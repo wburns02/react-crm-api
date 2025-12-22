@@ -4,9 +4,9 @@ from app.database import Base
 
 
 class User(Base):
-    """User model for authentication."""
+    """User model for authentication - separate from legacy users table."""
 
-    __tablename__ = "users"
+    __tablename__ = "api_users"
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
