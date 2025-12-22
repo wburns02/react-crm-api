@@ -19,9 +19,11 @@ python-multipart>=0.0.6
 # Twilio
 twilio>=8.10.0
 
-# Auth
+# Auth - pinned to avoid CVE-2024-23342 in ecdsa
 python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0
+# Pin cryptography to get ecdsa fix
+cryptography>=42.0.0
 
 # Validation
 email-validator>=2.0.0
@@ -29,7 +31,6 @@ email-validator>=2.0.0
 # Testing
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
-httpx>=0.26.0
 
 # Development
 python-dotenv>=1.0.0

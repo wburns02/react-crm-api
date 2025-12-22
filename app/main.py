@@ -1,3 +1,12 @@
+"""
+React CRM API - Main Application
+
+SECURITY FEATURES:
+- Conditional API docs (disabled in production by default)
+- Structured logging without sensitive data
+- Production-hardened configuration
+"""
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +17,7 @@ from app.webhooks.twilio import twilio_router
 from app.config import settings
 from app.database import init_db
 
-# Configure logging
+# Configure secure logging
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -22,35 +31,50 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting React CRM API...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
-    logger.info(f"Database URL prefix: {settings.DATABASE_URL[:30]}...")
+    # SECURITY: Don't log full database URL, just prefix
+    if settings.DATABASE_URL:
+        logger.info(f"Database URL prefix: {settings.DATABASE_URL[:30]}...")
     try:
         await init_db()
         logger.info("Database initialized successfully")
     except Exception as e:
-        logger.error(f"Database initialization failed: {e}")
+        # SECURITY: Don't log full exception details which may contain credentials
+        logger.error(f"Database initialization failed: {type(e).__name__}")
         logger.warning("App starting without database - some features may not work")
     yield
     # Shutdown
     logger.info("Shutting down React CRM API...")
 
 
+# SECURITY: Conditionally enable docs based on settings
+docs_url = "/docs" if settings.DOCS_ENABLED else None
+redoc_url = "/redoc" if settings.DOCS_ENABLED else None
+
 app = FastAPI(
     title="React CRM API",
     description="API for React CRM - Nationwide Septic Service Management",
     version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=docs_url,
+    redoc_url=redoc_url,
     lifespan=lifespan,
 )
 
 # CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        settings.FRONTEND_URL,
+# SECURITY: Restrict origins to known frontend URLs
+allowed_origins = [
+    settings.FRONTEND_URL,
+]
+
+# Only allow localhost origins in development
+if not settings.is_production:
+    allowed_origins.extend([
         "http://localhost:5173",  # Vite dev server
         "http://localhost:3000",  # Alternative dev port
-    ],
+    ])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -64,12 +88,15 @@ app.include_router(twilio_router, prefix="/webhooks/twilio", tags=["webhooks"])
 @app.get("/")
 async def root():
     """Root endpoint - API info."""
-    return {
+    response = {
         "name": "React CRM API",
         "version": "2.0.0",
-        "docs": "/docs",
         "health": "/health",
     }
+    # Only include docs link if enabled
+    if settings.DOCS_ENABLED:
+        response["docs"] = "/docs"
+    return response
 
 
 @app.get("/health")
@@ -82,7 +109,7 @@ async def health_check():
     }
 
 
-# For running with uvicorn directly
+# For running with uvicorn directly (development only)
 if __name__ == "__main__":
     import uvicorn
 

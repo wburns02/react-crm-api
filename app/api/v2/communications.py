@@ -1,7 +1,17 @@
-from fastapi import APIRouter, HTTPException, status, Query
+"""
+Communications API Endpoints
+
+SECURITY:
+- Rate limiting on SMS/email send endpoints
+- RBAC enforcement for sending messages
+- No sensitive data in logs
+"""
+
+from fastapi import APIRouter, HTTPException, status, Query, Depends
 from sqlalchemy import select, func
 from typing import Optional
 from datetime import datetime
+import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.message import Message, MessageType, MessageDirection, MessageStatus
@@ -12,6 +22,10 @@ from app.schemas.message import (
     MessageListResponse,
 )
 from app.services.twilio_service import TwilioService
+from app.security.rate_limiter import rate_limit_sms
+from app.security.rbac import require_permission, Permission, has_permission
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -71,7 +85,35 @@ async def send_sms(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Send an SMS message via Twilio."""
+    """
+    Send an SMS message via Twilio.
+
+    SECURITY:
+    - Rate limited per user (10/min, 100/hour)
+    - Rate limited per destination (5/hour to same number)
+    - Requires SEND_SMS permission
+    """
+    # RBAC check
+    if not has_permission(current_user, Permission.SEND_SMS):
+        logger.warning(
+            "SMS send denied - insufficient permissions",
+            extra={"user_id": current_user.id}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to send SMS messages"
+        )
+
+    # Rate limiting
+    try:
+        rate_limit_sms(current_user, request.to)
+    except HTTPException:
+        logger.warning(
+            "SMS rate limit exceeded",
+            extra={"user_id": current_user.id, "destination_suffix": request.to[-4:]}
+        )
+        raise
+
     twilio_service = TwilioService()
 
     # Create message record
@@ -103,15 +145,26 @@ async def send_sms(
         await db.commit()
         await db.refresh(message)
 
+        # SECURITY: Don't log phone numbers or message content
+        logger.info(
+            "SMS sent successfully",
+            extra={"message_id": message.id, "user_id": current_user.id}
+        )
+
     except Exception as e:
         message.status = MessageStatus.failed
         message.error_message = str(e)
         await db.commit()
         await db.refresh(message)
 
+        logger.error(
+            "SMS send failed",
+            extra={"message_id": message.id, "error_type": type(e).__name__}
+        )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send SMS: {str(e)}",
+            detail="Failed to send SMS. Please try again later.",
         )
 
     return message
@@ -123,7 +176,23 @@ async def send_email(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Send an email (placeholder - implement with your email service)."""
+    """
+    Send an email (placeholder - implement with your email service).
+
+    SECURITY:
+    - Requires SEND_EMAIL permission
+    """
+    # RBAC check
+    if not has_permission(current_user, Permission.SEND_EMAIL):
+        logger.warning(
+            "Email send denied - insufficient permissions",
+            extra={"user_id": current_user.id}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to send emails"
+        )
+
     # Create message record
     message = Message(
         customer_id=request.customer_id,
@@ -145,6 +214,11 @@ async def send_email(
     message.sent_at = datetime.utcnow()
     await db.commit()
     await db.refresh(message)
+
+    logger.info(
+        "Email queued",
+        extra={"message_id": message.id, "user_id": current_user.id}
+    )
 
     return message
 

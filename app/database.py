@@ -1,12 +1,21 @@
+"""
+Database Configuration
+
+SECURITY:
+- SQLAlchemy echo disabled in production to prevent credential leakage
+- Connection string never logged
+"""
+
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from app.config import settings
 
 
 # Create async engine
+# SECURITY: Use sqlalchemy_echo property which is disabled in production
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
+    echo=settings.sqlalchemy_echo,  # Disabled in production
     future=True,
 )
 

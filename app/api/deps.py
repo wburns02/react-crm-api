@@ -1,5 +1,17 @@
+"""
+FastAPI Dependencies
+
+Provides dependency injection for database sessions, authentication,
+and authorization.
+
+SECURITY NOTES:
+- JWT payloads are never logged
+- Bearer token is the primary auth method (SPA-friendly, no CSRF needed)
+- Session cookies are supported but Bearer is preferred
+"""
+
 from typing import Annotated
-from fastapi import Depends, HTTPException, status, Cookie, Response
+from fastapi import Depends, HTTPException, status, Cookie
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -16,7 +28,7 @@ from app.schemas.auth import TokenData
 logger = logging.getLogger(__name__)
 
 
-# HTTP Bearer for JWT
+# HTTP Bearer for JWT - primary auth method
 security = HTTPBearer(auto_error=False)
 
 
@@ -53,7 +65,14 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
     session_token: Annotated[str | None, Cookie(alias="session")] = None,
 ) -> User:
-    """Get current user from JWT token or session cookie."""
+    """
+    Get current user from JWT token or session cookie.
+
+    SECURITY:
+    - Bearer token is preferred (no CSRF vulnerability)
+    - Session cookie supported for browser convenience
+    - JWT payloads are NOT logged to prevent credential leakage
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -61,36 +80,36 @@ async def get_current_user(
     )
 
     token = None
+    auth_method = None
 
-    # Try Bearer token first
+    # Try Bearer token first (preferred for SPAs - no CSRF vulnerability)
     if credentials:
         token = credentials.credentials
-        logger.info(f"Got token from Bearer header")
+        auth_method = "bearer"
     # Fall back to session cookie
     elif session_token:
         token = session_token
-        logger.info(f"Got token from session cookie")
+        auth_method = "cookie"
 
     if not token:
-        logger.warning("No token found in request")
+        # SECURITY: Don't reveal which auth methods are supported
         raise credentials_exception
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        logger.info(f"JWT payload: {payload}")
+        # SECURITY: Never log JWT payloads - they contain sensitive data
         sub = payload.get("sub")
         email: str = payload.get("email")
         if sub is None:
-            logger.warning("sub is None from token")
             raise credentials_exception
-        user_id = int(sub)  # Convert string back to int
-        logger.info(f"Extracted user_id={user_id}, email={email}")
+        user_id = int(sub)
         token_data = TokenData(user_id=user_id, email=email)
-    except JWTError as e:
-        logger.error(f"JWT decode error: {e}")
+    except JWTError:
+        # SECURITY: Don't log token decode errors with details
+        logger.warning("JWT validation failed", extra={"auth_method": auth_method})
         raise credentials_exception
-    except ValueError as e:
-        logger.error(f"Invalid user_id format: {e}")
+    except ValueError:
+        logger.warning("Invalid token format", extra={"auth_method": auth_method})
         raise credentials_exception
 
     result = await db.execute(select(User).where(User.id == token_data.user_id))
@@ -99,7 +118,13 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
+
+    # Log successful auth without sensitive details
+    logger.debug(
+        "User authenticated",
+        extra={"user_id": user.id, "auth_method": auth_method}
+    )
 
     return user
 
@@ -109,7 +134,7 @@ async def get_current_active_user(
 ) -> User:
     """Get current active user."""
     if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
     return current_user
 
 

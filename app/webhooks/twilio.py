@@ -1,4 +1,13 @@
-from fastapi import APIRouter, Request, HTTPException, Response
+"""
+Twilio Webhook Handlers
+
+SECURITY:
+- All webhook endpoints validate Twilio signature
+- Invalid signatures are rejected with 403
+- No sensitive data is logged
+"""
+
+from fastapi import APIRouter, Request, HTTPException, Response, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
@@ -7,6 +16,7 @@ import logging
 from app.database import async_session_maker
 from app.models.message import Message, MessageStatus
 from app.config import settings
+from app.security.twilio_validator import validate_twilio_signature
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +24,18 @@ twilio_router = APIRouter()
 
 
 @twilio_router.post("/incoming")
-async def handle_incoming_sms(request: Request):
+async def handle_incoming_sms(
+    request: Request,
+    _signature_valid: bool = Depends(validate_twilio_signature),
+):
     """
     Handle incoming SMS from Twilio.
 
+    SECURITY: Validates X-Twilio-Signature before processing.
+
     Routes messages based on source:
-    - If message is a reply to a React-originated message → handle here
-    - If message is a reply to a Legacy-originated message → forward to legacy backend
+    - If message is a reply to a React-originated message -> handle here
+    - If message is a reply to a Legacy-originated message -> forward to legacy backend
     """
     form_data = await request.form()
 
@@ -29,7 +44,11 @@ async def handle_incoming_sms(request: Request):
     to_number = form_data.get("To")
     body = form_data.get("Body", "")
 
-    logger.info(f"Incoming SMS: {message_sid} from {from_number}")
+    # SECURITY: Don't log message content or full phone numbers
+    logger.info(
+        "Incoming SMS received",
+        extra={"message_sid": message_sid, "from_suffix": from_number[-4:] if from_number else None}
+    )
 
     # Try to find if this is a reply to an existing conversation
     async with async_session_maker() as db:
@@ -44,7 +63,10 @@ async def handle_incoming_sms(request: Request):
 
         if last_message and last_message.source == "react":
             # This is a reply to a React message - handle it
-            logger.info(f"Handling React reply from {from_number}")
+            logger.info(
+                "Processing React reply",
+                extra={"customer_id": last_message.customer_id}
+            )
 
             # Create incoming message record
             incoming = Message(
@@ -69,7 +91,7 @@ async def handle_incoming_sms(request: Request):
 
         else:
             # Forward to legacy backend
-            logger.info(f"Forwarding to legacy backend: {from_number}")
+            logger.info("Forwarding to legacy backend")
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
@@ -83,7 +105,7 @@ async def handle_incoming_sms(request: Request):
                         media_type=response.headers.get("content-type", "application/xml"),
                     )
             except httpx.RequestError as e:
-                logger.error(f"Failed to forward to legacy: {e}")
+                logger.error(f"Failed to forward to legacy: {type(e).__name__}")
                 # Still return success to Twilio to prevent retries
                 return Response(
                     content='<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
@@ -92,9 +114,14 @@ async def handle_incoming_sms(request: Request):
 
 
 @twilio_router.post("/status")
-async def handle_status_callback(request: Request):
+async def handle_status_callback(
+    request: Request,
+    _signature_valid: bool = Depends(validate_twilio_signature),
+):
     """
     Handle Twilio status callbacks.
+
+    SECURITY: Validates X-Twilio-Signature before processing.
 
     Updates message status when Twilio reports delivery status changes.
     """
@@ -105,7 +132,11 @@ async def handle_status_callback(request: Request):
     error_code = form_data.get("ErrorCode")
     error_message = form_data.get("ErrorMessage")
 
-    logger.info(f"Status callback: {message_sid} -> {message_status}")
+    # SECURITY: Don't log error messages which might contain PII
+    logger.info(
+        "Status callback received",
+        extra={"message_sid": message_sid, "status": message_status}
+    )
 
     async with async_session_maker() as db:
         # Find the message
@@ -135,10 +166,13 @@ async def handle_status_callback(request: Request):
                     message.error_message = error_message
 
                 await db.commit()
-                logger.info(f"Updated message {message.id} status to {message.status}")
+                logger.info(
+                    "Message status updated",
+                    extra={"message_id": message.id, "new_status": message.status.value}
+                )
             else:
                 # Forward to legacy
-                logger.info(f"Forwarding status to legacy for message {message_sid}")
+                logger.info("Forwarding status to legacy")
                 try:
                     async with httpx.AsyncClient() as client:
                         await client.post(
@@ -147,10 +181,10 @@ async def handle_status_callback(request: Request):
                             timeout=10.0,
                         )
                 except httpx.RequestError as e:
-                    logger.error(f"Failed to forward status to legacy: {e}")
+                    logger.error(f"Failed to forward status to legacy: {type(e).__name__}")
         else:
             # Message not found in React DB - might be legacy
-            logger.info(f"Message {message_sid} not found, forwarding to legacy")
+            logger.info("Message not found, forwarding to legacy")
             try:
                 async with httpx.AsyncClient() as client:
                     await client.post(
@@ -159,6 +193,6 @@ async def handle_status_callback(request: Request):
                         timeout=10.0,
                     )
             except httpx.RequestError as e:
-                logger.error(f"Failed to forward status to legacy: {e}")
+                logger.error(f"Failed to forward status to legacy: {type(e).__name__}")
 
     return {"status": "ok"}
