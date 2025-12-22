@@ -101,4 +101,4 @@ async def register(
     await db.commit()
     await db.refresh(user)
 
-    return user
+    return UserResponse.from_db_user(user)
