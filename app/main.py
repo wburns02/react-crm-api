@@ -21,8 +21,14 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     logger.info("Starting React CRM API...")
-    await init_db()
-    logger.info("Database initialized")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"Database URL prefix: {settings.DATABASE_URL[:30]}...")
+    try:
+        await init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        logger.warning("App starting without database - some features may not work")
     yield
     # Shutdown
     logger.info("Shutting down React CRM API...")
