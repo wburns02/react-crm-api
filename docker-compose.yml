@@ -15,6 +15,12 @@ services:
     volumes:
       - .:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 5001 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   db:
     image: postgres:16-alpine
