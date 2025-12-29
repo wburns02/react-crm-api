@@ -63,12 +63,14 @@ app = FastAPI(
 # SECURITY: Restrict origins to known frontend URLs
 allowed_origins = [
     settings.FRONTEND_URL,
+    "https://react.ecbtx.com",  # Production ReactCRM frontend
 ]
 
 # Only allow localhost origins in development
 if not settings.is_production:
     allowed_origins.extend([
         "http://localhost:5173",  # Vite dev server
+        "http://localhost:5174",  # Vite dev server (alternate port)
         "http://localhost:3000",  # Alternative dev port
     ])
 
