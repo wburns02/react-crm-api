@@ -26,6 +26,7 @@ async def list_work_orders(
     job_type: Optional[JobType] = None,
     priority: Optional[Priority] = None,
     assigned_technician: Optional[str] = None,
+    scheduled_date: Optional[str] = None,  # Exact date match (YYYY-MM-DD)
     scheduled_date_from: Optional[datetime] = None,
     scheduled_date_to: Optional[datetime] = None,
 ):
@@ -48,6 +49,10 @@ async def list_work_orders(
 
     if assigned_technician:
         query = query.where(WorkOrder.assigned_technician == assigned_technician)
+
+    if scheduled_date:
+        # Exact date match - compare just the date part
+        query = query.where(func.date(WorkOrder.scheduled_date) == scheduled_date)
 
     if scheduled_date_from:
         query = query.where(WorkOrder.scheduled_date >= scheduled_date_from)

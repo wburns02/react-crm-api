@@ -23,6 +23,18 @@ from app.schemas.auth import (
     TokenData,
     LoginRequest,
 )
+from app.schemas.technician import (
+    TechnicianCreate,
+    TechnicianUpdate,
+    TechnicianResponse,
+    TechnicianListResponse,
+)
+from app.schemas.invoice import (
+    InvoiceCreate,
+    InvoiceUpdate,
+    InvoiceResponse,
+    InvoiceListResponse,
+)
 
 __all__ = [
     "CustomerCreate",
@@ -42,4 +54,12 @@ __all__ = [
     "Token",
     "TokenData",
     "LoginRequest",
+    "TechnicianCreate",
+    "TechnicianUpdate",
+    "TechnicianResponse",
+    "TechnicianListResponse",
+    "InvoiceCreate",
+    "InvoiceUpdate",
+    "InvoiceResponse",
+    "InvoiceListResponse",
 ]
