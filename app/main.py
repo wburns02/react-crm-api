@@ -66,13 +66,14 @@ allowed_origins = [
     "https://react.ecbtx.com",  # Production ReactCRM frontend
 ]
 
-# Only allow localhost origins in development
-if not settings.is_production:
-    allowed_origins.extend([
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:5174",  # Vite dev server (alternate port)
-        "http://localhost:3000",  # Alternative dev port
-    ])
+# Allow localhost origins for development/testing
+# These are safe to include since they can only be accessed locally
+allowed_origins.extend([
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:5174",  # Vite dev server (alternate port)
+    "http://localhost:5175",  # Vite dev server (alternate port)
+    "http://localhost:3000",  # Alternative dev port
+])
 
 app.add_middleware(
     CORSMiddleware,
