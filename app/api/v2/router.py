@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v2 import auth, customers, work_orders, communications, technicians, invoices, dashboard, schedule, reports
+from app.api.v2 import auth, customers, work_orders, communications, technicians, invoices, dashboard, schedule, reports, ringcentral
 
 api_router = APIRouter()
 
@@ -13,3 +13,4 @@ api_router.include_router(invoices.router, prefix="/invoices", tags=["invoices"]
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(schedule.router, prefix="/schedule", tags=["schedule"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
+api_router.include_router(ringcentral.router, prefix="/ringcentral", tags=["ringcentral"])

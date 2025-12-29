@@ -20,12 +20,12 @@ class WorkOrderStatus(str, enum.Enum):
     draft = "draft"
     scheduled = "scheduled"
     confirmed = "confirmed"
-    en_route = "en_route"
+    enroute = "enroute"
     on_site = "on_site"
     in_progress = "in_progress"
     completed = "completed"
     canceled = "canceled"
-    requires_follow_up = "requires_follow_up"
+    requires_followup = "requires_followup"
 
 
 class Priority(str, enum.Enum):

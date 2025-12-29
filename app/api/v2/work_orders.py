@@ -20,7 +20,7 @@ async def list_work_orders(
     db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     customer_id: Optional[int] = None,
     status: Optional[WorkOrderStatus] = None,
     job_type: Optional[JobType] = None,
