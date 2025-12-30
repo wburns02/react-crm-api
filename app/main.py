@@ -19,9 +19,26 @@ from app.config import settings
 from app.database import init_db
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
+    # Core models
     Customer, WorkOrder, Message, User, Technician,
     Invoice, Payment, Quote, SMSConsent, SMSConsentAudit, Activity,
-    Ticket, Equipment, InventoryItem
+    Ticket, Equipment, InventoryItem,
+    # Phase 1: AI
+    AIEmbedding, AIConversation, AIMessage,
+    # Phase 2: RingCentral
+    CallLog,
+    # Phase 3: E-Signatures
+    SignatureRequest, Signature, SignedDocument,
+    # Phase 4: Pricing
+    ServiceCatalog, PricingZone, PricingRule, CustomerPricingTier,
+    # Phase 5: AI Agents
+    AIAgent, AgentConversation, AgentMessage, AgentTask,
+    # Phase 6: Predictions
+    LeadScore, ChurnPrediction, RevenueForecast, DealHealth, PredictionModel,
+    # Phase 7: Marketing
+    MarketingCampaign, MarketingWorkflow, WorkflowEnrollment, EmailTemplate, SMSTemplate,
+    # Phase 10: Payroll
+    PayrollPeriod, TimeEntry, Commission, TechnicianPayRate,
 )
 
 # Configure secure logging
