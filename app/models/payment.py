@@ -47,8 +47,8 @@ class Payment(Base):
     updated_at = Column(DateTime, onupdate=func.now())
     processed_at = Column(DateTime)
 
-    # Relationships
-    customer = relationship("Customer", backref="payments")
+    # Note: Relationship to Customer commented out to avoid import/backref issues
+    # customer = relationship("Customer", backref="payments")
 
     def __repr__(self):
         return f"<Payment {self.id} ${self.amount}>"
