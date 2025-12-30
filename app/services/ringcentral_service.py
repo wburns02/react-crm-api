@@ -33,9 +33,10 @@ class RingCentralService:
 
     def __init__(self):
         self.config = RingCentralConfig(
-            client_id=getattr(settings, 'RINGCENTRAL_CLIENT_ID', ''),
-            client_secret=getattr(settings, 'RINGCENTRAL_CLIENT_SECRET', ''),
-            jwt_token=getattr(settings, 'RINGCENTRAL_JWT_TOKEN', ''),
+            client_id=settings.RINGCENTRAL_CLIENT_ID or '',
+            client_secret=settings.RINGCENTRAL_CLIENT_SECRET or '',
+            server_url=settings.RINGCENTRAL_SERVER_URL or 'https://platform.ringcentral.com',
+            jwt_token=settings.RINGCENTRAL_JWT_TOKEN or '',
         )
         self._access_token: Optional[str] = None
         self._token_expires: Optional[datetime] = None

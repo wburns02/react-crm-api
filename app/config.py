@@ -52,6 +52,27 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str | None = None
     TWILIO_AUTH_TOKEN: str | None = None
     TWILIO_PHONE_NUMBER: str | None = None
+    TWILIO_SMS_FROM_NUMBER: str | None = None
+    TWILIO_API_KEY_SID: str | None = None
+    TWILIO_API_KEY_SECRET: str | None = None
+    TWILIO_TWIML_APP_SID: str | None = None
+
+    # RingCentral
+    RINGCENTRAL_CLIENT_ID: str | None = None
+    RINGCENTRAL_CLIENT_SECRET: str | None = None
+    RINGCENTRAL_SERVER_URL: str = "https://platform.ringcentral.com"
+    RINGCENTRAL_JWT_TOKEN: str | None = None
+
+    # Samsara Fleet Tracking
+    SAMSARA_API_TOKEN: str | None = None
+
+    # AI Services
+    OPENAI_API_KEY: str | None = None
+    ANTHROPIC_API_KEY: str | None = None
+
+    # Local AI Server (for vLLM on RTX 5090)
+    AI_SERVER_URL: str = "http://localhost:8000"
+    AI_SERVER_ENABLED: bool = False
 
     # Legacy backend (for webhook routing)
     LEGACY_BACKEND_URL: str = "http://localhost:5000"
