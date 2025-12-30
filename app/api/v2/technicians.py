@@ -163,7 +163,7 @@ def technician_to_response(tech: Technician) -> dict:
     }
 
 
-@router.get("/", response_model=TechnicianListResponse)
+@router.get("/")
 async def list_technicians(
     db: DbSession,
     current_user: CurrentUser,
