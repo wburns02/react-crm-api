@@ -48,7 +48,7 @@ class TechnicianUpdate(BaseModel):
     """Schema for updating a technician (all fields optional)."""
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None  # Using str instead of EmailStr to allow empty strings
     phone: Optional[str] = Field(None, max_length=20)
     employee_id: Optional[str] = Field(None, max_length=50)
     is_active: Optional[bool] = None
