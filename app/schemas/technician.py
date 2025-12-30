@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from typing import Optional
 
 
@@ -6,7 +6,8 @@ class TechnicianBase(BaseModel):
     """Base technician schema."""
     first_name: str = Field(default="", max_length=100)
     last_name: str = Field(default="", max_length=100)
-    email: Optional[EmailStr] = None
+    # Using str instead of EmailStr to allow empty strings from database
+    email: Optional[str] = None
     phone: Optional[str] = Field(None, max_length=20)
     employee_id: Optional[str] = Field(None, max_length=50)
     is_active: bool = True
