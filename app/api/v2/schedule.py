@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Query
 from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel
 
 from app.api.deps import DbSession, CurrentUser
-from app.models.work_order import WorkOrder, WorkOrderStatus
+from app.models.work_order import WorkOrder
 from app.models.customer import Customer
 from app.models.technician import Technician
 
@@ -14,7 +13,6 @@ router = APIRouter()
 
 
 class ScheduleStats(BaseModel):
-    """Schedule statistics."""
     today_jobs: int
     week_jobs: int
     unscheduled_jobs: int
@@ -22,7 +20,6 @@ class ScheduleStats(BaseModel):
 
 
 class ScheduleWorkOrder(BaseModel):
-    """Work order for schedule views."""
     id: str
     customer_id: str
     customer_name: Optional[str] = None
@@ -38,24 +35,8 @@ class ScheduleWorkOrder(BaseModel):
 
 
 class UnscheduledResponse(BaseModel):
-    """Unscheduled work orders response."""
     items: list[ScheduleWorkOrder]
     total: int
-
-
-class TechnicianSchedule(BaseModel):
-    """Technician with their scheduled jobs."""
-    id: str
-    name: str
-    is_active: bool
-    jobs: list[ScheduleWorkOrder]
-    total_hours: float
-
-
-class ScheduleByTechnicianResponse(BaseModel):
-    """Schedule grouped by technician."""
-    technicians: list[TechnicianSchedule]
-    unassigned: list[ScheduleWorkOrder]
 
 
 def work_order_to_schedule(wo: WorkOrder) -> dict:
@@ -63,15 +44,15 @@ def work_order_to_schedule(wo: WorkOrder) -> dict:
     return {
         "id": str(wo.id),
         "customer_id": str(wo.customer_id),
-        "customer_name": None,  # Would need join
-        "job_type": wo.job_type.value if wo.job_type else "pumping",
-        "status": wo.status.value if wo.status else "draft",
-        "priority": wo.priority.value if wo.priority else "normal",
+        "customer_name": None,
+        "job_type": wo.job_type or "pumping",
+        "status": wo.status or "draft",
+        "priority": wo.priority or "normal",
         "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
-        "time_window_start": wo.time_window_start,
-        "time_window_end": wo.time_window_end,
+        "time_window_start": str(wo.time_window_start) if wo.time_window_start else None,
+        "time_window_end": str(wo.time_window_end) if wo.time_window_end else None,
         "assigned_technician": wo.assigned_technician,
-        "service_address": wo.service_address,
+        "service_address": wo.service_address_line1,
         "service_city": wo.service_city,
     }
 
@@ -83,18 +64,14 @@ async def get_schedule_stats(
 ):
     """Get schedule statistics."""
     today = date.today()
-    week_start = today - timedelta(days=today.weekday())  # Monday
-    week_end = week_start + timedelta(days=6)  # Sunday
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=6)
 
-    # Today's jobs
     today_result = await db.execute(
-        select(func.count()).where(
-            func.date(WorkOrder.scheduled_date) == today
-        )
+        select(func.count()).where(func.date(WorkOrder.scheduled_date) == today)
     )
     today_jobs = today_result.scalar() or 0
 
-    # This week's jobs
     week_result = await db.execute(
         select(func.count()).where(
             and_(
@@ -105,11 +82,10 @@ async def get_schedule_stats(
     )
     week_jobs = week_result.scalar() or 0
 
-    # Unscheduled (draft without date)
     unscheduled_result = await db.execute(
         select(func.count()).where(
             and_(
-                WorkOrder.status == WorkOrderStatus.draft,
+                WorkOrder.status == "draft",
                 or_(
                     WorkOrder.scheduled_date.is_(None),
                     WorkOrder.scheduled_date == None,
@@ -119,11 +95,8 @@ async def get_schedule_stats(
     )
     unscheduled_jobs = unscheduled_result.scalar() or 0
 
-    # Emergency jobs (any status)
     emergency_result = await db.execute(
-        select(func.count()).where(
-            WorkOrder.priority == "emergency"
-        )
+        select(func.count()).where(WorkOrder.priority == "emergency")
     )
     emergency_jobs = emergency_result.scalar() or 0
 
@@ -144,7 +117,7 @@ async def get_unscheduled_work_orders(
     """Get unscheduled work orders (draft without date)."""
     query = select(WorkOrder).where(
         and_(
-            WorkOrder.status == WorkOrderStatus.draft,
+            WorkOrder.status == "draft",
             or_(
                 WorkOrder.scheduled_date.is_(None),
                 WorkOrder.scheduled_date == None,
@@ -231,7 +204,6 @@ async def get_week_view(
     result = await db.execute(query)
     work_orders = result.scalars().all()
 
-    # Group by date
     by_date: dict[str, list[dict]] = {}
     for i in range(7):
         day = (start + timedelta(days=i)).isoformat()
@@ -239,7 +211,7 @@ async def get_week_view(
 
     for wo in work_orders:
         if wo.scheduled_date:
-            day_str = wo.scheduled_date.date().isoformat() if hasattr(wo.scheduled_date, 'date') else str(wo.scheduled_date)[:10]
+            day_str = wo.scheduled_date.isoformat() if hasattr(wo.scheduled_date, 'isoformat') else str(wo.scheduled_date)[:10]
             if day_str in by_date:
                 by_date[day_str].append(work_order_to_schedule(wo))
 
