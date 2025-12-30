@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, text
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import Optional
@@ -10,6 +10,60 @@ from app.models.work_order import WorkOrder
 from app.models.invoice import Invoice
 
 router = APIRouter()
+
+
+@router.get("/debug/schema")
+async def debug_schema(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Debug endpoint to check database schema."""
+    result = {}
+
+    # List all tables
+    try:
+        tables_result = await db.execute(text(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+        ))
+        result["tables"] = [row[0] for row in tables_result.fetchall()]
+    except Exception as e:
+        result["tables_error"] = str(e)
+
+    # Check technicians table columns
+    try:
+        cols_result = await db.execute(text(
+            "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'technicians'"
+        ))
+        result["technicians_columns"] = {row[0]: row[1] for row in cols_result.fetchall()}
+    except Exception as e:
+        result["technicians_error"] = str(e)
+
+    # Check invoices table columns
+    try:
+        cols_result = await db.execute(text(
+            "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'invoices'"
+        ))
+        result["invoices_columns"] = {row[0]: row[1] for row in cols_result.fetchall()}
+    except Exception as e:
+        result["invoices_error"] = str(e)
+
+    # Check payments table columns
+    try:
+        cols_result = await db.execute(text(
+            "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'payments'"
+        ))
+        result["payments_columns"] = {row[0]: row[1] for row in cols_result.fetchall()}
+    except Exception as e:
+        result["payments_error"] = str(e)
+
+    # Check alembic version
+    try:
+        version_result = await db.execute(text("SELECT version_num FROM alembic_version"))
+        result["alembic_version"] = [row[0] for row in version_result.fetchall()]
+    except Exception as e:
+        result["alembic_error"] = str(e)
+
+    return result
 
 
 class DashboardStats(BaseModel):
