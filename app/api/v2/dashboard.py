@@ -63,6 +63,13 @@ async def debug_schema(
     except Exception as e:
         result["alembic_error"] = str(e)
 
+    # Try simple technician query to debug
+    try:
+        tech_result = await db.execute(text("SELECT id, first_name, last_name FROM technicians LIMIT 3"))
+        result["technicians_sample"] = [{"id": row[0], "name": f"{row[1]} {row[2]}"} for row in tech_result.fetchall()]
+    except Exception as e:
+        result["technicians_query_error"] = str(e)
+
     return result
 
 
