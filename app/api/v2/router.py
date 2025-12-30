@@ -19,6 +19,22 @@ from app.api.v2 import (
     tickets,
     equipment,
     inventory,
+    # Phase 1: AI Infrastructure
+    ai,
+    # Phase 3: E-Signatures
+    signatures,
+    # Phase 4: Pricing Engine
+    pricing,
+    # Phase 5: AI Agents
+    agents,
+    # Phase 6: Predictive Analytics
+    predictions,
+    # Phase 7: Marketing Automation
+    marketing,
+    # Phase 8: Schedule Map View
+    schedule_map,
+    # Phase 9: Employee Portal
+    employee_portal,
 )
 
 api_router = APIRouter()
@@ -43,3 +59,27 @@ api_router.include_router(activities.router, prefix="/activities", tags=["activi
 api_router.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
 api_router.include_router(equipment.router, prefix="/equipment", tags=["equipment"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+
+# Phase 1: AI Infrastructure
+api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
+
+# Phase 3: E-Signatures
+api_router.include_router(signatures.router, prefix="/signatures", tags=["signatures"])
+
+# Phase 4: Pricing Engine
+api_router.include_router(pricing.router, prefix="/pricing", tags=["pricing"])
+
+# Phase 5: AI Agents
+api_router.include_router(agents.router, prefix="/agents", tags=["agents"])
+
+# Phase 6: Predictive Analytics
+api_router.include_router(predictions.router, prefix="/predictions", tags=["predictions"])
+
+# Phase 7: Marketing Automation
+api_router.include_router(marketing.router, prefix="/marketing", tags=["marketing"])
+
+# Phase 8: Schedule Map View
+api_router.include_router(schedule_map.router, prefix="/schedule-map", tags=["schedule-map"])
+
+# Phase 9: Employee Portal
+api_router.include_router(employee_portal.router, prefix="/employee", tags=["employee"])

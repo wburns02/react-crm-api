@@ -1,0 +1,302 @@
+"""AI Gateway Service - Connection to local GPU-powered AI server.
+
+This service provides access to:
+- LLM inference (Llama 3.1 70B via vLLM)
+- Embeddings (BGE-large-en-v1.5)
+- Speech-to-text (Whisper)
+- Semantic search (pgvector)
+
+The AI server runs on local hardware with RTX 5090 (32GB) and is accessed
+via Twingate secure tunnel from Railway.
+"""
+import httpx
+import logging
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel
+import json
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class AIGatewayConfig(BaseModel):
+    """Configuration for AI gateway connection."""
+    base_url: str = "http://localhost:8000"  # Local AI server URL (via Twingate)
+    timeout: float = 120.0  # LLM inference can take time
+    max_retries: int = 3
+
+
+class ChatMessage(BaseModel):
+    """Chat message format."""
+    role: str  # system, user, assistant
+    content: str
+
+
+class ChatRequest(BaseModel):
+    """Request format for chat completion."""
+    messages: List[ChatMessage]
+    max_tokens: int = 1024
+    temperature: float = 0.7
+    stream: bool = False
+
+
+class EmbeddingRequest(BaseModel):
+    """Request format for embeddings."""
+    texts: List[str]
+    model: str = "bge-large-en-v1.5"
+
+
+class TranscribeRequest(BaseModel):
+    """Request format for audio transcription."""
+    audio_url: str  # URL to audio file
+    language: Optional[str] = "en"
+
+
+class AIGateway:
+    """Gateway to local AI server."""
+
+    def __init__(self, config: Optional[AIGatewayConfig] = None):
+        self.config = config or AIGatewayConfig(
+            base_url=getattr(settings, 'AI_SERVER_URL', 'http://localhost:8000')
+        )
+        self._client: Optional[httpx.AsyncClient] = None
+
+    async def get_client(self) -> httpx.AsyncClient:
+        """Get or create HTTP client."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                base_url=self.config.base_url,
+                timeout=self.config.timeout,
+            )
+        return self._client
+
+    async def close(self):
+        """Close the HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Check if AI server is healthy."""
+        try:
+            client = await self.get_client()
+            response = await client.get("/health")
+            return {"status": "healthy", "server": response.json()}
+        except httpx.ConnectError:
+            return {"status": "unavailable", "error": "Cannot connect to AI server"}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    async def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        system_prompt: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generate chat completion using local LLM.
+
+        Args:
+            messages: List of {role, content} messages
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (0-1)
+            system_prompt: Optional system prompt to prepend
+
+        Returns:
+            Dict with 'content' key containing generated text
+        """
+        try:
+            client = await self.get_client()
+
+            # Prepend system prompt if provided
+            if system_prompt:
+                messages = [{"role": "system", "content": system_prompt}] + messages
+
+            payload = {
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "stream": False,
+            }
+
+            response = await client.post("/v1/chat/completions", json=payload)
+            response.raise_for_status()
+
+            data = response.json()
+            return {
+                "content": data["choices"][0]["message"]["content"],
+                "usage": data.get("usage", {}),
+                "model": data.get("model", "llama-3.1-70b"),
+            }
+        except httpx.ConnectError:
+            logger.warning("AI server unavailable, using fallback response")
+            return {
+                "content": "[AI server unavailable - please try again later]",
+                "error": "connection_failed",
+            }
+        except Exception as e:
+            logger.error(f"Chat completion error: {e}")
+            return {"content": "", "error": str(e)}
+
+    async def generate_embeddings(
+        self,
+        texts: List[str],
+        model: str = "bge-large-en-v1.5",
+    ) -> Dict[str, Any]:
+        """Generate embeddings for texts.
+
+        Args:
+            texts: List of texts to embed
+            model: Embedding model to use
+
+        Returns:
+            Dict with 'embeddings' key containing list of vectors
+        """
+        try:
+            client = await self.get_client()
+
+            payload = {
+                "input": texts,
+                "model": model,
+            }
+
+            response = await client.post("/v1/embeddings", json=payload)
+            response.raise_for_status()
+
+            data = response.json()
+            embeddings = [item["embedding"] for item in data["data"]]
+
+            return {
+                "embeddings": embeddings,
+                "model": model,
+                "dimensions": len(embeddings[0]) if embeddings else 0,
+            }
+        except httpx.ConnectError:
+            logger.warning("AI server unavailable for embeddings")
+            return {"embeddings": [], "error": "connection_failed"}
+        except Exception as e:
+            logger.error(f"Embedding error: {e}")
+            return {"embeddings": [], "error": str(e)}
+
+    async def transcribe_audio(
+        self,
+        audio_url: str,
+        language: str = "en",
+    ) -> Dict[str, Any]:
+        """Transcribe audio using Whisper.
+
+        Args:
+            audio_url: URL to audio file
+            language: Language code
+
+        Returns:
+            Dict with 'text' key containing transcription
+        """
+        try:
+            client = await self.get_client()
+
+            payload = {
+                "audio_url": audio_url,
+                "language": language,
+            }
+
+            response = await client.post("/v1/audio/transcriptions", json=payload)
+            response.raise_for_status()
+
+            data = response.json()
+            return {
+                "text": data.get("text", ""),
+                "language": language,
+                "duration": data.get("duration"),
+            }
+        except httpx.ConnectError:
+            logger.warning("AI server unavailable for transcription")
+            return {"text": "", "error": "connection_failed"}
+        except Exception as e:
+            logger.error(f"Transcription error: {e}")
+            return {"text": "", "error": str(e)}
+
+    async def summarize_text(
+        self,
+        text: str,
+        max_length: int = 200,
+        style: str = "concise",
+    ) -> Dict[str, Any]:
+        """Summarize text using LLM.
+
+        Args:
+            text: Text to summarize
+            max_length: Target summary length in words
+            style: Summary style (concise, detailed, bullet_points)
+
+        Returns:
+            Dict with 'summary' key
+        """
+        style_prompts = {
+            "concise": f"Summarize this in {max_length} words or less:",
+            "detailed": f"Provide a detailed summary in about {max_length} words:",
+            "bullet_points": "Summarize this as bullet points (max 5 points):",
+        }
+
+        prompt = style_prompts.get(style, style_prompts["concise"])
+
+        result = await self.chat_completion(
+            messages=[{"role": "user", "content": f"{prompt}\n\n{text}"}],
+            max_tokens=max_length * 2,  # Rough estimate
+            temperature=0.3,  # Lower temp for summarization
+        )
+
+        return {
+            "summary": result.get("content", ""),
+            "style": style,
+            "error": result.get("error"),
+        }
+
+    async def analyze_sentiment(
+        self,
+        text: str,
+    ) -> Dict[str, Any]:
+        """Analyze sentiment of text.
+
+        Returns:
+            Dict with sentiment (positive/negative/neutral) and score
+        """
+        result = await self.chat_completion(
+            messages=[{
+                "role": "user",
+                "content": f"""Analyze the sentiment of this text. Respond with JSON only:
+{{"sentiment": "positive|negative|neutral", "score": 0.0-1.0, "reason": "brief explanation"}}
+
+Text: {text}"""
+            }],
+            max_tokens=100,
+            temperature=0.1,
+        )
+
+        try:
+            # Try to parse JSON from response
+            content = result.get("content", "{}")
+            # Handle markdown code blocks
+            if "```" in content:
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+
+            sentiment_data = json.loads(content.strip())
+            return sentiment_data
+        except json.JSONDecodeError:
+            return {
+                "sentiment": "neutral",
+                "score": 0.5,
+                "reason": "Could not analyze",
+                "error": "parse_failed",
+            }
+
+
+# Singleton instance
+ai_gateway = AIGateway()
+
+
+async def get_ai_gateway() -> AIGateway:
+    """Dependency injection for AI gateway."""
+    return ai_gateway
