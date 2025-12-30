@@ -15,6 +15,7 @@ from app.api.v2 import (
     quotes,
     sms_consent,
     payroll,
+    activities,
 )
 
 api_router = APIRouter()
@@ -35,3 +36,4 @@ api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(ringcentral.router, prefix="/ringcentral", tags=["ringcentral"])
 api_router.include_router(sms_consent.router, prefix="/sms-consent", tags=["sms-consent"])
 api_router.include_router(payroll.router, prefix="/payroll", tags=["payroll"])
+api_router.include_router(activities.router, prefix="/activities", tags=["activities"])

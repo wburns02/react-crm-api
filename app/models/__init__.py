@@ -7,6 +7,7 @@ from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.quote import Quote
 from app.models.sms_consent import SMSConsent, SMSConsentAudit
+from app.models.activity import Activity
 
 __all__ = [
     "Customer",
@@ -19,4 +20,5 @@ __all__ = [
     "Quote",
     "SMSConsent",
     "SMSConsentAudit",
+    "Activity",
 ]

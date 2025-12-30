@@ -20,7 +20,7 @@ from app.database import init_db
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
     Customer, WorkOrder, Message, User, Technician,
-    Invoice, Payment, Quote, SMSConsent, SMSConsentAudit
+    Invoice, Payment, Quote, SMSConsent, SMSConsentAudit, Activity
 )
 
 # Configure secure logging
