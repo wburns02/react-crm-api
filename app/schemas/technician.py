@@ -5,8 +5,8 @@ from typing import Optional
 
 class TechnicianBase(BaseModel):
     """Base technician schema."""
-    first_name: str = Field(..., min_length=1, max_length=100)
-    last_name: str = Field(..., min_length=1, max_length=100)
+    first_name: str = Field(default="", max_length=100)
+    last_name: str = Field(default="", max_length=100)
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(None, max_length=20)
     employee_id: Optional[str] = Field(None, max_length=50)

@@ -81,31 +81,33 @@ async def list_technicians(
         # Convert rows to response dicts
         items = []
         for row in rows:
+            first_name = row[1] or ""
+            last_name = row[2] or ""
             items.append({
                 "id": str(row[0]),
-                "first_name": row[1],
-                "last_name": row[2],
-                "full_name": f"{row[1]} {row[2]}",
+                "first_name": first_name,
+                "last_name": last_name,
+                "full_name": f"{first_name} {last_name}".strip(),
                 "email": row[3],
                 "phone": row[4],
                 "employee_id": row[5],
-                "is_active": row[6],
-                "skills": row[7] or [],
+                "is_active": row[6] if row[6] is not None else True,
+                "skills": row[7] if isinstance(row[7], list) else [],
                 "assigned_vehicle": row[8],
-                "vehicle_capacity_gallons": row[9],
+                "vehicle_capacity_gallons": float(row[9]) if row[9] else None,
                 "license_number": row[10],
                 "license_expiry": str(row[11]) if row[11] else None,
-                "hourly_rate": row[12],
+                "hourly_rate": float(row[12]) if row[12] else None,
                 "notes": row[13],
                 "home_region": row[14],
                 "home_address": row[15],
                 "home_city": row[16],
                 "home_state": row[17],
                 "home_postal_code": row[18],
-                "home_latitude": row[19],
-                "home_longitude": row[20],
-                "created_at": row[21].isoformat() if row[21] else None,
-                "updated_at": row[22].isoformat() if row[22] else None,
+                "home_latitude": float(row[19]) if row[19] else None,
+                "home_longitude": float(row[20]) if row[20] else None,
+                "created_at": row[21],
+                "updated_at": row[22],
             })
 
         return {
@@ -124,7 +126,7 @@ async def list_technicians(
 
 @router.get("/{technician_id}", response_model=TechnicianResponse)
 async def get_technician(
-    technician_id: int,
+    technician_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -157,7 +159,7 @@ async def create_technician(
 
 @router.patch("/{technician_id}", response_model=TechnicianResponse)
 async def update_technician(
-    technician_id: int,
+    technician_id: str,
     technician_data: TechnicianUpdate,
     db: DbSession,
     current_user: CurrentUser,
@@ -184,7 +186,7 @@ async def update_technician(
 
 @router.delete("/{technician_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_technician(
-    technician_id: int,
+    technician_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):

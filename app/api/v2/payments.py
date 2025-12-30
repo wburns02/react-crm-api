@@ -1,7 +1,7 @@
 """
 Payments API - Track invoice and customer payments.
 """
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status as http_status, Query
 from sqlalchemy import select, func
 from typing import Optional
 from datetime import datetime
@@ -28,7 +28,7 @@ async def list_payments(
     page_size: int = Query(20, ge=1, le=500),
     customer_id: Optional[int] = None,
     work_order_id: Optional[str] = None,  # Flask uses work_order_id not invoice_id
-    status: Optional[str] = None,
+    payment_status: Optional[str] = None,
     payment_method: Optional[str] = None,
 ):
     """List payments with pagination and filtering."""
@@ -43,8 +43,8 @@ async def list_payments(
         if work_order_id:
             query = query.where(Payment.work_order_id == work_order_id)
 
-        if status:
-            query = query.where(Payment.status == status)
+        if payment_status:
+            query = query.where(Payment.status == payment_status)
 
         if payment_method:
             query = query.where(Payment.payment_method == payment_method)
@@ -71,7 +71,7 @@ async def list_payments(
     except Exception as e:
         logger.error(f"Error listing payments: {type(e).__name__}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
 
@@ -88,14 +88,14 @@ async def get_payment(
 
     if not payment:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Payment not found",
         )
 
     return payment
 
 
-@router.post("/", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=PaymentResponse, status_code=http_status.HTTP_201_CREATED)
 async def create_payment(
     payment_data: PaymentCreate,
     db: DbSession,
@@ -125,7 +125,7 @@ async def update_payment(
 
     if not payment:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Payment not found",
         )
 
@@ -139,7 +139,7 @@ async def update_payment(
     return payment
 
 
-@router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{payment_id}", status_code=http_status.HTTP_204_NO_CONTENT)
 async def delete_payment(
     payment_id: int,
     db: DbSession,
@@ -151,7 +151,7 @@ async def delete_payment(
 
     if not payment:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Payment not found",
         )
 
