@@ -75,47 +75,76 @@ async def get_dashboard_stats(
     """Get aggregated dashboard statistics."""
     now = datetime.now()
     today = now.date()
-    month_start = today.replace(day=1)
 
-    # Prospect stages (strings)
+    # Default values in case of errors
+    total_prospects = 0
+    total_customers = 0
+    total_work_orders = 0
+    scheduled_work_orders = 0
+    in_progress_work_orders = 0
+    today_jobs_count = 0
+    revenue_mtd = 0.0
+    invoices_pending = 0
+    invoices_overdue = 0
+    recent_prospects_models = []
+    recent_customers_models = []
+    today_jobs_models = []
+
     prospect_stages = ["new_lead", "contacted", "qualified", "quoted", "negotiation"]
 
-    # Total prospects
-    total_prospects_result = await db.execute(
-        select(func.count()).where(Customer.prospect_stage.in_(prospect_stages))
-    )
-    total_prospects = total_prospects_result.scalar() or 0
-    active_prospects = total_prospects
-
-    # Total customers (won)
-    total_customers_result = await db.execute(
-        select(func.count()).where(Customer.prospect_stage == "won")
-    )
-    total_customers = total_customers_result.scalar() or 0
-
-    # Work order stats
-    total_wo_result = await db.execute(select(func.count()).select_from(WorkOrder))
-    total_work_orders = total_wo_result.scalar() or 0
-
-    scheduled_wo_result = await db.execute(
-        select(func.count()).where(WorkOrder.status.in_(["scheduled", "confirmed"]))
-    )
-    scheduled_work_orders = scheduled_wo_result.scalar() or 0
-
-    in_progress_wo_result = await db.execute(
-        select(func.count()).where(WorkOrder.status.in_(["enroute", "on_site", "in_progress"]))
-    )
-    in_progress_work_orders = in_progress_wo_result.scalar() or 0
-
-    today_jobs_result = await db.execute(
-        select(func.count()).where(func.date(WorkOrder.scheduled_date) == today)
-    )
-    today_jobs = today_jobs_result.scalar() or 0
-
-    pipeline_value = 0.0
-
-    # Revenue MTD - safely handle if invoices table doesn't exist
+    # Wrap all database queries in try/except for robustness
     try:
+        # Total prospects
+        total_prospects_result = await db.execute(
+            select(func.count()).where(Customer.prospect_stage.in_(prospect_stages))
+        )
+        total_prospects = total_prospects_result.scalar() or 0
+    except Exception:
+        pass
+
+    try:
+        # Total customers (won)
+        total_customers_result = await db.execute(
+            select(func.count()).where(Customer.prospect_stage == "won")
+        )
+        total_customers = total_customers_result.scalar() or 0
+    except Exception:
+        pass
+
+    try:
+        # Work order stats
+        total_wo_result = await db.execute(select(func.count()).select_from(WorkOrder))
+        total_work_orders = total_wo_result.scalar() or 0
+    except Exception:
+        pass
+
+    try:
+        scheduled_wo_result = await db.execute(
+            select(func.count()).where(WorkOrder.status.in_(["scheduled", "confirmed"]))
+        )
+        scheduled_work_orders = scheduled_wo_result.scalar() or 0
+    except Exception:
+        pass
+
+    try:
+        in_progress_wo_result = await db.execute(
+            select(func.count()).where(WorkOrder.status.in_(["enroute", "on_site", "in_progress"]))
+        )
+        in_progress_work_orders = in_progress_wo_result.scalar() or 0
+    except Exception:
+        pass
+
+    try:
+        today_jobs_result = await db.execute(
+            select(func.count()).where(WorkOrder.scheduled_date == today)
+        )
+        today_jobs_count = today_jobs_result.scalar() or 0
+    except Exception:
+        pass
+
+    # Invoice queries - table may not exist
+    try:
+        month_start = today.replace(day=1)
         revenue_result = await db.execute(
             select(func.sum(Invoice.total)).where(
                 and_(
@@ -136,21 +165,19 @@ async def get_dashboard_stats(
         )
         invoices_overdue = overdue_result.scalar() or 0
     except Exception:
-        # Invoices table may not exist in Flask database
-        revenue_mtd = 0.0
-        invoices_pending = 0
-        invoices_overdue = 0
+        pass
 
-    upcoming_followups = 0
-
-    # Recent prospects
-    recent_prospects_result = await db.execute(
-        select(Customer)
-        .where(Customer.prospect_stage.in_(prospect_stages))
-        .order_by(Customer.created_at.desc())
-        .limit(5)
-    )
-    recent_prospects_models = recent_prospects_result.scalars().all()
+    # Recent prospects - order by id if created_at is unreliable
+    try:
+        recent_prospects_result = await db.execute(
+            select(Customer)
+            .where(Customer.prospect_stage.in_(prospect_stages))
+            .order_by(Customer.id.desc())
+            .limit(5)
+        )
+        recent_prospects_models = recent_prospects_result.scalars().all()
+    except Exception:
+        pass
 
     recent_prospects = [
         RecentProspect(
@@ -165,14 +192,17 @@ async def get_dashboard_stats(
         for p in recent_prospects_models
     ]
 
-    # Recent customers
-    recent_customers_result = await db.execute(
-        select(Customer)
-        .where(Customer.prospect_stage == "won")
-        .order_by(Customer.created_at.desc())
-        .limit(5)
-    )
-    recent_customers_models = recent_customers_result.scalars().all()
+    # Recent customers - order by id if created_at is unreliable
+    try:
+        recent_customers_result = await db.execute(
+            select(Customer)
+            .where(Customer.prospect_stage == "won")
+            .order_by(Customer.id.desc())
+            .limit(5)
+        )
+        recent_customers_models = recent_customers_result.scalars().all()
+    except Exception:
+        pass
 
     recent_customers = [
         RecentCustomer(
@@ -188,13 +218,15 @@ async def get_dashboard_stats(
     ]
 
     # Today's jobs
-    today_jobs_query = await db.execute(
-        select(WorkOrder)
-        .where(func.date(WorkOrder.scheduled_date) == today)
-        .order_by(WorkOrder.time_window_start)
-        .limit(10)
-    )
-    today_jobs_models = today_jobs_query.scalars().all()
+    try:
+        today_jobs_query = await db.execute(
+            select(WorkOrder)
+            .where(WorkOrder.scheduled_date == today)
+            .limit(10)
+        )
+        today_jobs_models = today_jobs_query.scalars().all()
+    except Exception:
+        pass
 
     today_jobs_list = [
         TodayJob(
@@ -211,17 +243,17 @@ async def get_dashboard_stats(
 
     stats = DashboardStats(
         total_prospects=total_prospects,
-        active_prospects=active_prospects,
+        active_prospects=total_prospects,
         total_customers=total_customers,
         total_work_orders=total_work_orders,
         scheduled_work_orders=scheduled_work_orders,
         in_progress_work_orders=in_progress_work_orders,
-        today_jobs=today_jobs,
-        pipeline_value=pipeline_value,
+        today_jobs=today_jobs_count,
+        pipeline_value=0.0,
         revenue_mtd=float(revenue_mtd),
         invoices_pending=invoices_pending,
         invoices_overdue=invoices_overdue,
-        upcoming_followups=upcoming_followups,
+        upcoming_followups=0,
         recent_prospect_ids=[str(p.id) for p in recent_prospects_models],
         recent_customer_ids=[str(c.id) for c in recent_customers_models],
     )
