@@ -16,6 +16,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/test-minimal")
+async def test_minimal(
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+):
+    """Minimal test endpoint to diagnose Query parameter issues."""
+    return {"message": "test ok", "page": page}
+
+
 @router.get("/debug")
 async def debug_technicians(
     db: DbSession,
@@ -174,7 +184,7 @@ def technician_to_response(tech: Technician) -> dict:
     }
 
 
-@router.get("/")
+@router.get("")
 async def list_technicians(
     db: DbSession,
     current_user: CurrentUser,
@@ -302,7 +312,7 @@ async def get_technician(
     return technician_to_response(technician)
 
 
-@router.post("/", response_model=TechnicianResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TechnicianResponse, status_code=status.HTTP_201_CREATED)
 async def create_technician(
     technician_data: TechnicianCreate,
     db: DbSession,
