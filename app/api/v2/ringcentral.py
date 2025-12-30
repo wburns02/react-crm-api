@@ -152,6 +152,21 @@ async def get_ringcentral_status():
     return result
 
 
+@router.get("/debug-config")
+async def get_debug_config():
+    """DEBUG: Check RingCentral configuration values."""
+    from app.config import settings
+    return {
+        "client_id_set": bool(settings.RINGCENTRAL_CLIENT_ID),
+        "client_id_len": len(settings.RINGCENTRAL_CLIENT_ID or ""),
+        "client_secret_set": bool(settings.RINGCENTRAL_CLIENT_SECRET),
+        "client_secret_len": len(settings.RINGCENTRAL_CLIENT_SECRET or ""),
+        "server_url": settings.RINGCENTRAL_SERVER_URL,
+        "service_configured": ringcentral_service.is_configured,
+        "service_client_id_len": len(ringcentral_service.config.client_id or ""),
+    }
+
+
 @router.post("/call")
 async def make_call(
     request: MakeCallRequest,
