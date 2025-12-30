@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, Literal
+from decimal import Decimal
 
 
 # Valid invoice status values
@@ -27,61 +28,65 @@ class CustomerSummary(BaseModel):
 
 
 class InvoiceBase(BaseModel):
-    """Base invoice schema."""
-    customer_id: int
-    work_order_id: Optional[str] = None
+    """Base invoice schema - matches Flask database with UUIDs."""
+    customer_id: str  # UUID as string
+    work_order_id: Optional[str] = None  # UUID as string
     status: str = "draft"
-    line_items: list[LineItem] = []
-    tax_rate: float = Field(0, ge=0, le=100)
-    due_date: Optional[str] = None
+    line_items: Optional[list[LineItem]] = []
     notes: Optional[str] = None
-    terms: Optional[str] = None
 
 
 class InvoiceCreate(InvoiceBase):
     """Schema for creating an invoice."""
-    # Calculated fields are passed from frontend
-    subtotal: Optional[float] = 0
-    tax: Optional[float] = 0
-    total: Optional[float] = 0
+    invoice_number: Optional[str] = None
+    issue_date: Optional[date] = None
+    due_date: Optional[date] = None
+    amount: Optional[Decimal] = 0
+    currency: Optional[str] = "USD"
 
 
 class InvoiceUpdate(BaseModel):
     """Schema for updating an invoice (all fields optional)."""
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     work_order_id: Optional[str] = None
     status: Optional[str] = None
     line_items: Optional[list[LineItem]] = None
-    subtotal: Optional[float] = None
-    tax_rate: Optional[float] = Field(None, ge=0, le=100)
-    tax: Optional[float] = None
-    total: Optional[float] = None
-    due_date: Optional[str] = None
-    paid_date: Optional[str] = None
+    amount: Optional[Decimal] = None
+    paid_amount: Optional[Decimal] = None
+    issue_date: Optional[date] = None
+    due_date: Optional[date] = None
+    paid_date: Optional[date] = None
     notes: Optional[str] = None
-    terms: Optional[str] = None
 
 
 class InvoiceResponse(BaseModel):
-    """Schema for invoice response."""
-    id: str
-    invoice_number: str
-    customer_id: str
+    """Schema for invoice response - matches Flask database."""
+    id: str  # UUID as string
+    invoice_number: Optional[str] = None
+    customer_id: str  # UUID as string
     customer_name: Optional[str] = None
     customer: Optional[CustomerSummary] = None
-    work_order_id: Optional[str] = None
+    work_order_id: Optional[str] = None  # UUID as string
     status: str
-    line_items: list[LineItem]
-    subtotal: float
-    tax_rate: float
-    tax: float
-    total: float
-    due_date: Optional[str] = None
-    paid_date: Optional[str] = None
+    line_items: Optional[list[LineItem]] = []
+
+    # Flask DB uses 'amount' instead of separate subtotal/tax/total
+    amount: Optional[float] = 0
+    paid_amount: Optional[float] = 0
+    currency: Optional[str] = "USD"
+
+    # Dates
+    issue_date: Optional[date] = None
+    due_date: Optional[date] = None
+    paid_date: Optional[date] = None
+
+    # Additional fields from Flask
+    external_payment_link: Optional[str] = None
+    pdf_url: Optional[str] = None
     notes: Optional[str] = None
-    terms: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

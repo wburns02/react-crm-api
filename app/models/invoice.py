@@ -1,55 +1,63 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Numeric, JSON, Date
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
+import uuid
 
 
 class Invoice(Base):
-    """Invoice model for customer billing."""
+    """Invoice model - matches existing Flask database schema.
+
+    NOTE: Flask uses UUID for id, customer_id, and work_order_id
+    """
 
     __tablename__ = "invoices"
 
-    id = Column(Integer, primary_key=True, index=True)
-    invoice_number = Column(String(50), unique=True, index=True, nullable=False)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
-    work_order_id = Column(String(36), ForeignKey("work_orders.id"), nullable=True, index=True)
+    # Flask uses UUID for primary key
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True, index=True)
 
-    status = Column(String(20), default="draft", nullable=False)
-
-    # Line items stored as JSON array
-    # Each item: {service, description, quantity, rate, amount}
-    line_items = Column(JSON, default=list)
-
-    # Calculated totals
-    subtotal = Column(Float, default=0)
-    tax_rate = Column(Float, default=0)  # Percentage (e.g., 8.25 for 8.25%)
-    tax = Column(Float, default=0)
-    total = Column(Float, default=0)
+    invoice_number = Column(String(50), unique=True, index=True)
 
     # Dates
-    due_date = Column(String(20))  # ISO date string
-    paid_date = Column(String(20))  # ISO date string
+    issue_date = Column(Date)
+    due_date = Column(Date)
+    paid_date = Column(Date)
+
+    # Amounts
+    amount = Column(Numeric(10, 2))  # Total amount
+    paid_amount = Column(Numeric(10, 2))
+    currency = Column(String(3), default="USD")
+
+    # Status is a USER-DEFINED type in Flask DB
+    status = Column(String(20), default="draft")  # draft, sent, paid, overdue, void
+
+    # Line items stored as JSON
+    line_items = Column(JSON, default=list)
 
     # Additional info
     notes = Column(Text)
-    terms = Column(Text)
+    external_payment_link = Column(String(255))
+    quickbooks_invoice_id = Column(String(100))
+
+    # PDF
+    pdf_url = Column(String(255))
+    pdf_generated_at = Column(DateTime)
+
+    # Sending
+    last_sent_at = Column(DateTime)
+    sent_count = Column(Integer, default=0)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationships
-    customer = relationship("Customer", backref="invoices")
-    work_order = relationship("WorkOrder", backref="invoices")
+    # Relationships - note: Customer.id is also UUID in Flask
+    # We can't define relationship here as Customer model uses Integer id
+    # customer = relationship("Customer", backref="invoices")
+    # work_order = relationship("WorkOrder", backref="invoices")
 
     def __repr__(self):
         return f"<Invoice {self.invoice_number}>"
-
-    def calculate_totals(self):
-        """Recalculate subtotal, tax, and total from line items."""
-        if self.line_items:
-            self.subtotal = sum(item.get('amount', 0) for item in self.line_items)
-        else:
-            self.subtotal = 0
-        self.tax = self.subtotal * (self.tax_rate / 100) if self.tax_rate else 0
-        self.total = self.subtotal + self.tax
