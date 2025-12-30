@@ -163,7 +163,7 @@ def technician_to_response(tech: Technician) -> dict:
     }
 
 
-@router.get("", include_in_schema=True)
+@router.get("/")
 async def list_technicians(
     db: DbSession,
     current_user: CurrentUser,
@@ -173,90 +173,95 @@ async def list_technicians(
     active_only: Optional[bool] = None,
 ):
     """List technicians with pagination and filtering."""
-    from sqlalchemy import text as sql_text
+    try:
+        from sqlalchemy import text as sql_text
 
-    # Use raw SQL to avoid ORM issues
-    sql = """
-        SELECT id, first_name, last_name, email, phone, employee_id, is_active,
-               skills, assigned_vehicle, vehicle_capacity_gallons,
-               license_number, license_expiry, hourly_rate, notes,
-               home_region, home_address, home_city, home_state, home_postal_code,
-               home_latitude, home_longitude, created_at, updated_at
-        FROM technicians
-        ORDER BY first_name, last_name
-        LIMIT :limit OFFSET :offset
-    """
-    offset_val = (page - 1) * page_size
-    result = await db.execute(sql_text(sql), {"limit": page_size, "offset": offset_val})
-    rows = result.fetchall()
+        # Use raw SQL to avoid ORM issues
+        sql = """
+            SELECT id, first_name, last_name, email, phone, employee_id, is_active,
+                   skills, assigned_vehicle, vehicle_capacity_gallons,
+                   license_number, license_expiry, hourly_rate, notes,
+                   home_region, home_address, home_city, home_state, home_postal_code,
+                   home_latitude, home_longitude, created_at, updated_at
+            FROM technicians
+            ORDER BY first_name, last_name
+            LIMIT :limit OFFSET :offset
+        """
+        offset_val = (page - 1) * page_size
+        result = await db.execute(sql_text(sql), {"limit": page_size, "offset": offset_val})
+        rows = result.fetchall()
 
-    # Count total
-    count_result = await db.execute(sql_text("SELECT COUNT(*) FROM technicians"))
-    total = count_result.scalar()
+        # Count total
+        count_result = await db.execute(sql_text("SELECT COUNT(*) FROM technicians"))
+        total = count_result.scalar()
 
-    # Convert rows to response dicts
-    items = []
-    for row in rows:
-        first_name = row[1] or ""
-        last_name = row[2] or ""
+        # Convert rows to response dicts
+        items = []
+        for row in rows:
+            first_name = row[1] or ""
+            last_name = row[2] or ""
 
-        # Handle skills - might be list, tuple, or None
-        skills_val = row[7]
-        if skills_val is None:
-            skills = []
-        elif isinstance(skills_val, (list, tuple)):
-            skills = list(skills_val)
-        else:
-            skills = []
+            # Handle skills - might be list, tuple, or None
+            skills_val = row[7]
+            if skills_val is None:
+                skills = []
+            elif isinstance(skills_val, (list, tuple)):
+                skills = list(skills_val)
+            else:
+                skills = []
 
-        # Handle datetime fields - convert to ISO string for serialization
-        created_at = None
-        if row[21]:
-            try:
-                created_at = row[21].isoformat() if hasattr(row[21], 'isoformat') else str(row[21])
-            except Exception:
-                created_at = None
+            # Handle datetime fields - convert to ISO string for serialization
+            created_at = None
+            if row[21]:
+                try:
+                    created_at = row[21].isoformat() if hasattr(row[21], 'isoformat') else str(row[21])
+                except Exception:
+                    created_at = None
 
-        updated_at = None
-        if row[22]:
-            try:
-                updated_at = row[22].isoformat() if hasattr(row[22], 'isoformat') else str(row[22])
-            except Exception:
-                updated_at = None
+            updated_at = None
+            if row[22]:
+                try:
+                    updated_at = row[22].isoformat() if hasattr(row[22], 'isoformat') else str(row[22])
+                except Exception:
+                    updated_at = None
 
-        items.append({
-            "id": str(row[0]),
-            "first_name": first_name,
-            "last_name": last_name,
-            "full_name": f"{first_name} {last_name}".strip(),
-            "email": row[3],
-            "phone": row[4],
-            "employee_id": row[5],
-            "is_active": bool(row[6]) if row[6] is not None else True,
-            "skills": skills,
-            "assigned_vehicle": row[8],
-            "vehicle_capacity_gallons": float(row[9]) if row[9] else None,
-            "license_number": row[10],
-            "license_expiry": str(row[11]) if row[11] else None,
-            "hourly_rate": float(row[12]) if row[12] else None,
-            "notes": row[13],
-            "home_region": row[14],
-            "home_address": row[15],
-            "home_city": row[16],
-            "home_state": row[17],
-            "home_postal_code": row[18],
-            "home_latitude": float(row[19]) if row[19] else None,
-            "home_longitude": float(row[20]) if row[20] else None,
-            "created_at": created_at,
-            "updated_at": updated_at,
-        })
+            items.append({
+                "id": str(row[0]),
+                "first_name": first_name,
+                "last_name": last_name,
+                "full_name": f"{first_name} {last_name}".strip(),
+                "email": row[3],
+                "phone": row[4],
+                "employee_id": row[5],
+                "is_active": bool(row[6]) if row[6] is not None else True,
+                "skills": skills,
+                "assigned_vehicle": row[8],
+                "vehicle_capacity_gallons": float(row[9]) if row[9] else None,
+                "license_number": row[10],
+                "license_expiry": str(row[11]) if row[11] else None,
+                "hourly_rate": float(row[12]) if row[12] else None,
+                "notes": row[13],
+                "home_region": row[14],
+                "home_address": row[15],
+                "home_city": row[16],
+                "home_state": row[17],
+                "home_postal_code": row[18],
+                "home_latitude": float(row[19]) if row[19] else None,
+                "home_longitude": float(row[20]) if row[20] else None,
+                "created_at": created_at,
+                "updated_at": updated_at,
+            })
 
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-    }
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        import traceback
+        logger.error(f"Error in list_technicians: {traceback.format_exc()}")
+        return {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}
 
 
 @router.get("/{technician_id}", response_model=TechnicianResponse)
