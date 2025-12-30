@@ -80,11 +80,19 @@ async def list_technicians_raw(
         last_name = row[2] or ""
 
         # Handle skills - may be list, tuple, or comma-separated string
+        # Note: Database has corrupted data where skills were stored as char arrays
+        # e.g., ['p','u','m','p','i','n','g',',','m',...] instead of ['pumping','maintenance',...]
         skills_val = row[7]
         if skills_val is None:
             skills = []
         elif isinstance(skills_val, (list, tuple)):
-            skills = list(skills_val)
+            # Check if this is a corrupted char array (all items are single chars)
+            if skills_val and all(isinstance(s, str) and len(s) <= 1 for s in skills_val):
+                # Join chars back together and split by comma
+                joined = "".join(skills_val)
+                skills = [s.strip() for s in joined.split(",") if s.strip()]
+            else:
+                skills = list(skills_val)
         elif isinstance(skills_val, str):
             # Parse comma-separated string
             skills = [s.strip() for s in skills_val.split(",") if s.strip()]
@@ -205,13 +213,18 @@ async def list_technicians(
             last_name = row[2] or ""
 
             # Handle skills - may be list, tuple, or comma-separated string
+            # Note: Database has corrupted data where skills were stored as char arrays
             skills_val = row[7]
             if skills_val is None:
                 skills = []
             elif isinstance(skills_val, (list, tuple)):
-                skills = list(skills_val)
+                # Check if this is a corrupted char array (all items are single chars)
+                if skills_val and all(isinstance(s, str) and len(s) <= 1 for s in skills_val):
+                    joined = "".join(skills_val)
+                    skills = [s.strip() for s in joined.split(",") if s.strip()]
+                else:
+                    skills = list(skills_val)
             elif isinstance(skills_val, str):
-                # Parse comma-separated string
                 skills = [s.strip() for s in skills_val.split(",") if s.strip()]
             else:
                 skills = []
