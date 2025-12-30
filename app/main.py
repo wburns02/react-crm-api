@@ -8,8 +8,9 @@ SECURITY FEATURES:
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import logging
 
 from app.api.v2.router import api_router
@@ -28,6 +29,22 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+class ProxyHeadersMiddleware(BaseHTTPMiddleware):
+    """Middleware to trust X-Forwarded-* headers from reverse proxies like Railway.
+
+    This fixes the issue where FastAPI's trailing slash redirect (307) generates
+    HTTP URLs instead of HTTPS when behind a reverse proxy.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        # Trust X-Forwarded-Proto header from Railway's edge proxy
+        forwarded_proto = request.headers.get("x-forwarded-proto")
+        if forwarded_proto:
+            # Update the scope to reflect the actual client protocol
+            request.scope["scheme"] = forwarded_proto
+        return await call_next(request)
 
 
 @asynccontextmanager
@@ -63,6 +80,10 @@ app = FastAPI(
     redoc_url=redoc_url,
     lifespan=lifespan,
 )
+
+# Proxy headers middleware (must be added before CORS)
+# This ensures redirects use HTTPS when behind Railway's edge proxy
+app.add_middleware(ProxyHeadersMiddleware)
 
 # CORS middleware
 # SECURITY: Restrict origins to known frontend URLs

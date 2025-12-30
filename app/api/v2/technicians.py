@@ -79,12 +79,15 @@ async def list_technicians_raw(
         first_name = row[1] or ""
         last_name = row[2] or ""
 
-        # Handle skills
+        # Handle skills - may be list, tuple, or comma-separated string
         skills_val = row[7]
         if skills_val is None:
             skills = []
         elif isinstance(skills_val, (list, tuple)):
             skills = list(skills_val)
+        elif isinstance(skills_val, str):
+            # Parse comma-separated string
+            skills = [s.strip() for s in skills_val.split(",") if s.strip()]
         else:
             skills = []
 
@@ -201,12 +204,15 @@ async def list_technicians(
             first_name = row[1] or ""
             last_name = row[2] or ""
 
-            # Handle skills - might be list, tuple, or None
+            # Handle skills - may be list, tuple, or comma-separated string
             skills_val = row[7]
             if skills_val is None:
                 skills = []
             elif isinstance(skills_val, (list, tuple)):
                 skills = list(skills_val)
+            elif isinstance(skills_val, str):
+                # Parse comma-separated string
+                skills = [s.strip() for s in skills_val.split(",") if s.strip()]
             else:
                 skills = []
 
