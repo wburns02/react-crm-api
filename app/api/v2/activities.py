@@ -23,7 +23,7 @@ def activity_to_response(activity: Activity) -> dict:
     """Convert Activity model to response dict."""
     return {
         "id": str(activity.id),
-        "customer_id": str(activity.customer_id),
+        "customer_id": str(activity.customer_id),  # Convert to string for frontend
         "activity_type": activity.activity_type,
         "description": activity.description,
         "activity_date": activity.activity_date.isoformat() if activity.activity_date else None,
@@ -48,7 +48,7 @@ async def list_activities(
 
     # Apply filters
     if customer_id:
-        query = query.where(Activity.customer_id == customer_id)
+        query = query.where(Activity.customer_id == int(customer_id))
 
     if activity_type:
         query = query.where(Activity.activity_type == activity_type)
@@ -101,6 +101,9 @@ async def create_activity(
 ):
     """Create a new activity."""
     data = activity_data.model_dump()
+
+    # Convert customer_id from string to int
+    data["customer_id"] = int(data["customer_id"])
 
     # Convert string dates
     if data.get("activity_date"):

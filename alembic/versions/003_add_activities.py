@@ -34,7 +34,7 @@ def upgrade():
         op.create_table(
             'activities',
             sa.Column('id', UUID(as_uuid=True), primary_key=True),
-            sa.Column('customer_id', UUID(as_uuid=True), sa.ForeignKey('customers.id'), nullable=False, index=True),
+            sa.Column('customer_id', sa.Integer, sa.ForeignKey('customers.id'), nullable=False, index=True),
             sa.Column('activity_type', sa.String(20), nullable=False, index=True),
             sa.Column('description', sa.Text, nullable=False),
             sa.Column('activity_date', sa.DateTime(timezone=True), server_default=sa.func.now()),

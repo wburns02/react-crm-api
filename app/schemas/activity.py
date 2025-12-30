@@ -9,7 +9,7 @@ ActivityType = Literal["call", "email", "sms", "note", "meeting", "task"]
 
 class ActivityBase(BaseModel):
     """Base activity schema."""
-    customer_id: str = Field(..., description="UUID of the customer")
+    customer_id: str = Field(..., description="ID of the customer (string, will be converted to int)")
     activity_type: ActivityType
     description: str = Field(..., min_length=1)
     activity_date: Optional[str] = None
