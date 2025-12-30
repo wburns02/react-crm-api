@@ -33,7 +33,7 @@ def activity_to_response(activity: Activity) -> dict:
     }
 
 
-@router.get("", response_model=ActivityListResponse)
+@router.get("")
 async def list_activities(
     db: DbSession,
     current_user: CurrentUser,
@@ -43,35 +43,40 @@ async def list_activities(
     activity_type: Optional[str] = None,
 ):
     """List activities with pagination and filtering."""
-    # Base query
-    query = select(Activity)
+    try:
+        # Base query
+        query = select(Activity)
 
-    # Apply filters
-    if customer_id:
-        query = query.where(Activity.customer_id == int(customer_id))
+        # Apply filters
+        if customer_id:
+            query = query.where(Activity.customer_id == int(customer_id))
 
-    if activity_type:
-        query = query.where(Activity.activity_type == activity_type)
+        if activity_type:
+            query = query.where(Activity.activity_type == activity_type)
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
 
-    # Apply pagination and ordering
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(Activity.activity_date.desc())
+        # Apply pagination and ordering
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size).order_by(Activity.activity_date.desc())
 
-    # Execute query
-    result = await db.execute(query)
-    activities = result.scalars().all()
+        # Execute query
+        result = await db.execute(query)
+        activities = result.scalars().all()
 
-    return ActivityListResponse(
-        items=[activity_to_response(a) for a in activities],
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+        return {
+            "items": [activity_to_response(a) for a in activities],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        import traceback
+        logger.error(f"Error in list_activities: {traceback.format_exc()}")
+        return {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}
 
 
 @router.get("/{activity_id}", response_model=ActivityResponse)
