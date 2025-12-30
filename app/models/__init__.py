@@ -8,6 +8,9 @@ from app.models.payment import Payment
 from app.models.quote import Quote
 from app.models.sms_consent import SMSConsent, SMSConsentAudit
 from app.models.activity import Activity
+from app.models.ticket import Ticket
+from app.models.equipment import Equipment
+from app.models.inventory import InventoryItem
 
 __all__ = [
     "Customer",
@@ -21,4 +24,7 @@ __all__ = [
     "SMSConsent",
     "SMSConsentAudit",
     "Activity",
+    "Ticket",
+    "Equipment",
+    "InventoryItem",
 ]

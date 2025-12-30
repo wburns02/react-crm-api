@@ -20,7 +20,8 @@ from app.database import init_db
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
     Customer, WorkOrder, Message, User, Technician,
-    Invoice, Payment, Quote, SMSConsent, SMSConsentAudit, Activity
+    Invoice, Payment, Quote, SMSConsent, SMSConsentAudit, Activity,
+    Ticket, Equipment, InventoryItem
 )
 
 # Configure secure logging
@@ -75,7 +76,7 @@ redoc_url = "/redoc" if settings.DOCS_ENABLED else None
 app = FastAPI(
     title="React CRM API",
     description="API for React CRM - Nationwide Septic Service Management",
-    version="2.0.0",
+    version="2.0.2",  # Added tickets, equipment, inventory endpoints
     docs_url=docs_url,
     redoc_url=redoc_url,
     lifespan=lifespan,
