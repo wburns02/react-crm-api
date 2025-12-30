@@ -1,5 +1,4 @@
 from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime
 from typing import Optional
 
 
@@ -84,30 +83,12 @@ class TechnicianResponse(TechnicianBase):
     """Schema for technician response."""
     id: str  # Frontend expects string ID
     full_name: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    # Accept both datetime and string for flexibility
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
     class Config:
         from_attributes = True
-
-    @classmethod
-    def model_validate(cls, obj, **kwargs):
-        """Custom validation to convert integer id to string."""
-        if hasattr(obj, 'id') and isinstance(obj.id, int):
-            # Create a dict-like wrapper that converts id to string
-            class IdWrapper:
-                def __init__(self, original):
-                    self._original = original
-
-                def __getattr__(self, name):
-                    if name == 'id':
-                        return str(self._original.id)
-                    if name == 'full_name':
-                        return f"{self._original.first_name} {self._original.last_name}"
-                    return getattr(self._original, name)
-
-            obj = IdWrapper(obj)
-        return super().model_validate(obj, **kwargs)
 
 
 class TechnicianListResponse(BaseModel):

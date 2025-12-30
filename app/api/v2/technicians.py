@@ -83,6 +83,31 @@ async def list_technicians(
         for row in rows:
             first_name = row[1] or ""
             last_name = row[2] or ""
+
+            # Handle skills - might be list, tuple, or None
+            skills_val = row[7]
+            if skills_val is None:
+                skills = []
+            elif isinstance(skills_val, (list, tuple)):
+                skills = list(skills_val)
+            else:
+                skills = []
+
+            # Handle datetime fields - convert to ISO string for serialization
+            created_at = None
+            if row[21]:
+                try:
+                    created_at = row[21].isoformat() if hasattr(row[21], 'isoformat') else str(row[21])
+                except Exception:
+                    created_at = None
+
+            updated_at = None
+            if row[22]:
+                try:
+                    updated_at = row[22].isoformat() if hasattr(row[22], 'isoformat') else str(row[22])
+                except Exception:
+                    updated_at = None
+
             items.append({
                 "id": str(row[0]),
                 "first_name": first_name,
@@ -91,8 +116,8 @@ async def list_technicians(
                 "email": row[3],
                 "phone": row[4],
                 "employee_id": row[5],
-                "is_active": row[6] if row[6] is not None else True,
-                "skills": row[7] if isinstance(row[7], list) else [],
+                "is_active": bool(row[6]) if row[6] is not None else True,
+                "skills": skills,
                 "assigned_vehicle": row[8],
                 "vehicle_capacity_gallons": float(row[9]) if row[9] else None,
                 "license_number": row[10],
@@ -106,8 +131,8 @@ async def list_technicians(
                 "home_postal_code": row[18],
                 "home_latitude": float(row[19]) if row[19] else None,
                 "home_longitude": float(row[20]) if row[20] else None,
-                "created_at": row[21],
-                "updated_at": row[22],
+                "created_at": created_at,
+                "updated_at": updated_at,
             })
 
         return {
@@ -118,6 +143,8 @@ async def list_technicians(
         }
     except Exception as e:
         logger.error(f"Error listing technicians: {type(e).__name__}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error: {type(e).__name__}: {str(e)}"
