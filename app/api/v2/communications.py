@@ -30,6 +30,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/debug-config")
+async def get_twilio_debug_config():
+    """DEBUG: Check Twilio configuration values (no auth required)."""
+    from app.config import settings
+    return {
+        "account_sid_set": bool(settings.TWILIO_ACCOUNT_SID),
+        "account_sid_len": len(settings.TWILIO_ACCOUNT_SID or ""),
+        "account_sid_preview": (settings.TWILIO_ACCOUNT_SID or "")[:4] + "..." if settings.TWILIO_ACCOUNT_SID else None,
+        "auth_token_set": bool(settings.TWILIO_AUTH_TOKEN),
+        "auth_token_len": len(settings.TWILIO_AUTH_TOKEN or ""),
+        "phone_number": settings.TWILIO_PHONE_NUMBER,
+        "sms_from_number": settings.TWILIO_SMS_FROM_NUMBER,
+    }
+
+
 @router.get("/history", response_model=MessageListResponse)
 async def get_communication_history(
     db: DbSession,
