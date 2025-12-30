@@ -1,7 +1,10 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
-from app.models.invoice import InvoiceStatus
+from typing import Optional, Literal
+
+
+# Valid invoice status values
+INVOICE_STATUSES = Literal["draft", "sent", "paid", "overdue", "void"]
 
 
 class LineItem(BaseModel):
@@ -26,8 +29,8 @@ class CustomerSummary(BaseModel):
 class InvoiceBase(BaseModel):
     """Base invoice schema."""
     customer_id: int
-    work_order_id: Optional[int] = None
-    status: InvoiceStatus = InvoiceStatus.draft
+    work_order_id: Optional[str] = None
+    status: str = "draft"
     line_items: list[LineItem] = []
     tax_rate: float = Field(0, ge=0, le=100)
     due_date: Optional[str] = None
@@ -46,8 +49,8 @@ class InvoiceCreate(InvoiceBase):
 class InvoiceUpdate(BaseModel):
     """Schema for updating an invoice (all fields optional)."""
     customer_id: Optional[int] = None
-    work_order_id: Optional[int] = None
-    status: Optional[InvoiceStatus] = None
+    work_order_id: Optional[str] = None
+    status: Optional[str] = None
     line_items: Optional[list[LineItem]] = None
     subtotal: Optional[float] = None
     tax_rate: Optional[float] = Field(None, ge=0, le=100)
@@ -67,7 +70,7 @@ class InvoiceResponse(BaseModel):
     customer_name: Optional[str] = None
     customer: Optional[CustomerSummary] = None
     work_order_id: Optional[str] = None
-    status: InvoiceStatus
+    status: str
     line_items: list[LineItem]
     subtotal: float
     tax_rate: float

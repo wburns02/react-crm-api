@@ -7,7 +7,7 @@ from typing import Optional
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
 from app.models.work_order import WorkOrder
-from app.models.invoice import Invoice, InvoiceStatus
+from app.models.invoice import Invoice
 
 router = APIRouter()
 
@@ -114,11 +114,11 @@ async def get_dashboard_stats(
 
     pipeline_value = 0.0
 
-    # Revenue MTD
+    # Revenue MTD - use strings for status
     revenue_result = await db.execute(
         select(func.sum(Invoice.total)).where(
             and_(
-                Invoice.status == InvoiceStatus.paid,
+                Invoice.status == "paid",
                 Invoice.paid_date >= month_start.isoformat(),
             )
         )
@@ -126,12 +126,12 @@ async def get_dashboard_stats(
     revenue_mtd = revenue_result.scalar() or 0.0
 
     pending_result = await db.execute(
-        select(func.count()).where(Invoice.status.in_([InvoiceStatus.draft, InvoiceStatus.sent]))
+        select(func.count()).where(Invoice.status.in_(["draft", "sent"]))
     )
     invoices_pending = pending_result.scalar() or 0
 
     overdue_result = await db.execute(
-        select(func.count()).where(Invoice.status == InvoiceStatus.overdue)
+        select(func.count()).where(Invoice.status == "overdue")
     )
     invoices_overdue = overdue_result.scalar() or 0
 

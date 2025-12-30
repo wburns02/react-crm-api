@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
 from app.models.customer import Customer
-from app.models.invoice import Invoice, InvoiceStatus
+from app.models.invoice import Invoice
 from app.models.technician import Technician
 
 router = APIRouter()

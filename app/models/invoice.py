@@ -1,16 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum, ForeignKey, Float, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-import enum
 from app.database import Base
-
-
-class InvoiceStatus(str, enum.Enum):
-    draft = "draft"
-    sent = "sent"
-    paid = "paid"
-    overdue = "overdue"
-    void = "void"
 
 
 class Invoice(Base):
@@ -21,9 +12,9 @@ class Invoice(Base):
     id = Column(Integer, primary_key=True, index=True)
     invoice_number = Column(String(50), unique=True, index=True, nullable=False)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
-    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True, index=True)
+    work_order_id = Column(String(36), nullable=True, index=True)  # UUID string like work_orders.id
 
-    status = Column(Enum(InvoiceStatus), default=InvoiceStatus.draft, nullable=False)
+    status = Column(String(20), default="draft", nullable=False)
 
     # Line items stored as JSON array
     # Each item: {service, description, quantity, rate, amount}

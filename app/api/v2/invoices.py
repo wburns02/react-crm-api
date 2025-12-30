@@ -6,7 +6,7 @@ from datetime import datetime
 import uuid
 
 from app.api.deps import DbSession, CurrentUser
-from app.models.invoice import Invoice, InvoiceStatus
+from app.models.invoice import Invoice
 from app.models.customer import Customer
 from app.schemas.invoice import (
     InvoiceCreate,
@@ -69,7 +69,7 @@ async def list_invoices(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status: Optional[InvoiceStatus] = None,
+    status: Optional[str] = None,
     customer_id: Optional[int] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -274,19 +274,19 @@ async def send_invoice(
             detail="Invoice not found",
         )
 
-    if invoice.status == InvoiceStatus.paid:
+    if invoice.status == "paid":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot send a paid invoice",
         )
 
-    if invoice.status == InvoiceStatus.void:
+    if invoice.status == "void":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot send a voided invoice",
         )
 
-    invoice.status = InvoiceStatus.sent
+    invoice.status = "sent"
 
     # TODO: Actually send email to customer when email service is implemented
 
@@ -315,13 +315,13 @@ async def mark_invoice_paid(
             detail="Invoice not found",
         )
 
-    if invoice.status == InvoiceStatus.void:
+    if invoice.status == "void":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot mark a voided invoice as paid",
         )
 
-    invoice.status = InvoiceStatus.paid
+    invoice.status = "paid"
     invoice.paid_date = datetime.now().strftime("%Y-%m-%d")
 
     await db.commit()
