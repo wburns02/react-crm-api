@@ -12,7 +12,7 @@ class Invoice(Base):
     id = Column(Integer, primary_key=True, index=True)
     invoice_number = Column(String(50), unique=True, index=True, nullable=False)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
-    work_order_id = Column(String(36), nullable=True, index=True)  # UUID string like work_orders.id
+    work_order_id = Column(String(36), ForeignKey("work_orders.id"), nullable=True, index=True)
 
     status = Column(String(20), default="draft", nullable=False)
 
