@@ -57,38 +57,59 @@ async def list_technicians(
 ):
     """List technicians with pagination and filtering."""
     try:
-        # Base query
-        query = select(Technician)
+        from sqlalchemy import text as sql_text
 
-        # Apply filters
-        if search:
-            search_filter = or_(
-                Technician.first_name.ilike(f"%{search}%"),
-                Technician.last_name.ilike(f"%{search}%"),
-                Technician.email.ilike(f"%{search}%"),
-                Technician.phone.ilike(f"%{search}%"),
-                Technician.employee_id.ilike(f"%{search}%"),
-            )
-            query = query.where(search_filter)
-
-        if active_only is True:
-            query = query.where(Technician.is_active == True)
-
-        # Get total count
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await db.execute(count_query)
-        total = total_result.scalar()
-
-        # Apply pagination
+        # Use raw SQL to avoid ORM issues
+        sql = """
+            SELECT id, first_name, last_name, email, phone, employee_id, is_active,
+                   skills, assigned_vehicle, vehicle_capacity_gallons,
+                   license_number, license_expiry, hourly_rate, notes,
+                   home_region, home_address, home_city, home_state, home_postal_code,
+                   home_latitude, home_longitude, created_at, updated_at
+            FROM technicians
+            ORDER BY first_name, last_name
+            LIMIT :limit OFFSET :offset
+        """
         offset = (page - 1) * page_size
-        query = query.offset(offset).limit(page_size).order_by(Technician.first_name, Technician.last_name)
+        result = await db.execute(sql_text(sql), {"limit": page_size, "offset": offset})
+        rows = result.fetchall()
 
-        # Execute query
-        result = await db.execute(query)
-        technicians = result.scalars().all()
+        # Count total
+        count_result = await db.execute(sql_text("SELECT COUNT(*) FROM technicians"))
+        total = count_result.scalar()
+
+        # Convert rows to response dicts
+        items = []
+        for row in rows:
+            items.append({
+                "id": str(row[0]),
+                "first_name": row[1],
+                "last_name": row[2],
+                "full_name": f"{row[1]} {row[2]}",
+                "email": row[3],
+                "phone": row[4],
+                "employee_id": row[5],
+                "is_active": row[6],
+                "skills": row[7] or [],
+                "assigned_vehicle": row[8],
+                "vehicle_capacity_gallons": row[9],
+                "license_number": row[10],
+                "license_expiry": str(row[11]) if row[11] else None,
+                "hourly_rate": row[12],
+                "notes": row[13],
+                "home_region": row[14],
+                "home_address": row[15],
+                "home_city": row[16],
+                "home_state": row[17],
+                "home_postal_code": row[18],
+                "home_latitude": row[19],
+                "home_longitude": row[20],
+                "created_at": row[21].isoformat() if row[21] else None,
+                "updated_at": row[22].isoformat() if row[22] else None,
+            })
 
         return {
-            "items": [technician_to_response(t) for t in technicians],
+            "items": items,
             "total": total,
             "page": page,
             "page_size": page_size,
