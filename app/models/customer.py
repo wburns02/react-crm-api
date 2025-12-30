@@ -43,10 +43,11 @@ class Customer(Base):
     last_name = Column(String(100), nullable=False)
     email = Column(String(255), index=True)
     phone = Column(String(20))
-    address = Column(String(255))
+    # Match Flask column names
+    address_line1 = Column(String(255))
     city = Column(String(100))
     state = Column(String(50))
-    zip_code = Column(String(20))
+    postal_code = Column(String(20))
 
     customer_type = Column(
         Enum(CustomerType),

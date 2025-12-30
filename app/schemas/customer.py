@@ -10,10 +10,11 @@ class CustomerBase(BaseModel):
     last_name: str = Field(..., min_length=1, max_length=100)
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(None, max_length=20)
-    address: Optional[str] = Field(None, max_length=255)
+    # Match Flask column names
+    address_line1: Optional[str] = Field(None, max_length=255, alias="address")
     city: Optional[str] = Field(None, max_length=100)
     state: Optional[str] = Field(None, max_length=50)
-    zip_code: Optional[str] = Field(None, max_length=20)
+    postal_code: Optional[str] = Field(None, max_length=20, alias="zip_code")
     customer_type: Optional[CustomerType] = CustomerType.residential
     prospect_stage: Optional[ProspectStage] = ProspectStage.new_lead
     lead_source: Optional[LeadSource] = None
@@ -35,10 +36,11 @@ class CustomerUpdate(BaseModel):
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(None, max_length=20)
-    address: Optional[str] = Field(None, max_length=255)
+    # Match Flask column names
+    address_line1: Optional[str] = Field(None, max_length=255, alias="address")
     city: Optional[str] = Field(None, max_length=100)
     state: Optional[str] = Field(None, max_length=50)
-    zip_code: Optional[str] = Field(None, max_length=20)
+    postal_code: Optional[str] = Field(None, max_length=20, alias="zip_code")
     customer_type: Optional[CustomerType] = None
     prospect_stage: Optional[ProspectStage] = None
     lead_source: Optional[LeadSource] = None

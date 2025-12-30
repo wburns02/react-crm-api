@@ -15,10 +15,11 @@ class WorkOrderBase(BaseModel):
     time_window_end: Optional[str] = None
     estimated_duration_hours: Optional[float] = None
     assigned_technician: Optional[str] = None
-    service_address: Optional[str] = None
+    # Match Flask column names (use aliases for React compatibility)
+    service_address_line1: Optional[str] = Field(None, alias="service_address")
     service_city: Optional[str] = None
     service_state: Optional[str] = None
-    service_zip: Optional[str] = None
+    service_postal_code: Optional[str] = Field(None, alias="service_zip")
     description: Optional[str] = None
     notes: Optional[str] = None
     internal_notes: Optional[str] = None
@@ -40,10 +41,11 @@ class WorkOrderUpdate(BaseModel):
     time_window_end: Optional[str] = None
     estimated_duration_hours: Optional[float] = None
     assigned_technician: Optional[str] = None
-    service_address: Optional[str] = None
+    # Match Flask column names
+    service_address_line1: Optional[str] = Field(None, alias="service_address")
     service_city: Optional[str] = None
     service_state: Optional[str] = None
-    service_zip: Optional[str] = None
+    service_postal_code: Optional[str] = Field(None, alias="service_zip")
     description: Optional[str] = None
     notes: Optional[str] = None
     internal_notes: Optional[str] = None
@@ -53,7 +55,7 @@ class WorkOrderUpdate(BaseModel):
 
 class WorkOrderResponse(WorkOrderBase):
     """Schema for work order response."""
-    id: int
+    id: str  # Flask uses VARCHAR(36) UUID
     completed_at: Optional[datetime] = None
     completion_notes: Optional[str] = None
     created_at: datetime
@@ -61,6 +63,7 @@ class WorkOrderResponse(WorkOrderBase):
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class WorkOrderListResponse(BaseModel):

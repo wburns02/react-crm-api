@@ -41,7 +41,8 @@ class WorkOrder(Base):
 
     __tablename__ = "work_orders"
 
-    id = Column(Integer, primary_key=True, index=True)
+    # Flask uses VARCHAR(36) UUID for work order IDs
+    id = Column(String(36), primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
 
     job_type = Column(Enum(JobType), nullable=False)
@@ -54,10 +55,11 @@ class WorkOrder(Base):
     estimated_duration_hours = Column(Float)
 
     assigned_technician = Column(String(100))
-    service_address = Column(String(255))
+    # Match Flask column names
+    service_address_line1 = Column(String(255))
     service_city = Column(String(100))
     service_state = Column(String(50))
-    service_zip = Column(String(20))
+    service_postal_code = Column(String(20))
 
     description = Column(Text)
     notes = Column(Text)

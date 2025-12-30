@@ -9,7 +9,8 @@ class Technician(Base):
 
     __tablename__ = "technicians"
 
-    id = Column(Integer, primary_key=True, index=True)
+    # Flask uses VARCHAR(36) UUID for technician IDs
+    id = Column(String(36), primary_key=True, index=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     email = Column(String(255), index=True)
