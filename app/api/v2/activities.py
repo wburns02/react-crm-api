@@ -19,6 +19,41 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.post("/recreate-table")
+async def recreate_activities_table(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Admin endpoint to recreate activities table with correct schema."""
+    from sqlalchemy import text
+    try:
+        # Drop existing table
+        await db.execute(text("DROP TABLE IF EXISTS activities CASCADE"))
+        await db.commit()
+
+        # Create table with correct schema
+        await db.execute(text("""
+            CREATE TABLE activities (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                customer_id INTEGER NOT NULL REFERENCES customers(id),
+                activity_type VARCHAR(20) NOT NULL,
+                description TEXT NOT NULL,
+                activity_date TIMESTAMPTZ DEFAULT NOW(),
+                created_by VARCHAR(100),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """))
+        await db.execute(text("CREATE INDEX ix_activities_customer_id ON activities(customer_id)"))
+        await db.execute(text("CREATE INDEX ix_activities_activity_type ON activities(activity_type)"))
+        await db.commit()
+
+        return {"status": "success", "message": "Activities table recreated"}
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+
 def activity_to_response(activity: Activity) -> dict:
     """Convert Activity model to response dict."""
     return {
