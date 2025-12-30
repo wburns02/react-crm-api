@@ -4,6 +4,7 @@ from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime
 import uuid
+import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.invoice import Invoice
@@ -15,6 +16,7 @@ from app.schemas.invoice import (
     InvoiceListResponse,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -75,41 +77,48 @@ async def list_invoices(
     date_to: Optional[str] = None,
 ):
     """List invoices with pagination and filtering."""
-    # Base query with customer eager loading
-    query = select(Invoice).options(selectinload(Invoice.customer))
+    try:
+        # Base query with customer eager loading
+        query = select(Invoice).options(selectinload(Invoice.customer))
 
-    # Apply filters
-    if status:
-        query = query.where(Invoice.status == status)
+        # Apply filters
+        if status:
+            query = query.where(Invoice.status == status)
 
-    if customer_id:
-        query = query.where(Invoice.customer_id == customer_id)
+        if customer_id:
+            query = query.where(Invoice.customer_id == customer_id)
 
-    if date_from:
-        query = query.where(Invoice.created_at >= date_from)
+        if date_from:
+            query = query.where(Invoice.created_at >= date_from)
 
-    if date_to:
-        query = query.where(Invoice.created_at <= date_to)
+        if date_to:
+            query = query.where(Invoice.created_at <= date_to)
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
 
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(Invoice.created_at.desc())
+        # Apply pagination
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size).order_by(Invoice.created_at.desc())
 
-    # Execute query
-    result = await db.execute(query)
-    invoices = result.scalars().all()
+        # Execute query
+        result = await db.execute(query)
+        invoices = result.scalars().all()
 
-    return {
-        "items": [invoice_to_response(inv) for inv in invoices],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-    }
+        return {
+            "items": [invoice_to_response(inv) for inv in invoices],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        logger.error(f"Error listing invoices: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {type(e).__name__}: {str(e)}"
+        )
 
 
 @router.get("/{invoice_id}", response_model=InvoiceResponse)

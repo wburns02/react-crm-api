@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 from typing import Optional
 from datetime import datetime
+import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.payment import Payment
@@ -15,6 +16,7 @@ from app.schemas.payment import (
     PaymentListResponse,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -30,41 +32,48 @@ async def list_payments(
     payment_method: Optional[str] = None,
 ):
     """List payments with pagination and filtering."""
-    # Base query
-    query = select(Payment)
+    try:
+        # Base query
+        query = select(Payment)
 
-    # Apply filters
-    if customer_id:
-        query = query.where(Payment.customer_id == customer_id)
+        # Apply filters
+        if customer_id:
+            query = query.where(Payment.customer_id == customer_id)
 
-    if invoice_id:
-        query = query.where(Payment.invoice_id == invoice_id)
+        if invoice_id:
+            query = query.where(Payment.invoice_id == invoice_id)
 
-    if status:
-        query = query.where(Payment.status == status)
+        if status:
+            query = query.where(Payment.status == status)
 
-    if payment_method:
-        query = query.where(Payment.payment_method == payment_method)
+        if payment_method:
+            query = query.where(Payment.payment_method == payment_method)
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
 
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(Payment.payment_date.desc())
+        # Apply pagination
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size).order_by(Payment.payment_date.desc())
 
-    # Execute query
-    result = await db.execute(query)
-    payments = result.scalars().all()
+        # Execute query
+        result = await db.execute(query)
+        payments = result.scalars().all()
 
-    return PaymentListResponse(
-        items=payments,
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+        return PaymentListResponse(
+            items=payments,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+    except Exception as e:
+        logger.error(f"Error listing payments: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {type(e).__name__}: {str(e)}"
+        )
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)

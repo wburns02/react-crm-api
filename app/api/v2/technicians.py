@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, or_
 from typing import Optional
+import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.technician import Technician
@@ -11,6 +12,7 @@ from app.schemas.technician import (
     TechnicianListResponse,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -54,42 +56,49 @@ async def list_technicians(
     active_only: Optional[bool] = None,
 ):
     """List technicians with pagination and filtering."""
-    # Base query
-    query = select(Technician)
+    try:
+        # Base query
+        query = select(Technician)
 
-    # Apply filters
-    if search:
-        search_filter = or_(
-            Technician.first_name.ilike(f"%{search}%"),
-            Technician.last_name.ilike(f"%{search}%"),
-            Technician.email.ilike(f"%{search}%"),
-            Technician.phone.ilike(f"%{search}%"),
-            Technician.employee_id.ilike(f"%{search}%"),
+        # Apply filters
+        if search:
+            search_filter = or_(
+                Technician.first_name.ilike(f"%{search}%"),
+                Technician.last_name.ilike(f"%{search}%"),
+                Technician.email.ilike(f"%{search}%"),
+                Technician.phone.ilike(f"%{search}%"),
+                Technician.employee_id.ilike(f"%{search}%"),
+            )
+            query = query.where(search_filter)
+
+        if active_only is True:
+            query = query.where(Technician.is_active == True)
+
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
+
+        # Apply pagination
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size).order_by(Technician.first_name, Technician.last_name)
+
+        # Execute query
+        result = await db.execute(query)
+        technicians = result.scalars().all()
+
+        return {
+            "items": [technician_to_response(t) for t in technicians],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        logger.error(f"Error listing technicians: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
-        query = query.where(search_filter)
-
-    if active_only is True:
-        query = query.where(Technician.is_active == True)
-
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
-
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(Technician.first_name, Technician.last_name)
-
-    # Execute query
-    result = await db.execute(query)
-    technicians = result.scalars().all()
-
-    return {
-        "items": [technician_to_response(t) for t in technicians],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-    }
 
 
 @router.get("/{technician_id}", response_model=TechnicianResponse)
