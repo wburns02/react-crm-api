@@ -27,7 +27,7 @@ async def list_payments(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
     customer_id: Optional[int] = None,
-    invoice_id: Optional[int] = None,
+    work_order_id: Optional[str] = None,  # Flask uses work_order_id not invoice_id
     status: Optional[str] = None,
     payment_method: Optional[str] = None,
 ):
@@ -40,8 +40,8 @@ async def list_payments(
         if customer_id:
             query = query.where(Payment.customer_id == customer_id)
 
-        if invoice_id:
-            query = query.where(Payment.invoice_id == invoice_id)
+        if work_order_id:
+            query = query.where(Payment.work_order_id == work_order_id)
 
         if status:
             query = query.where(Payment.status == status)
@@ -54,9 +54,9 @@ async def list_payments(
         total_result = await db.execute(count_query)
         total = total_result.scalar()
 
-        # Apply pagination
+        # Apply pagination - Flask uses created_at not payment_date
         offset = (page - 1) * page_size
-        query = query.offset(offset).limit(page_size).order_by(Payment.payment_date.desc())
+        query = query.offset(offset).limit(page_size).order_by(Payment.created_at.desc())
 
         # Execute query
         result = await db.execute(query)
@@ -103,8 +103,7 @@ async def create_payment(
 ):
     """Create a new payment."""
     data = payment_data.model_dump()
-    if not data.get('payment_date'):
-        data['payment_date'] = datetime.utcnow()
+    # Flask uses created_at with server default, so we don't need to set it
 
     payment = Payment(**data)
     db.add(payment)
