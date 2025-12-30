@@ -1,28 +1,51 @@
 from pydantic import BaseModel, Field
-from datetime import datetime
-from typing import Optional
-from app.models.work_order import JobType, WorkOrderStatus, Priority
+from datetime import datetime, date, time
+from typing import Optional, Any
+from decimal import Decimal
 
 
 class WorkOrderBase(BaseModel):
     """Base work order schema."""
     customer_id: int
-    job_type: JobType
-    status: WorkOrderStatus = WorkOrderStatus.draft
-    priority: Priority = Priority.normal
-    scheduled_date: Optional[datetime] = None
-    time_window_start: Optional[str] = None
-    time_window_end: Optional[str] = None
+    technician_id: Optional[str] = None
+    job_type: str
+    status: Optional[str] = "draft"
+    priority: Optional[str] = "normal"
+
+    # Scheduling
+    scheduled_date: Optional[date] = None
+    time_window_start: Optional[time] = None
+    time_window_end: Optional[time] = None
     estimated_duration_hours: Optional[float] = None
-    assigned_technician: Optional[str] = None
-    # Match Flask column names (use aliases for React compatibility)
-    service_address_line1: Optional[str] = Field(None, alias="service_address")
+
+    # Service location
+    service_address_line1: Optional[str] = None
+    service_address_line2: Optional[str] = None
     service_city: Optional[str] = None
     service_state: Optional[str] = None
-    service_postal_code: Optional[str] = Field(None, alias="service_zip")
-    description: Optional[str] = None
+    service_postal_code: Optional[str] = None
+    service_latitude: Optional[float] = None
+    service_longitude: Optional[float] = None
+
+    # Job specifics
+    estimated_gallons: Optional[int] = None
     notes: Optional[str] = None
     internal_notes: Optional[str] = None
+
+    # Recurrence
+    is_recurring: Optional[bool] = False
+    recurrence_frequency: Optional[str] = None
+    next_recurrence_date: Optional[date] = None
+
+    # Checklist
+    checklist: Optional[Any] = None
+
+    # Assignment
+    assigned_vehicle: Optional[str] = None
+    assigned_technician: Optional[str] = None
+
+    # Financial
+    total_amount: Optional[Decimal] = None
 
 
 class WorkOrderCreate(WorkOrderBase):
@@ -33,37 +56,72 @@ class WorkOrderCreate(WorkOrderBase):
 class WorkOrderUpdate(BaseModel):
     """Schema for updating a work order (all fields optional)."""
     customer_id: Optional[int] = None
-    job_type: Optional[JobType] = None
-    status: Optional[WorkOrderStatus] = None
-    priority: Optional[Priority] = None
-    scheduled_date: Optional[datetime] = None
-    time_window_start: Optional[str] = None
-    time_window_end: Optional[str] = None
+    technician_id: Optional[str] = None
+    job_type: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+
+    scheduled_date: Optional[date] = None
+    time_window_start: Optional[time] = None
+    time_window_end: Optional[time] = None
     estimated_duration_hours: Optional[float] = None
-    assigned_technician: Optional[str] = None
-    # Match Flask column names
-    service_address_line1: Optional[str] = Field(None, alias="service_address")
+
+    service_address_line1: Optional[str] = None
+    service_address_line2: Optional[str] = None
     service_city: Optional[str] = None
     service_state: Optional[str] = None
-    service_postal_code: Optional[str] = Field(None, alias="service_zip")
-    description: Optional[str] = None
+    service_postal_code: Optional[str] = None
+    service_latitude: Optional[float] = None
+    service_longitude: Optional[float] = None
+
+    estimated_gallons: Optional[int] = None
     notes: Optional[str] = None
     internal_notes: Optional[str] = None
-    completed_at: Optional[datetime] = None
-    completion_notes: Optional[str] = None
+
+    is_recurring: Optional[bool] = None
+    recurrence_frequency: Optional[str] = None
+    next_recurrence_date: Optional[date] = None
+
+    checklist: Optional[Any] = None
+
+    assigned_vehicle: Optional[str] = None
+    assigned_technician: Optional[str] = None
+
+    total_amount: Optional[Decimal] = None
+
+    # Time tracking
+    actual_start_time: Optional[datetime] = None
+    actual_end_time: Optional[datetime] = None
+    travel_start_time: Optional[datetime] = None
+    travel_end_time: Optional[datetime] = None
+    break_minutes: Optional[int] = None
+    is_clocked_in: Optional[bool] = None
 
 
 class WorkOrderResponse(WorkOrderBase):
     """Schema for work order response."""
     id: str  # Flask uses VARCHAR(36) UUID
-    completed_at: Optional[datetime] = None
-    completion_notes: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    # Time tracking
+    actual_start_time: Optional[datetime] = None
+    actual_end_time: Optional[datetime] = None
+    travel_start_time: Optional[datetime] = None
+    travel_end_time: Optional[datetime] = None
+    break_minutes: Optional[int] = None
+    total_labor_minutes: Optional[int] = None
+    total_travel_minutes: Optional[int] = None
+
+    # Clock in/out
+    is_clocked_in: Optional[bool] = False
+    clock_in_gps_lat: Optional[Decimal] = None
+    clock_in_gps_lon: Optional[Decimal] = None
+    clock_out_gps_lat: Optional[Decimal] = None
+    clock_out_gps_lon: Optional[Decimal] = None
 
     class Config:
         from_attributes = True
-        populate_by_name = True
 
 
 class WorkOrderListResponse(BaseModel):

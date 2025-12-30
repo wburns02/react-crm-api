@@ -1,11 +1,11 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric, ARRAY
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
 
 
 class Technician(Base):
-    """Technician model for field service technicians."""
+    """Technician model - matches Flask database schema."""
 
     __tablename__ = "technicians"
 
@@ -18,6 +18,39 @@ class Technician(Base):
     employee_id = Column(String(50), unique=True, index=True)
     is_active = Column(Boolean, default=True)
 
+    # Skills (stored as array in Flask DB)
+    skills = Column(ARRAY(String))
+
+    # Vehicle info
+    assigned_vehicle = Column(String(100))
+    vehicle_capacity_gallons = Column(Integer)
+
+    # Licensing
+    license_number = Column(String(100))
+    license_expiry = Column(Date)
+
+    # Pay rates
+    hourly_rate = Column(Float)
+    overtime_rate = Column(Numeric)
+    double_time_rate = Column(Numeric)
+    travel_rate = Column(Numeric)
+    pay_type = Column(String(50))
+    salary_amount = Column(Numeric)
+
+    # Work hours
+    default_hours_per_week = Column(Numeric)
+    overtime_threshold = Column(Numeric)
+
+    # PTO
+    pto_balance_hours = Column(Numeric)
+    pto_accrual_rate = Column(Numeric)
+
+    # Employment
+    hire_date = Column(Date)
+    hired_date = Column(Date)  # Legacy duplicate column
+    department = Column(String(100))
+    external_payroll_id = Column(String(100))
+
     # Home location
     home_region = Column(String(100))
     home_address = Column(String(255))
@@ -27,28 +60,12 @@ class Technician(Base):
     home_latitude = Column(Float)
     home_longitude = Column(Float)
 
-    # Skills (stored as JSON array)
-    skills = Column(JSON, default=list)
-
-    # Vehicle info
-    assigned_vehicle = Column(String(100))
-    vehicle_capacity_gallons = Column(Float)
-
-    # Licensing
-    license_number = Column(String(100))
-    license_expiry = Column(String(20))  # ISO date string
-
-    # Payroll
-    hourly_rate = Column(Float)
-
     # Notes
     notes = Column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    # Note: WorkOrder relationship will be added when technician_id FK is added to WorkOrder
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
 
     def __repr__(self):
         return f"<Technician {self.first_name} {self.last_name}>"

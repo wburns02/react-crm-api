@@ -3,7 +3,7 @@ from sqlalchemy import select, func, or_
 from typing import Optional
 
 from app.api.deps import DbSession, CurrentUser
-from app.models.customer import Customer, CustomerType, ProspectStage
+from app.models.customer import Customer
 from app.schemas.customer import (
     CustomerCreate,
     CustomerUpdate,
@@ -21,8 +21,8 @@ async def list_customers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
     search: Optional[str] = None,
-    customer_type: Optional[CustomerType] = None,
-    prospect_stage: Optional[ProspectStage] = None,
+    customer_type: Optional[str] = None,
+    prospect_stage: Optional[str] = None,
     is_active: Optional[bool] = None,
 ):
     """List customers with pagination and filtering."""
@@ -36,7 +36,6 @@ async def list_customers(
             Customer.last_name.ilike(f"%{search}%"),
             Customer.email.ilike(f"%{search}%"),
             Customer.phone.ilike(f"%{search}%"),
-            Customer.company_name.ilike(f"%{search}%"),
         )
         query = query.where(search_filter)
 

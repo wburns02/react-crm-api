@@ -1,81 +1,78 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, ForeignKey, Date, Time, JSON, Numeric
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-import enum
 from app.database import Base
 
 
-class JobType(str, enum.Enum):
-    pumping = "pumping"
-    inspection = "inspection"
-    repair = "repair"
-    installation = "installation"
-    emergency = "emergency"
-    maintenance = "maintenance"
-    grease_trap = "grease_trap"
-    camera_inspection = "camera_inspection"
-
-
-class WorkOrderStatus(str, enum.Enum):
-    draft = "draft"
-    scheduled = "scheduled"
-    confirmed = "confirmed"
-    enroute = "enroute"
-    on_site = "on_site"
-    in_progress = "in_progress"
-    completed = "completed"
-    canceled = "canceled"
-    requires_followup = "requires_followup"
-
-
-class Priority(str, enum.Enum):
-    low = "low"
-    normal = "normal"
-    high = "high"
-    urgent = "urgent"
-    emergency = "emergency"
-
-
 class WorkOrder(Base):
-    """Work Order model."""
+    """Work Order model - matches Flask database schema."""
 
     __tablename__ = "work_orders"
 
     # Flask uses VARCHAR(36) UUID for work order IDs
     id = Column(String(36), primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    technician_id = Column(String(36), ForeignKey("technicians.id"), index=True)
 
-    job_type = Column(Enum(JobType), nullable=False)
-    status = Column(Enum(WorkOrderStatus), default=WorkOrderStatus.draft)
-    priority = Column(Enum(Priority), default=Priority.normal)
+    # Job details (job_type, priority, status are USER-DEFINED enums in Flask)
+    job_type = Column(String(50), nullable=False)
+    priority = Column(String(20))
+    status = Column(String(30))
 
-    scheduled_date = Column(DateTime(timezone=True))
-    time_window_start = Column(String(10))  # "09:00"
-    time_window_end = Column(String(10))  # "12:00"
+    # Scheduling
+    scheduled_date = Column(Date)
+    time_window_start = Column(Time)
+    time_window_end = Column(Time)
     estimated_duration_hours = Column(Float)
 
-    assigned_technician = Column(String(100))
-    # Match Flask column names
+    # Service location
     service_address_line1 = Column(String(255))
+    service_address_line2 = Column(String(255))
     service_city = Column(String(100))
     service_state = Column(String(50))
     service_postal_code = Column(String(20))
+    service_latitude = Column(Float)
+    service_longitude = Column(Float)
 
-    description = Column(Text)
+    # Job specifics
+    estimated_gallons = Column(Integer)
     notes = Column(Text)
     internal_notes = Column(Text)
 
-    # Completion details
-    completed_at = Column(DateTime(timezone=True))
-    completion_notes = Column(Text)
+    # Recurrence
+    is_recurring = Column(Boolean, default=False)
+    recurrence_frequency = Column(String(50))
+    next_recurrence_date = Column(Date)
 
-    # React-specific fields (new schema)
-    estimated_completion = Column(DateTime(timezone=True))
-    actual_duration_hours = Column(Float)
-    equipment_used = Column(Text)  # JSON array
+    # Checklist (stored as JSON)
+    checklist = Column(JSON)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # Assignment
+    assigned_vehicle = Column(String(100))
+    assigned_technician = Column(String(100))
+
+    # Timestamps
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+
+    # Financial
+    total_amount = Column(Numeric)
+
+    # Time tracking
+    actual_start_time = Column(DateTime(timezone=True))
+    actual_end_time = Column(DateTime(timezone=True))
+    travel_start_time = Column(DateTime(timezone=True))
+    travel_end_time = Column(DateTime(timezone=True))
+    break_minutes = Column(Integer)
+    total_labor_minutes = Column(Integer)
+    total_travel_minutes = Column(Integer)
+
+    # Clock in/out
+    is_clocked_in = Column(Boolean, default=False)
+    clock_in_gps_lat = Column(Numeric)
+    clock_in_gps_lon = Column(Numeric)
+    clock_out_gps_lat = Column(Numeric)
+    clock_out_gps_lon = Column(Numeric)
 
     # Relationships
     customer = relationship("Customer", back_populates="work_orders")

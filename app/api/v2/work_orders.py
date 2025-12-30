@@ -2,9 +2,10 @@ from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 from typing import Optional
 from datetime import datetime
+import uuid
 
 from app.api.deps import DbSession, CurrentUser
-from app.models.work_order import WorkOrder, JobType, WorkOrderStatus, Priority
+from app.models.work_order import WorkOrder
 from app.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
@@ -22,10 +23,11 @@ async def list_work_orders(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
     customer_id: Optional[int] = None,
-    status: Optional[WorkOrderStatus] = None,
-    job_type: Optional[JobType] = None,
-    priority: Optional[Priority] = None,
+    status: Optional[str] = None,
+    job_type: Optional[str] = None,
+    priority: Optional[str] = None,
     assigned_technician: Optional[str] = None,
+    technician_id: Optional[str] = None,
     scheduled_date: Optional[str] = None,  # Exact date match (YYYY-MM-DD)
     scheduled_date_from: Optional[datetime] = None,
     scheduled_date_to: Optional[datetime] = None,
@@ -49,6 +51,9 @@ async def list_work_orders(
 
     if assigned_technician:
         query = query.where(WorkOrder.assigned_technician == assigned_technician)
+
+    if technician_id:
+        query = query.where(WorkOrder.technician_id == technician_id)
 
     if scheduled_date:
         # Exact date match - compare just the date part
@@ -83,7 +88,7 @@ async def list_work_orders(
 
 @router.get("/{work_order_id}", response_model=WorkOrderResponse)
 async def get_work_order(
-    work_order_id: int,
+    work_order_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -107,7 +112,9 @@ async def create_work_order(
     current_user: CurrentUser,
 ):
     """Create a new work order."""
-    work_order = WorkOrder(**work_order_data.model_dump())
+    data = work_order_data.model_dump()
+    data['id'] = str(uuid.uuid4())  # Generate UUID for new work orders
+    work_order = WorkOrder(**data)
     db.add(work_order)
     await db.commit()
     await db.refresh(work_order)
@@ -116,7 +123,7 @@ async def create_work_order(
 
 @router.patch("/{work_order_id}", response_model=WorkOrderResponse)
 async def update_work_order(
-    work_order_id: int,
+    work_order_id: str,
     work_order_data: WorkOrderUpdate,
     db: DbSession,
     current_user: CurrentUser,
@@ -143,7 +150,7 @@ async def update_work_order(
 
 @router.delete("/{work_order_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_work_order(
-    work_order_id: int,
+    work_order_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):

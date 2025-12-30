@@ -1,74 +1,77 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-import enum
 from app.database import Base
 
 
-class CustomerType(str, enum.Enum):
-    residential = "residential"
-    commercial = "commercial"
-    hoa = "hoa"
-    municipal = "municipal"
-    property_management = "property_management"
-
-
-class ProspectStage(str, enum.Enum):
-    new_lead = "new_lead"
-    contacted = "contacted"
-    qualified = "qualified"
-    quoted = "quoted"
-    negotiation = "negotiation"
-    won = "won"
-    lost = "lost"
-
-
-class LeadSource(str, enum.Enum):
-    referral = "referral"
-    website = "website"
-    google = "google"
-    facebook = "facebook"
-    repeat_customer = "repeat_customer"
-    door_to_door = "door_to_door"
-    other = "other"
-
-
 class Customer(Base):
-    """Customer model."""
+    """Customer model - matches Flask database schema."""
 
     __tablename__ = "customers"
 
     id = Column(Integer, primary_key=True, index=True)
-    first_name = Column(String(100), nullable=False)
-    last_name = Column(String(100), nullable=False)
+    first_name = Column(String(100))
+    last_name = Column(String(100))
     email = Column(String(255), index=True)
     phone = Column(String(20))
-    # Match Flask column names
+
+    # Address
     address_line1 = Column(String(255))
+    address_line2 = Column(String(255))
     city = Column(String(100))
     state = Column(String(50))
     postal_code = Column(String(20))
 
-    customer_type = Column(
-        Enum(CustomerType),
-        default=CustomerType.residential
-    )
-    prospect_stage = Column(
-        Enum(ProspectStage),
-        default=ProspectStage.new_lead
-    )
-    lead_source = Column(Enum(LeadSource))
-
-    notes = Column(Text)
+    # Status
     is_active = Column(Boolean, default=True)
 
-    # React-specific fields (new schema)
-    preferred_contact_method = Column(String(20))
-    company_name = Column(String(255))
-    tags = Column(String(500))  # JSON array stored as string
+    # Lead/Sales tracking (stored as varchar in Flask DB)
+    lead_source = Column(String(50))
+    lead_notes = Column(Text)
+    prospect_stage = Column(String(50))
+    assigned_sales_rep = Column(String(100))
+    estimated_value = Column(Float)
+    customer_type = Column(String(50))
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # Septic system info
+    tank_size_gallons = Column(Integer)
+    number_of_tanks = Column(Integer)
+    system_type = Column(String(100))
+    manufacturer = Column(String(100))
+    installer_name = Column(String(100))
+    subdivision = Column(String(100))
+    system_issued_date = Column(Date)
+
+    # Tags
+    tags = Column(String(500))
+
+    # Timestamps
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+
+    # Marketing attribution
+    utm_source = Column(String(255))
+    utm_medium = Column(String(255))
+    utm_campaign = Column(String(255))
+    utm_term = Column(String(255))
+    utm_content = Column(String(255))
+    gclid = Column(String(255))
+    landing_page = Column(String(500))
+    first_touch_ts = Column(DateTime)
+    last_touch_ts = Column(DateTime)
+
+    # Geolocation
+    latitude = Column(Numeric)
+    longitude = Column(Numeric)
+
+    # Integrations
+    default_payment_terms = Column(String(50))
+    quickbooks_customer_id = Column(String(100))
+    hubspot_contact_id = Column(String(100))
+    servicenow_ticket_ref = Column(String(100))
+
+    # Follow-up
+    next_follow_up_date = Column(Date)
 
     # Relationships
     work_orders = relationship("WorkOrder", back_populates="customer")
