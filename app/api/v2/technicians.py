@@ -16,6 +16,123 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/debug")
+async def debug_technicians(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Debug endpoint to see raw technician data."""
+    from sqlalchemy import text as sql_text
+
+    sql = """
+        SELECT id, first_name, last_name, email, phone, employee_id, is_active,
+               skills, assigned_vehicle, vehicle_capacity_gallons,
+               license_number, license_expiry, hourly_rate, notes,
+               home_region, home_address, home_city, home_state, home_postal_code,
+               home_latitude, home_longitude, created_at, updated_at
+        FROM technicians
+        LIMIT 3
+    """
+    result = await db.execute(sql_text(sql))
+    rows = result.fetchall()
+
+    debug_info = []
+    for row in rows:
+        debug_info.append({
+            "id": {"value": row[0], "type": str(type(row[0]))},
+            "first_name": {"value": row[1], "type": str(type(row[1]))},
+            "last_name": {"value": row[2], "type": str(type(row[2]))},
+            "email": {"value": row[3], "type": str(type(row[3]))},
+            "phone": {"value": row[4], "type": str(type(row[4]))},
+            "is_active": {"value": row[6], "type": str(type(row[6]))},
+            "skills": {"value": str(row[7]), "type": str(type(row[7]))},
+            "created_at": {"value": str(row[21]) if row[21] else None, "type": str(type(row[21]))},
+            "updated_at": {"value": str(row[22]) if row[22] else None, "type": str(type(row[22]))},
+        })
+
+    return {"debug_info": debug_info}
+
+
+@router.get("/list-raw")
+async def list_technicians_raw(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List technicians without response model validation for debugging."""
+    from sqlalchemy import text as sql_text
+
+    sql = """
+        SELECT id, first_name, last_name, email, phone, employee_id, is_active,
+               skills, assigned_vehicle, vehicle_capacity_gallons,
+               license_number, license_expiry, hourly_rate, notes,
+               home_region, home_address, home_city, home_state, home_postal_code,
+               home_latitude, home_longitude, created_at, updated_at
+        FROM technicians
+        ORDER BY first_name, last_name
+        LIMIT 20
+    """
+    result = await db.execute(sql_text(sql))
+    rows = result.fetchall()
+
+    items = []
+    for row in rows:
+        first_name = row[1] or ""
+        last_name = row[2] or ""
+
+        # Handle skills
+        skills_val = row[7]
+        if skills_val is None:
+            skills = []
+        elif isinstance(skills_val, (list, tuple)):
+            skills = list(skills_val)
+        else:
+            skills = []
+
+        # Handle datetime fields
+        created_at = None
+        if row[21]:
+            try:
+                created_at = row[21].isoformat() if hasattr(row[21], 'isoformat') else str(row[21])
+            except Exception:
+                created_at = None
+
+        updated_at = None
+        if row[22]:
+            try:
+                updated_at = row[22].isoformat() if hasattr(row[22], 'isoformat') else str(row[22])
+            except Exception:
+                updated_at = None
+
+        items.append({
+            "id": str(row[0]),
+            "first_name": first_name,
+            "last_name": last_name,
+            "full_name": f"{first_name} {last_name}".strip(),
+            "email": row[3],
+            "phone": row[4],
+            "employee_id": row[5],
+            "is_active": bool(row[6]) if row[6] is not None else True,
+            "skills": skills,
+            "assigned_vehicle": row[8],
+            "vehicle_capacity_gallons": float(row[9]) if row[9] else None,
+            "license_number": row[10],
+            "license_expiry": str(row[11]) if row[11] else None,
+            "hourly_rate": float(row[12]) if row[12] else None,
+            "notes": row[13],
+            "home_region": row[14],
+            "home_address": row[15],
+            "home_city": row[16],
+            "home_state": row[17],
+            "home_postal_code": row[18],
+            "home_latitude": float(row[19]) if row[19] else None,
+            "home_longitude": float(row[20]) if row[20] else None,
+            "created_at": created_at,
+            "updated_at": updated_at,
+        })
+
+    return {"items": items, "total": len(items), "page": 1, "page_size": 20}
+
+
 def technician_to_response(tech: Technician) -> dict:
     """Convert Technician model to response dict with string ID."""
     return {
