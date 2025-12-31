@@ -164,9 +164,14 @@ async def get_debug_config():
             "client_secret_set": bool(settings.RINGCENTRAL_CLIENT_SECRET),
             "client_secret_len": len(settings.RINGCENTRAL_CLIENT_SECRET or ""),
             "server_url": settings.RINGCENTRAL_SERVER_URL,
+            "jwt_token_set": bool(settings.RINGCENTRAL_JWT_TOKEN),
+            "jwt_token_len": len(settings.RINGCENTRAL_JWT_TOKEN or ""),
+            "jwt_token_preview": (settings.RINGCENTRAL_JWT_TOKEN or "")[:20] + "..." if settings.RINGCENTRAL_JWT_TOKEN else None,
             "service_configured": ringcentral_service.is_configured,
             "service_client_id_len": len(ringcentral_service.config.client_id or ""),
             "service_client_id_preview": (ringcentral_service.config.client_id or "")[:4] + "..." if ringcentral_service.config.client_id else None,
+            "service_jwt_token_len": len(ringcentral_service.config.jwt_token or ""),
+            "service_jwt_token_preview": (ringcentral_service.config.jwt_token or "")[:20] + "..." if ringcentral_service.config.jwt_token else None,
         }
     except Exception as e:
         return {"error": str(e), "type": type(e).__name__}
