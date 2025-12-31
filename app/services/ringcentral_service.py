@@ -99,8 +99,14 @@ class RingCentralService:
 
             return self._access_token
 
+        except httpx.HTTPStatusError as e:
+            error_detail = e.response.text if e.response else "No response body"
+            logger.error(f"RingCentral auth failed: {e.response.status_code} - {error_detail}")
+            self._last_auth_error = f"{e.response.status_code}: {error_detail}"
+            return None
         except Exception as e:
             logger.error(f"Failed to get RingCentral access token: {e}")
+            self._last_auth_error = str(e)
             return None
 
     async def _api_request(
@@ -153,6 +159,7 @@ class RingCentralService:
                 "connected": False,
                 "configured": True,
                 "message": "Failed to authenticate with RingCentral",
+                "auth_error": getattr(self, '_last_auth_error', None),
             }
 
         # Test API connection
