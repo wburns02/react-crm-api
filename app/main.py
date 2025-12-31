@@ -155,7 +155,7 @@ async def health_check():
         "status": "healthy",
         "version": "2.0.3",  # Updated to verify deployment
         "environment": settings.ENVIRONMENT,
-        "deploy_marker": "2025-12-31T16:00",
+        "deploy_marker": "2025-12-31T18:00",
     }
 
 
