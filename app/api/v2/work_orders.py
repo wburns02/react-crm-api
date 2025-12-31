@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast, String, text
 from typing import Optional
 from datetime import datetime
 import uuid
@@ -45,11 +45,12 @@ async def list_work_orders(
         if customer_id:
             query = query.where(WorkOrder.customer_id == customer_id)
         if status_filter:
-            query = query.where(WorkOrder.status == status_filter)
+            # Cast status column to string for comparison (handles PostgreSQL ENUM)
+            query = query.where(cast(WorkOrder.status, String) == status_filter)
         if job_type:
-            query = query.where(WorkOrder.job_type == job_type)
+            query = query.where(cast(WorkOrder.job_type, String) == job_type)
         if priority:
-            query = query.where(WorkOrder.priority == priority)
+            query = query.where(cast(WorkOrder.priority, String) == priority)
         if assigned_technician:
             query = query.where(WorkOrder.assigned_technician == assigned_technician)
         if technician_id:
@@ -66,11 +67,11 @@ async def list_work_orders(
         if customer_id:
             count_query = count_query.where(WorkOrder.customer_id == customer_id)
         if status_filter:
-            count_query = count_query.where(WorkOrder.status == status_filter)
+            count_query = count_query.where(cast(WorkOrder.status, String) == status_filter)
         if job_type:
-            count_query = count_query.where(WorkOrder.job_type == job_type)
+            count_query = count_query.where(cast(WorkOrder.job_type, String) == job_type)
         if priority:
-            count_query = count_query.where(WorkOrder.priority == priority)
+            count_query = count_query.where(cast(WorkOrder.priority, String) == priority)
         if assigned_technician:
             count_query = count_query.where(WorkOrder.assigned_technician == assigned_technician)
         if technician_id:
