@@ -1,7 +1,29 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, ForeignKey, Date, Time, JSON, Numeric
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, ForeignKey, Date, Time, JSON, Numeric, Enum as SQLEnum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import ENUM
 from app.database import Base
+
+# PostgreSQL ENUM types - must match database schema exactly
+WorkOrderStatusEnum = ENUM(
+    'draft', 'scheduled', 'confirmed', 'enroute', 'on_site',
+    'in_progress', 'completed', 'canceled', 'requires_followup',
+    name='work_order_status_enum',
+    create_type=False  # Don't create, already exists in DB
+)
+
+WorkOrderJobTypeEnum = ENUM(
+    'pumping', 'inspection', 'repair', 'installation',
+    'emergency', 'maintenance', 'grease_trap', 'camera_inspection',
+    name='work_order_job_type_enum',
+    create_type=False
+)
+
+WorkOrderPriorityEnum = ENUM(
+    'low', 'normal', 'high', 'urgent', 'emergency',
+    name='work_order_priority_enum',
+    create_type=False
+)
 
 
 class WorkOrder(Base):
@@ -14,10 +36,10 @@ class WorkOrder(Base):
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
     technician_id = Column(String(36), ForeignKey("technicians.id"), index=True)
 
-    # Job details (job_type, priority, status are USER-DEFINED enums in Flask)
-    job_type = Column(String(50), nullable=False)
-    priority = Column(String(20))
-    status = Column(String(30))
+    # Job details - PostgreSQL ENUM types
+    job_type = Column(WorkOrderJobTypeEnum, nullable=False)
+    priority = Column(WorkOrderPriorityEnum)
+    status = Column(WorkOrderStatusEnum)
 
     # Scheduling
     scheduled_date = Column(Date)
