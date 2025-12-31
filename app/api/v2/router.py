@@ -31,6 +31,7 @@ from app.api.v2 import (
     predictions,
     # Phase 7: Marketing Automation
     marketing,
+    marketing_hub,
     # Phase 8: Schedule Map View
     schedule_map,
     # Phase 9: Employee Portal
@@ -81,6 +82,7 @@ api_router.include_router(predictions.router, prefix="/predictions", tags=["pred
 
 # Phase 7: Marketing Automation
 api_router.include_router(marketing.router, prefix="/marketing", tags=["marketing"])
+api_router.include_router(marketing_hub.router, prefix="/marketing-hub", tags=["marketing-hub"])
 
 # Phase 8: Schedule Map View
 api_router.include_router(schedule_map.router, prefix="/schedule-map", tags=["schedule-map"])
