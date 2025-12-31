@@ -65,10 +65,29 @@ async def list_work_orders(
     if scheduled_date_to:
         query = query.where(WorkOrder.scheduled_date <= scheduled_date_to)
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
+    # Get total count - build separate count query with same filters
+    count_query = select(func.count(WorkOrder.id))
+    if customer_id:
+        count_query = count_query.where(WorkOrder.customer_id == customer_id)
+    if status:
+        count_query = count_query.where(WorkOrder.status == status)
+    if job_type:
+        count_query = count_query.where(WorkOrder.job_type == job_type)
+    if priority:
+        count_query = count_query.where(WorkOrder.priority == priority)
+    if assigned_technician:
+        count_query = count_query.where(WorkOrder.assigned_technician == assigned_technician)
+    if technician_id:
+        count_query = count_query.where(WorkOrder.technician_id == technician_id)
+    if scheduled_date:
+        count_query = count_query.where(func.date(WorkOrder.scheduled_date) == scheduled_date)
+    if scheduled_date_from:
+        count_query = count_query.where(WorkOrder.scheduled_date >= scheduled_date_from)
+    if scheduled_date_to:
+        count_query = count_query.where(WorkOrder.scheduled_date <= scheduled_date_to)
+
     total_result = await db.execute(count_query)
-    total = total_result.scalar()
+    total = total_result.scalar() or 0
 
     # Apply pagination
     offset = (page - 1) * page_size
