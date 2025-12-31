@@ -153,9 +153,9 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.0.1",  # Updated to verify deployment
+        "version": "2.0.2",  # Updated to verify deployment
         "environment": settings.ENVIRONMENT,
-        "deploy_marker": "2024-12-30T20:30",
+        "deploy_marker": "2025-12-31T14:00",
     }
 
 
