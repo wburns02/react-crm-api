@@ -35,6 +35,10 @@ from app.api.v2 import (
     schedule_map,
     # Phase 9: Employee Portal
     employee_portal,
+    # Fleet & Integrations
+    samsara,
+    email_marketing,
+    admin,
 )
 
 api_router = APIRouter()
@@ -83,3 +87,8 @@ api_router.include_router(schedule_map.router, prefix="/schedule-map", tags=["sc
 
 # Phase 9: Employee Portal
 api_router.include_router(employee_portal.router, prefix="/employee", tags=["employee"])
+
+# Fleet & Integrations
+api_router.include_router(samsara.router, prefix="/samsara", tags=["samsara"])
+api_router.include_router(email_marketing.router, prefix="/email-marketing", tags=["email-marketing"])
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
