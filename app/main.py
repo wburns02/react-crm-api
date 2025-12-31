@@ -9,9 +9,11 @@ SECURITY FEATURES:
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import logging
+import traceback
 
 from app.api.v2.router import api_router
 from app.webhooks.twilio import twilio_router
@@ -167,3 +169,25 @@ if __name__ == "__main__":
         port=5001,
         reload=settings.DEBUG,
     )
+
+
+# Global exception handler to ensure CORS headers on 500 errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Handle all unhandled exceptions with proper CORS headers."""
+    logger.error(f"Unhandled exception: {type(exc).__name__}: {str(exc)}")
+    if settings.DEBUG:
+        logger.error(traceback.format_exc())
+
+    origin = request.headers.get("origin", "")
+    response = JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+
+    return response
