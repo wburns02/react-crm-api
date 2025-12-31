@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# PostgreSQL ENUM fields that need explicit type casting
+ENUM_FIELDS = {"status", "job_type", "priority"}
+
 
 @router.get("", response_model=WorkOrderListResponse)
 async def list_work_orders(
@@ -149,6 +152,7 @@ async def update_work_order(
     current_user: CurrentUser,
 ):
     """Update a work order."""
+    # First check if work order exists
     result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
     work_order = result.scalar_one_or_none()
 
@@ -159,11 +163,43 @@ async def update_work_order(
         )
 
     update_data = work_order_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(work_order, field, value)
 
-    await db.commit()
-    await db.refresh(work_order)
+    if not update_data:
+        return work_order
+
+    # Build raw SQL to handle PostgreSQL ENUM types properly
+    set_clauses = []
+    params = {"work_order_id": work_order_id}
+
+    for field, value in update_data.items():
+        if value is None:
+            set_clauses.append(f"{field} = NULL")
+        elif field in ENUM_FIELDS:
+            # Cast to the PostgreSQL ENUM type explicitly
+            enum_type = f"work_order_{field}_enum"
+            set_clauses.append(f"{field} = :{field}::{enum_type}")
+            params[field] = value
+        else:
+            set_clauses.append(f"{field} = :{field}")
+            params[field] = value
+
+    # Add updated_at timestamp
+    set_clauses.append("updated_at = NOW()")
+
+    sql = text(f"UPDATE work_orders SET {', '.join(set_clauses)} WHERE id = :work_order_id")
+
+    try:
+        await db.execute(sql, params)
+        await db.commit()
+    except Exception as e:
+        logger.error(f"Error updating work order {work_order_id}: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    # Re-fetch the updated work order
+    result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+    work_order = result.scalar_one_or_none()
+
     return work_order
 
 
