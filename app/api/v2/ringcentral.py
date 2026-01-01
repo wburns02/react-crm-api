@@ -67,26 +67,26 @@ def call_log_to_response(call: CallLog) -> dict:
     """Convert CallLog model to response dict."""
     return {
         "id": str(call.id),
-        "rc_call_id": call.rc_call_id,
-        "from_number": call.from_number,
-        "to_number": call.to_number,
-        "from_name": call.from_name,
-        "to_name": call.to_name,
+        "rc_call_id": call.rc_call_id,  # property -> ringcentral_call_id
+        "from_number": call.from_number,  # property -> caller_number
+        "to_number": call.to_number,  # property -> called_number
+        "from_name": None,  # Not in DB
+        "to_name": None,  # Not in DB
         "direction": call.direction,
-        "status": call.status,
-        "start_time": call.start_time.isoformat() if call.start_time else None,
-        "end_time": call.end_time.isoformat() if call.end_time else None,
+        "status": call.status,  # property -> call_disposition
+        "start_time": call.start_time.isoformat() if call.start_time else None,  # property
+        "end_time": None,  # Not in DB
         "duration_seconds": call.duration_seconds,
-        "has_recording": call.has_recording,
+        "has_recording": call.has_recording,  # property
         "recording_url": call.recording_url,
-        "transcription": call.transcription,
-        "ai_summary": call.ai_summary,
-        "sentiment": call.sentiment,
-        "sentiment_score": call.sentiment_score,
+        "transcription": None,  # Not in DB
+        "ai_summary": None,  # Not in DB
+        "sentiment": None,  # Not in DB
+        "sentiment_score": None,  # Not in DB
         "customer_id": str(call.customer_id) if call.customer_id else None,
-        "contact_name": call.contact_name,
+        "contact_name": call.contact_name,  # property -> answered_by
         "notes": call.notes,
-        "disposition": call.disposition,
+        "disposition": call.disposition,  # property -> call_disposition
         "created_at": call.created_at.isoformat() if call.created_at else None,
     }
 
@@ -222,16 +222,18 @@ async def make_call(
             detail=result["error"],
         )
 
-    # Create initial call log entry
+    # Create initial call log entry (using actual DB column names)
+    now = datetime.utcnow()
     call_log = CallLog(
-        rc_call_id=result.get("id"),
-        rc_session_id=result.get("sessionId"),
-        from_number=from_number,
-        to_number=request.to_number,
+        ringcentral_call_id=result.get("id"),
+        ringcentral_session_id=result.get("sessionId"),
+        caller_number=from_number,
+        called_number=request.to_number,
         direction="outbound",
-        status="ringing",
-        start_time=datetime.utcnow(),
-        user_id=str(current_user.id),
+        call_disposition="ringing",
+        call_date=now.date(),
+        call_time=now.time(),
+        assigned_to=str(current_user.id),
         customer_id=int(request.customer_id) if request.customer_id else None,
     )
 
@@ -240,7 +242,7 @@ async def make_call(
         customer = await find_customer_by_phone(db, request.to_number)
         if customer:
             call_log.customer_id = customer.id
-            call_log.contact_name = f"{customer.first_name} {customer.last_name}".strip()
+            call_log.answered_by = f"{customer.first_name} {customer.last_name}".strip()
 
     db.add(call_log)
     await db.commit()
@@ -442,45 +444,47 @@ async def sync_call_logs(
     for record in records:
         rc_call_id = record.get("id")
 
-        # Check if already exists
+        # Check if already exists (using actual DB column name)
         existing = await db.execute(
-            select(CallLog).where(CallLog.rc_call_id == rc_call_id)
+            select(CallLog).where(CallLog.ringcentral_call_id == rc_call_id)
         )
         if existing.scalar_one_or_none():
             skipped += 1
             continue
 
-        # Create new call log
+        # Create new call log (using actual DB column names)
         from_info = record.get("from", {})
         to_info = record.get("to", {})
 
+        # Parse start time
+        start_dt = datetime.utcnow()
+        if record.get("startTime"):
+            start_dt = datetime.fromisoformat(record["startTime"].replace("Z", "+00:00"))
+
         call_log = CallLog(
-            rc_call_id=rc_call_id,
-            rc_session_id=record.get("sessionId"),
-            from_number=from_info.get("phoneNumber", ""),
-            to_number=to_info.get("phoneNumber", ""),
-            from_name=from_info.get("name"),
-            to_name=to_info.get("name"),
+            ringcentral_call_id=rc_call_id,
+            ringcentral_session_id=record.get("sessionId"),
+            caller_number=from_info.get("phoneNumber", ""),
+            called_number=to_info.get("phoneNumber", ""),
             direction=record.get("direction", "").lower(),
-            status=record.get("result", "unknown").lower(),
+            call_disposition=record.get("result", "unknown").lower(),
             call_type=record.get("type", "voice").lower(),
-            start_time=datetime.fromisoformat(record["startTime"].replace("Z", "+00:00")) if record.get("startTime") else datetime.utcnow(),
+            call_date=start_dt.date(),
+            call_time=start_dt.time(),
             duration_seconds=record.get("duration"),
         )
 
         # Check for recording
         recording = record.get("recording")
         if recording:
-            call_log.has_recording = True
             call_log.recording_url = recording.get("contentUri")
-            call_log.recording_duration_seconds = recording.get("duration")
 
         # Try to match customer
-        search_number = call_log.to_number if call_log.direction == "outbound" else call_log.from_number
+        search_number = call_log.called_number if call_log.direction == "outbound" else call_log.caller_number
         customer = await find_customer_by_phone(db, search_number)
         if customer:
             call_log.customer_id = customer.id
-            call_log.contact_name = f"{customer.first_name} {customer.last_name}".strip()
+            call_log.answered_by = f"{customer.first_name} {customer.last_name}".strip()
 
         db.add(call_log)
         synced += 1
