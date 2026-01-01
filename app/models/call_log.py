@@ -4,9 +4,9 @@ NOTE: This model matches the EXISTING production database schema.
 The column names here must match the actual call_logs table.
 """
 from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Time
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.sql import func
-import uuid
+
 
 from app.database import Base
 
@@ -19,7 +19,7 @@ class CallLog(Base):
 
     __tablename__ = "call_logs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
 
     # RingCentral identifiers (match actual DB columns)
     ringcentral_call_id = Column(String(100), nullable=True, index=True)
