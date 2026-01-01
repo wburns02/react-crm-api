@@ -93,21 +93,25 @@ def call_log_to_response(call: CallLog) -> dict:
 
 async def find_customer_by_phone(db: DbSession, phone: str) -> Optional[Customer]:
     """Look up customer by phone number."""
-    # Normalize phone number (remove non-digits)
-    normalized = ''.join(c for c in phone if c.isdigit())
-    if len(normalized) == 11 and normalized.startswith('1'):
-        normalized = normalized[1:]  # Remove leading 1
+    try:
+        # Normalize phone number (remove non-digits)
+        normalized = ''.join(c for c in phone if c.isdigit())
+        if len(normalized) == 11 and normalized.startswith('1'):
+            normalized = normalized[1:]  # Remove leading 1
 
-    # Search customers
-    result = await db.execute(
-        select(Customer).where(
-            or_(
-                Customer.phone.contains(normalized[-10:]),
-                Customer.mobile_phone.contains(normalized[-10:]) if hasattr(Customer, 'mobile_phone') else False,
-            )
-        ).limit(1)
-    )
-    return result.scalar_one_or_none()
+        if len(normalized) < 7:
+            return None  # Phone number too short
+
+        # Search customers by phone (just use main phone column)
+        result = await db.execute(
+            select(Customer).where(
+                Customer.phone.contains(normalized[-10:])
+            ).limit(1)
+        )
+        return result.scalar_one_or_none()
+    except Exception as e:
+        logger.warning(f"Error finding customer by phone {phone}: {e}")
+        return None
 
 
 async def create_activity_from_call(
@@ -196,63 +200,74 @@ async def make_call(
     current_user: CurrentUser,
 ):
     """Initiate an outbound call (click-to-call)."""
-    if not ringcentral_service.is_configured:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="RingCentral not configured",
+    try:
+        if not ringcentral_service.is_configured:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="RingCentral not configured",
+            )
+
+        # Default from number to user's extension
+        from_number = request.from_number or getattr(current_user, 'phone_extension', None)
+        if not from_number:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No from_number specified and user has no extension configured",
+            )
+
+        # Make the call via RingCentral
+        logger.info(f"Initiating call from {from_number} to {request.to_number}")
+        result = await ringcentral_service.make_call(
+            from_number=from_number,
+            to_number=request.to_number,
+        )
+        logger.info(f"RingCentral response: {result}")
+
+        if result.get("error"):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result["error"],
+            )
+
+        # Create initial call log entry (using actual DB column names)
+        now = datetime.utcnow()
+        call_log = CallLog(
+            ringcentral_call_id=result.get("id"),
+            ringcentral_session_id=result.get("sessionId"),
+            caller_number=from_number,
+            called_number=request.to_number,
+            direction="outbound",
+            call_disposition="ringing",
+            call_date=now.date(),
+            call_time=now.time(),
+            assigned_to=str(current_user.id),
+            customer_id=int(request.customer_id) if request.customer_id else None,
         )
 
-    # Default from number to user's extension
-    from_number = request.from_number or getattr(current_user, 'phone_extension', None)
-    if not from_number:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No from_number specified and user has no extension configured",
-        )
+        # Try to find customer if not provided (skip if fails)
+        if not call_log.customer_id:
+            try:
+                customer = await find_customer_by_phone(db, request.to_number)
+                if customer:
+                    call_log.customer_id = customer.id
+                    call_log.answered_by = f"{customer.first_name} {customer.last_name}".strip()
+            except Exception as ce:
+                logger.warning(f"Could not find customer by phone: {ce}")
 
-    # Make the call via RingCentral
-    result = await ringcentral_service.make_call(
-        from_number=from_number,
-        to_number=request.to_number,
-    )
+        db.add(call_log)
+        await db.commit()
+        await db.refresh(call_log)
 
-    if result.get("error"):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result["error"],
-        )
-
-    # Create initial call log entry (using actual DB column names)
-    now = datetime.utcnow()
-    call_log = CallLog(
-        ringcentral_call_id=result.get("id"),
-        ringcentral_session_id=result.get("sessionId"),
-        caller_number=from_number,
-        called_number=request.to_number,
-        direction="outbound",
-        call_disposition="ringing",
-        call_date=now.date(),
-        call_time=now.time(),
-        assigned_to=str(current_user.id),
-        customer_id=int(request.customer_id) if request.customer_id else None,
-    )
-
-    # Try to find customer if not provided
-    if not call_log.customer_id:
-        customer = await find_customer_by_phone(db, request.to_number)
-        if customer:
-            call_log.customer_id = customer.id
-            call_log.answered_by = f"{customer.first_name} {customer.last_name}".strip()
-
-    db.add(call_log)
-    await db.commit()
-    await db.refresh(call_log)
-
-    return {
-        "status": "initiated",
-        "call_log_id": str(call_log.id),
-        "ringcentral_response": result,
-    }
+        return {
+            "status": "initiated",
+            "call_log_id": str(call_log.id),
+            "ringcentral_response": result,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in make_call: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/calls")
