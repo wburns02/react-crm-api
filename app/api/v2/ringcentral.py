@@ -152,6 +152,18 @@ async def get_ringcentral_status():
     return result
 
 
+@router.get("/debug-db")
+async def debug_database(db: DbSession):
+    """DEBUG: Check call_logs table schema."""
+    from sqlalchemy import text
+    try:
+        result = await db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'call_logs' ORDER BY ordinal_position"))
+        columns = [row[0] for row in result.fetchall()]
+        return {"table_exists": len(columns) > 0, "columns": columns}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.get("/debug-config")
 async def get_debug_config():
     """DEBUG: Check RingCentral configuration values."""
