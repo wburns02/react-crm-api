@@ -268,37 +268,43 @@ async def list_calls(
     date_to: Optional[datetime] = None,
 ):
     """List call logs with filtering and pagination."""
-    query = select(CallLog)
+    try:
+        query = select(CallLog)
 
-    if direction:
-        query = query.where(CallLog.direction == direction)
-    if customer_id:
-        query = query.where(CallLog.customer_id == int(customer_id))
-    if status_filter:
-        query = query.where(CallLog.status == status_filter)
-    if date_from:
-        query = query.where(CallLog.start_time >= date_from)
-    if date_to:
-        query = query.where(CallLog.start_time <= date_to)
+        if direction:
+            query = query.where(CallLog.direction == direction)
+        if customer_id:
+            query = query.where(CallLog.customer_id == int(customer_id))
+        if status_filter:
+            # Use actual column name: call_disposition
+            query = query.where(CallLog.call_disposition == status_filter)
+        if date_from:
+            # Use call_date for date filtering
+            query = query.where(CallLog.call_date >= date_from.date())
+        if date_to:
+            query = query.where(CallLog.call_date <= date_to.date())
 
-    # Count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        # Count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
 
-    # Paginate
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(CallLog.start_time.desc())
+        # Paginate - order by created_at since call_date/time may be null
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size).order_by(CallLog.created_at.desc())
 
-    result = await db.execute(query)
-    calls = result.scalars().all()
+        result = await db.execute(query)
+        calls = result.scalars().all()
 
-    return {
-        "items": [call_log_to_response(c) for c in calls],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-    }
+        return {
+            "items": [call_log_to_response(c) for c in calls],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        logger.error(f"Error listing calls: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/calls/{call_id}")
