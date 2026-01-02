@@ -138,8 +138,9 @@ class RingCentralService:
             return response.json() if response.content else {"status": "success"}
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"RingCentral API error: {e.response.status_code} - {e.response.text}")
-            return {"error": str(e), "status_code": e.response.status_code}
+            error_body = e.response.text
+            logger.error(f"RingCentral API error: {e.response.status_code} - {error_body}")
+            return {"error": str(e), "error_body": error_body, "status_code": e.response.status_code}
         except Exception as e:
             logger.error(f"RingCentral request error: {e}")
             return {"error": str(e)}

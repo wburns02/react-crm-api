@@ -226,10 +226,11 @@ async def make_call(
         # Check for errors BEFORE creating call log
         if result.get("error"):
             error_msg = result.get("error", "Unknown error")
-            logger.error(f"RingCentral call failed: {error_msg}")
+            error_body = result.get("error_body", "")
+            logger.error(f"RingCentral call failed: {error_msg} - {error_body}")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"RingCentral error: {error_msg}",
+                detail=f"RingCentral error: {error_body or error_msg}",
             )
 
         # Verify we got a call ID back (indicates success)
