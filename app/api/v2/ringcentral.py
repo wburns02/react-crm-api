@@ -552,6 +552,34 @@ async def sync_call_logs(
     }
 
 
+@router.get("/my-extension")
+async def get_my_extension(
+    current_user: CurrentUser,
+):
+    """Get the current authenticated user's RingCentral extension.
+
+    This returns YOUR extension info, not a list of all extensions.
+    Use this to determine your own extension number for making calls.
+    """
+    if not ringcentral_service.is_configured:
+        return {"configured": False, "error": "RingCentral not configured"}
+
+    result = await ringcentral_service.get_current_extension()
+
+    if result.get("error"):
+        return {"configured": True, "error": result["error"]}
+
+    return {
+        "configured": True,
+        "id": result.get("id"),
+        "extension_number": result.get("extensionNumber"),
+        "name": result.get("name"),
+        "email": result.get("contact", {}).get("email"),
+        "phone_number": result.get("contact", {}).get("businessPhone"),
+        "status": result.get("status"),
+    }
+
+
 @router.get("/extensions")
 async def list_extensions(
     current_user: CurrentUser,

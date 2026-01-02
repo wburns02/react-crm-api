@@ -370,6 +370,18 @@ class RingCentralService:
             logger.error(f"Failed to download recording: {e}")
             return None
 
+    async def get_current_extension(self) -> Dict[str, Any]:
+        """Get the current authenticated user's extension info.
+
+        Returns the extension that owns the JWT token / OAuth session.
+        This is the user's OWN extension, not a list of all extensions.
+        """
+        result = await self._api_request(
+            "GET",
+            "/restapi/v1.0/account/~/extension/~",
+        )
+        return result
+
     async def get_extensions(self) -> Dict[str, Any]:
         """Get list of extensions (users) in the account."""
         result = await self._api_request(
