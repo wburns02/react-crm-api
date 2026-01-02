@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, cast, String, text
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date as date_type
 import uuid
 import logging
 import traceback
@@ -59,7 +59,12 @@ async def list_work_orders(
         if technician_id:
             query = query.where(WorkOrder.technician_id == technician_id)
         if scheduled_date:
-            query = query.where(func.date(WorkOrder.scheduled_date) == scheduled_date)
+            # Parse string to date object for proper comparison
+            try:
+                date_obj = date_type.fromisoformat(scheduled_date)
+                query = query.where(WorkOrder.scheduled_date == date_obj)
+            except ValueError:
+                pass  # Invalid date format, skip filter
         if scheduled_date_from:
             query = query.where(WorkOrder.scheduled_date >= scheduled_date_from)
         if scheduled_date_to:
@@ -80,7 +85,11 @@ async def list_work_orders(
         if technician_id:
             count_query = count_query.where(WorkOrder.technician_id == technician_id)
         if scheduled_date:
-            count_query = count_query.where(func.date(WorkOrder.scheduled_date) == scheduled_date)
+            try:
+                date_obj = date_type.fromisoformat(scheduled_date)
+                count_query = count_query.where(WorkOrder.scheduled_date == date_obj)
+            except ValueError:
+                pass
         if scheduled_date_from:
             count_query = count_query.where(WorkOrder.scheduled_date >= scheduled_date_from)
         if scheduled_date_to:
