@@ -223,10 +223,21 @@ async def make_call(
         )
         logger.info(f"RingCentral response: {result}")
 
+        # Check for errors BEFORE creating call log
         if result.get("error"):
+            error_msg = result.get("error", "Unknown error")
+            logger.error(f"RingCentral call failed: {error_msg}")
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=result["error"],
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"RingCentral error: {error_msg}",
+            )
+
+        # Verify we got a call ID back (indicates success)
+        if not result.get("id"):
+            logger.error(f"RingCentral returned unexpected response (no call ID): {result}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="RingCentral call initiation failed - no call ID returned",
             )
 
         # Create initial call log entry (using actual DB column names)

@@ -195,13 +195,40 @@ class RingCentralService:
         Returns:
             Call session information
         """
+        # Normalize from_number - extract digits only
+        from_digits = ''.join(c for c in from_number if c.isdigit())
+
+        # Detect extension (1-5 digits) vs phone number (6+ digits)
+        if len(from_digits) <= 5:
+            # It's an extension number - use extensionNumber field
+            from_field = {"extensionNumber": from_digits}
+        else:
+            # It's a phone number - format with +1 country code
+            if len(from_digits) == 10:
+                from_field = {"phoneNumber": f"+1{from_digits}"}
+            elif len(from_digits) == 11 and from_digits.startswith('1'):
+                from_field = {"phoneNumber": f"+{from_digits}"}
+            else:
+                from_field = {"phoneNumber": from_digits}
+
+        # Format to_number with country code
+        to_digits = ''.join(c for c in to_number if c.isdigit())
+        if len(to_digits) == 10:
+            to_formatted = f"+1{to_digits}"
+        elif len(to_digits) == 11 and to_digits.startswith('1'):
+            to_formatted = f"+{to_digits}"
+        else:
+            to_formatted = to_digits
+
         data = {
-            "from": {"phoneNumber": from_number},
-            "to": {"phoneNumber": to_number},
+            "from": from_field,
+            "to": {"phoneNumber": to_formatted},
             "playPrompt": False,
         }
         if caller_id:
             data["callerId"] = {"phoneNumber": caller_id}
+
+        logger.info(f"RingOut request data: {data}")
 
         result = await self._api_request(
             "POST",
