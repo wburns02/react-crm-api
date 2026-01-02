@@ -47,14 +47,19 @@ async def login(
         expires_delta=access_token_expires,
     )
 
-    # Set session cookie
+    # Set session cookie (HTTP-only for XSS protection)
+    # SECURITY: For cross-origin cookies (SPA on different domain):
+    # - secure=True: Required for SameSite=None
+    # - samesite="none": Required for cross-origin requests
+    # - httponly=True: Prevents XSS from reading the cookie
     response.set_cookie(
         key="session",
         value=access_token,
         httponly=True,
-        secure=settings.ENVIRONMENT != "development",
-        samesite="lax",
+        secure=True,  # Always secure (required for SameSite=None)
+        samesite="none",  # Required for cross-origin cookies
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",  # Available for all API paths
     )
 
     return Token(access_token=access_token, token=access_token, token_type="bearer")
@@ -63,7 +68,13 @@ async def login(
 @router.post("/logout")
 async def logout(response: Response):
     """Logout user by clearing session cookie."""
-    response.delete_cookie(key="session")
+    # SECURITY: Must match the cookie settings used when setting the cookie
+    response.delete_cookie(
+        key="session",
+        path="/",
+        secure=True,
+        samesite="none",
+    )
     return {"message": "Successfully logged out"}
 
 
