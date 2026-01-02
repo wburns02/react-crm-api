@@ -19,6 +19,7 @@ from app.api.v2 import (
     tickets,
     equipment,
     inventory,
+    notifications,
     # Phase 1: AI Infrastructure
     ai,
     # Phase 3: E-Signatures
@@ -64,6 +65,7 @@ api_router.include_router(activities.router, prefix="/activities", tags=["activi
 api_router.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
 api_router.include_router(equipment.router, prefix="/equipment", tags=["equipment"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 
 # Phase 1: AI Infrastructure
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
