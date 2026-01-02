@@ -193,6 +193,27 @@ async def get_debug_config():
         return {"error": str(e), "type": type(e).__name__}
 
 
+@router.get("/debug-forwarding")
+async def debug_forwarding_numbers(current_user: CurrentUser):
+    """DEBUG: Show raw forwarding numbers for the authenticated extension."""
+    if not ringcentral_service.is_configured:
+        return {"configured": False, "error": "RingCentral not configured"}
+
+    # Get forwarding numbers
+    fwd_result = await ringcentral_service.get_forwarding_numbers()
+
+    # Get current extension info
+    ext_result = await ringcentral_service._api_request(
+        "GET",
+        "/restapi/v1.0/account/~/extension/~",
+    )
+
+    return {
+        "authenticated_extension": ext_result,
+        "forwarding_numbers": fwd_result,
+    }
+
+
 @router.post("/call")
 async def make_call(
     request: MakeCallRequest,
