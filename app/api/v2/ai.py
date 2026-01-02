@@ -457,3 +457,27 @@ async def delete_conversation(
     await db.commit()
 
     return {"status": "deleted"}
+
+
+# AI Dispatch Stats endpoint
+class DispatchStats(BaseModel):
+    total_dispatches: int = 0
+    ai_assisted: int = 0
+    manual: int = 0
+    optimization_score: float = 0.0
+
+
+@router.get("/dispatch/stats")
+async def get_dispatch_stats(
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """Get AI dispatch statistics."""
+    # TODO: Implement with actual dispatch data
+    # For now return placeholder to prevent 404
+    return DispatchStats(
+        total_dispatches=0,
+        ai_assisted=0,
+        manual=0,
+        optimization_score=0.0,
+    )
