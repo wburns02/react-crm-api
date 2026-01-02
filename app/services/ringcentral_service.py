@@ -209,11 +209,24 @@ class RingCentralService:
 
             if fwd_result.get("error"):
                 logger.warning(f"Failed to get forwarding numbers: {fwd_result}")
-                # Continue without from_field - let RingCentral use default
+                # Try to get extension's business phone instead
+                ext_result = await self._api_request("GET", "/restapi/v1.0/account/~/extension/~")
+                business_phone = ext_result.get("contact", {}).get("businessPhone")
+                if business_phone:
+                    logger.info(f"Using extension's business phone: {business_phone}")
+                    from_field = {"phoneNumber": business_phone}
             else:
                 records = fwd_result.get("records", [])
                 if not records:
-                    logger.warning("No forwarding numbers configured - will use RingCentral default")
+                    # No forwarding numbers - try to use extension's business phone
+                    logger.warning("No forwarding numbers configured - checking for business phone")
+                    ext_result = await self._api_request("GET", "/restapi/v1.0/account/~/extension/~")
+                    business_phone = ext_result.get("contact", {}).get("businessPhone")
+                    if business_phone:
+                        logger.info(f"Using extension's business phone: {business_phone}")
+                        from_field = {"phoneNumber": business_phone}
+                    else:
+                        logger.warning("No forwarding numbers or business phone - call may fail")
                 else:
                     # Log available forwarding numbers for debugging
                     logger.info(f"Available forwarding numbers: {json.dumps(records, indent=2)}")
