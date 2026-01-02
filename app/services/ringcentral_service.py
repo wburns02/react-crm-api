@@ -189,7 +189,7 @@ class RingCentralService:
         """Initiate an outbound call (RingOut).
 
         Args:
-            from_number: Extension or phone number to call from
+            from_number: Extension number, forwarding number ID, or phone number to call from
             to_number: Phone number to call
             caller_id: Optional caller ID to display
 
@@ -201,8 +201,48 @@ class RingCentralService:
 
         # Detect extension (1-5 digits) vs phone number (6+ digits)
         if len(from_digits) <= 5:
-            # It's an extension number - use extensionNumber field
-            from_field = {"extensionNumber": from_digits}
+            # It's an extension number - need to look up forwarding number
+            # Get the authenticated user's forwarding numbers
+            fwd_result = await self.get_forwarding_numbers()
+
+            if fwd_result.get("error"):
+                logger.error(f"Failed to get forwarding numbers: {fwd_result}")
+                return {"error": f"Cannot get forwarding numbers: {fwd_result.get('error')}"}
+
+            records = fwd_result.get("records", [])
+            if not records:
+                return {"error": "No forwarding numbers configured. Please set up a forwarding number in RingCentral."}
+
+            # Log available forwarding numbers for debugging
+            logger.info(f"Available forwarding numbers: {json.dumps(records, indent=2)}")
+
+            # Try to find the best forwarding number to use:
+            # 1. First, try to find one matching the requested extension
+            # 2. Otherwise, use the first one with CallFlip feature (desk phone/softphone)
+            # 3. Fall back to any forwarding number
+            selected_fwd = None
+
+            for fwd in records:
+                # Check if this forwarding number has the extension we want
+                fwd_label = fwd.get("label", "").lower()
+                fwd_phone = fwd.get("phoneNumber", "")
+                features = fwd.get("features", [])
+
+                # Log each forwarding number
+                logger.info(f"Forwarding number: id={fwd.get('id')}, label={fwd_label}, phone={fwd_phone}, features={features}")
+
+                # Prefer forwarding numbers that support CallFlip (for desk phones/softphones)
+                if "CallFlip" in features and not selected_fwd:
+                    selected_fwd = fwd
+
+            # Fall back to first forwarding number if no CallFlip found
+            if not selected_fwd:
+                selected_fwd = records[0]
+
+            logger.info(f"Selected forwarding number: id={selected_fwd.get('id')}, label={selected_fwd.get('label')}")
+
+            # Use forwardingNumberId - this is the correct field for RingOut API
+            from_field = {"forwardingNumberId": selected_fwd.get("id")}
         else:
             # It's a phone number - format with +1 country code
             if len(from_digits) == 10:
@@ -316,6 +356,19 @@ class RingCentralService:
             "GET",
             "/restapi/v1.0/account/~/extension",
             params={"perPage": 1000},
+        )
+        return result
+
+    async def get_forwarding_numbers(self, extension_id: str = "~") -> Dict[str, Any]:
+        """Get forwarding numbers for an extension.
+
+        These are the phone numbers/devices that can receive calls for this extension.
+        Returns list with id, phoneNumber, label, features, etc.
+        """
+        result = await self._api_request(
+            "GET",
+            f"/restapi/v1.0/account/~/extension/{extension_id}/forwarding-number",
+            params={"perPage": 100},
         )
         return result
 
