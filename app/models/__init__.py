@@ -37,6 +37,11 @@ from app.models.marketing import MarketingCampaign, MarketingWorkflow, WorkflowE
 # Phase 10: Payroll
 from app.models.payroll import PayrollPeriod, TimeEntry, Commission, TechnicianPayRate
 
+# Phase 11: Compliance
+from app.models.license import License
+from app.models.certification import Certification
+from app.models.inspection import Inspection
+
 __all__ = [
     # Core models
     "Customer",
@@ -91,4 +96,8 @@ __all__ = [
     "TimeEntry",
     "Commission",
     "TechnicianPayRate",
+    # Phase 11: Compliance
+    "License",
+    "Certification",
+    "Inspection",
 ]

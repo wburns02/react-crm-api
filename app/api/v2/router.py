@@ -43,6 +43,8 @@ from app.api.v2 import (
     samsara,
     email_marketing,
     admin,
+    # Phase 11: Compliance
+    compliance,
 )
 
 api_router = APIRouter()
@@ -100,3 +102,6 @@ api_router.include_router(employee_portal.router, prefix="/employee", tags=["emp
 api_router.include_router(samsara.router, prefix="/samsara", tags=["samsara"])
 api_router.include_router(email_marketing.router, prefix="/email-marketing", tags=["email-marketing"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+
+# Phase 11: Compliance
+api_router.include_router(compliance.router, prefix="/compliance", tags=["compliance"])
