@@ -1,0 +1,165 @@
+name: Overnight Autonomous Loop
+
+on:
+  schedule:
+    # Run at 2 AM Central (8 AM UTC in winter, 7 AM UTC in summer)
+    - cron: '0 8 * * *'
+
+  workflow_dispatch:
+    inputs:
+      max_iterations:
+        description: 'Maximum iterations'
+        required: false
+        default: '20'
+        type: string
+      max_duration:
+        description: 'Maximum duration (e.g., 4h, 30m)'
+        required: false
+        default: '4h'
+        type: string
+      dry_run:
+        description: 'Dry run (no actual changes)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  autonomous-loop:
+    name: Autonomous TODO Processing
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hour max
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Configure Git
+        run: |
+          git config user.name "Claude Autonomous"
+          git config user.email "claude-autonomous@ecbtx.com"
+
+      - name: Check Claude Authentication
+        id: auth-check
+        run: |
+          if [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "auth_method=api_key" >> $GITHUB_OUTPUT
+            echo "Using API key authentication"
+          elif [ -n "${{ secrets.CLAUDE_OAUTH_TOKEN }}" ]; then
+            echo "auth_method=oauth" >> $GITHUB_OUTPUT
+            echo "Using OAuth token authentication"
+          else
+            echo "auth_method=none" >> $GITHUB_OUTPUT
+            echo "::warning::No authentication configured. Set ANTHROPIC_API_KEY or CLAUDE_OAUTH_TOKEN secret."
+          fi
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Run Autonomous Loop
+        if: steps.auth-check.outputs.auth_method != 'none'
+        run: |
+          chmod +x ./scripts/ralph-wiggum-runner.sh
+
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ./scripts/ralph-wiggum-runner.sh \
+              --prompt "Process TODO.md items following the project rules in claude.md" \
+              --dry-run \
+              --log-format text
+          else
+            ./scripts/ralph-wiggum-runner.sh \
+              --prompt "Process TODO.md items following the project rules in claude.md. Run Playwright tests to verify fixes. Commit after each completed task." \
+              --max-iterations ${{ github.event.inputs.max_iterations || '20' }} \
+              --max-duration ${{ github.event.inputs.max_duration || '4h' }} \
+              --log-format json
+          fi
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # For Max subscription OAuth (if configured)
+          CLAUDE_OAUTH_TOKEN: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
+
+      - name: Commit and Push Changes
+        if: success() && github.event.inputs.dry_run != 'true'
+        run: |
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Overnight autonomous improvements
+
+            🤖 Generated with Claude Code autonomous loop
+
+            Run ID: ${{ github.run_id }}
+            Workflow: ${{ github.workflow }}"
+            git push
+          fi
+
+      - name: Upload Session Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-session-logs
+          path: |
+            ~/.claude/ralph-logs/
+            ~/.claude/todo-logs/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Generate Summary
+        if: always()
+        run: |
+          echo "## Overnight Autonomous Run Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Max Iterations | ${{ github.event.inputs.max_iterations || '20' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Max Duration | ${{ github.event.inputs.max_duration || '4h' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dry Run | ${{ github.event.inputs.dry_run || 'false' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Auth Method | ${{ steps.auth-check.outputs.auth_method }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check if TODO.md was modified
+          if git diff --name-only HEAD~1 2>/dev/null | grep -q "TODO.md"; then
+            echo "### TODO.md Changes" >> $GITHUB_STEP_SUMMARY
+            echo '```diff' >> $GITHUB_STEP_SUMMARY
+            git diff HEAD~1 -- TODO.md 2>/dev/null | head -50 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Notify on Failure
+        if: failure() && github.event_name == 'schedule'
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "🤖 Overnight Autonomous Run Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "🤖 *Overnight Autonomous Run Failed*\n\nThe scheduled autonomous loop encountered issues.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run Details>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        continue-on-error: true

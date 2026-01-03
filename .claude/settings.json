@@ -1,0 +1,102 @@
+{
+  "$schema": "https://claude.ai/schemas/settings.json",
+  "version": "2.0",
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'echo \"[PRE] Bash command: $(echo $CLAUDE_TOOL_INPUT | jq -r .command 2>/dev/null | head -c 100)\" >> ~/.claude/tool-audit.log'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if [ -f TODO.md ]; then sed -i \"s/^\\*Last updated:.*/\\*Last updated: $(date -Iseconds)\\*/\" TODO.md 2>/dev/null || true; fi'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'echo \"[POST] Bash exit: $?\" >> ~/.claude/tool-audit.log'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Before stopping, verify the autonomous task status:\n\n1. Check if the original task goal has been achieved\n2. Review any pending items in TODO.md if it exists\n3. Verify tests pass (if applicable)\n4. Check for uncommitted changes\n\nIf the task is NOT complete and more work is needed:\n- Output reasoning for why more work is needed\n- Block the stop to continue working\n\nIf the task IS complete:\n- Summarize what was accomplished\n- Allow the stop"
+          }
+        ]
+      }
+    ]
+  },
+
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write",
+      "Bash(git *)",
+      "Bash(npm *)",
+      "Bash(node *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pytest *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(chmod +x *)",
+      "Bash(jq *)",
+      "Bash(date *)",
+      "Bash(echo *)",
+      "Bash(pwd)",
+      "Bash(which *)",
+      "Bash(wc *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(diff *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(sed *)",
+      "Bash(awk *)"
+    ],
+    "deny": []
+  },
+
+  "model": "claude-sonnet-4-20250514",
+
+  "autonomousMode": {
+    "enabled": true,
+    "maxIterations": 50,
+    "commitAfterEachTask": true,
+    "runTestsBeforeCommit": true,
+    "useStopHook": true
+  },
+
+  "logging": {
+    "structured": true,
+    "format": "json",
+    "auditFile": "~/.claude/tool-audit.log"
+  }
+}
