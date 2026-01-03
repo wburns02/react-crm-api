@@ -1,6 +1,6 @@
 """Marketing automation models."""
 from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, JSON, Float
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
 
@@ -110,8 +110,8 @@ class EmailTemplate(Base):
     body_html = Column(Text, nullable=False)
     body_text = Column(Text, nullable=True)
 
-    # Personalization variables
-    variables = Column(ARRAY(String), nullable=True)  # ["first_name", "company", ...]
+    # Personalization variables (JSON for SQLite test compatibility)
+    variables = Column(JSON, nullable=True)  # ["first_name", "company", ...]
 
     # Category
     category = Column(String(50), nullable=True)
@@ -130,7 +130,7 @@ class SMSTemplate(Base):
     name = Column(String(255), nullable=False)
     body = Column(String(160), nullable=False)  # SMS length limit
 
-    variables = Column(ARRAY(String), nullable=True)
+    variables = Column(JSON, nullable=True)
     category = Column(String(50), nullable=True)
 
     is_active = Column(Boolean, default=True)

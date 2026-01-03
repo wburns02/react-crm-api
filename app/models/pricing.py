@@ -1,6 +1,6 @@
 """Pricing models for dynamic, zone-based pricing engine."""
 from sqlalchemy import Column, String, DateTime, Text, Integer, Float, Boolean, JSON
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
 
@@ -34,9 +34,9 @@ class ServiceCatalog(Base):
     estimated_duration_minutes = Column(Integer, nullable=True)
     setup_time_minutes = Column(Integer, nullable=True)
 
-    # Requirements
-    required_skills = Column(ARRAY(String), nullable=True)
-    required_equipment = Column(ARRAY(String), nullable=True)
+    # Requirements (JSON for SQLite test compatibility)
+    required_skills = Column(JSON, nullable=True)
+    required_equipment = Column(JSON, nullable=True)
 
     # Tax
     is_taxable = Column(Boolean, default=True)
@@ -65,10 +65,10 @@ class PricingZone(Base):
     code = Column(String(20), unique=True, nullable=False, index=True)
     description = Column(Text, nullable=True)
 
-    # Geographic coverage
-    zip_codes = Column(ARRAY(String), nullable=True)  # List of ZIP codes
-    counties = Column(ARRAY(String), nullable=True)
-    cities = Column(ARRAY(String), nullable=True)
+    # Geographic coverage (JSON for SQLite test compatibility)
+    zip_codes = Column(JSON, nullable=True)  # List of ZIP codes
+    counties = Column(JSON, nullable=True)
+    cities = Column(JSON, nullable=True)
     state = Column(String(2), nullable=True)
 
     # Geographic center (for distance calculations)
@@ -125,9 +125,9 @@ class PricingRule(Base):
     adjustment_type = Column(String(20), nullable=False)  # percent, fixed
     adjustment_value = Column(Float, nullable=False)  # -10 for 10% off, 25 for $25 or 25%
 
-    # Scope
-    applies_to_services = Column(ARRAY(String), nullable=True)  # Service codes, null = all
-    applies_to_zones = Column(ARRAY(String), nullable=True)  # Zone codes, null = all
+    # Scope (JSON for SQLite test compatibility)
+    applies_to_services = Column(JSON, nullable=True)  # Service codes, null = all
+    applies_to_zones = Column(JSON, nullable=True)  # Zone codes, null = all
 
     # Stacking
     stackable = Column(Boolean, default=False)  # Can combine with other rules

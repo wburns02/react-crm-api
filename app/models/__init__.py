@@ -15,8 +15,9 @@ from app.models.inventory import InventoryItem
 # Phase 1: AI Infrastructure
 from app.models.ai_embedding import AIEmbedding, AIConversation, AIMessage
 
-# Phase 2: RingCentral
+# Phase 2: RingCentral / Call Center
 from app.models.call_log import CallLog
+from app.models.call_disposition import CallDisposition
 
 # Phase 3: E-Signatures
 from app.models.signature import SignatureRequest, Signature, SignedDocument
@@ -56,8 +57,9 @@ __all__ = [
     "AIEmbedding",
     "AIConversation",
     "AIMessage",
-    # Phase 2: RingCentral
+    # Phase 2: RingCentral / Call Center
     "CallLog",
+    "CallDisposition",
     # Phase 3: E-Signatures
     "SignatureRequest",
     "Signature",

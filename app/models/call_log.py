@@ -3,8 +3,7 @@
 NOTE: This model matches the EXISTING production database schema.
 The column names here must match the actual call_logs table.
 """
-from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Time
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Time, JSON
 from sqlalchemy.sql import func
 
 
@@ -50,7 +49,8 @@ class CallLog(Base):
 
     # Notes and tags
     notes = Column(Text, nullable=True)
-    tags = Column(ARRAY(String), nullable=True)
+    # Using JSON instead of ARRAY for SQLite test compatibility
+    tags = Column(JSON, nullable=True)
 
     # External system reference
     external_system = Column(String(100), nullable=True)

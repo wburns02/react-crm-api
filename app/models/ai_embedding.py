@@ -2,8 +2,8 @@
 
 Uses pgvector extension for PostgreSQL to store and search embeddings.
 """
-from sqlalchemy import Column, String, DateTime, Text, Integer, Index
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy import Column, String, DateTime, Text, Integer, Index, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
 
@@ -25,9 +25,8 @@ class AIEmbedding(Base):
     content = Column(Text, nullable=False)
     content_type = Column(String(50), default="text")  # text, call_transcript, email, note
 
-    # Embedding vector (stored as array - pgvector would use vector type)
-    # For now using ARRAY(Float) - can migrate to pgvector later
-    embedding = Column(ARRAY(Integer), nullable=True)  # Placeholder - real impl uses pgvector
+    # Embedding vector (stored as JSON for SQLite test compatibility - pgvector for production)
+    embedding = Column(JSON, nullable=True)  # Placeholder - real impl uses pgvector
     embedding_model = Column(String(100), default="bge-large-en-v1.5")
     embedding_dimensions = Column(Integer, default=1024)
 
