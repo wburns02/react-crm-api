@@ -46,6 +46,9 @@ from app.models.inspection import Inspection
 from app.models.contract import Contract
 from app.models.contract_template import ContractTemplate
 
+# Phase 13: Job Costing
+from app.models.job_cost import JobCost
+
 __all__ = [
     # Core models
     "Customer",
@@ -107,4 +110,6 @@ __all__ = [
     # Phase 12: Contracts
     "Contract",
     "ContractTemplate",
+    # Phase 13: Job Costing
+    "JobCost",
 ]

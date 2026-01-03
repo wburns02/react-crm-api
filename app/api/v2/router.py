@@ -47,6 +47,8 @@ from app.api.v2 import (
     compliance,
     # Phase 12: Contracts
     contracts,
+    # Phase 13: Job Costing
+    job_costing,
 )
 
 api_router = APIRouter()
@@ -110,3 +112,6 @@ api_router.include_router(compliance.router, prefix="/compliance", tags=["compli
 
 # Phase 12: Contracts
 api_router.include_router(contracts.router, prefix="/contracts", tags=["contracts"])
+
+# Phase 13: Job Costing
+api_router.include_router(job_costing.router, prefix="/job-costing", tags=["job-costing"])
