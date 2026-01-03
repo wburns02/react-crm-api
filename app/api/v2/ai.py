@@ -481,3 +481,38 @@ async def get_dispatch_stats(
         manual=0,
         optimization_score=0.0,
     )
+
+
+# AI Dispatch Suggestions endpoint
+class DispatchSuggestion(BaseModel):
+    """A single dispatch suggestion from AI."""
+    work_order_id: int
+    technician_id: int
+    suggested_date: str
+    suggested_time: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason: str
+
+
+class DispatchSuggestionsResponse(BaseModel):
+    """Response containing AI dispatch suggestions."""
+    suggestions: List[DispatchSuggestion] = []
+
+
+@router.get("/dispatch/suggestions", response_model=DispatchSuggestionsResponse)
+async def get_dispatch_suggestions(
+    current_user: CurrentUser,
+):
+    """Get AI-powered dispatch suggestions.
+
+    Returns suggestions for optimal work order assignments based on:
+    - Technician availability and skills
+    - Geographic proximity
+    - Work order priority and deadlines
+    - Historical performance data
+
+    Currently returns empty array as a stub.
+    """
+    # TODO: Implement AI-powered dispatch suggestions
+    # For now return empty array to prevent 404
+    return DispatchSuggestionsResponse(suggestions=[])
