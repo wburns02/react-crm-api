@@ -45,6 +45,8 @@ from app.api.v2 import (
     admin,
     # Phase 11: Compliance
     compliance,
+    # Phase 12: Contracts
+    contracts,
 )
 
 api_router = APIRouter()
@@ -105,3 +107,6 @@ api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 
 # Phase 11: Compliance
 api_router.include_router(compliance.router, prefix="/compliance", tags=["compliance"])
+
+# Phase 12: Contracts
+api_router.include_router(contracts.router, prefix="/contracts", tags=["contracts"])

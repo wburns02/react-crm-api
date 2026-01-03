@@ -42,6 +42,10 @@ from app.models.license import License
 from app.models.certification import Certification
 from app.models.inspection import Inspection
 
+# Phase 12: Contracts
+from app.models.contract import Contract
+from app.models.contract_template import ContractTemplate
+
 __all__ = [
     # Core models
     "Customer",
@@ -100,4 +104,7 @@ __all__ = [
     "License",
     "Certification",
     "Inspection",
+    # Phase 12: Contracts
+    "Contract",
+    "ContractTemplate",
 ]
