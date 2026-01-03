@@ -1,56 +1,106 @@
-# react-crm-api Autonomous Task Queue
+# react-crm-api - Backend Feature Migration
 
-FastAPI backend for ReactCRM. Tasks are processed sequentially.
+Backend API tasks for ReactCRM feature parity with Legacy CRM.
 
 ## Format
-- `[ ]` Pending task
-- `[~]` In-progress task
-- `[x]` Completed task
-- `PRIORITY:HIGH` - Urgent (processed first)
-- `BLOCKED: reason` - Skipped until unblocked
+- `[ ]` Pending | `[~]` In-progress | `[x]` Completed
+- `PRIORITY:HIGH` - Process first
 
 ---
 
-## Current Sprint Tasks
+## PHASE 1: CALL CENTER
 
-### Critical Bugs
-- [ ] PRIORITY:HIGH - Fix technicians endpoint 500 error (use /list-raw workaround pattern)
-- [ ] Fix email marketing API path that incorrectly includes /api prefix
-
-### Testing
-- [ ] Run pytest and fix any failing tests
-- [ ] Add integration tests for authentication flow
-- [ ] Add tests for work_orders CRUD operations
-
-### API Improvements
-- [ ] Review and optimize slow database queries
-- [ ] Add pagination to list endpoints that don't have it
-- [ ] Implement rate limiting on public endpoints
-
-### Code Quality
-- [ ] Review SQLAlchemy models for missing indexes
-- [ ] Add type hints to functions missing them
-- [ ] Remove deprecated endpoints and clean up unused code
-
-### Documentation
-- [ ] Update OpenAPI schema descriptions
-- [ ] Document webhook payload formats
-- [ ] Add examples to Pydantic schemas
+- [ ] PRIORITY:HIGH - Create app/models/call_log.py with CallLog model
+- [ ] Create app/models/call_disposition.py with CallDisposition model
+- [ ] Create app/schemas/calls.py with Pydantic schemas
+- [ ] Create app/api/v2/calls.py router with CRUD endpoints
+- [ ] Add calls router to app/api/v2/router.py
+- [ ] Create Alembic migration for call_logs and call_dispositions tables
+- [ ] Run alembic upgrade head and verify tables created
 
 ---
 
-## Completed Tasks
+## PHASE 2: COMPLIANCE
 
-<!-- Move completed tasks here -->
+- [ ] Create app/models/license.py with License model
+- [ ] Create app/models/certification.py with Certification model
+- [ ] Create app/models/inspection.py with Inspection model
+- [ ] Create app/schemas/compliance.py with Pydantic schemas
+- [ ] Create app/api/v2/compliance.py router
+- [ ] Add compliance router to app/api/v2/router.py
+- [ ] Create Alembic migration for compliance tables
+- [ ] Run alembic upgrade head
+
+---
+
+## PHASE 3: CONTRACTS
+
+- [ ] Create app/models/contract.py with Contract model
+- [ ] Create app/models/contract_template.py with ContractTemplate model
+- [ ] Create app/schemas/contracts.py with Pydantic schemas
+- [ ] Create app/api/v2/contracts.py router
+- [ ] Add contracts router to app/api/v2/router.py
+- [ ] Create Alembic migration for contracts tables
+- [ ] Run alembic upgrade head
+
+---
+
+## PHASE 4: TIME TRACKING
+
+- [ ] Create app/models/time_entry.py with TimeEntry model
+- [ ] Create app/schemas/time_tracking.py with Pydantic schemas
+- [ ] Create app/api/v2/time_tracking.py router (clock-in, clock-out, timesheets)
+- [ ] Add time_tracking router to app/api/v2/router.py
+- [ ] Create Alembic migration for time_entries table
+- [ ] Run alembic upgrade head
+
+---
+
+## PHASE 5: JOB COSTING
+
+- [ ] Create app/models/job_cost.py with JobCost model
+- [ ] Create app/schemas/job_costing.py with Pydantic schemas
+- [ ] Add costs endpoints to app/api/v2/work_orders.py
+- [ ] Create app/api/v2/job_costing.py for summary/profitability reports
+- [ ] Create Alembic migration for job_costs table
+- [ ] Run alembic upgrade head
+
+---
+
+## PHASE 6: DATA IMPORT
+
+- [ ] Create app/services/csv_importer.py with validation logic
+- [ ] Create app/api/v2/import_data.py router
+- [ ] Add CSV template generation endpoints
+- [ ] Add import_data router to app/api/v2/router.py
+
+---
+
+## PHASE 7: ENHANCED REPORTS
+
+- [ ] Add revenue-by-service endpoint to app/api/v2/reports.py
+- [ ] Add revenue-by-technician endpoint
+- [ ] Add revenue-by-location endpoint
+- [ ] Add customer-lifetime-value endpoint
+- [ ] Add technician-performance endpoint
+
+---
+
+## TESTING
+
+- [ ] Run pytest and fix any failures
+- [ ] Add tests for new call endpoints
+- [ ] Add tests for compliance endpoints
+- [ ] Add tests for contracts endpoints
+- [ ] Add tests for time tracking endpoints
 
 ---
 
 ## Notes
 
-- Run tests with: `pytest tests/ -v`
-- Check API docs at: /docs (Swagger UI)
-- Use Alembic for database migrations: `alembic upgrade head`
-- NEVER modify production database directly
+- Reference legacy models at C:/Users/Will/crm-work/Mac-Septic-CRM/crm_customer_module_fixed/backend/application/models/
+- Follow existing patterns (async SQLAlchemy, Pydantic v2)
+- Run migrations on Railway after local verification
 
 ---
 
