@@ -49,6 +49,8 @@ from app.api.v2 import (
     contracts,
     # Phase 13: Job Costing
     job_costing,
+    # Phase 14: Data Import
+    import_data,
 )
 
 api_router = APIRouter()
@@ -115,3 +117,6 @@ api_router.include_router(contracts.router, prefix="/contracts", tags=["contract
 
 # Phase 13: Job Costing
 api_router.include_router(job_costing.router, prefix="/job-costing", tags=["job-costing"])
+
+# Phase 14: Data Import
+api_router.include_router(import_data.router, prefix="/import", tags=["import"])
