@@ -554,6 +554,251 @@ async def set_pay_rate(
     return {"status": "updated", "effective_date": rate.effective_date.isoformat()}
 
 
+# Additional endpoints to match frontend expectations
+
+@router.get("/periods")
+async def list_payroll_periods_v2(
+    db: DbSession,
+    current_user: CurrentUser,
+    status: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
+):
+    """List payroll periods (alias for frontend compatibility)."""
+    query = select(PayrollPeriod)
+
+    if status:
+        query = query.where(PayrollPeriod.status == status)
+    if year:
+        from datetime import date as date_type
+        query = query.where(PayrollPeriod.start_date >= date_type(year, 1, 1))
+        query = query.where(PayrollPeriod.end_date <= date_type(year, 12, 31))
+
+    query = query.order_by(PayrollPeriod.start_date.desc())
+    result = await db.execute(query)
+    periods = result.scalars().all()
+
+    return {
+        "periods": [
+            {
+                "id": str(p.id),
+                "start_date": p.start_date.isoformat(),
+                "end_date": p.end_date.isoformat(),
+                "period_type": p.period_type,
+                "status": p.status,
+                "total_regular_hours": p.total_regular_hours,
+                "total_overtime_hours": p.total_overtime_hours,
+                "total_gross_pay": p.total_gross_pay,
+                "total_commissions": p.total_commissions,
+                "technician_count": p.technician_count,
+            }
+            for p in periods
+        ]
+    }
+
+
+@router.get("/periods/{period_id}/summary")
+async def get_period_summary(
+    period_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get payroll summary by technician for a period."""
+    result = await db.execute(
+        select(PayrollPeriod).where(PayrollPeriod.id == period_id)
+    )
+    period = result.scalar_one_or_none()
+
+    if not period:
+        raise HTTPException(status_code=404, detail="Payroll period not found")
+
+    # Get time entries grouped by technician
+    entries_result = await db.execute(
+        select(TimeEntry).where(TimeEntry.payroll_period_id == period_id)
+    )
+    entries = entries_result.scalars().all()
+
+    # Get commissions
+    comm_result = await db.execute(
+        select(Commission).where(Commission.payroll_period_id == period_id)
+    )
+    commissions = comm_result.scalars().all()
+
+    # Group by technician
+    by_technician = {}
+    for entry in entries:
+        tech_id = entry.technician_id
+        if tech_id not in by_technician:
+            by_technician[tech_id] = {
+                "technician_id": tech_id,
+                "regular_hours": 0,
+                "overtime_hours": 0,
+                "gross_pay": 0,
+                "commissions": 0,
+            }
+        by_technician[tech_id]["regular_hours"] += entry.regular_hours or 0
+        by_technician[tech_id]["overtime_hours"] += entry.overtime_hours or 0
+
+    for comm in commissions:
+        tech_id = comm.technician_id
+        if tech_id not in by_technician:
+            by_technician[tech_id] = {
+                "technician_id": tech_id,
+                "regular_hours": 0,
+                "overtime_hours": 0,
+                "gross_pay": 0,
+                "commissions": 0,
+            }
+        by_technician[tech_id]["commissions"] += comm.commission_amount or 0
+
+    return {"summaries": list(by_technician.values())}
+
+
+@router.get("/commissions")
+async def list_commissions(
+    db: DbSession,
+    current_user: CurrentUser,
+    technician_id: Optional[str] = None,
+    payroll_period_id: Optional[str] = None,
+    status_filter: Optional[str] = Query(None, alias="status"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+):
+    """List commissions."""
+    query = select(Commission)
+
+    if technician_id:
+        query = query.where(Commission.technician_id == technician_id)
+    if payroll_period_id:
+        query = query.where(Commission.payroll_period_id == payroll_period_id)
+    if status_filter:
+        query = query.where(Commission.status == status_filter)
+
+    # Count
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+
+    # Paginate
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size).order_by(Commission.earned_date.desc())
+
+    result = await db.execute(query)
+    commissions = result.scalars().all()
+
+    return {
+        "commissions": [
+            {
+                "id": str(c.id),
+                "technician_id": c.technician_id,
+                "work_order_id": c.work_order_id,
+                "invoice_id": c.invoice_id,
+                "payroll_period_id": str(c.payroll_period_id) if c.payroll_period_id else None,
+                "commission_type": c.commission_type,
+                "base_amount": c.base_amount,
+                "rate": c.rate,
+                "rate_type": c.rate_type,
+                "commission_amount": c.commission_amount,
+                "status": c.status,
+                "description": c.description,
+                "earned_date": c.earned_date.isoformat(),
+            }
+            for c in commissions
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+class BulkApproveTimeEntriesRequest(BaseModel):
+    entry_ids: List[str]
+
+
+class BulkApproveCommissionsRequest(BaseModel):
+    commission_ids: List[str]
+
+
+@router.post("/time-entries/bulk-approve")
+async def bulk_approve_time_entries(
+    request: BulkApproveTimeEntriesRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Bulk approve time entries."""
+    approved = 0
+    for entry_id in request.entry_ids:
+        result = await db.execute(
+            select(TimeEntry).where(TimeEntry.id == entry_id)
+        )
+        entry = result.scalar_one_or_none()
+        if entry and entry.status == "pending":
+            entry.status = "approved"
+            entry.approved_by = current_user.email
+            entry.approved_at = datetime.utcnow()
+            approved += 1
+
+    await db.commit()
+    return {"approved": approved}
+
+
+@router.post("/commissions/bulk-approve")
+async def bulk_approve_commissions(
+    request: BulkApproveCommissionsRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Bulk approve commissions."""
+    approved = 0
+    for comm_id in request.commission_ids:
+        result = await db.execute(
+            select(Commission).where(Commission.id == comm_id)
+        )
+        comm = result.scalar_one_or_none()
+        if comm and comm.status == "pending":
+            comm.status = "approved"
+            approved += 1
+
+    await db.commit()
+    return {"approved": approved}
+
+
+@router.get("/pay-rates")
+async def list_pay_rates(
+    db: DbSession,
+    current_user: CurrentUser,
+    technician_id: Optional[str] = None,
+    is_active: Optional[bool] = None,
+):
+    """List all pay rates."""
+    query = select(TechnicianPayRate)
+
+    if technician_id:
+        query = query.where(TechnicianPayRate.technician_id == technician_id)
+    if is_active is not None:
+        query = query.where(TechnicianPayRate.is_active == is_active)
+
+    result = await db.execute(query)
+    rates = result.scalars().all()
+
+    return {
+        "rates": [
+            {
+                "id": str(r.id),
+                "technician_id": r.technician_id,
+                "hourly_rate": r.hourly_rate,
+                "overtime_multiplier": r.overtime_multiplier,
+                "job_commission_rate": r.job_commission_rate,
+                "upsell_commission_rate": r.upsell_commission_rate,
+                "weekly_overtime_threshold": r.weekly_overtime_threshold,
+                "effective_date": r.effective_date.isoformat(),
+                "end_date": r.end_date.isoformat() if r.end_date else None,
+                "is_active": r.is_active,
+            }
+            for r in rates
+        ]
+    }
+
+
 # Stats
 
 @router.get("/stats")

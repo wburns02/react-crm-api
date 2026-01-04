@@ -71,6 +71,430 @@ class OfflineSyncRequest(BaseModel):
 
 # Endpoints
 
+@router.get("/dashboard")
+async def get_employee_dashboard(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get employee dashboard stats."""
+    # Find technician
+    tech_result = await db.execute(
+        select(Technician).where(Technician.email == current_user.email)
+    )
+    technician = tech_result.scalar_one_or_none()
+
+    if not technician:
+        return {
+            "jobs_today": 0,
+            "jobs_completed_today": 0,
+            "hours_today": 0,
+            "is_clocked_in": False,
+        }
+
+    today = date.today()
+
+    # Jobs today
+    jobs_result = await db.execute(
+        select(func.count()).select_from(WorkOrder).where(
+            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.scheduled_date == today,
+        )
+    )
+    jobs_today = jobs_result.scalar() or 0
+
+    # Completed jobs today
+    completed_result = await db.execute(
+        select(func.count()).select_from(WorkOrder).where(
+            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.scheduled_date == today,
+            WorkOrder.status == "completed",
+        )
+    )
+    completed_today = completed_result.scalar() or 0
+
+    # Hours today
+    hours_result = await db.execute(
+        select(func.sum(WorkOrder.total_labor_minutes)).where(
+            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.scheduled_date == today,
+        )
+    )
+    minutes_today = hours_result.scalar() or 0
+
+    # Check if clocked in
+    clocked_in_result = await db.execute(
+        select(func.count()).select_from(WorkOrder).where(
+            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.is_clocked_in == True,
+        )
+    )
+    is_clocked_in = (clocked_in_result.scalar() or 0) > 0
+
+    return {
+        "jobs_today": jobs_today,
+        "jobs_completed_today": completed_today,
+        "hours_today": round(minutes_today / 60, 1),
+        "is_clocked_in": is_clocked_in,
+    }
+
+
+@router.get("/profile")
+async def get_employee_profile(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get employee profile."""
+    tech_result = await db.execute(
+        select(Technician).where(Technician.email == current_user.email)
+    )
+    technician = tech_result.scalar_one_or_none()
+
+    if not technician:
+        return {
+            "id": "",
+            "first_name": current_user.email.split("@")[0],
+            "last_name": "",
+            "email": current_user.email,
+            "role": "technician",
+            "is_active": True,
+        }
+
+    return {
+        "id": str(technician.id),
+        "first_name": technician.name.split()[0] if technician.name else "",
+        "last_name": " ".join(technician.name.split()[1:]) if technician.name and len(technician.name.split()) > 1 else "",
+        "email": technician.email,
+        "role": "technician",
+        "is_active": technician.is_active,
+        "phone": technician.phone,
+    }
+
+
+@router.get("/jobs")
+async def get_employee_jobs(
+    db: DbSession,
+    current_user: CurrentUser,
+    date_filter: Optional[str] = Query(None, alias="date"),
+):
+    """Get jobs assigned to current technician (frontend-compatible)."""
+    tech_result = await db.execute(
+        select(Technician).where(Technician.email == current_user.email)
+    )
+    technician = tech_result.scalar_one_or_none()
+
+    if not technician:
+        return {"jobs": []}
+
+    query = select(WorkOrder).where(WorkOrder.technician_id == str(technician.id))
+
+    if date_filter:
+        query = query.where(WorkOrder.scheduled_date == date.fromisoformat(date_filter))
+    else:
+        query = query.where(WorkOrder.scheduled_date == date.today())
+
+    query = query.order_by(WorkOrder.time_window_start)
+    result = await db.execute(query)
+    work_orders = result.scalars().all()
+
+    return {
+        "jobs": [
+            {
+                "id": str(wo.id),
+                "customer_id": str(wo.customer_id),
+                "customer_name": wo.customer_name,
+                "job_type": wo.job_type,
+                "status": wo.status,
+                "priority": wo.priority,
+                "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
+                "time_window_start": str(wo.time_window_start) if wo.time_window_start else None,
+                "time_window_end": str(wo.time_window_end) if wo.time_window_end else None,
+                "address": wo.service_address_line1,
+                "city": wo.service_city,
+                "state": wo.service_state,
+                "zip": wo.service_zip,
+                "latitude": wo.service_latitude,
+                "longitude": wo.service_longitude,
+                "notes": wo.notes,
+                "checklist": wo.checklist,
+                "estimated_duration_hours": wo.estimated_duration_hours,
+                "is_clocked_in": wo.is_clocked_in,
+            }
+            for wo in work_orders
+        ]
+    }
+
+
+@router.get("/jobs/{job_id}")
+async def get_employee_job(
+    job_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a single job."""
+    wo_result = await db.execute(
+        select(WorkOrder).where(WorkOrder.id == job_id)
+    )
+    work_order = wo_result.scalar_one_or_none()
+
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return {
+        "id": str(work_order.id),
+        "customer_id": str(work_order.customer_id),
+        "customer_name": work_order.customer_name,
+        "job_type": work_order.job_type,
+        "status": work_order.status,
+        "priority": work_order.priority,
+        "scheduled_date": work_order.scheduled_date.isoformat() if work_order.scheduled_date else None,
+        "time_window_start": str(work_order.time_window_start) if work_order.time_window_start else None,
+        "time_window_end": str(work_order.time_window_end) if work_order.time_window_end else None,
+        "address": work_order.service_address_line1,
+        "city": work_order.service_city,
+        "state": work_order.service_state,
+        "zip": work_order.service_zip,
+        "latitude": work_order.service_latitude,
+        "longitude": work_order.service_longitude,
+        "notes": work_order.notes,
+        "checklist": work_order.checklist,
+        "estimated_duration_hours": work_order.estimated_duration_hours,
+        "is_clocked_in": work_order.is_clocked_in,
+        "actual_start_time": work_order.actual_start_time.isoformat() if work_order.actual_start_time else None,
+        "actual_end_time": work_order.actual_end_time.isoformat() if work_order.actual_end_time else None,
+        "total_labor_minutes": work_order.total_labor_minutes,
+    }
+
+
+@router.get("/jobs/{job_id}/checklist")
+async def get_job_checklist(
+    job_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get checklist items for a job."""
+    wo_result = await db.execute(
+        select(WorkOrder).where(WorkOrder.id == job_id)
+    )
+    work_order = wo_result.scalar_one_or_none()
+
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return {"items": work_order.checklist or []}
+
+
+@router.patch("/jobs/{job_id}")
+async def patch_employee_job(
+    job_id: str,
+    request: JobStatusUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update a job (status, notes, etc)."""
+    wo_result = await db.execute(
+        select(WorkOrder).where(WorkOrder.id == job_id)
+    )
+    work_order = wo_result.scalar_one_or_none()
+
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    work_order.status = request.status
+
+    if request.notes:
+        existing_notes = work_order.notes or ""
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        work_order.notes = f"{existing_notes}\n[{timestamp}] {request.notes}".strip()
+
+    await db.commit()
+
+    return {
+        "id": str(work_order.id),
+        "status": work_order.status,
+    }
+
+
+@router.post("/jobs/{job_id}/start")
+async def start_job(
+    job_id: str,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    db: DbSession = None,
+    current_user: CurrentUser = None,
+):
+    """Start a job (mark as en_route or in_progress)."""
+    wo_result = await db.execute(
+        select(WorkOrder).where(WorkOrder.id == job_id)
+    )
+    work_order = wo_result.scalar_one_or_none()
+
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if work_order.status == "scheduled":
+        work_order.status = "en_route"
+    elif work_order.status == "en_route":
+        work_order.status = "in_progress"
+        work_order.actual_start_time = datetime.utcnow()
+        work_order.is_clocked_in = True
+        if latitude and longitude:
+            work_order.clock_in_gps_lat = latitude
+            work_order.clock_in_gps_lon = longitude
+
+    await db.commit()
+
+    return {
+        "id": str(work_order.id),
+        "status": work_order.status,
+    }
+
+
+@router.post("/jobs/{job_id}/complete")
+async def complete_job(
+    job_id: str,
+    notes: Optional[str] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    customer_signature: Optional[str] = None,
+    technician_signature: Optional[str] = None,
+    db: DbSession = None,
+    current_user: CurrentUser = None,
+):
+    """Complete a job."""
+    wo_result = await db.execute(
+        select(WorkOrder).where(WorkOrder.id == job_id)
+    )
+    work_order = wo_result.scalar_one_or_none()
+
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    work_order.status = "completed"
+    work_order.actual_end_time = datetime.utcnow()
+    work_order.is_clocked_in = False
+
+    if latitude and longitude:
+        work_order.clock_out_gps_lat = latitude
+        work_order.clock_out_gps_lon = longitude
+
+    if work_order.actual_start_time:
+        duration = datetime.utcnow() - work_order.actual_start_time
+        work_order.total_labor_minutes = int(duration.total_seconds() / 60)
+
+    if notes:
+        existing_notes = work_order.notes or ""
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        work_order.notes = f"{existing_notes}\n[{timestamp}] Completion: {notes}".strip()
+
+    await db.commit()
+
+    return {
+        "id": str(work_order.id),
+        "status": work_order.status,
+        "labor_minutes": work_order.total_labor_minutes,
+    }
+
+
+@router.get("/timeclock/status")
+async def get_timeclock_status(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get current time clock status."""
+    tech_result = await db.execute(
+        select(Technician).where(Technician.email == current_user.email)
+    )
+    technician = tech_result.scalar_one_or_none()
+
+    if not technician:
+        return {"entry": None}
+
+    # Check for any clocked-in work order
+    clocked_in_result = await db.execute(
+        select(WorkOrder).where(
+            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.is_clocked_in == True,
+        ).limit(1)
+    )
+    clocked_in_wo = clocked_in_result.scalar_one_or_none()
+
+    if clocked_in_wo:
+        return {
+            "entry": {
+                "id": str(clocked_in_wo.id),
+                "clock_in": clocked_in_wo.actual_start_time.isoformat() if clocked_in_wo.actual_start_time else None,
+                "clock_out": None,
+                "work_order_id": str(clocked_in_wo.id),
+            }
+        }
+
+    return {"entry": None}
+
+
+@router.post("/timeclock/clock-in")
+async def timeclock_clock_in(
+    request: ClockInRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Clock in via timeclock endpoint."""
+    return await clock_in(request, db, current_user)
+
+
+@router.post("/timeclock/clock-out")
+async def timeclock_clock_out(
+    request: ClockOutRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Clock out via timeclock endpoint."""
+    return await clock_out(request, db, current_user)
+
+
+@router.get("/timeclock/history")
+async def get_timeclock_history(
+    db: DbSession,
+    current_user: CurrentUser,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    """Get time clock history."""
+    tech_result = await db.execute(
+        select(Technician).where(Technician.email == current_user.email)
+    )
+    technician = tech_result.scalar_one_or_none()
+
+    if not technician:
+        return {"entries": []}
+
+    query = select(WorkOrder).where(
+        WorkOrder.technician_id == str(technician.id),
+        WorkOrder.actual_start_time.isnot(None),
+    )
+
+    if start_date:
+        query = query.where(WorkOrder.scheduled_date >= date.fromisoformat(start_date))
+    if end_date:
+        query = query.where(WorkOrder.scheduled_date <= date.fromisoformat(end_date))
+
+    query = query.order_by(WorkOrder.actual_start_time.desc()).limit(50)
+    result = await db.execute(query)
+    work_orders = result.scalars().all()
+
+    return {
+        "entries": [
+            {
+                "id": str(wo.id),
+                "clock_in": wo.actual_start_time.isoformat() if wo.actual_start_time else None,
+                "clock_out": wo.actual_end_time.isoformat() if wo.actual_end_time else None,
+                "work_order_id": str(wo.id),
+                "duration_minutes": wo.total_labor_minutes,
+            }
+            for wo in work_orders
+        ]
+    }
+
+
 @router.get("/my-jobs")
 async def get_my_jobs(
     db: DbSession,
