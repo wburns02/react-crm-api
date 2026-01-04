@@ -1216,7 +1216,7 @@ async def get_dispatch_stats(
         )
 
         top_technicians = []
-        for row in tech_stats_result.fetchall():
+        for row in tech_stats_result.all():
             top_technicians.append({
                 "technician_id": str(row[0]) if row[0] else None,
                 "technician_name": row[1] or "Unknown",
@@ -1242,7 +1242,7 @@ async def get_dispatch_stats(
 
         day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         busiest_days = []
-        for row in days_result.fetchall():
+        for row in days_result.all():
             dow = int(row[0]) if row[0] is not None else 0
             busiest_days.append({
                 "day": day_names[dow],
