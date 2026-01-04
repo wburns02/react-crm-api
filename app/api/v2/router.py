@@ -51,6 +51,8 @@ from app.api.v2 import (
     job_costing,
     # Phase 14: Data Import
     import_data,
+    # Phase 15: Service Intervals
+    service_intervals,
 )
 
 api_router = APIRouter()
@@ -120,3 +122,6 @@ api_router.include_router(job_costing.router, prefix="/job-costing", tags=["job-
 
 # Phase 14: Data Import
 api_router.include_router(import_data.router, prefix="/import", tags=["import"])
+
+# Phase 15: Service Intervals
+api_router.include_router(service_intervals.router, prefix="/service-intervals", tags=["service-intervals"])
