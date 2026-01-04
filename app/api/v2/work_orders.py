@@ -14,6 +14,7 @@ from app.schemas.work_order import (
     WorkOrderResponse,
     WorkOrderListResponse,
 )
+from app.services.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,21 @@ async def create_work_order(
     db.add(work_order)
     await db.commit()
     await db.refresh(work_order)
+
+    # Broadcast work order created event via WebSocket
+    await manager.broadcast_event(
+        event_type="work_order.created",
+        data={
+            "id": work_order.id,
+            "customer_id": str(work_order.customer_id),
+            "job_type": str(work_order.job_type) if work_order.job_type else None,
+            "status": str(work_order.status) if work_order.status else None,
+            "priority": str(work_order.priority) if work_order.priority else None,
+            "scheduled_date": work_order.scheduled_date.isoformat() if work_order.scheduled_date else None,
+            "assigned_technician": work_order.assigned_technician,
+        },
+    )
+
     return work_order
 
 
@@ -176,6 +192,10 @@ async def update_work_order(
     if not update_data:
         return work_order
 
+    # Track status change for WebSocket event
+    old_status = str(work_order.status) if work_order.status else None
+    old_technician = work_order.assigned_technician
+
     try:
         # Use SQLAlchemy ORM update - handles ENUM types correctly
         for field, value in update_data.items():
@@ -191,6 +211,66 @@ async def update_work_order(
         logger.error(f"Error updating work order {work_order_id}: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    # Determine the type of update for WebSocket event
+    new_status = str(work_order.status) if work_order.status else None
+    new_technician = work_order.assigned_technician
+
+    # Broadcast appropriate WebSocket events
+    event_data = {
+        "id": work_order.id,
+        "customer_id": str(work_order.customer_id),
+        "job_type": str(work_order.job_type) if work_order.job_type else None,
+        "status": new_status,
+        "priority": str(work_order.priority) if work_order.priority else None,
+        "scheduled_date": work_order.scheduled_date.isoformat() if work_order.scheduled_date else None,
+        "assigned_technician": new_technician,
+        "updated_fields": list(update_data.keys()),
+    }
+
+    # Status change event
+    if old_status != new_status:
+        await manager.broadcast_event(
+            event_type="work_order.status_changed",
+            data={
+                **event_data,
+                "old_status": old_status,
+                "new_status": new_status,
+            },
+        )
+
+    # Technician assignment event
+    if old_technician != new_technician:
+        await manager.broadcast_event(
+            event_type="work_order.assigned",
+            data={
+                **event_data,
+                "old_technician": old_technician,
+                "new_technician": new_technician,
+            },
+        )
+
+    # General update event (always sent)
+    await manager.broadcast_event(
+        event_type="work_order.updated",
+        data=event_data,
+    )
+
+    # Schedule change event (when schedule-related fields change)
+    schedule_fields = {"scheduled_date", "time_window_start", "time_window_end", "assigned_technician"}
+    if schedule_fields.intersection(update_data.keys()):
+        await manager.broadcast_event(
+            event_type="schedule.updated",
+            data={
+                "work_order_id": work_order.id,
+                "customer_id": str(work_order.customer_id),
+                "scheduled_date": work_order.scheduled_date.isoformat() if work_order.scheduled_date else None,
+                "time_window_start": str(work_order.time_window_start) if work_order.time_window_start else None,
+                "time_window_end": str(work_order.time_window_end) if work_order.time_window_end else None,
+                "assigned_technician": new_technician,
+                "updated_fields": list(schedule_fields.intersection(update_data.keys())),
+            },
+        )
 
     return work_order
 

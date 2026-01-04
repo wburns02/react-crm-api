@@ -16,6 +16,7 @@ import logging
 import traceback
 
 from app.api.v2.router import api_router
+from app.api.public.router import public_router
 from app.webhooks.twilio import twilio_router
 from app.config import settings
 from app.database import init_db
@@ -42,6 +43,8 @@ from app.models import (
     # Phase 10: Payroll
     PayrollPeriod, TimeEntry, Commission, TechnicianPayRate,
 )
+# OAuth models for public API
+from app.models.oauth import APIClient, APIToken
 
 # Configure secure logging
 logging.basicConfig(
@@ -94,8 +97,8 @@ redoc_url = "/redoc" if settings.DOCS_ENABLED else None
 
 app = FastAPI(
     title="React CRM API",
-    description="API for React CRM - Nationwide Septic Service Management",
-    version="2.0.2",  # Added tickets, equipment, inventory endpoints
+    description="API for React CRM - Nationwide Septic Service Management. Includes Public API with OAuth2 authentication.",
+    version="2.1.0",  # Added public API with OAuth2 authentication
     docs_url=docs_url,
     redoc_url=redoc_url,
     lifespan=lifespan,
@@ -131,6 +134,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(api_router, prefix="/api/v2")
+app.include_router(public_router, prefix="/api/public/v1", tags=["Public API"])
 app.include_router(twilio_router, prefix="/webhooks/twilio", tags=["webhooks"])
 
 
@@ -139,8 +143,10 @@ async def root():
     """Root endpoint - API info."""
     response = {
         "name": "React CRM API",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "health": "/health",
+        "api_v2": "/api/v2",
+        "public_api": "/api/public/v1",
     }
     # Only include docs link if enabled
     if settings.DOCS_ENABLED:
@@ -153,9 +159,9 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.0.3",  # Updated to verify deployment
+        "version": "2.1.0",  # Added public API with OAuth2
         "environment": settings.ENVIRONMENT,
-        "deploy_marker": "2025-12-31T18:00",
+        "features": ["public_api", "oauth2"],
     }
 
 

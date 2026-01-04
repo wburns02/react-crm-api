@@ -53,6 +53,10 @@ from app.api.v2 import (
     import_data,
     # Phase 15: Service Intervals
     service_intervals,
+    # Phase 16: Analytics
+    analytics,
+    # WebSocket for real-time updates
+    websocket,
 )
 
 api_router = APIRouter()
@@ -125,3 +129,9 @@ api_router.include_router(import_data.router, prefix="/import", tags=["import"])
 
 # Phase 15: Service Intervals
 api_router.include_router(service_intervals.router, prefix="/service-intervals", tags=["service-intervals"])
+
+# Phase 16: Analytics
+api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+
+# WebSocket for real-time updates
+api_router.include_router(websocket.router, tags=["websocket"])

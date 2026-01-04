@@ -49,6 +49,9 @@ from app.models.contract_template import ContractTemplate
 # Phase 13: Job Costing
 from app.models.job_cost import JobCost
 
+# Public API OAuth
+from app.models.oauth import APIClient, APIToken
+
 __all__ = [
     # Core models
     "Customer",
@@ -112,4 +115,7 @@ __all__ = [
     "ContractTemplate",
     # Phase 13: Job Costing
     "JobCost",
+    # Public API OAuth
+    "APIClient",
+    "APIToken",
 ]

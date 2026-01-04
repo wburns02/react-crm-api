@@ -15,6 +15,7 @@ from app.schemas.payment import (
     PaymentResponse,
     PaymentListResponse,
 )
+from app.services.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -109,6 +110,21 @@ async def create_payment(
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
+
+    # Broadcast payment received event via WebSocket
+    await manager.broadcast_event(
+        event_type="payment.received",
+        data={
+            "id": payment.id,
+            "customer_id": payment.customer_id,
+            "work_order_id": payment.work_order_id,
+            "amount": float(payment.amount) if payment.amount else 0,
+            "payment_method": payment.payment_method,
+            "status": payment.status,
+            "created_at": payment.created_at.isoformat() if payment.created_at else None,
+        },
+    )
+
     return payment
 
 

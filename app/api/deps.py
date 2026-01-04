@@ -20,7 +20,7 @@ import bcrypt
 from datetime import datetime, timedelta
 import logging
 
-from app.database import get_db
+from app.database import get_db, async_session_maker
 from app.config import settings
 from app.models.user import User
 from app.schemas.auth import TokenData
@@ -141,3 +141,57 @@ async def get_current_active_user(
 # Type aliases for dependency injection
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_active_user)]
+
+
+async def get_current_user_ws(token: str | None) -> User | None:
+    """
+    Authenticate WebSocket connections using JWT token from query parameter.
+
+    Unlike HTTP endpoints, WebSocket connections cannot use headers for auth,
+    so the token is passed as a query parameter.
+
+    SECURITY:
+    - Token is validated the same way as Bearer tokens
+    - Returns None on failure instead of raising exception (WebSocket pattern)
+    - JWT payloads are NOT logged
+
+    Args:
+        token: JWT access token from WebSocket query parameter
+
+    Returns:
+        User object if authenticated, None otherwise
+    """
+    if not token:
+        logger.warning("WebSocket auth failed: no token provided")
+        return None
+
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        sub = payload.get("sub")
+        if sub is None:
+            logger.warning("WebSocket auth failed: no sub claim in token")
+            return None
+
+        user_id = int(sub)
+    except JWTError:
+        logger.warning("WebSocket auth failed: JWT validation error")
+        return None
+    except ValueError:
+        logger.warning("WebSocket auth failed: invalid user_id format")
+        return None
+
+    # Get database session manually since we can't use dependency injection
+    async with async_session_maker() as db:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            logger.warning(f"WebSocket auth failed: user {user_id} not found")
+            return None
+
+        if not user.is_active:
+            logger.warning(f"WebSocket auth failed: user {user_id} is inactive")
+            return None
+
+        logger.debug(f"WebSocket authenticated: user_id={user_id}")
+        return user
