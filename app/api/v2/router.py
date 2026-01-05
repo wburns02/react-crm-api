@@ -57,6 +57,24 @@ from app.api.v2 import (
     analytics,
     # WebSocket for real-time updates
     websocket,
+    # Phase 17: Operations Command Center
+    analytics_operations,
+    analytics_financial,
+    # Phase 18: Enterprise Features
+    enterprise,
+    # Phase 19: Integration Marketplace
+    marketplace,
+    # Phase 20: Embedded Fintech
+    financing,
+    # Phase 21: IoT Integration
+    iot,
+    # Phase 22: Onboarding & Help
+    onboarding,
+    # Phase 23: Stripe Payment Processing
+    stripe_payments,
+    # Phase 24: Quick Wins Bundle
+    quickbooks,
+    push_notifications,
 )
 
 api_router = APIRouter()
@@ -135,3 +153,29 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["analytic
 
 # WebSocket for real-time updates
 api_router.include_router(websocket.router, tags=["websocket"])
+
+# Phase 17: Operations Command Center
+api_router.include_router(analytics_operations.router, prefix="/analytics/operations", tags=["analytics-operations"])
+api_router.include_router(analytics_financial.router, prefix="/analytics/financial", tags=["analytics-financial"])
+
+# Phase 18: Enterprise Features
+api_router.include_router(enterprise.router, prefix="/enterprise", tags=["enterprise"])
+
+# Phase 19: Integration Marketplace
+api_router.include_router(marketplace.router, prefix="/marketplace", tags=["marketplace"])
+
+# Phase 20: Embedded Fintech
+api_router.include_router(financing.router, prefix="/financing", tags=["financing"])
+
+# Phase 21: IoT Integration
+api_router.include_router(iot.router, prefix="/iot", tags=["iot"])
+
+# Phase 22: Onboarding & Help
+api_router.include_router(onboarding.router, prefix="/onboarding", tags=["onboarding"])
+
+# Phase 23: Stripe Payment Processing
+api_router.include_router(stripe_payments.router, prefix="/payments/stripe", tags=["stripe-payments"])
+
+# Phase 24: Quick Wins Bundle
+api_router.include_router(quickbooks.router, prefix="/integrations/quickbooks", tags=["quickbooks"])
+api_router.include_router(push_notifications.router, prefix="/notifications/push", tags=["push-notifications"])
