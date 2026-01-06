@@ -86,7 +86,8 @@ async def list_tasks(
         offset = (page - 1) * page_size
 
         # Order by priority then due date
-        priority_order = func.case(
+        from sqlalchemy import case
+        priority_order = case(
             (CSTask.priority == TaskPriority.CRITICAL.value, 1),
             (CSTask.priority == TaskPriority.HIGH.value, 2),
             (CSTask.priority == TaskPriority.MEDIUM.value, 3),
