@@ -545,7 +545,7 @@ def get_world_class_playbooks(segment_ids: list[int] = None) -> list[dict]:
                     "name": "Immediate Acknowledgment",
                     "step_type": "call",
                     "days_from_start": 0,
-                    "due_days": 0,
+                    "due_days": 1,
                     "description": "Call customer within 1 hour of escalation. Acknowledge, empathize, commit to resolution.",
                     "talk_track": "I understand you're experiencing [issue] and I want you to know this is my top priority. I'm personally taking ownership of this. Let me understand exactly what happened...",
                     "instructions": "No excuses, no deflection. Own it. Get full details. Commit to a follow-up timeline."
@@ -554,7 +554,7 @@ def get_world_class_playbooks(segment_ids: list[int] = None) -> list[dict]:
                     "name": "Internal Escalation & War Room",
                     "step_type": "internal_task",
                     "days_from_start": 0,
-                    "due_days": 0,
+                    "due_days": 1,
                     "description": "Assemble cross-functional team, brief leadership, begin root cause analysis",
                     "instructions": "Notify: CS Manager, Support Lead, Engineering (if technical), Executive sponsor (if high value). Create war room channel. Document timeline, impact, customer sentiment."
                 },
