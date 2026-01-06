@@ -4,14 +4,28 @@ Admin Settings API - System configuration endpoints.
 Provides settings management for system, notifications, integrations, and security.
 Also provides user management endpoints.
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
-from sqlalchemy import select
-from datetime import datetime
+from sqlalchemy import select, delete, func
+from datetime import datetime, timedelta, date
+from decimal import Decimal
+import random
+import logging
 
 from app.api.deps import CurrentUser, DbSession, get_password_hash
 from app.models.user import User
+from app.models.customer import Customer
+
+# Customer Success imports
+from app.models.customer_success.health_score import HealthScore, HealthScoreEvent
+from app.models.customer_success.segment import Segment, CustomerSegment
+from app.models.customer_success.playbook import Playbook, PlaybookStep, PlaybookExecution
+from app.models.customer_success.journey import Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution
+from app.models.customer_success.task import CSTask
+from app.models.customer_success.touchpoint import Touchpoint
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -253,3 +267,417 @@ async def update_security_settings(
 ) -> SecuritySettings:
     """Update security settings."""
     return settings
+
+
+# ============ Customer Success Seed Data ============
+
+# Fake data for generating customers
+FIRST_NAMES = [
+    "James", "Mary", "Robert", "Patricia", "John", "Jennifer", "Michael", "Linda",
+    "David", "Elizabeth", "William", "Barbara", "Richard", "Susan", "Joseph", "Jessica",
+    "Thomas", "Sarah", "Christopher", "Karen", "Charles", "Lisa", "Daniel", "Nancy",
+    "Matthew", "Betty", "Anthony", "Margaret", "Mark", "Sandra", "Donald", "Ashley",
+    "Steven", "Kimberly", "Paul", "Emily", "Andrew", "Donna", "Joshua", "Michelle"
+]
+
+LAST_NAMES = [
+    "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis",
+    "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson",
+    "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Perez", "Thompson",
+    "White", "Harris", "Sanchez", "Clark", "Ramirez", "Lewis", "Robinson", "Walker"
+]
+
+CITIES = [
+    ("Houston", "TX", "77001"), ("Austin", "TX", "78701"), ("Dallas", "TX", "75201"),
+    ("San Antonio", "TX", "78201"), ("Fort Worth", "TX", "76101"),
+]
+
+SUBDIVISIONS = ["Oak Meadows", "Riverside Estates", "Cedar Creek", "Pine Valley", "Willow Springs"]
+SYSTEM_TYPES = ["Conventional", "Aerobic", "Mound", "Chamber", "Drip Distribution"]
+TANK_SIZES = [500, 750, 1000, 1250, 1500, 2000]
+LEAD_SOURCES = ["Google", "Referral", "Facebook", "Website", "Yelp"]
+CUSTOMER_TYPES = ["Residential", "Commercial", "Multi-Family", "HOA"]
+
+
+class SeedResponse(BaseModel):
+    success: bool
+    message: str
+    stats: dict
+
+
+@router.post("/seed/customer-success", response_model=SeedResponse)
+async def seed_customer_success_data(
+    db: DbSession,
+    current_user: CurrentUser,
+    target_customers: int = 100,
+):
+    """
+    Seed Customer Success test data.
+
+    - Limits customers to target_customers (default 100)
+    - Removes any customer named "Stephanie Burns"
+    - Creates health scores, segments, playbooks, journeys, tasks, touchpoints
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can seed data"
+        )
+
+    stats = {}
+
+    try:
+        # 1. Clear existing CS data
+        logger.info("Clearing existing Customer Success data...")
+        await db.execute(delete(JourneyStepExecution))
+        await db.execute(delete(JourneyEnrollment))
+        await db.execute(delete(JourneyStep))
+        await db.execute(delete(Journey))
+        await db.execute(delete(CSTask))
+        await db.execute(delete(PlaybookExecution))
+        await db.execute(delete(PlaybookStep))
+        await db.execute(delete(Playbook))
+        await db.execute(delete(Touchpoint))
+        await db.execute(delete(HealthScoreEvent))
+        await db.execute(delete(HealthScore))
+        await db.execute(delete(CustomerSegment))
+        await db.execute(delete(Segment))
+        await db.commit()
+
+        # 2. Remove Stephanie Burns
+        result = await db.execute(
+            select(Customer).where(
+                func.lower(Customer.first_name) == 'stephanie',
+                func.lower(Customer.last_name) == 'burns'
+            )
+        )
+        for s in result.scalars().all():
+            logger.info(f"Removing Stephanie Burns (ID: {s.id})")
+            await db.delete(s)
+        await db.commit()
+
+        # 3. Manage customer count
+        result = await db.execute(select(func.count(Customer.id)))
+        current_count = result.scalar()
+
+        if current_count > target_customers:
+            excess = current_count - target_customers
+            stmt = select(Customer.id).order_by(Customer.id.desc()).limit(excess)
+            result = await db.execute(stmt)
+            ids_to_delete = [row[0] for row in result.fetchall()]
+            await db.execute(delete(Customer).where(Customer.id.in_(ids_to_delete)))
+            await db.commit()
+        elif current_count < target_customers:
+            needed = target_customers - current_count
+            used_combos = set()
+            result = await db.execute(select(Customer.first_name, Customer.last_name))
+            for row in result.fetchall():
+                used_combos.add((row[0], row[1]))
+
+            new_customers = []
+            attempts = 0
+            while len(new_customers) < needed and attempts < 1000:
+                attempts += 1
+                first = random.choice(FIRST_NAMES)
+                last = random.choice(LAST_NAMES)
+                if first.lower() == 'stephanie' and last.lower() == 'burns':
+                    continue
+                if (first, last) in used_combos:
+                    continue
+                used_combos.add((first, last))
+                city, state, postal = random.choice(CITIES)
+
+                customer = Customer(
+                    first_name=first,
+                    last_name=last,
+                    email=f"{first.lower()}.{last.lower()}@example.com",
+                    phone=f"({random.randint(200, 999)}) {random.randint(200, 999)}-{random.randint(1000, 9999)}",
+                    address_line1=f"{random.randint(100, 9999)} Oak St",
+                    city=city,
+                    state=state,
+                    postal_code=postal,
+                    is_active=random.random() > 0.1,
+                    lead_source=random.choice(LEAD_SOURCES),
+                    customer_type=random.choice(CUSTOMER_TYPES),
+                    tank_size_gallons=random.choice(TANK_SIZES),
+                    number_of_tanks=random.randint(1, 3),
+                    system_type=random.choice(SYSTEM_TYPES),
+                    subdivision=random.choice(SUBDIVISIONS),
+                    created_at=datetime.now() - timedelta(days=random.randint(30, 730)),
+                    updated_at=datetime.now() - timedelta(days=random.randint(0, 30)),
+                )
+                new_customers.append(customer)
+
+            db.add_all(new_customers)
+            await db.commit()
+
+        # Get all customer IDs
+        result = await db.execute(select(Customer.id))
+        customer_ids = [row[0] for row in result.fetchall()]
+        stats["customers"] = len(customer_ids)
+
+        # 4. Create segments
+        segments_data = [
+            {"name": "High Value Accounts", "description": "High contract value customers", "color": "#10B981", "segment_type": "dynamic", "priority": 10},
+            {"name": "At Risk - Low Engagement", "description": "Customers showing disengagement", "color": "#EF4444", "segment_type": "dynamic", "priority": 5},
+            {"name": "Growth Candidates", "description": "Healthy accounts with expansion potential", "color": "#3B82F6", "segment_type": "dynamic", "priority": 15},
+            {"name": "New Customers (< 90 days)", "description": "Recently onboarded customers", "color": "#8B5CF6", "segment_type": "dynamic", "priority": 20},
+            {"name": "Champions", "description": "Highly engaged advocates", "color": "#F59E0B", "segment_type": "dynamic", "priority": 25},
+            {"name": "Commercial Accounts", "description": "Business customers", "color": "#6366F1", "segment_type": "dynamic", "priority": 30},
+        ]
+
+        segment_ids = []
+        for data in segments_data:
+            segment = Segment(**data)
+            db.add(segment)
+            await db.flush()
+            segment_ids.append(segment.id)
+        await db.commit()
+        stats["segments"] = len(segment_ids)
+
+        # 5. Create health scores
+        health_scores = []
+        for cid in customer_ids:
+            base_score = max(10, min(100, int(random.gauss(65, 20))))
+            product_adoption = max(0, min(100, int(base_score + random.gauss(0, 15))))
+            engagement = max(0, min(100, int(base_score + random.gauss(0, 15))))
+            relationship = max(0, min(100, int(base_score + random.gauss(5, 10))))
+            financial = max(0, min(100, int(base_score + random.gauss(0, 12))))
+            support = max(0, min(100, int(base_score + random.gauss(-5, 18))))
+
+            overall = int(product_adoption * 0.30 + engagement * 0.25 + relationship * 0.15 + financial * 0.20 + support * 0.10)
+            status_val = 'healthy' if overall >= 70 else ('at_risk' if overall >= 40 else 'critical')
+            trend_roll = random.random()
+            trend = 'improving' if trend_roll < 0.3 else ('stable' if trend_roll < 0.6 else 'declining')
+
+            hs = HealthScore(
+                customer_id=cid,
+                overall_score=overall,
+                health_status=status_val,
+                product_adoption_score=product_adoption,
+                engagement_score=engagement,
+                relationship_score=relationship,
+                financial_score=financial,
+                support_score=support,
+                churn_probability=round(max(0, min(1, (100 - overall) / 100 * 0.8)), 3),
+                expansion_probability=round(random.uniform(0, 0.5) if status_val == 'healthy' else random.uniform(0, 0.2), 3),
+                days_since_last_login=random.randint(0, 90),
+                days_to_renewal=random.randint(30, 365),
+                score_trend=trend,
+                score_change_7d=random.randint(-10, 10),
+                score_change_30d=random.randint(-20, 20),
+            )
+            health_scores.append(hs)
+
+        db.add_all(health_scores)
+        await db.commit()
+        stats["health_scores"] = len(health_scores)
+
+        # 6. Assign customers to segments
+        result = await db.execute(select(HealthScore.customer_id, HealthScore.overall_score))
+        health_data = {row[0]: row[1] for row in result.fetchall()}
+
+        memberships = []
+        segment_counts = {sid: 0 for sid in segment_ids}
+
+        for cid in customer_ids:
+            score = health_data.get(cid, 50)
+            assigned = []
+
+            if score >= 75:
+                assigned.append(segment_ids[0])  # High Value
+            if score < 50:
+                assigned.append(segment_ids[1])  # At Risk
+            if 60 <= score <= 85 and random.random() < 0.4:
+                assigned.append(segment_ids[2])  # Growth
+            if random.random() < 0.15:
+                assigned.append(segment_ids[3])  # New
+            if score >= 85:
+                assigned.append(segment_ids[4])  # Champions
+            if random.random() < 0.25:
+                assigned.append(segment_ids[5])  # Commercial
+
+            for sid in assigned:
+                memberships.append(CustomerSegment(
+                    customer_id=cid,
+                    segment_id=sid,
+                    is_active=True,
+                    entry_reason="Initial segmentation",
+                    added_by="system:seed"
+                ))
+                segment_counts[sid] += 1
+
+        db.add_all(memberships)
+
+        for sid, count in segment_counts.items():
+            result = await db.execute(select(Segment).where(Segment.id == sid))
+            segment = result.scalar_one()
+            segment.customer_count = count
+
+        await db.commit()
+        stats["segment_memberships"] = len(memberships)
+
+        # 7. Create playbooks
+        playbooks_data = [
+            {"name": "New Customer Onboarding", "category": "onboarding", "trigger_type": "segment_entry", "priority": "high", "target_completion_days": 30},
+            {"name": "At-Risk Intervention", "category": "churn_risk", "trigger_type": "health_threshold", "priority": "critical", "target_completion_days": 14},
+            {"name": "Quarterly Business Review", "category": "qbr", "trigger_type": "scheduled", "priority": "medium", "target_completion_days": 21},
+            {"name": "Expansion Opportunity", "category": "expansion", "trigger_type": "manual", "priority": "high", "target_completion_days": 45},
+            {"name": "Renewal Process", "category": "renewal", "trigger_type": "days_to_renewal", "priority": "high", "target_completion_days": 90},
+        ]
+
+        playbook_ids = []
+        for pb_data in playbooks_data:
+            playbook = Playbook(**pb_data)
+            db.add(playbook)
+            await db.flush()
+            playbook_ids.append(playbook.id)
+
+            # Add steps
+            steps = [
+                {"name": "Initial Contact", "step_type": "call", "step_order": 1, "days_from_start": 0, "due_days": 1},
+                {"name": "Follow-up Email", "step_type": "email", "step_order": 2, "days_from_start": 2, "due_days": 2},
+                {"name": "Schedule Meeting", "step_type": "meeting", "step_order": 3, "days_from_start": 5, "due_days": 5},
+                {"name": "Review & Close", "step_type": "review", "step_order": 4, "days_from_start": 10, "due_days": 5},
+            ]
+            for step_data in steps:
+                step = PlaybookStep(playbook_id=playbook.id, **step_data)
+                db.add(step)
+
+        await db.commit()
+        stats["playbooks"] = len(playbook_ids)
+
+        # 8. Create journeys
+        journeys_data = [
+            {"name": "Onboarding Journey", "journey_type": "onboarding", "trigger_type": "segment_entry", "goal_metric": "feature_adoption", "goal_target": 70.0, "goal_timeframe_days": 60},
+            {"name": "Risk Mitigation Journey", "journey_type": "risk_mitigation", "trigger_type": "segment_entry", "goal_metric": "health_score", "goal_target": 60.0, "goal_timeframe_days": 30},
+            {"name": "Advocacy Development", "journey_type": "advocacy", "trigger_type": "segment_entry", "goal_metric": "nps_score", "goal_target": 10.0, "goal_timeframe_days": 90},
+        ]
+
+        journey_ids = []
+        for j_data in journeys_data:
+            journey = Journey(**j_data)
+            db.add(journey)
+            await db.flush()
+            journey_ids.append(journey.id)
+
+            # Add steps
+            steps = [
+                {"name": "Welcome Email", "step_type": "email", "step_order": 1, "wait_days": 0},
+                {"name": "Wait Period", "step_type": "wait", "step_order": 2, "wait_days": 3},
+                {"name": "Check-in Message", "step_type": "in_app_message", "step_order": 3, "wait_days": 0},
+                {"name": "CSM Touchpoint", "step_type": "human_touchpoint", "step_order": 4, "wait_days": 0, "task_due_days": 3},
+            ]
+            for step_data in steps:
+                step = JourneyStep(journey_id=journey.id, **step_data)
+                db.add(step)
+
+        await db.commit()
+        stats["journeys"] = len(journey_ids)
+
+        # 9. Create tasks
+        task_templates = [
+            {"title": "Quarterly check-in call", "task_type": "call", "category": "relationship", "priority": "medium"},
+            {"title": "Review usage metrics", "task_type": "review", "category": "adoption", "priority": "low"},
+            {"title": "Send training resources", "task_type": "email", "category": "onboarding", "priority": "medium"},
+            {"title": "Schedule QBR", "task_type": "meeting", "category": "relationship", "priority": "high"},
+            {"title": "Follow up on support ticket", "task_type": "follow_up", "category": "support", "priority": "high"},
+        ]
+
+        tasks = []
+        statuses = ['pending', 'in_progress', 'completed', 'blocked', 'snoozed']
+
+        for cid in customer_ids:
+            num_tasks = random.randint(1, 3)
+            for template in random.sample(task_templates, min(num_tasks, len(task_templates))):
+                task_status = random.choice(statuses)
+                task = CSTask(
+                    customer_id=cid,
+                    title=template["title"],
+                    task_type=template["task_type"],
+                    category=template["category"],
+                    priority=template["priority"],
+                    status=task_status,
+                    due_date=date.today() + timedelta(days=random.randint(-10, 30)),
+                    source="seed_script",
+                )
+                if task_status == 'completed':
+                    task.completed_at = datetime.now() - timedelta(days=random.randint(0, 5))
+                    task.outcome = random.choice(['successful', 'rescheduled', 'no_response'])
+                tasks.append(task)
+
+        db.add_all(tasks)
+        await db.commit()
+        stats["tasks"] = len(tasks)
+
+        # 10. Create touchpoints
+        touchpoint_types = ['email_sent', 'email_opened', 'call_outbound', 'call_inbound', 'meeting_held', 'product_login']
+        touchpoints = []
+
+        for cid in customer_ids:
+            for _ in range(random.randint(3, 8)):
+                tp_type = random.choice(touchpoint_types)
+                touchpoint = Touchpoint(
+                    customer_id=cid,
+                    touchpoint_type=tp_type,
+                    channel=random.choice(['email', 'phone', 'in_app', 'meeting']),
+                    direction='outbound' if 'sent' in tp_type or 'outbound' in tp_type else 'inbound',
+                    sentiment=random.choice(['positive', 'neutral', 'negative']) if 'call' in tp_type or 'meeting' in tp_type else None,
+                    occurred_at=datetime.now() - timedelta(days=random.randint(1, 180)),
+                    source='seed_script',
+                )
+                touchpoints.append(touchpoint)
+
+        db.add_all(touchpoints)
+        await db.commit()
+        stats["touchpoints"] = len(touchpoints)
+
+        # 11. Create journey enrollments
+        enrollments = []
+        for journey_id in journey_ids:
+            enrolled = random.sample(customer_ids, int(len(customer_ids) * 0.2))
+            for cid in enrolled:
+                enrollment = JourneyEnrollment(
+                    journey_id=journey_id,
+                    customer_id=cid,
+                    status=random.choice(['active', 'completed']),
+                    steps_completed=random.randint(1, 4),
+                    enrolled_by='system:seed'
+                )
+                enrollments.append(enrollment)
+
+        db.add_all(enrollments)
+        await db.commit()
+        stats["journey_enrollments"] = len(enrollments)
+
+        # 12. Create playbook executions
+        executions = []
+        for playbook_id in playbook_ids:
+            executed = random.sample(customer_ids, int(len(customer_ids) * 0.15))
+            for cid in executed:
+                execution = PlaybookExecution(
+                    playbook_id=playbook_id,
+                    customer_id=cid,
+                    status=random.choice(['active', 'completed']),
+                    steps_completed=random.randint(1, 4),
+                    steps_total=4,
+                    triggered_by='system:seed'
+                )
+                executions.append(execution)
+
+        db.add_all(executions)
+        await db.commit()
+        stats["playbook_executions"] = len(executions)
+
+        return SeedResponse(
+            success=True,
+            message="Customer Success test data seeded successfully",
+            stats=stats
+        )
+
+    except Exception as e:
+        logger.error(f"Error seeding data: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error seeding data: {str(e)}"
+        )
