@@ -28,7 +28,7 @@ def upgrade():
         sa.Column('rate_limit_per_minute', sa.Integer, server_default='100'),
         sa.Column('rate_limit_per_hour', sa.Integer, server_default='1000'),
         sa.Column('is_active', sa.Boolean, server_default='true'),
-        sa.Column('owner_user_id', sa.Integer, sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('owner_user_id', sa.Integer, sa.ForeignKey('api_users.id'), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
         sa.Column('last_used_at', sa.DateTime(timezone=True), nullable=True),
