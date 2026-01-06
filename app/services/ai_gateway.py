@@ -45,7 +45,7 @@ class ChatRequest(BaseModel):
 class EmbeddingRequest(BaseModel):
     """Request format for embeddings."""
     texts: List[str]
-    model: str = "bge-large-en-v1.5"
+    model: str = "embed"
 
 
 class TranscribeRequest(BaseModel):
@@ -119,7 +119,7 @@ class AIGateway:
                 messages = [{"role": "system", "content": system_prompt}] + messages
 
             payload = {
-                "model": "gpt-3.5-turbo",  # Required by OpenAI-compatible endpoints
+                "model": "llama3-70b",  # Required by OpenAI-compatible endpoints
                 "messages": messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
@@ -148,7 +148,7 @@ class AIGateway:
     async def generate_embeddings(
         self,
         texts: List[str],
-        model: str = "bge-large-en-v1.5",
+        model: str = "embed",
     ) -> Dict[str, Any]:
         """Generate embeddings for texts.
 
