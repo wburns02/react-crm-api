@@ -59,14 +59,7 @@ class Journey(Base):
     trigger_segment_id = Column(Integer, ForeignKey("cs_segments.id"))
 
     # Journey settings
-    status = Column(
-        SQLEnum(
-            'draft', 'active', 'paused', 'archived',
-            name='cs_journey_status_enum'
-        ),
-        default='draft'
-    )
-    is_active = Column(Boolean, default=True)  # Deprecated: use status instead
+    is_active = Column(Boolean, default=True)
     allow_re_enrollment = Column(Boolean, default=False)
     re_enrollment_cooldown_days = Column(Integer, default=90)
     max_concurrent_enrollments = Column(Integer)  # null = unlimited
@@ -83,16 +76,11 @@ class Journey(Base):
 
     # Metrics (auto-updated)
     total_enrolled = Column(Integer, default=0)
-    active_enrolled = Column(Integer, default=0)  # Currently active enrollments
-    currently_active = Column(Integer, default=0)  # Deprecated: use active_enrolled
-    completed_count = Column(Integer, default=0)
-    total_completed = Column(Integer, default=0)  # Deprecated: use completed_count
-    goal_achieved_count = Column(Integer, default=0)
+    currently_active = Column(Integer, default=0)
+    total_completed = Column(Integer, default=0)
     total_exited_early = Column(Integer, default=0)
     avg_completion_days = Column(Float)
-    conversion_rate = Column(Float)  # goal_achieved / completed
     success_rate = Column(Float)  # Completed goal / Total completed
-    priority = Column(Integer, default=0)  # Higher priority journeys override lower
 
     # Ownership
     created_by_user_id = Column(Integer, ForeignKey("api_users.id"))
@@ -216,14 +204,10 @@ class JourneyEnrollment(Base):
     # Progress
     current_step_id = Column(Integer, ForeignKey("cs_journey_steps.id"))
     current_step_started_at = Column(DateTime(timezone=True))
-    current_step_order = Column(Integer, default=0)
     steps_completed = Column(Integer, default=0)
-    steps_total = Column(Integer, default=0)
 
     # Timing
     enrolled_at = Column(DateTime(timezone=True), server_default=func.now())
-    started_at = Column(DateTime(timezone=True))
-    paused_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     exited_at = Column(DateTime(timezone=True))
 
@@ -248,7 +232,6 @@ class JourneyEnrollment(Base):
 
     # Enrollment source
     enrolled_by = Column(String(100))  # 'system', 'user:123', 'segment:5'
-    enrollment_reason = Column(Text)  # Why they were enrolled
     enrollment_trigger = Column(String(100))
 
     # Extra data

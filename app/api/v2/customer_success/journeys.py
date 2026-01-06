@@ -53,25 +53,26 @@ async def list_journeys(
     try:
         query = select(Journey).options(selectinload(Journey.steps))
 
+        # Filter by is_active instead of status (status column may not exist)
         if status:
-            query = query.where(Journey.status == status)
+            # Map status to is_active boolean
+            if status in ('active', 'draft'):
+                query = query.where(Journey.is_active == True)
+            elif status in ('paused', 'archived'):
+                query = query.where(Journey.is_active == False)
         if journey_type:
             query = query.where(Journey.journey_type == journey_type)
         if search:
             query = query.where(Journey.name.ilike(f"%{search}%"))
 
-        # Get total count - use simpler query that doesn't rely on status column
+        # Get total count
         count_query = select(func.count()).select_from(Journey)
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
-        # Apply pagination - use name ordering only if priority column might not exist
+        # Apply pagination - order by name only (priority column may not exist)
         offset = (page - 1) * page_size
-        try:
-            query = query.offset(offset).limit(page_size).order_by(Journey.priority.desc(), Journey.name)
-        except Exception:
-            # Fallback if priority column doesn't exist
-            query = query.offset(offset).limit(page_size).order_by(Journey.name)
+        query = query.offset(offset).limit(page_size).order_by(Journey.name)
 
         result = await db.execute(query)
         journeys = result.scalars().unique().all()

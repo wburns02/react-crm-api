@@ -149,7 +149,9 @@ class JourneyBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     journey_type: JourneyType = JourneyType.CUSTOM
-    status: JourneyStatus = JourneyStatus.DRAFT
+    # Note: status column may not exist in DB, use is_active instead
+    status: Optional[JourneyStatus] = JourneyStatus.DRAFT
+    is_active: bool = True
 
     # Entry triggers
     trigger_segment_id: Optional[int] = None
@@ -215,13 +217,13 @@ class JourneyResponse(JourneyBase):
     """Journey response schema."""
     id: int
 
-    # Metrics
+    # Metrics (some columns may not exist in DB yet)
     total_enrolled: int = 0
-    active_enrolled: int = 0
-    completed_count: int = 0
-    goal_achieved_count: int = 0
+    currently_active: int = 0  # DB column name
+    total_completed: int = 0  # DB column name
+    total_exited_early: int = 0
     avg_completion_days: Optional[float] = None
-    conversion_rate: Optional[float] = None
+    success_rate: Optional[float] = None  # DB column name
 
     # Steps
     steps: list[JourneyStepResponse] = []
@@ -265,27 +267,30 @@ class JourneyEnrollmentResponse(JourneyEnrollmentBase):
     id: int
     status: EnrollmentStatus
 
-    # Progress
+    # Progress (some columns may not exist in DB yet)
     current_step_id: Optional[int] = None
-    current_step_order: int = 0
+    current_step_started_at: Optional[datetime] = None
     steps_completed: int = 0
-    steps_total: int = 0
 
     # Goal tracking
     goal_achieved: bool = False
-    goal_achieved_at: Optional[datetime] = None
+    goal_value_at_start: Optional[float] = None
+    goal_value_at_end: Optional[float] = None
 
     # Timing
     enrolled_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    paused_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     exited_at: Optional[datetime] = None
     exit_reason: Optional[str] = None
+    exit_notes: Optional[str] = None
 
     # Metrics
     health_score_at_start: Optional[int] = None
     health_score_at_end: Optional[int] = None
+
+    # Enrollment source
+    enrolled_by: Optional[str] = None
+    enrollment_trigger: Optional[str] = None
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
