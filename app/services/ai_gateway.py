@@ -14,6 +14,7 @@ import logging
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 import json
+import traceback
 
 from app.config import settings
 
@@ -130,10 +131,29 @@ class AIGateway:
             response.raise_for_status()
 
             data = response.json()
+            logger.info(f"LLM response keys: {data.keys()}")
+            
+            # Handle different response formats
+            if "choices" in data and len(data["choices"]) > 0:
+                choice = data["choices"][0]
+                if "message" in choice:
+                    content = choice["message"].get("content", "")
+                elif "text" in choice:
+                    content = choice["text"]
+                else:
+                    content = str(choice)
+            elif "response" in data:
+                content = data["response"]
+            elif "content" in data:
+                content = data["content"]
+            else:
+                logger.warning(f"Unexpected LLM response format: {data}")
+                content = str(data)
+            
             return {
-                "content": data["choices"][0]["message"]["content"],
+                "content": content,
                 "usage": data.get("usage", {}),
-                "model": data.get("model", "llama-3.1-70b"),
+                "model": data.get("model", "llama3"),
             }
         except httpx.ConnectError:
             logger.warning("AI server unavailable, using fallback response")
@@ -143,6 +163,7 @@ class AIGateway:
             }
         except Exception as e:
             logger.error(f"Chat completion error: {e}")
+            logger.error(traceback.format_exc())
             return {"content": "", "error": str(e)}
 
     async def generate_embeddings(
