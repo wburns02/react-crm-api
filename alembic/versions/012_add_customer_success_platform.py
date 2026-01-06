@@ -170,7 +170,7 @@ def upgrade():
         sa.Column('event_source', sa.String(100)),
         sa.Column('affected_components', JSON),
         sa.Column('description', sa.Text),
-        sa.Column('metadata', JSON),
+        sa.Column('event_metadata', JSON),
         sa.Column('occurred_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
@@ -410,7 +410,7 @@ def upgrade():
         sa.Column('health_score_at_start', sa.Integer),
         sa.Column('health_score_at_end', sa.Integer),
         sa.Column('total_time_spent_minutes', sa.Integer, server_default='0'),
-        sa.Column('metadata', JSON),
+        sa.Column('extra_data', JSON),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
     )
@@ -444,7 +444,7 @@ def upgrade():
         sa.Column('health_score_at_end', sa.Integer),
         sa.Column('enrolled_by', sa.String(100)),
         sa.Column('enrollment_trigger', sa.String(100)),
-        sa.Column('metadata', JSON),
+        sa.Column('extra_data', JSON),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
     )
@@ -548,7 +548,7 @@ def upgrade():
         sa.Column('document_url', sa.String(500)),
         sa.Column('source', sa.String(100)),
         sa.Column('tags', JSON),
-        sa.Column('metadata', JSON),
+        sa.Column('task_data', JSON),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
     )

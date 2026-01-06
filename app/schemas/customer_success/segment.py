@@ -2,9 +2,11 @@
 Segment Schemas for Enterprise Customer Success Platform
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, Literal, Any
+from typing import Optional, Literal, Any, Union
 from enum import Enum
 
 
@@ -43,7 +45,7 @@ class SegmentRule(BaseModel):
 class SegmentRuleSet(BaseModel):
     """Rule set with AND/OR logic."""
     logic: Literal["and", "or"] = "and"
-    rules: list[SegmentRule | "SegmentRuleSet"] = Field(default_factory=list)
+    rules: list[Union[SegmentRule, "SegmentRuleSet"]] = Field(default_factory=list)
 
 
 # Enable self-referencing

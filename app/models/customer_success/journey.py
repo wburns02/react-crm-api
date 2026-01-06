@@ -234,8 +234,8 @@ class JourneyEnrollment(Base):
     enrolled_by = Column(String(100))  # 'system', 'user:123', 'segment:5'
     enrollment_trigger = Column(String(100))
 
-    # Metadata
-    metadata = Column(JSON)
+    # Extra data
+    extra_data = Column(JSON)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

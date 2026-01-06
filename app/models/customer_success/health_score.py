@@ -125,7 +125,7 @@ class HealthScoreEvent(Base):
 
     # Context
     description = Column(Text)
-    metadata = Column(JSON)
+    event_metadata = Column(JSON)
 
     # Timestamps
     occurred_at = Column(DateTime(timezone=True), server_default=func.now())

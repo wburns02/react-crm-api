@@ -242,8 +242,8 @@ class PlaybookExecution(Base):
     # Time tracking
     total_time_spent_minutes = Column(Integer, default=0)
 
-    # Metadata
-    metadata = Column(JSON)
+    # Extra data
+    extra_data = Column(JSON)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

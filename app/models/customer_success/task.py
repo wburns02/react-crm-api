@@ -142,7 +142,7 @@ class CSTask(Base):
     # Metadata
     source = Column(String(100))  # 'playbook', 'journey', 'manual', 'alert', 'integration'
     tags = Column(JSON)  # ["urgent", "renewal", "vip"]
-    metadata = Column(JSON)
+    task_data = Column(JSON)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
