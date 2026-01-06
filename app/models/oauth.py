@@ -43,7 +43,7 @@ class APIClient(Base):
     is_active = Column(Boolean, default=True)
 
     # Owner tracking
-    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    owner_user_id = Column(Integer, ForeignKey("api_users.id"), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

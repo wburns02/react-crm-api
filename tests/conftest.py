@@ -4,10 +4,13 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import NullPool
 
-from app.main import app
+# Import the FastAPI application explicitly
+from app.main import app as fastapi_app
 from app.database import Base, get_db
-from app.api.deps import get_password_hash
+from app.api.deps import get_password_hash, create_access_token
 from app.models.user import User
+# Import all models to ensure they're registered with Base.metadata
+import app.models  # noqa: F401
 
 # Test database URL (SQLite for testing)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
@@ -54,30 +57,49 @@ async def test_user(test_db: AsyncSession):
 
 
 @pytest_asyncio.fixture
+async def admin_user(test_db: AsyncSession):
+    """Create an admin user."""
+    user = User(
+        email="admin@example.com",
+        hashed_password=get_password_hash("adminpassword123"),
+        first_name="Admin",
+        last_name="User",
+        is_active=True,
+        is_superuser=True,
+    )
+    test_db.add(user)
+    await test_db.commit()
+    await test_db.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
 async def client(test_db: AsyncSession):
     """Create test client with overridden database."""
 
     async def override_get_db():
         yield test_db
 
-    app.dependency_overrides[get_db] = override_get_db
+    fastapi_app.dependency_overrides[get_db] = override_get_db
 
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
-    app.dependency_overrides.clear()
+    fastapi_app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture
 async def authenticated_client(client: AsyncClient, test_user: User):
     """Create authenticated test client."""
-    # Login to get token
-    response = await client.post(
-        "/api/v2/auth/login",
-        json={"email": "test@example.com", "password": "testpassword123"},
-    )
-    token = response.json()["access_token"]
+    token = create_access_token(data={"sub": str(test_user.id), "email": test_user.email})
+    client.headers["Authorization"] = f"Bearer {token}"
+    return client
 
+
+@pytest_asyncio.fixture
+async def admin_client(client: AsyncClient, admin_user: User):
+    """Create admin authenticated test client."""
+    token = create_access_token(data={"sub": str(admin_user.id), "email": admin_user.email})
     client.headers["Authorization"] = f"Bearer {token}"
     return client
