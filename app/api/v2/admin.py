@@ -356,18 +356,16 @@ async def seed_customer_success_data(
             await db.delete(s)
         await db.commit()
 
-        # 3. Manage customer count
+        # 3. Manage customer count (don't delete - may have FK constraints)
         result = await db.execute(select(func.count(Customer.id)))
         current_count = result.scalar()
 
         if current_count > target_customers:
-            excess = current_count - target_customers
-            stmt = select(Customer.id).order_by(Customer.id.desc()).limit(excess)
-            result = await db.execute(stmt)
-            ids_to_delete = [row[0] for row in result.fetchall()]
-            await db.execute(delete(Customer).where(Customer.id.in_(ids_to_delete)))
-            await db.commit()
-        elif current_count < target_customers:
+            # Don't delete customers - they may have work orders, attachments, etc.
+            # Just use the first N customers
+            logger.info(f"Have {current_count} customers, using first {target_customers}")
+
+        if current_count < target_customers:
             needed = target_customers - current_count
             used_combos = set()
             result = await db.execute(select(Customer.first_name, Customer.last_name))
@@ -411,8 +409,10 @@ async def seed_customer_success_data(
             db.add_all(new_customers)
             await db.commit()
 
-        # Get all customer IDs
-        result = await db.execute(select(Customer.id))
+        # Get customer IDs (limit to target)
+        result = await db.execute(
+            select(Customer.id).order_by(Customer.id).limit(target_customers)
+        )
         customer_ids = [row[0] for row in result.fetchall()]
         stats["customers"] = len(customer_ids)
 
