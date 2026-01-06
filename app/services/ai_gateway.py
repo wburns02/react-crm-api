@@ -119,6 +119,7 @@ class AIGateway:
                 messages = [{"role": "system", "content": system_prompt}] + messages
 
             payload = {
+                "model": "gpt-3.5-turbo",  # Required by OpenAI-compatible endpoints
                 "messages": messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
