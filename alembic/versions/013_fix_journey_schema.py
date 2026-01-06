@@ -16,26 +16,64 @@ depends_on = None
 
 
 def upgrade():
-    # Create the status enum type if it doesn't exist
+    # Use raw SQL to add columns if they don't exist (idempotent)
     op.execute("""
         DO $$ BEGIN
+            -- Create the status enum type if it doesn't exist
             CREATE TYPE cs_journey_status_enum AS ENUM ('draft', 'active', 'paused', 'archived');
         EXCEPTION
             WHEN duplicate_object THEN null;
         END $$;
     """)
 
-    # Add new columns to cs_journeys table
-    op.add_column('cs_journeys', sa.Column('status', sa.Enum(
-        'draft', 'active', 'paused', 'archived',
-        name='cs_journey_status_enum', create_type=False
-    ), server_default='draft'))
+    # Add columns to cs_journeys if they don't exist
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journeys ADD COLUMN status cs_journey_status_enum DEFAULT 'draft';
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
 
-    op.add_column('cs_journeys', sa.Column('active_enrolled', sa.Integer, server_default='0'))
-    op.add_column('cs_journeys', sa.Column('completed_count', sa.Integer, server_default='0'))
-    op.add_column('cs_journeys', sa.Column('goal_achieved_count', sa.Integer, server_default='0'))
-    op.add_column('cs_journeys', sa.Column('conversion_rate', sa.Float))
-    op.add_column('cs_journeys', sa.Column('priority', sa.Integer, server_default='0'))
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journeys ADD COLUMN active_enrolled INTEGER DEFAULT 0;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
+
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journeys ADD COLUMN completed_count INTEGER DEFAULT 0;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
+
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journeys ADD COLUMN goal_achieved_count INTEGER DEFAULT 0;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
+
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journeys ADD COLUMN conversion_rate FLOAT;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
+
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journeys ADD COLUMN priority INTEGER DEFAULT 0;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
 
     # Sync is_active with status
     op.execute("""
@@ -50,21 +88,57 @@ def upgrade():
     # Sync currently_active to active_enrolled
     op.execute("""
         UPDATE cs_journeys
-        SET active_enrolled = COALESCE(currently_active, 0);
+        SET active_enrolled = COALESCE(currently_active, 0)
+        WHERE active_enrolled IS NULL OR active_enrolled = 0;
     """)
 
     # Sync total_completed to completed_count
     op.execute("""
         UPDATE cs_journeys
-        SET completed_count = COALESCE(total_completed, 0);
+        SET completed_count = COALESCE(total_completed, 0)
+        WHERE completed_count IS NULL OR completed_count = 0;
     """)
 
-    # Add columns to cs_journey_enrollments table
-    op.add_column('cs_journey_enrollments', sa.Column('current_step_order', sa.Integer, server_default='0'))
-    op.add_column('cs_journey_enrollments', sa.Column('steps_total', sa.Integer, server_default='0'))
-    op.add_column('cs_journey_enrollments', sa.Column('started_at', sa.DateTime(timezone=True)))
-    op.add_column('cs_journey_enrollments', sa.Column('paused_at', sa.DateTime(timezone=True)))
-    op.add_column('cs_journey_enrollments', sa.Column('enrollment_reason', sa.Text))
+    # Add columns to cs_journey_enrollments table if they don't exist
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journey_enrollments ADD COLUMN current_step_order INTEGER DEFAULT 0;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
+
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journey_enrollments ADD COLUMN steps_total INTEGER DEFAULT 0;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
+
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journey_enrollments ADD COLUMN started_at TIMESTAMP WITH TIME ZONE;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
+
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journey_enrollments ADD COLUMN paused_at TIMESTAMP WITH TIME ZONE;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
+
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE cs_journey_enrollments ADD COLUMN enrollment_reason TEXT;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
 
 
 def downgrade():
