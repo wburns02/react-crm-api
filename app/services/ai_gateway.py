@@ -119,7 +119,7 @@ class AIGateway:
                 messages = [{"role": "system", "content": system_prompt}] + messages
 
             payload = {
-                "model": "llama3-70b",  # Required by OpenAI-compatible endpoints
+                "model": "llama3",  # Required by OpenAI-compatible endpoints
                 "messages": messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
