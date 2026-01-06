@@ -23,6 +23,9 @@ class JourneyType(str, Enum):
     RENEWAL = "renewal"
     WIN_BACK = "win_back"
     CUSTOM = "custom"
+    # Additional types from database model
+    RISK_MITIGATION = "risk_mitigation"
+    ADVOCACY = "advocacy"
 
 
 class JourneyStepType(str, Enum):
@@ -39,6 +42,11 @@ class JourneyStepType(str, Enum):
     ADD_TAG = "add_tag"
     ENROLL_JOURNEY = "enroll_journey"
     TRIGGER_PLAYBOOK = "trigger_playbook"
+    # Additional types from database model
+    SEGMENT_UPDATE = "segment_update"
+    HEALTH_CHECK = "health_check"
+    SLACK_NOTIFICATION = "slack_notification"
+    CUSTOM = "custom"
 
 
 class EnrollmentStatus(str, Enum):
