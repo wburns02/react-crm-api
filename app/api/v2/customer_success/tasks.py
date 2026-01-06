@@ -43,67 +43,79 @@ async def list_tasks(
     my_tasks: bool = False,
 ):
     """List CS tasks with filtering."""
-    query = select(CSTask)
+    import logging
+    logger = logging.getLogger(__name__)
 
-    # Filters
-    if my_tasks:
-        query = query.where(CSTask.assigned_to_user_id == current_user.id)
-    elif assigned_to_user_id:
-        query = query.where(CSTask.assigned_to_user_id == assigned_to_user_id)
+    try:
+        query = select(CSTask)
 
-    if status:
-        query = query.where(CSTask.status == status)
-    if priority:
-        query = query.where(CSTask.priority == priority)
-    if task_type:
-        query = query.where(CSTask.task_type == task_type)
-    if category:
-        query = query.where(CSTask.category == category)
-    if customer_id:
-        query = query.where(CSTask.customer_id == customer_id)
-    if due_before:
-        query = query.where(CSTask.due_date <= due_before)
-    if due_after:
-        query = query.where(CSTask.due_date >= due_after)
-    if search:
-        query = query.where(
-            or_(
-                CSTask.title.ilike(f"%{search}%"),
-                CSTask.description.ilike(f"%{search}%"),
+        # Filters
+        if my_tasks:
+            query = query.where(CSTask.assigned_to_user_id == current_user.id)
+        elif assigned_to_user_id:
+            query = query.where(CSTask.assigned_to_user_id == assigned_to_user_id)
+
+        if status:
+            query = query.where(CSTask.status == status)
+        if priority:
+            query = query.where(CSTask.priority == priority)
+        if task_type:
+            query = query.where(CSTask.task_type == task_type)
+        if category:
+            query = query.where(CSTask.category == category)
+        if customer_id:
+            query = query.where(CSTask.customer_id == customer_id)
+        if due_before:
+            query = query.where(CSTask.due_date <= due_before)
+        if due_after:
+            query = query.where(CSTask.due_date >= due_after)
+        if search:
+            query = query.where(
+                or_(
+                    CSTask.title.ilike(f"%{search}%"),
+                    CSTask.description.ilike(f"%{search}%"),
+                )
             )
+
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        # Apply pagination and ordering
+        offset = (page - 1) * page_size
+
+        # Order by priority then due date
+        priority_order = func.case(
+            (CSTask.priority == TaskPriority.CRITICAL.value, 1),
+            (CSTask.priority == TaskPriority.HIGH.value, 2),
+            (CSTask.priority == TaskPriority.MEDIUM.value, 3),
+            (CSTask.priority == TaskPriority.LOW.value, 4),
+            else_=5,
         )
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        query = query.offset(offset).limit(page_size).order_by(
+            priority_order,
+            CSTask.due_date.asc().nullslast(),
+        )
 
-    # Apply pagination and ordering
-    offset = (page - 1) * page_size
+        result = await db.execute(query)
+        tasks = result.scalars().all()
 
-    # Order by priority then due date
-    priority_order = func.case(
-        (CSTask.priority == TaskPriority.CRITICAL.value, 1),
-        (CSTask.priority == TaskPriority.HIGH.value, 2),
-        (CSTask.priority == TaskPriority.MEDIUM.value, 3),
-        (CSTask.priority == TaskPriority.LOW.value, 4),
-        else_=5,
-    )
+        logger.info(f"Found {len(tasks)} tasks")
 
-    query = query.offset(offset).limit(page_size).order_by(
-        priority_order,
-        CSTask.due_date.asc().nullslast(),
-    )
-
-    result = await db.execute(query)
-    tasks = result.scalars().all()
-
-    return CSTaskListResponse(
-        items=tasks,
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+        return CSTaskListResponse(
+            items=tasks,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+    except Exception as e:
+        logger.error(f"Error listing tasks: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error listing tasks: {str(e)}"
+        )
 
 
 @router.get("/overdue")

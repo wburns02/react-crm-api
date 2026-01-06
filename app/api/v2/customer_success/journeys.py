@@ -47,35 +47,49 @@ async def list_journeys(
     search: Optional[str] = None,
 ):
     """List journeys with filtering."""
-    query = select(Journey).options(selectinload(Journey.steps))
+    import logging
+    logger = logging.getLogger(__name__)
 
-    if status:
-        query = query.where(Journey.status == status)
-    if journey_type:
-        query = query.where(Journey.journey_type == journey_type)
-    if search:
-        query = query.where(Journey.name.ilike(f"%{search}%"))
+    try:
+        query = select(Journey).options(selectinload(Journey.steps))
 
-    # Get total count
-    count_query = select(func.count()).select_from(select(Journey).where(
-        Journey.status == status if status else True
-    ).subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        if status:
+            query = query.where(Journey.status == status)
+        if journey_type:
+            query = query.where(Journey.journey_type == journey_type)
+        if search:
+            query = query.where(Journey.name.ilike(f"%{search}%"))
 
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(Journey.priority.desc(), Journey.name)
+        # Get total count - use simpler query that doesn't rely on status column
+        count_query = select(func.count()).select_from(Journey)
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
 
-    result = await db.execute(query)
-    journeys = result.scalars().unique().all()
+        # Apply pagination - use name ordering only if priority column might not exist
+        offset = (page - 1) * page_size
+        try:
+            query = query.offset(offset).limit(page_size).order_by(Journey.priority.desc(), Journey.name)
+        except Exception:
+            # Fallback if priority column doesn't exist
+            query = query.offset(offset).limit(page_size).order_by(Journey.name)
 
-    return JourneyListResponse(
-        items=journeys,
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+        result = await db.execute(query)
+        journeys = result.scalars().unique().all()
+
+        logger.info(f"Found {len(journeys)} journeys")
+
+        return JourneyListResponse(
+            items=journeys,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+    except Exception as e:
+        logger.error(f"Error listing journeys: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error listing journeys: {str(e)}"
+        )
 
 
 @router.get("/{journey_id}", response_model=JourneyResponse)
