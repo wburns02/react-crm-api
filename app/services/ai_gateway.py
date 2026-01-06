@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 class AIGatewayConfig(BaseModel):
     """Configuration for AI gateway connection."""
     base_url: str = "http://localhost:8000"  # Local AI server URL (via Twingate)
+    api_key: Optional[str] = None  # API key for authentication
     timeout: float = 120.0  # LLM inference can take time
     max_retries: int = 3
 
@@ -58,16 +59,21 @@ class AIGateway:
 
     def __init__(self, config: Optional[AIGatewayConfig] = None):
         self.config = config or AIGatewayConfig(
+            api_key=getattr(settings, 'AI_SERVER_API_KEY', None),
             base_url=getattr(settings, 'AI_SERVER_URL', 'http://localhost:8000')
         )
         self._client: Optional[httpx.AsyncClient] = None
 
     async def get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
+        """Get or create HTTP client with auth headers."""
         if self._client is None or self._client.is_closed:
+            headers = {}
+            if self.config.api_key:
+                headers["Authorization"] = f"Bearer {self.config.api_key}"
             self._client = httpx.AsyncClient(
                 base_url=self.config.base_url,
                 timeout=self.config.timeout,
+                headers=headers,
             )
         return self._client
 

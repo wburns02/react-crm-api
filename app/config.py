@@ -72,6 +72,7 @@ class Settings(BaseSettings):
 
     # Local AI Server (for vLLM on RTX 5090)
     AI_SERVER_URL: str = "http://localhost:8000"
+    AI_SERVER_API_KEY: str | None = None
     AI_SERVER_ENABLED: bool = False
 
     # Legacy backend (for webhook routing)
