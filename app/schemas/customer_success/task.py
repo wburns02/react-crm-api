@@ -111,7 +111,7 @@ class CSTaskBase(BaseModel):
 
     # Metadata
     tags: Optional[list[str]] = None
-    metadata: Optional[dict] = None
+    task_data: Optional[dict] = None  # Renamed from metadata to avoid SQLAlchemy conflict
 
 
 class CSTaskCreate(CSTaskBase):
@@ -154,7 +154,7 @@ class CSTaskUpdate(BaseModel):
     document_url: Optional[str] = None
     recording_url: Optional[str] = None
     tags: Optional[list[str]] = None
-    metadata: Optional[dict] = None
+    task_data: Optional[dict] = None  # Renamed from metadata to avoid SQLAlchemy conflict
     assigned_to_user_id: Optional[int] = None
 
 
