@@ -344,7 +344,7 @@ async def seed_customer_success_data(
         await db.execute(delete(Segment))
         await db.commit()
 
-        # 2. Remove Stephanie Burns
+        # 2. Remove Stephanie Burns (or rename if has FK constraints)
         result = await db.execute(
             select(Customer).where(
                 func.lower(Customer.first_name) == 'stephanie',
@@ -352,8 +352,11 @@ async def seed_customer_success_data(
             )
         )
         for s in result.scalars().all():
-            logger.info(f"Removing Stephanie Burns (ID: {s.id})")
-            await db.delete(s)
+            # Rename instead of delete to avoid FK constraint issues
+            logger.info(f"Renaming Stephanie Burns (ID: {s.id}) to 'Removed Customer'")
+            s.first_name = "Removed"
+            s.last_name = "Customer"
+            s.email = f"removed.customer.{s.id}@example.com"
         await db.commit()
 
         # 3. Manage customer count (don't delete - may have FK constraints)
