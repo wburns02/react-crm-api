@@ -24,6 +24,7 @@ from app.models.customer_success.playbook import Playbook, PlaybookStep, Playboo
 from app.models.customer_success.journey import Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution
 from app.models.customer_success.task import CSTask
 from app.models.customer_success.touchpoint import Touchpoint
+from app.data.playbooks_data import get_world_class_playbooks
 
 logger = logging.getLogger(__name__)
 
@@ -520,31 +521,28 @@ async def seed_customer_success_data(
         await db.commit()
         stats["segment_memberships"] = len(memberships)
 
-        # 7. Create playbooks
-        playbooks_data = [
-            {"name": "New Customer Onboarding", "category": "onboarding", "trigger_type": "segment_entry", "priority": "high", "target_completion_days": 30},
-            {"name": "At-Risk Intervention", "category": "churn_risk", "trigger_type": "health_threshold", "priority": "critical", "target_completion_days": 14},
-            {"name": "Quarterly Business Review", "category": "qbr", "trigger_type": "scheduled", "priority": "medium", "target_completion_days": 21},
-            {"name": "Expansion Opportunity", "category": "expansion", "trigger_type": "manual", "priority": "high", "target_completion_days": 45},
-            {"name": "Renewal Process", "category": "renewal", "trigger_type": "days_to_renewal", "priority": "high", "target_completion_days": 90},
-        ]
+        # 7. Create world-class playbooks (2025-2026 Best Practices)
+        playbooks_data = get_world_class_playbooks(segment_ids)
 
         playbook_ids = []
         for pb_data in playbooks_data:
+            # Extract steps before creating playbook
+            steps_data = pb_data.pop("steps", [])
+
+            # Handle success_criteria - convert to JSON-compatible
+            if "success_criteria" in pb_data and pb_data["success_criteria"]:
+                pb_data["success_criteria"] = pb_data["success_criteria"]
+
             playbook = Playbook(**pb_data)
             db.add(playbook)
             await db.flush()
             playbook_ids.append(playbook.id)
 
-            # Add steps
-            steps = [
-                {"name": "Initial Contact", "step_type": "call", "step_order": 1, "days_from_start": 0, "due_days": 1},
-                {"name": "Follow-up Email", "step_type": "email", "step_order": 2, "days_from_start": 2, "due_days": 2},
-                {"name": "Schedule Meeting", "step_type": "meeting", "step_order": 3, "days_from_start": 5, "due_days": 5},
-                {"name": "Review & Close", "step_type": "review", "step_order": 4, "days_from_start": 10, "due_days": 5},
-            ]
-            for step_data in steps:
-                step = PlaybookStep(playbook_id=playbook.id, **step_data)
+            # Add steps with detailed content
+            for i, step_data in enumerate(steps_data, 1):
+                step_data["step_order"] = i
+                step_data["playbook_id"] = playbook.id
+                step = PlaybookStep(**step_data)
                 db.add(step)
 
         await db.commit()
