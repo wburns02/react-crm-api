@@ -623,9 +623,9 @@ async def seed_customer_success_data(
                 touchpoint = Touchpoint(
                     customer_id=cid,
                     touchpoint_type=tp_type,
-                    channel=random.choice(['email', 'phone', 'in_app', 'meeting']),
+                    channel=random.choice(['email', 'phone', 'in_app', 'video']),
                     direction='outbound' if 'sent' in tp_type or 'outbound' in tp_type else 'inbound',
-                    sentiment=random.choice(['positive', 'neutral', 'negative']) if 'call' in tp_type or 'meeting' in tp_type else None,
+                    sentiment_label=random.choice(['positive', 'neutral', 'negative']) if 'call' in tp_type or 'meeting' in tp_type else None,
                     occurred_at=datetime.now() - timedelta(days=random.randint(1, 180)),
                     source='seed_script',
                 )
