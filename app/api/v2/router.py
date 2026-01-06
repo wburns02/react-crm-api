@@ -76,6 +76,16 @@ from app.api.v2 import (
     quickbooks,
     push_notifications,
 )
+# Phase 25: Enterprise Customer Success Platform
+from app.api.v2.customer_success import (
+    health_scores_router,
+    segments_router,
+    journeys_router,
+    playbooks_router,
+    tasks_router,
+    touchpoints_router,
+    dashboard_router as cs_dashboard_router,
+)
 
 api_router = APIRouter()
 
@@ -179,3 +189,12 @@ api_router.include_router(stripe_payments.router, prefix="/payments/stripe", tag
 # Phase 24: Quick Wins Bundle
 api_router.include_router(quickbooks.router, prefix="/integrations/quickbooks", tags=["quickbooks"])
 api_router.include_router(push_notifications.router, prefix="/notifications/push", tags=["push-notifications"])
+
+# Phase 25: Enterprise Customer Success Platform
+api_router.include_router(health_scores_router, prefix="/cs/health-scores", tags=["customer-success"])
+api_router.include_router(segments_router, prefix="/cs/segments", tags=["customer-success"])
+api_router.include_router(journeys_router, prefix="/cs/journeys", tags=["customer-success"])
+api_router.include_router(playbooks_router, prefix="/cs/playbooks", tags=["customer-success"])
+api_router.include_router(tasks_router, prefix="/cs/tasks", tags=["customer-success"])
+api_router.include_router(touchpoints_router, prefix="/cs/touchpoints", tags=["customer-success"])
+api_router.include_router(cs_dashboard_router, prefix="/cs/dashboard", tags=["customer-success"])

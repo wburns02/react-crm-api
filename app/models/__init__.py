@@ -52,6 +52,16 @@ from app.models.job_cost import JobCost
 # Public API OAuth
 from app.models.oauth import APIClient, APIToken
 
+# Enterprise Customer Success Platform
+from app.models.customer_success import (
+    HealthScore, HealthScoreEvent,
+    Segment, CustomerSegment,
+    Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution,
+    Playbook, PlaybookStep, PlaybookExecution,
+    CSTask,
+    Touchpoint,
+)
+
 __all__ = [
     # Core models
     "Customer",
@@ -118,4 +128,18 @@ __all__ = [
     # Public API OAuth
     "APIClient",
     "APIToken",
+    # Enterprise Customer Success Platform
+    "HealthScore",
+    "HealthScoreEvent",
+    "Segment",
+    "CustomerSegment",
+    "Journey",
+    "JourneyStep",
+    "JourneyEnrollment",
+    "JourneyStepExecution",
+    "Playbook",
+    "PlaybookStep",
+    "PlaybookExecution",
+    "CSTask",
+    "Touchpoint",
 ]
