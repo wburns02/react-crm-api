@@ -7,8 +7,11 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime
+import logging
 
 from app.api.deps import DbSession, CurrentUser
+
+logger = logging.getLogger(__name__)
 from app.models.customer import Customer
 from app.models.customer_success import (
     Playbook, PlaybookStep, PlaybookExecution
@@ -46,35 +49,48 @@ async def list_playbooks(
     search: Optional[str] = None,
 ):
     """List playbooks with filtering."""
-    query = select(Playbook).options(selectinload(Playbook.steps))
+    try:
+        query = select(Playbook).options(selectinload(Playbook.steps))
 
-    if category:
-        query = query.where(Playbook.category == category)
-    if trigger_type:
-        query = query.where(Playbook.trigger_type == trigger_type)
-    if is_active is not None:
-        query = query.where(Playbook.is_active == is_active)
-    if search:
-        query = query.where(Playbook.name.ilike(f"%{search}%"))
+        if category:
+            query = query.where(Playbook.category == category)
+        if trigger_type:
+            query = query.where(Playbook.trigger_type == trigger_type)
+        if is_active is not None:
+            query = query.where(Playbook.is_active == is_active)
+        if search:
+            query = query.where(Playbook.name.ilike(f"%{search}%"))
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
 
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(Playbook.priority.desc(), Playbook.name)
+        # Apply pagination
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size).order_by(Playbook.priority.desc(), Playbook.name)
 
-    result = await db.execute(query)
-    playbooks = result.scalars().unique().all()
+        result = await db.execute(query)
+        playbooks = result.scalars().unique().all()
 
-    return PlaybookListResponse(
-        items=playbooks,
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+        # Debug: Log playbook data before serialization
+        for pb in playbooks:
+            logger.info(f"Playbook {pb.id}: {pb.name}, category={pb.category}, priority={pb.priority}")
+            for step in pb.steps:
+                logger.info(f"  Step {step.id}: {step.name}, type={step.step_type}")
+
+        return PlaybookListResponse(
+            items=playbooks,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+    except Exception as e:
+        logger.error(f"Error listing playbooks: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error listing playbooks: {str(e)}"
+        )
 
 
 @router.get("/{playbook_id}", response_model=PlaybookResponse)
