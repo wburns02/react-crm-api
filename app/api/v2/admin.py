@@ -25,6 +25,7 @@ from app.models.customer_success.journey import Journey, JourneyStep, JourneyEnr
 from app.models.customer_success.task import CSTask
 from app.models.customer_success.touchpoint import Touchpoint
 from app.data.playbooks_data import get_world_class_playbooks
+from app.data.journeys_data import get_world_class_journeys
 
 logger = logging.getLogger(__name__)
 
@@ -548,33 +549,31 @@ async def seed_customer_success_data(
         await db.commit()
         stats["playbooks"] = len(playbook_ids)
 
-        # 8. Create journeys
-        journeys_data = [
-            {"name": "Onboarding Journey", "journey_type": "onboarding", "trigger_type": "segment_entry", "goal_metric": "feature_adoption", "goal_target": 70.0, "goal_timeframe_days": 60},
-            {"name": "Risk Mitigation Journey", "journey_type": "risk_mitigation", "trigger_type": "segment_entry", "goal_metric": "health_score", "goal_target": 60.0, "goal_timeframe_days": 30},
-            {"name": "Advocacy Development", "journey_type": "advocacy", "trigger_type": "segment_entry", "goal_metric": "nps_score", "goal_target": 10.0, "goal_timeframe_days": 90},
-        ]
+        # 8. Create world-class journeys (2025-2026 Best Practices)
+        journeys_data = get_world_class_journeys()
 
         journey_ids = []
+        total_steps = 0
         for j_data in journeys_data:
+            # Extract steps before creating journey
+            steps_data = j_data.pop("steps", [])
+
             journey = Journey(**j_data)
             db.add(journey)
             await db.flush()
             journey_ids.append(journey.id)
 
-            # Add steps
-            steps = [
-                {"name": "Welcome Email", "step_type": "email", "step_order": 1, "wait_days": 0},
-                {"name": "Wait Period", "step_type": "wait", "step_order": 2, "wait_days": 3},
-                {"name": "Check-in Message", "step_type": "in_app_message", "step_order": 3, "wait_days": 0},
-                {"name": "CSM Touchpoint", "step_type": "human_touchpoint", "step_order": 4, "wait_days": 0, "task_due_days": 3},
-            ]
-            for step_data in steps:
-                step = JourneyStep(journey_id=journey.id, **step_data)
+            # Add steps with detailed content
+            for i, step_data in enumerate(steps_data, 1):
+                step_data["step_order"] = i
+                step_data["journey_id"] = journey.id
+                step = JourneyStep(**step_data)
                 db.add(step)
+                total_steps += 1
 
         await db.commit()
         stats["journeys"] = len(journey_ids)
+        stats["journey_steps"] = total_steps
 
         # 9. Create tasks
         task_templates = [
