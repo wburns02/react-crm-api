@@ -159,9 +159,9 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.2.0",  # Added demo mode role switching
+        "version": "2.3.0",  # Added CS Platform APIs (surveys, campaigns, escalations, collaboration)
         "environment": settings.ENVIRONMENT,
-        "features": ["public_api", "oauth2", "demo_roles"],
+        "features": ["public_api", "oauth2", "demo_roles", "cs_platform"],
     }
 
 
