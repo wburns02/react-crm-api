@@ -16,45 +16,44 @@ branch_labels = None
 depends_on = None
 
 
-def create_enum_if_not_exists(name, values):
-    """Create PostgreSQL enum type if it doesn't exist."""
+def drop_and_create_enum(name, values):
+    """Drop enum if it exists (with no dependencies) and create it fresh.
+
+    This handles partial migration failures where enums were created with wrong values.
+    Since no tables reference these enums yet (they fail first), we can safely drop and recreate.
+    """
     values_str = ", ".join([f"'{v}'" for v in values])
-    # Use DO block to conditionally create enum
-    op.execute(f"""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{name}') THEN
-                CREATE TYPE {name} AS ENUM ({values_str});
-            END IF;
-        END$$;
-    """)
+    # Drop existing enum if it exists (CASCADE will only work if no columns use it)
+    op.execute(f"DROP TYPE IF EXISTS {name} CASCADE")
+    # Create enum with correct values
+    op.execute(f"CREATE TYPE {name} AS ENUM ({values_str})")
 
 
 def upgrade() -> None:
     # ============ CREATE ENUM TYPES FIRST ============
     # Create all enum types with IF NOT EXISTS to handle partial migration failures
-    create_enum_if_not_exists('cs_survey_type_enum', ['nps', 'csat', 'ces', 'custom'])
-    create_enum_if_not_exists('cs_survey_status_enum', ['draft', 'active', 'paused', 'completed'])
-    create_enum_if_not_exists('cs_survey_trigger_enum', ['manual', 'scheduled', 'event', 'milestone'])
-    create_enum_if_not_exists('cs_question_type_enum', ['rating', 'scale', 'text', 'multiple_choice', 'single_choice'])
-    create_enum_if_not_exists('cs_sentiment_enum', ['positive', 'neutral', 'negative'])
-    create_enum_if_not_exists('cs_campaign_status_enum', ['draft', 'active', 'paused', 'completed', 'cancelled'])
-    create_enum_if_not_exists('cs_campaign_type_enum', ['onboarding', 'nurture', 'renewal', 'upsell', 'win_back', 'health_check', 'custom'])
-    create_enum_if_not_exists('cs_step_action_enum', ['email', 'task', 'wait', 'condition', 'notification', 'webhook', 'sms', 'call'])
-    create_enum_if_not_exists('cs_enrollment_status_enum', ['active', 'completed', 'exited', 'paused'])
-    create_enum_if_not_exists('cs_execution_status_enum', ['pending', 'completed', 'skipped', 'failed'])
-    create_enum_if_not_exists('cs_escalation_type_enum', ['health_drop', 'churn_risk', 'support_issue', 'renewal_risk', 'nps_detractor', 'custom'])
-    create_enum_if_not_exists('cs_escalation_status_enum', ['open', 'in_progress', 'resolved', 'closed', 'escalated'])
-    create_enum_if_not_exists('cs_priority_enum', ['low', 'medium', 'high', 'critical'])
-    create_enum_if_not_exists('cs_resource_type_enum', ['document', 'template', 'guide', 'video', 'link', 'tool', 'script'])
-    create_enum_if_not_exists('cs_campaign_channel_enum', ['email', 'in_app', 'sms', 'multi_channel'])
-    create_enum_if_not_exists('cs_step_type_enum', ['email', 'in_app_message', 'sms', 'task', 'wait', 'condition'])
-    create_enum_if_not_exists('cs_exec_status_enum', ['pending', 'sent', 'delivered', 'opened', 'clicked', 'failed', 'skipped'])
-    create_enum_if_not_exists('cs_severity_enum', ['low', 'medium', 'high', 'critical'])
-    create_enum_if_not_exists('cs_note_type_enum', ['update', 'internal', 'customer_communication', 'resolution'])
-    create_enum_if_not_exists('cs_resource_category_enum', ['onboarding', 'training', 'playbooks', 'processes', 'best_practices', 'templates', 'general'])
-    create_enum_if_not_exists('cs_visibility_enum', ['all', 'team', 'managers', 'admins'])
-    create_enum_if_not_exists('cs_note_visibility_enum', ['all', 'team', 'managers', 'private'])
+    drop_and_create_enum('cs_survey_type_enum', ['nps', 'csat', 'ces', 'custom'])
+    drop_and_create_enum('cs_survey_status_enum', ['draft', 'active', 'paused', 'completed'])
+    drop_and_create_enum('cs_survey_trigger_enum', ['manual', 'scheduled', 'event', 'milestone'])
+    drop_and_create_enum('cs_question_type_enum', ['rating', 'scale', 'text', 'multiple_choice', 'single_choice'])
+    drop_and_create_enum('cs_sentiment_enum', ['positive', 'neutral', 'negative'])
+    drop_and_create_enum('cs_campaign_status_enum', ['draft', 'active', 'paused', 'completed', 'archived'])
+    drop_and_create_enum('cs_campaign_type_enum', ['nurture', 'onboarding', 'adoption', 'renewal', 'expansion', 'winback', 'custom'])
+    drop_and_create_enum('cs_step_action_enum', ['email', 'task', 'wait', 'condition', 'notification', 'webhook', 'sms', 'call'])
+    drop_and_create_enum('cs_enrollment_status_enum', ['active', 'paused', 'completed', 'converted', 'unsubscribed', 'exited'])
+    drop_and_create_enum('cs_execution_status_enum', ['pending', 'completed', 'skipped', 'failed'])
+    drop_and_create_enum('cs_escalation_type_enum', ['technical', 'billing', 'service', 'product', 'relationship', 'executive', 'custom'])
+    drop_and_create_enum('cs_escalation_status_enum', ['open', 'in_progress', 'pending_customer', 'pending_internal', 'resolved', 'closed'])
+    drop_and_create_enum('cs_priority_enum', ['low', 'medium', 'high', 'critical'])
+    drop_and_create_enum('cs_resource_type_enum', ['document', 'video', 'template', 'checklist', 'guide', 'script', 'link'])
+    drop_and_create_enum('cs_campaign_channel_enum', ['email', 'in_app', 'sms', 'multi_channel'])
+    drop_and_create_enum('cs_step_type_enum', ['email', 'in_app_message', 'sms', 'task', 'wait', 'condition'])
+    drop_and_create_enum('cs_exec_status_enum', ['pending', 'sent', 'delivered', 'opened', 'clicked', 'failed', 'skipped'])
+    drop_and_create_enum('cs_severity_enum', ['low', 'medium', 'high', 'critical'])
+    drop_and_create_enum('cs_note_type_enum', ['update', 'internal', 'customer_communication', 'resolution'])
+    drop_and_create_enum('cs_resource_category_enum', ['onboarding', 'training', 'playbooks', 'processes', 'best_practices', 'templates', 'general'])
+    drop_and_create_enum('cs_visibility_enum', ['all', 'team', 'managers', 'admins'])
+    drop_and_create_enum('cs_note_visibility_enum', ['all', 'team', 'managers', 'private'])
 
     # ============ SURVEYS ============
 
