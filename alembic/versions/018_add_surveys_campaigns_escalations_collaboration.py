@@ -6,6 +6,7 @@ Create Date: 2026-01-07 09:30:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -15,7 +16,46 @@ branch_labels = None
 depends_on = None
 
 
+def create_enum_if_not_exists(name, values):
+    """Create PostgreSQL enum type if it doesn't exist."""
+    values_str = ", ".join([f"'{v}'" for v in values])
+    # Use DO block to conditionally create enum
+    op.execute(f"""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{name}') THEN
+                CREATE TYPE {name} AS ENUM ({values_str});
+            END IF;
+        END$$;
+    """)
+
+
 def upgrade() -> None:
+    # ============ CREATE ENUM TYPES FIRST ============
+    # Create all enum types with IF NOT EXISTS to handle partial migration failures
+    create_enum_if_not_exists('cs_survey_type_enum', ['nps', 'csat', 'ces', 'custom'])
+    create_enum_if_not_exists('cs_survey_status_enum', ['draft', 'active', 'paused', 'completed'])
+    create_enum_if_not_exists('cs_survey_trigger_enum', ['manual', 'scheduled', 'event', 'milestone'])
+    create_enum_if_not_exists('cs_question_type_enum', ['rating', 'scale', 'text', 'multiple_choice', 'single_choice'])
+    create_enum_if_not_exists('cs_sentiment_enum', ['positive', 'neutral', 'negative'])
+    create_enum_if_not_exists('cs_campaign_status_enum', ['draft', 'active', 'paused', 'completed', 'cancelled'])
+    create_enum_if_not_exists('cs_campaign_type_enum', ['onboarding', 'nurture', 'renewal', 'upsell', 'win_back', 'health_check', 'custom'])
+    create_enum_if_not_exists('cs_step_action_enum', ['email', 'task', 'wait', 'condition', 'notification', 'webhook', 'sms', 'call'])
+    create_enum_if_not_exists('cs_enrollment_status_enum', ['active', 'completed', 'exited', 'paused'])
+    create_enum_if_not_exists('cs_execution_status_enum', ['pending', 'completed', 'skipped', 'failed'])
+    create_enum_if_not_exists('cs_escalation_type_enum', ['health_drop', 'churn_risk', 'support_issue', 'renewal_risk', 'nps_detractor', 'custom'])
+    create_enum_if_not_exists('cs_escalation_status_enum', ['open', 'in_progress', 'resolved', 'closed', 'escalated'])
+    create_enum_if_not_exists('cs_priority_enum', ['low', 'medium', 'high', 'critical'])
+    create_enum_if_not_exists('cs_resource_type_enum', ['document', 'template', 'guide', 'video', 'link', 'tool', 'script'])
+    create_enum_if_not_exists('cs_campaign_channel_enum', ['email', 'in_app', 'sms', 'multi_channel'])
+    create_enum_if_not_exists('cs_step_type_enum', ['email', 'in_app_message', 'sms', 'task', 'wait', 'condition'])
+    create_enum_if_not_exists('cs_exec_status_enum', ['pending', 'sent', 'delivered', 'opened', 'clicked', 'failed', 'skipped'])
+    create_enum_if_not_exists('cs_severity_enum', ['low', 'medium', 'high', 'critical'])
+    create_enum_if_not_exists('cs_note_type_enum', ['update', 'internal', 'customer_communication', 'resolution'])
+    create_enum_if_not_exists('cs_resource_category_enum', ['onboarding', 'training', 'playbooks', 'processes', 'best_practices', 'templates', 'general'])
+    create_enum_if_not_exists('cs_visibility_enum', ['all', 'team', 'managers', 'admins'])
+    create_enum_if_not_exists('cs_note_visibility_enum', ['all', 'team', 'managers', 'private'])
+
     # ============ SURVEYS ============
 
     # cs_surveys table
@@ -24,9 +64,9 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(200), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('survey_type', sa.Enum('nps', 'csat', 'ces', 'custom', name='cs_survey_type_enum'), default='nps'),
-        sa.Column('status', sa.Enum('draft', 'active', 'paused', 'completed', name='cs_survey_status_enum'), default='draft'),
-        sa.Column('trigger_type', sa.Enum('manual', 'scheduled', 'event', 'milestone', name='cs_survey_trigger_enum'), default='manual'),
+        sa.Column('survey_type', postgresql.ENUM('nps', 'csat', 'ces', 'custom', name='cs_survey_type_enum', create_type=False), default='nps'),
+        sa.Column('status', postgresql.ENUM('draft', 'active', 'paused', 'completed', name='cs_survey_status_enum', create_type=False), default='draft'),
+        sa.Column('trigger_type', postgresql.ENUM('manual', 'scheduled', 'event', 'milestone', name='cs_survey_trigger_enum', create_type=False), default='manual'),
         sa.Column('scheduled_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('schedule_recurrence', sa.String(50), nullable=True),
         sa.Column('trigger_event', sa.String(100), nullable=True),
@@ -58,7 +98,7 @@ def upgrade() -> None:
         sa.Column('survey_id', sa.Integer(), sa.ForeignKey('cs_surveys.id'), nullable=False),
         sa.Column('text', sa.Text(), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('question_type', sa.Enum('rating', 'scale', 'text', 'multiple_choice', 'single_choice', name='cs_question_type_enum'), nullable=False),
+        sa.Column('question_type', postgresql.ENUM('rating', 'scale', 'text', 'multiple_choice', 'single_choice', name='cs_question_type_enum', create_type=False), nullable=False),
         sa.Column('order', sa.Integer(), default=0),
         sa.Column('is_required', sa.Boolean(), default=True),
         sa.Column('scale_min', sa.Integer(), default=0),
@@ -80,7 +120,7 @@ def upgrade() -> None:
         sa.Column('survey_id', sa.Integer(), sa.ForeignKey('cs_surveys.id'), nullable=False),
         sa.Column('customer_id', sa.Integer(), sa.ForeignKey('customers.id'), nullable=False),
         sa.Column('overall_score', sa.Float(), nullable=True),
-        sa.Column('sentiment', sa.Enum('positive', 'neutral', 'negative', name='cs_sentiment_enum'), nullable=True),
+        sa.Column('sentiment', postgresql.ENUM('positive', 'neutral', 'negative', name='cs_sentiment_enum', create_type=False), nullable=True),
         sa.Column('sentiment_score', sa.Float(), nullable=True),
         sa.Column('is_complete', sa.Boolean(), default=False),
         sa.Column('source', sa.String(100), nullable=True),
@@ -117,11 +157,11 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(200), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('campaign_type', sa.Enum('nurture', 'onboarding', 'adoption', 'renewal', 'expansion', 'winback', 'custom', name='cs_campaign_type_enum'), default='nurture'),
-        sa.Column('status', sa.Enum('draft', 'active', 'paused', 'completed', 'archived', name='cs_campaign_status_enum'), default='draft'),
+        sa.Column('campaign_type', postgresql.ENUM('nurture', 'onboarding', 'adoption', 'renewal', 'expansion', 'winback', 'custom', name='cs_campaign_type_enum', create_type=False), default='nurture'),
+        sa.Column('status', postgresql.ENUM('draft', 'active', 'paused', 'completed', 'archived', name='cs_campaign_status_enum', create_type=False), default='draft'),
         sa.Column('target_segment_id', sa.Integer(), sa.ForeignKey('cs_segments.id'), nullable=True),
         sa.Column('target_criteria', sa.JSON(), nullable=True),
-        sa.Column('primary_channel', sa.Enum('email', 'in_app', 'sms', 'multi_channel', name='cs_campaign_channel_enum'), default='email'),
+        sa.Column('primary_channel', postgresql.ENUM('email', 'in_app', 'sms', 'multi_channel', name='cs_campaign_channel_enum', create_type=False), default='email'),
         sa.Column('start_date', sa.DateTime(timezone=True), nullable=True),
         sa.Column('end_date', sa.DateTime(timezone=True), nullable=True),
         sa.Column('timezone', sa.String(50), default='UTC'),
@@ -155,7 +195,7 @@ def upgrade() -> None:
         sa.Column('campaign_id', sa.Integer(), sa.ForeignKey('cs_campaigns.id'), nullable=False),
         sa.Column('name', sa.String(200), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('step_type', sa.Enum('email', 'in_app_message', 'sms', 'task', 'wait', 'condition', name='cs_step_type_enum'), nullable=False),
+        sa.Column('step_type', postgresql.ENUM('email', 'in_app_message', 'sms', 'task', 'wait', 'condition', name='cs_step_type_enum', create_type=False), nullable=False),
         sa.Column('order', sa.Integer(), default=0),
         sa.Column('delay_days', sa.Integer(), default=0),
         sa.Column('delay_hours', sa.Integer(), default=0),
@@ -187,7 +227,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('campaign_id', sa.Integer(), sa.ForeignKey('cs_campaigns.id'), nullable=False),
         sa.Column('customer_id', sa.Integer(), sa.ForeignKey('customers.id'), nullable=False),
-        sa.Column('status', sa.Enum('active', 'paused', 'completed', 'converted', 'unsubscribed', 'exited', name='cs_enrollment_status_enum'), default='active'),
+        sa.Column('status', postgresql.ENUM('active', 'paused', 'completed', 'converted', 'unsubscribed', 'exited', name='cs_enrollment_status_enum', create_type=False), default='active'),
         sa.Column('current_step_id', sa.Integer(), sa.ForeignKey('cs_campaign_steps.id'), nullable=True),
         sa.Column('steps_completed', sa.Integer(), default=0),
         sa.Column('next_step_scheduled_at', sa.DateTime(timezone=True), nullable=True),
@@ -214,7 +254,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('enrollment_id', sa.Integer(), sa.ForeignKey('cs_campaign_enrollments.id'), nullable=False),
         sa.Column('step_id', sa.Integer(), sa.ForeignKey('cs_campaign_steps.id'), nullable=False),
-        sa.Column('status', sa.Enum('pending', 'sent', 'delivered', 'opened', 'clicked', 'failed', 'skipped', name='cs_exec_status_enum'), default='pending'),
+        sa.Column('status', postgresql.ENUM('pending', 'sent', 'delivered', 'opened', 'clicked', 'failed', 'skipped', name='cs_exec_status_enum', create_type=False), default='pending'),
         sa.Column('scheduled_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('sent_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('delivered_at', sa.DateTime(timezone=True), nullable=True),
@@ -240,10 +280,10 @@ def upgrade() -> None:
         sa.Column('customer_id', sa.Integer(), sa.ForeignKey('customers.id'), nullable=False),
         sa.Column('title', sa.String(300), nullable=False),
         sa.Column('description', sa.Text(), nullable=False),
-        sa.Column('escalation_type', sa.Enum('technical', 'billing', 'service', 'product', 'relationship', 'executive', 'custom', name='cs_escalation_type_enum'), default='service'),
-        sa.Column('severity', sa.Enum('low', 'medium', 'high', 'critical', name='cs_severity_enum'), default='medium'),
+        sa.Column('escalation_type', postgresql.ENUM('technical', 'billing', 'service', 'product', 'relationship', 'executive', 'custom', name='cs_escalation_type_enum', create_type=False), default='service'),
+        sa.Column('severity', postgresql.ENUM('low', 'medium', 'high', 'critical', name='cs_severity_enum', create_type=False), default='medium'),
         sa.Column('priority', sa.Integer(), default=50),
-        sa.Column('status', sa.Enum('open', 'in_progress', 'pending_customer', 'pending_internal', 'resolved', 'closed', name='cs_escalation_status_enum'), default='open'),
+        sa.Column('status', postgresql.ENUM('open', 'in_progress', 'pending_customer', 'pending_internal', 'resolved', 'closed', name='cs_escalation_status_enum', create_type=False), default='open'),
         sa.Column('source', sa.String(100), nullable=True),
         sa.Column('source_id', sa.Integer(), nullable=True),
         sa.Column('assigned_to_user_id', sa.Integer(), sa.ForeignKey('api_users.id'), nullable=True),
@@ -281,7 +321,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('escalation_id', sa.Integer(), sa.ForeignKey('cs_escalations.id'), nullable=False),
         sa.Column('content', sa.Text(), nullable=False),
-        sa.Column('note_type', sa.Enum('update', 'internal', 'customer_communication', 'resolution', name='cs_note_type_enum'), default='update'),
+        sa.Column('note_type', postgresql.ENUM('update', 'internal', 'customer_communication', 'resolution', name='cs_note_type_enum', create_type=False), default='update'),
         sa.Column('is_internal', sa.Boolean(), default=True),
         sa.Column('created_by_user_id', sa.Integer(), sa.ForeignKey('api_users.id'), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
@@ -315,8 +355,8 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('title', sa.String(300), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('resource_type', sa.Enum('document', 'video', 'template', 'checklist', 'guide', 'script', 'link', name='cs_resource_type_enum'), nullable=False),
-        sa.Column('category', sa.Enum('onboarding', 'training', 'playbooks', 'processes', 'best_practices', 'templates', 'general', name='cs_resource_category_enum'), default='general'),
+        sa.Column('resource_type', postgresql.ENUM('document', 'video', 'template', 'checklist', 'guide', 'script', 'link', name='cs_resource_type_enum', create_type=False), nullable=False),
+        sa.Column('category', postgresql.ENUM('onboarding', 'training', 'playbooks', 'processes', 'best_practices', 'templates', 'general', name='cs_resource_category_enum', create_type=False), default='general'),
         sa.Column('content', sa.Text(), nullable=True),
         sa.Column('content_html', sa.Text(), nullable=True),
         sa.Column('url', sa.String(1000), nullable=True),
@@ -332,7 +372,7 @@ def upgrade() -> None:
         sa.Column('is_active', sa.Boolean(), default=True),
         sa.Column('is_archived', sa.Boolean(), default=False),
         sa.Column('created_by_user_id', sa.Integer(), sa.ForeignKey('api_users.id'), nullable=True),
-        sa.Column('visibility', sa.Enum('all', 'team', 'managers', 'admins', name='cs_visibility_enum'), default='all'),
+        sa.Column('visibility', postgresql.ENUM('all', 'team', 'managers', 'admins', name='cs_visibility_enum', create_type=False), default='all'),
         sa.Column('version', sa.String(20), default='1.0'),
         sa.Column('parent_resource_id', sa.Integer(), sa.ForeignKey('cs_resources.id'), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
@@ -381,7 +421,7 @@ def upgrade() -> None:
         sa.Column('category', sa.String(100), nullable=True),
         sa.Column('tags', sa.JSON(), nullable=True),
         sa.Column('is_pinned', sa.Boolean(), default=False),
-        sa.Column('visibility', sa.Enum('all', 'team', 'managers', 'private', name='cs_note_visibility_enum'), default='team'),
+        sa.Column('visibility', postgresql.ENUM('all', 'team', 'managers', 'private', name='cs_note_visibility_enum', create_type=False), default='team'),
         sa.Column('created_by_user_id', sa.Integer(), sa.ForeignKey('api_users.id'), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
