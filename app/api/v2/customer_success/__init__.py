@@ -8,6 +8,10 @@ Enterprise-grade Customer Success Platform with:
 - Playbook Management
 - Task Management
 - Touchpoint Tracking
+- Survey Management (NPS/CSAT/CES)
+- Campaign Management
+- Escalation Management
+- Collaboration Hub
 """
 
 from app.api.v2.customer_success.health_scores import router as health_scores_router
@@ -17,6 +21,10 @@ from app.api.v2.customer_success.playbooks import router as playbooks_router
 from app.api.v2.customer_success.tasks import router as tasks_router
 from app.api.v2.customer_success.touchpoints import router as touchpoints_router
 from app.api.v2.customer_success.dashboard import router as dashboard_router
+from app.api.v2.customer_success.surveys import router as surveys_router
+from app.api.v2.customer_success.campaigns import router as campaigns_router
+from app.api.v2.customer_success.escalations import router as escalations_router
+from app.api.v2.customer_success.collaboration import router as collaboration_router
 
 __all__ = [
     "health_scores_router",
@@ -26,4 +34,8 @@ __all__ = [
     "tasks_router",
     "touchpoints_router",
     "dashboard_router",
+    "surveys_router",
+    "campaigns_router",
+    "escalations_router",
+    "collaboration_router",
 ]

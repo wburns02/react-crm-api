@@ -75,6 +75,8 @@ from app.api.v2 import (
     # Phase 24: Quick Wins Bundle
     quickbooks,
     push_notifications,
+    # Phase 26: Demo Mode Role Switching
+    roles,
 )
 # Phase 25: Enterprise Customer Success Platform
 from app.api.v2.customer_success import (
@@ -85,6 +87,10 @@ from app.api.v2.customer_success import (
     tasks_router,
     touchpoints_router,
     dashboard_router as cs_dashboard_router,
+    surveys_router,
+    campaigns_router,
+    escalations_router,
+    collaboration_router,
 )
 
 api_router = APIRouter()
@@ -198,3 +204,10 @@ api_router.include_router(playbooks_router, prefix="/cs/playbooks", tags=["custo
 api_router.include_router(tasks_router, prefix="/cs/tasks", tags=["customer-success"])
 api_router.include_router(touchpoints_router, prefix="/cs/touchpoints", tags=["customer-success"])
 api_router.include_router(cs_dashboard_router, prefix="/cs/dashboard", tags=["customer-success"])
+api_router.include_router(surveys_router, prefix="/cs/surveys", tags=["customer-success"])
+api_router.include_router(campaigns_router, prefix="/cs/campaigns", tags=["customer-success"])
+api_router.include_router(escalations_router, prefix="/cs/escalations", tags=["customer-success"])
+api_router.include_router(collaboration_router, prefix="/cs/collaboration", tags=["customer-success"])
+
+# Phase 26: Demo Mode Role Switching
+api_router.include_router(roles.router, prefix="/roles", tags=["roles"])

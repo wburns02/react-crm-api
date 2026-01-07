@@ -37,6 +37,15 @@ class Journey(Base):
         default='custom'
     )
 
+    # Journey status
+    status = Column(
+        SQLEnum(
+            'draft', 'active', 'paused', 'archived',
+            name='cs_journey_status_enum'
+        ),
+        default='draft'
+    )
+
     # Trigger configuration
     trigger_type = Column(
         SQLEnum(

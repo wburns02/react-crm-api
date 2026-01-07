@@ -62,6 +62,9 @@ from app.models.customer_success import (
     Touchpoint,
 )
 
+# Demo Mode Role Switching
+from app.models.role_view import RoleView, UserRoleSession
+
 __all__ = [
     # Core models
     "Customer",
@@ -142,4 +145,7 @@ __all__ = [
     "PlaybookExecution",
     "CSTask",
     "Touchpoint",
+    # Demo Mode Role Switching
+    "RoleView",
+    "UserRoleSession",
 ]
