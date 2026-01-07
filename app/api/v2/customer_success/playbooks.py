@@ -1,5 +1,7 @@
 """
 Playbook API Endpoints for Enterprise Customer Success Platform
+
+Provides endpoints for managing CS playbooks and triggering executions.
 """
 
 from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks
