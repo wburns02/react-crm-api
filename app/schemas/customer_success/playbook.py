@@ -312,8 +312,8 @@ class PlaybookExecutionResponse(PlaybookExecutionBase):
     # Time tracking
     total_time_spent_minutes: int = 0
 
-    # Metadata
-    metadata: Optional[dict] = None
+    # Extra data
+    extra_data: Optional[dict] = None
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
