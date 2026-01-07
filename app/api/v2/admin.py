@@ -681,3 +681,59 @@ async def seed_customer_success_data(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error seeding data: {str(e)}"
         )
+
+
+# Temporary endpoint to add journey status column
+@router.post("/fix-journey-status")
+async def fix_journey_status(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Add status column to cs_journeys if it doesn't exist."""
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Only admins can run migrations")
+
+    try:
+        from sqlalchemy import text
+
+        # Check if column exists
+        result = await db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'cs_journeys' AND column_name = 'status'
+        """))
+        exists = result.scalar_one_or_none()
+
+        if exists:
+            return {"success": True, "message": "Column already exists", "column_exists": True}
+
+        # Create enum type if not exists
+        await db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'cs_journey_status_enum') THEN
+                    CREATE TYPE cs_journey_status_enum AS ENUM ('draft', 'active', 'paused', 'archived');
+                END IF;
+            END
+            $$;
+        """))
+
+        # Add the column
+        await db.execute(text("""
+            ALTER TABLE cs_journeys ADD COLUMN status cs_journey_status_enum DEFAULT 'draft';
+        """))
+
+        # Update existing rows
+        await db.execute(text("""
+            UPDATE cs_journeys SET status = 'draft' WHERE status IS NULL;
+        """))
+
+        await db.commit()
+
+        return {"success": True, "message": "Status column added successfully", "column_exists": False}
+
+    except Exception as e:
+        logger.error(f"Error adding status column: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error: {str(e)}"
+        )
