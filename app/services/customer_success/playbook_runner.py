@@ -118,7 +118,7 @@ class PlaybookRunner:
         # Create tasks for steps
         for step in steps:
             task = await self._create_task_for_step(
-                execution, step, customer_id, assigned_to_user_id
+                execution, step, customer_id, assigned_to_user_id, playbook
             )
             self.db.add(task)
 
@@ -287,6 +287,7 @@ class PlaybookRunner:
         step: PlaybookStep,
         customer_id: int,
         assigned_to_user_id: Optional[int] = None,
+        playbook: Optional[Playbook] = None,
     ) -> CSTask:
         """Create a task from a playbook step."""
         # Calculate due date
@@ -295,6 +296,13 @@ class PlaybookRunner:
             start_date = execution.started_at or datetime.utcnow()
             days_offset = (step.days_from_start or 0) + step.due_days
             due_date = (start_date + timedelta(days=days_offset)).date()
+
+        # Get priority from playbook
+        priority = "medium"
+        if playbook and playbook.priority:
+            priority = playbook.priority
+        elif execution.playbook and execution.playbook.priority:
+            priority = execution.playbook.priority
 
         return CSTask(
             customer_id=customer_id,
@@ -306,7 +314,7 @@ class PlaybookRunner:
                 "call", "email", "meeting", "review", "escalation",
                 "training", "product_demo", "custom"
             ] else "custom",
-            priority=execution.playbook.priority if execution.playbook else "medium",
+            priority=priority,
             status="pending",
             assigned_to_user_id=assigned_to_user_id,
             assigned_to_role=step.default_assignee_role,

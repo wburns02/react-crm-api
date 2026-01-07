@@ -16,6 +16,7 @@ from app.models.customer import Customer
 from app.models.customer_success import (
     Playbook, PlaybookStep, PlaybookExecution
 )
+from app.services.customer_success.playbook_runner import PlaybookRunner
 from app.schemas.customer_success.playbook import (
     PlaybookCreate,
     PlaybookUpdate,
@@ -365,70 +366,64 @@ async def trigger_playbook(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Trigger a playbook for a customer."""
-    # Check playbook exists and is active
-    playbook_result = await db.execute(
-        select(Playbook)
-        .options(selectinload(Playbook.steps))
-        .where(Playbook.id == request.playbook_id)
-    )
-    playbook = playbook_result.scalar_one_or_none()
+    """
+    Trigger a playbook for a customer.
 
-    if not playbook:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Playbook not found",
+    This creates a PlaybookExecution and generates CSTask entries
+    for each step in the playbook, allowing CSMs to track and
+    complete the playbook workflow.
+    """
+    try:
+        runner = PlaybookRunner(db)
+        execution = await runner.trigger_playbook(
+            playbook_id=request.playbook_id,
+            customer_id=request.customer_id,
+            triggered_by=f"user:{current_user.id}",
+            reason=request.reason,
+            assigned_to_user_id=request.assigned_to_user_id,
         )
 
-    if not playbook.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Playbook is not active",
+        logger.info(
+            f"Playbook {request.playbook_id} triggered for customer {request.customer_id} "
+            f"by user {current_user.id}. Execution ID: {execution.id}, "
+            f"Tasks created: {execution.steps_total}"
         )
 
-    # Check customer exists
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == request.customer_id)
-    )
-    if not customer_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Customer not found",
-        )
+        return execution
 
-    # Check max active executions
-    if not playbook.allow_parallel_execution:
-        active_count = await db.execute(
-            select(func.count()).where(
-                PlaybookExecution.playbook_id == request.playbook_id,
-                PlaybookExecution.customer_id == request.customer_id,
-                PlaybookExecution.status == PlaybookExecStatus.ACTIVE.value,
+    except ValueError as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_msg,
             )
-        )
-        if active_count.scalar() >= (playbook.max_active_per_customer or 1):
+        elif "not active" in error_msg.lower():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Max active executions reached for this customer",
+                detail=error_msg,
             )
-
-    execution = PlaybookExecution(
-        playbook_id=request.playbook_id,
-        customer_id=request.customer_id,
-        status=PlaybookExecStatus.ACTIVE.value,
-        triggered_by=f"user:{current_user.id}",
-        trigger_reason=request.reason,
-        assigned_to_user_id=request.assigned_to_user_id,
-        steps_total=len(playbook.steps),
-        started_at=datetime.utcnow(),
-    )
-    db.add(execution)
-
-    # Update playbook metrics
-    playbook.times_triggered = (playbook.times_triggered or 0) + 1
-
-    await db.commit()
-    await db.refresh(execution)
-    return execution
+        elif "cooldown" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+        elif "max active" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+    except Exception as e:
+        logger.error(f"Error triggering playbook: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger playbook: {str(e)}",
+        )
 
 
 @router.post("/trigger/bulk")
