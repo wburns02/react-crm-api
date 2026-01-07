@@ -34,3 +34,4 @@ pytest-asyncio>=0.23.0
 
 # Development
 python-dotenv>=1.0.0
+# Force rebuild Wed, Jan  7, 2026  9:32:51 AM
