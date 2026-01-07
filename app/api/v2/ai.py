@@ -644,8 +644,8 @@ class DispatchStatsResponse(BaseModel):
     top_matched_technicians: List[Dict[str, Any]] = []
 
     # Time analysis
-    busiest_days: List[Dict[str, int]] = []
-    busiest_hours: List[Dict[str, int]] = []
+    busiest_days: List[Dict[str, Any]] = []
+    busiest_hours: List[Dict[str, Any]] = []
 
     # Workload
     current_unassigned_count: int = 0
