@@ -36,11 +36,11 @@ def upgrade() -> None:
     drop_and_create_enum('cs_survey_status_enum', ['draft', 'active', 'paused', 'completed'])
     drop_and_create_enum('cs_survey_trigger_enum', ['manual', 'scheduled', 'event', 'milestone'])
     drop_and_create_enum('cs_question_type_enum', ['rating', 'scale', 'text', 'multiple_choice', 'single_choice'])
-    drop_and_create_enum('cs_sentiment_enum', ['positive', 'neutral', 'negative'])
+    drop_and_create_enum('cs_survey_sentiment_enum', ['positive', 'neutral', 'negative'])
     drop_and_create_enum('cs_campaign_status_enum', ['draft', 'active', 'paused', 'completed', 'archived'])
     drop_and_create_enum('cs_campaign_type_enum', ['nurture', 'onboarding', 'adoption', 'renewal', 'expansion', 'winback', 'custom'])
     drop_and_create_enum('cs_step_action_enum', ['email', 'task', 'wait', 'condition', 'notification', 'webhook', 'sms', 'call'])
-    drop_and_create_enum('cs_enrollment_status_enum', ['active', 'paused', 'completed', 'converted', 'unsubscribed', 'exited'])
+    drop_and_create_enum('cs_campaign_enroll_enum', ['active', 'paused', 'completed', 'converted', 'unsubscribed', 'exited'])
     drop_and_create_enum('cs_execution_status_enum', ['pending', 'completed', 'skipped', 'failed'])
     drop_and_create_enum('cs_escalation_type_enum', ['technical', 'billing', 'service', 'product', 'relationship', 'executive', 'custom'])
     drop_and_create_enum('cs_escalation_status_enum', ['open', 'in_progress', 'pending_customer', 'pending_internal', 'resolved', 'closed'])
@@ -119,7 +119,7 @@ def upgrade() -> None:
         sa.Column('survey_id', sa.Integer(), sa.ForeignKey('cs_surveys.id'), nullable=False),
         sa.Column('customer_id', sa.Integer(), sa.ForeignKey('customers.id'), nullable=False),
         sa.Column('overall_score', sa.Float(), nullable=True),
-        sa.Column('sentiment', postgresql.ENUM('positive', 'neutral', 'negative', name='cs_sentiment_enum', create_type=False), nullable=True),
+        sa.Column('sentiment', postgresql.ENUM('positive', 'neutral', 'negative', name='cs_survey_sentiment_enum', create_type=False), nullable=True),
         sa.Column('sentiment_score', sa.Float(), nullable=True),
         sa.Column('is_complete', sa.Boolean(), default=False),
         sa.Column('source', sa.String(100), nullable=True),
@@ -226,7 +226,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('campaign_id', sa.Integer(), sa.ForeignKey('cs_campaigns.id'), nullable=False),
         sa.Column('customer_id', sa.Integer(), sa.ForeignKey('customers.id'), nullable=False),
-        sa.Column('status', postgresql.ENUM('active', 'paused', 'completed', 'converted', 'unsubscribed', 'exited', name='cs_enrollment_status_enum', create_type=False), default='active'),
+        sa.Column('status', postgresql.ENUM('active', 'paused', 'completed', 'converted', 'unsubscribed', 'exited', name='cs_campaign_enroll_enum', create_type=False), default='active'),
         sa.Column('current_step_id', sa.Integer(), sa.ForeignKey('cs_campaign_steps.id'), nullable=True),
         sa.Column('steps_completed', sa.Integer(), default=0),
         sa.Column('next_step_scheduled_at', sa.DateTime(timezone=True), nullable=True),
@@ -486,12 +486,12 @@ def downgrade() -> None:
     op.execute("DROP TYPE IF EXISTS cs_survey_status_enum")
     op.execute("DROP TYPE IF EXISTS cs_survey_trigger_enum")
     op.execute("DROP TYPE IF EXISTS cs_question_type_enum")
-    op.execute("DROP TYPE IF EXISTS cs_sentiment_enum")
+    op.execute("DROP TYPE IF EXISTS cs_survey_sentiment_enum")
     op.execute("DROP TYPE IF EXISTS cs_campaign_type_enum")
     op.execute("DROP TYPE IF EXISTS cs_campaign_status_enum")
     op.execute("DROP TYPE IF EXISTS cs_campaign_channel_enum")
     op.execute("DROP TYPE IF EXISTS cs_step_type_enum")
-    op.execute("DROP TYPE IF EXISTS cs_enrollment_status_enum")
+    op.execute("DROP TYPE IF EXISTS cs_campaign_enroll_enum")
     op.execute("DROP TYPE IF EXISTS cs_exec_status_enum")
     op.execute("DROP TYPE IF EXISTS cs_escalation_type_enum")
     op.execute("DROP TYPE IF EXISTS cs_severity_enum")
