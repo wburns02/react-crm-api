@@ -413,7 +413,7 @@ def upgrade() -> None:
         sa.Column('entity_id', sa.Integer(), nullable=True),
         sa.Column('title', sa.String(300), nullable=True),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('metadata', sa.JSON(), nullable=True),
+        sa.Column('activity_data', sa.JSON(), nullable=True),
         sa.Column('user_id', sa.Integer(), sa.ForeignKey('api_users.id'), nullable=False),
         sa.Column('customer_id', sa.Integer(), sa.ForeignKey('customers.id'), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),

@@ -213,7 +213,7 @@ class CSActivity(Base):
     # Activity details
     title = Column(String(300))
     description = Column(Text)
-    metadata = Column(JSON)
+    activity_data = Column(JSON)  # Extra activity data (renamed from 'metadata' which is reserved)
 
     # Who performed the activity
     user_id = Column(Integer, ForeignKey("api_users.id"), nullable=False)

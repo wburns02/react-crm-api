@@ -224,7 +224,7 @@ class ActivityCreate(BaseModel):
     entity_id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    metadata: Optional[dict] = None
+    activity_data: Optional[dict] = None
     customer_id: Optional[int] = None
 
 
@@ -236,7 +236,7 @@ class ActivityResponse(BaseModel):
     entity_id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None
-    metadata: Optional[dict] = None
+    activity_data: Optional[dict] = None
     user_id: int
     user_name: Optional[str] = None
     customer_id: Optional[int] = None

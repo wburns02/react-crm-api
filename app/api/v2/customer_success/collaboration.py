@@ -39,7 +39,7 @@ async def log_activity(
     entity_id: int = None,
     title: str = None,
     description: str = None,
-    metadata: dict = None,
+    activity_data: dict = None,
     customer_id: int = None,
 ):
     activity = CSActivity(
@@ -48,7 +48,7 @@ async def log_activity(
         entity_id=entity_id,
         title=title,
         description=description,
-        metadata=metadata,
+        activity_data=activity_data,
         user_id=user_id,
         customer_id=customer_id,
     )
@@ -731,7 +731,7 @@ async def list_activity(
                 "entity_id": activity.entity_id,
                 "title": activity.title,
                 "description": activity.description,
-                "metadata": activity.metadata,
+                "activity_data": activity.activity_data,
                 "user_id": activity.user_id,
                 "customer_id": activity.customer_id,
                 "created_at": activity.created_at,
