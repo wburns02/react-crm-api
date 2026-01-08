@@ -1,6 +1,8 @@
 # Customer Success Models
 from app.models.customer_success.health_score import HealthScore, HealthScoreEvent
-from app.models.customer_success.segment import Segment, CustomerSegment
+from app.models.customer_success.segment import (
+    Segment, CustomerSegment, SegmentRule, SegmentMembership, SegmentSnapshot
+)
 from app.models.customer_success.journey import Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution
 from app.models.customer_success.playbook import Playbook, PlaybookStep, PlaybookExecution
 from app.models.customer_success.task import CSTask
@@ -19,6 +21,9 @@ __all__ = [
     # Segmentation
     "Segment",
     "CustomerSegment",
+    "SegmentRule",
+    "SegmentMembership",
+    "SegmentSnapshot",
     # Journeys
     "Journey",
     "JourneyStep",

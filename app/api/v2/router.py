@@ -94,6 +94,7 @@ from app.api.v2.customer_success import (
     ai_insights_router,
     ab_tests_router,
 )
+from app.api.v2.customer_success.escalations_ai import router as escalations_ai_router
 
 api_router = APIRouter()
 
@@ -209,6 +210,7 @@ api_router.include_router(cs_dashboard_router, prefix="/cs/dashboard", tags=["cu
 api_router.include_router(surveys_router, prefix="/cs/surveys", tags=["customer-success"])
 api_router.include_router(campaigns_router, prefix="/cs/campaigns", tags=["customer-success"])
 api_router.include_router(escalations_router, prefix="/cs/escalations", tags=["customer-success"])
+api_router.include_router(escalations_ai_router, prefix="/cs/escalations", tags=["customer-success-ai"])
 api_router.include_router(collaboration_router, prefix="/cs/collaboration", tags=["customer-success"])
 api_router.include_router(ai_insights_router, prefix="/cs/ai", tags=["customer-success"])
 api_router.include_router(ab_tests_router, prefix="/cs/ab-tests", tags=["customer-success"])
