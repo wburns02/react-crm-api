@@ -47,11 +47,9 @@ jobs:
 
       - name: Run Ruff linter
         run: ruff check app/ --output-format=github
-        continue-on-error: true
 
       - name: Run Ruff formatter check
         run: ruff format --check app/
-        continue-on-error: true
 
   test:
     name: Tests
@@ -90,9 +88,8 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
-          fail_ci_if_error: false
+          fail_ci_if_error: true
           verbose: true
-        continue-on-error: true
 
   security:
     name: Security Scan
@@ -115,13 +112,11 @@ jobs:
 
       - name: Run Bandit security linter
         run: bandit -r app/ -ll -ii --format json --output bandit-report.json
-        continue-on-error: true
 
       - name: Check for known vulnerabilities
         run: |
           pip install -r requirements.txt
-          safety check --full-report || true
-        continue-on-error: true
+          safety check --full-report
 
       - name: Upload security reports
         uses: actions/upload-artifact@v4
