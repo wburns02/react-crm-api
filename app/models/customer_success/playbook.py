@@ -107,7 +107,7 @@ class Playbook(Base):
     # Relationships
     steps = relationship("PlaybookStep", back_populates="playbook", order_by="PlaybookStep.step_order", cascade="all, delete-orphan")
     executions = relationship("PlaybookExecution", back_populates="playbook", cascade="all, delete-orphan")
-    trigger_segment = relationship("Segment", back_populates="playbooks")
+    trigger_segment = relationship("Segment", back_populates="playbooks", foreign_keys=[trigger_segment_id])
 
     def __repr__(self):
         return f"<Playbook id={self.id} name='{self.name}' category={self.category}>"

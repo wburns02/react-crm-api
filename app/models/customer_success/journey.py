@@ -102,7 +102,7 @@ class Journey(Base):
     # Relationships
     steps = relationship("JourneyStep", back_populates="journey", order_by="JourneyStep.step_order", cascade="all, delete-orphan")
     enrollments = relationship("JourneyEnrollment", back_populates="journey", cascade="all, delete-orphan")
-    trigger_segment = relationship("Segment", back_populates="journeys")
+    trigger_segment = relationship("Segment", back_populates="journeys", foreign_keys=[trigger_segment_id])
 
     def __repr__(self):
         return f"<Journey id={self.id} name='{self.name}' type={self.journey_type} active={self.is_active}>"
