@@ -687,3 +687,112 @@ async def get_campaign_analytics(
         step_performance=step_performance,
         enrollment_trend=enrollment_trend,
     )
+
+
+# Send Time Optimization Endpoints
+
+@router.get("/{campaign_id}/send-time-analysis")
+async def get_send_time_analysis(
+    campaign_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Get send time performance analysis for a campaign.
+
+    Analyzes historical message engagement data to identify optimal
+    send times based on open and click rates by hour and day of week.
+    """
+    from app.services.customer_success.send_time_optimizer import SendTimeOptimizer
+
+    # Verify campaign exists
+    result = await db.execute(
+        select(Campaign).where(Campaign.id == campaign_id)
+    )
+    campaign = result.scalar_one_or_none()
+
+    if not campaign:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Campaign not found",
+        )
+
+    optimizer = SendTimeOptimizer(db)
+    analysis = await optimizer.analyze_campaign_timing(campaign_id)
+    return analysis
+
+
+@router.post("/customers/{customer_id}/optimize-send-time")
+async def calculate_customer_send_profile(
+    customer_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Calculate optimal send time profile for a customer.
+
+    Analyzes the customer's historical engagement with campaign messages
+    to determine the best times to send future communications.
+    """
+    from app.services.customer_success.send_time_optimizer import SendTimeOptimizer
+
+    optimizer = SendTimeOptimizer(db)
+    profile = await optimizer.calculate_customer_profile(customer_id)
+
+    if "error" in profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=profile["error"],
+        )
+
+    return profile
+
+
+@router.get("/customers/{customer_id}/send-time-profile")
+async def get_customer_send_profile(
+    customer_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Get the existing send time profile for a customer.
+
+    Returns the customer's optimal send time profile if one has been calculated.
+    """
+    from app.services.customer_success.send_time_optimizer import SendTimeOptimizer
+
+    optimizer = SendTimeOptimizer(db)
+    profile = await optimizer.get_customer_profile(customer_id)
+
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No send time profile found for this customer",
+        )
+
+    return profile
+
+
+@router.get("/customers/{customer_id}/optimal-send-time")
+async def get_optimal_send_time(
+    customer_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    channel: str = "email",
+):
+    """
+    Get the next optimal send time for a customer.
+
+    Returns the next recommended datetime to send a message to this customer
+    based on their engagement history.
+    """
+    from app.services.customer_success.send_time_optimizer import SendTimeOptimizer
+
+    optimizer = SendTimeOptimizer(db)
+    optimal_time = await optimizer.get_optimal_send_time(customer_id, channel)
+
+    return {
+        "customer_id": customer_id,
+        "channel": channel,
+        "optimal_send_time": optimal_time.isoformat(),
+    }

@@ -70,6 +70,12 @@ from app.schemas.customer_success.collaboration import (
     TeamNoteBase, TeamNoteCreate, TeamNoteUpdate, TeamNoteResponse, TeamNoteListResponse,
     ActivityCreate, ActivityResponse, ActivityListResponse,
 )
+from app.schemas.customer_success.ab_test import (
+    ABTestType, ABTestStatus, PrimaryMetric,
+    ABTestBase, ABTestCreate, ABTestUpdate, ABTestResponse, ABTestListResponse,
+    ABTestResults, VariantMetrics, StatisticalResults, LiftResult,
+    MetricUpdateRequest, CompleteTestRequest, AssignVariantResponse, ActionResponse,
+)
 
 __all__ = [
     # Health Score
@@ -128,4 +134,9 @@ __all__ = [
     "TeamNoteCommentBase", "TeamNoteCommentCreate", "TeamNoteCommentResponse",
     "TeamNoteBase", "TeamNoteCreate", "TeamNoteUpdate", "TeamNoteResponse", "TeamNoteListResponse",
     "ActivityCreate", "ActivityResponse", "ActivityListResponse",
+    # A/B Testing
+    "ABTestType", "ABTestStatus", "PrimaryMetric",
+    "ABTestBase", "ABTestCreate", "ABTestUpdate", "ABTestResponse", "ABTestListResponse",
+    "ABTestResults", "VariantMetrics", "StatisticalResults", "LiftResult",
+    "MetricUpdateRequest", "CompleteTestRequest", "AssignVariantResponse", "ActionResponse",
 ]

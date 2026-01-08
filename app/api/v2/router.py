@@ -91,6 +91,8 @@ from app.api.v2.customer_success import (
     campaigns_router,
     escalations_router,
     collaboration_router,
+    ai_insights_router,
+    ab_tests_router,
 )
 
 api_router = APIRouter()
@@ -208,6 +210,8 @@ api_router.include_router(surveys_router, prefix="/cs/surveys", tags=["customer-
 api_router.include_router(campaigns_router, prefix="/cs/campaigns", tags=["customer-success"])
 api_router.include_router(escalations_router, prefix="/cs/escalations", tags=["customer-success"])
 api_router.include_router(collaboration_router, prefix="/cs/collaboration", tags=["customer-success"])
+api_router.include_router(ai_insights_router, prefix="/cs/ai", tags=["customer-success"])
+api_router.include_router(ab_tests_router, prefix="/cs/ab-tests", tags=["customer-success"])
 
 # Phase 26: Demo Mode Role Switching
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])

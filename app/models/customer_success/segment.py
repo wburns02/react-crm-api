@@ -59,9 +59,15 @@ class Segment(Base):
 
     # Settings
     is_active = Column(Boolean, default=True)
+    is_system = Column(Boolean, default=False)  # System segments cannot be deleted
     auto_refresh = Column(Boolean, default=True)
     refresh_interval_hours = Column(Integer, default=1)
     last_refreshed_at = Column(DateTime(timezone=True))
+
+    # Smart segment metadata
+    category = Column(String(50))  # lifecycle, value, service, engagement, geographic
+    ai_insight = Column(Text)  # AI-generated insight message for this segment
+    recommended_actions = Column(JSON)  # List of recommended actions for segment members
 
     # Priority (for overlapping segments)
     priority = Column(Integer, default=100)
