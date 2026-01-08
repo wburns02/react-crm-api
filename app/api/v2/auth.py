@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Response, Depends
 from sqlalchemy import select
 from datetime import timedelta
+import logging
 
 from app.api.deps import (
     DbSession,
@@ -14,6 +15,7 @@ from app.models.user import User
 from app.schemas.auth import UserCreate, UserResponse, Token, LoginRequest, AuthMeResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/login", response_model=Token)
@@ -23,46 +25,55 @@ async def login(
     db: DbSession,
 ):
     """Authenticate user and return JWT token."""
-    # Find user
-    result = await db.execute(select(User).where(User.email == login_data.email))
-    user = result.scalar_one_or_none()
+    try:
+        # Find user
+        logger.info(f"Login attempt for: {login_data.email}")
+        result = await db.execute(select(User).where(User.email == login_data.email))
+        user = result.scalar_one_or_none()
+        logger.info(f"User found: {user is not None}")
 
-    if not user or not verify_password(login_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+        if not user or not verify_password(login_data.password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is disabled",
+            )
+
+        # Create access token
+        logger.info("Creating access token...")
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": str(user.id), "email": user.email},
+            expires_delta=access_token_expires,
+        )
+        logger.info("Access token created successfully")
+
+        # Set session cookie (HTTP-only for XSS protection)
+        response.set_cookie(
+            key="session",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            path="/",
         )
 
-    if not user.is_active:
+        return Token(access_token=access_token, token=access_token, token_type="bearer")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {type(e).__name__}: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is disabled",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login failed: {type(e).__name__}"
         )
-
-    # Create access token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email},
-        expires_delta=access_token_expires,
-    )
-
-    # Set session cookie (HTTP-only for XSS protection)
-    # SECURITY: For cross-origin cookies (SPA on different domain):
-    # - secure=True: Required for SameSite=None
-    # - samesite="none": Required for cross-origin requests
-    # - httponly=True: Prevents XSS from reading the cookie
-    response.set_cookie(
-        key="session",
-        value=access_token,
-        httponly=True,
-        secure=True,  # Always secure (required for SameSite=None)
-        samesite="none",  # Required for cross-origin cookies
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        path="/",  # Available for all API paths
-    )
-
-    return Token(access_token=access_token, token=access_token, token_type="bearer")
 
 
 @router.post("/logout")
