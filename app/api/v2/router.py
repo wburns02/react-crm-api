@@ -77,6 +77,11 @@ from app.api.v2 import (
     push_notifications,
     # Phase 26: Demo Mode Role Switching
     roles,
+    # Phase 27: Real-Time GPS Tracking
+    gps_tracking,
+)
+# Skip
+    roles,
 )
 # Phase 25: Enterprise Customer Success Platform
 from app.api.v2.customer_success import (
@@ -217,3 +222,6 @@ api_router.include_router(ab_tests_router, prefix="/cs/ab-tests", tags=["custome
 
 # Phase 26: Demo Mode Role Switching
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
+
+# Phase 27: Real-Time GPS Tracking
+api_router.include_router(gps_tracking.router, tags=["gps-tracking"])
