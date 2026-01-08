@@ -9,7 +9,7 @@ Adds fields for pre-built smart segments:
 Also seeds the initial set of smart segments.
 
 Revision ID: 021_add_smart_segments
-Revises: 020_survey_engine_enhancements
+Revises: 020_survey_enhancements
 Create Date: 2026-01-08 12:00:00.000000
 """
 from alembic import op
@@ -19,7 +19,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '021_add_smart_segments'
-down_revision = '020_survey_engine_enhancements'
+down_revision = '020_survey_enhancements'
 branch_labels = None
 depends_on = None
 
