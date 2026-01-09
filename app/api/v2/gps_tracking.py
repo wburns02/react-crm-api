@@ -9,7 +9,7 @@ from typing import Optional, List
 from datetime import datetime, timedelta
 
 from app.database import get_db
-from app.core.auth import get_current_user
+from app.api.deps import get_current_user
 from app.services.gps_tracking_service import GPSTrackingService, GeofenceService
 from app.schemas.gps_tracking import (
     LocationUpdate, LocationUpdateBatch, TechnicianLocationResponse,

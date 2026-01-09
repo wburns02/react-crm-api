@@ -65,6 +65,9 @@ from app.models.customer_success import (
 # Demo Mode Role Switching
 from app.models.role_view import RoleView, UserRoleSession
 
+# Work Order Photos
+from app.models.work_order_photo import WorkOrderPhoto
+
 __all__ = [
     # Core models
     "Customer",
@@ -148,4 +151,6 @@ __all__ = [
     # Demo Mode Role Switching
     "RoleView",
     "UserRoleSession",
+    # Work Order Photos
+    "WorkOrderPhoto",
 ]

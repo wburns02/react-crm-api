@@ -79,9 +79,8 @@ from app.api.v2 import (
     roles,
     # Phase 27: Real-Time GPS Tracking
     gps_tracking,
-)
-# Skip
-    roles,
+    # Work Order Photos
+    work_order_photos,
 )
 # Phase 25: Enterprise Customer Success Platform
 from app.api.v2.customer_success import (
@@ -225,3 +224,6 @@ api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 
 # Phase 27: Real-Time GPS Tracking
 api_router.include_router(gps_tracking.router, tags=["gps-tracking"])
+
+# Work Order Photos (same prefix as work_orders)
+api_router.include_router(work_order_photos.router, prefix="/work-orders", tags=["work-order-photos"])
