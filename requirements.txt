@@ -14,6 +14,7 @@ pydantic-settings>=2.1.0
 
 # HTTP client and forms
 httpx>=0.26.0
+aiohttp>=3.9.0
 python-multipart>=0.0.6
 
 # Twilio
@@ -34,5 +35,14 @@ pytest-asyncio>=0.23.0
 
 # Development
 python-dotenv>=1.0.0
+
+# PDF Generation for Inspection Letters
+weasyprint>=60.0
+Jinja2>=3.1.0
+
+# Web scraping for TDEC permit lookup
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+
 # Force rebuild Wed, Jan  7, 2026  9:32:51 AM
 # Build trigger: 1767807723

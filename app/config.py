@@ -75,6 +75,16 @@ class Settings(BaseSettings):
     AI_SERVER_API_KEY: str | None = None
     AI_SERVER_ENABLED: bool = False
 
+    # R730 ML Workstation (Local AI via Tailscale Funnel)
+    USE_LOCAL_AI: bool = True
+    OLLAMA_BASE_URL: str = "https://localhost-0.tailad2d5f.ts.net/ollama"
+    OLLAMA_MODEL: str = "llama3.2:3b"
+    WHISPER_BASE_URL: str = "https://localhost-0.tailad2d5f.ts.net/whisper"
+    LOCAL_WHISPER_MODEL: str = "medium"
+    LLAVA_MODEL: str = "llava:13b"
+    HCTG_AI_URL: str = "https://hctg-ai.tailad2d5f.ts.net"
+    HCTG_AI_MODEL: str = "qwen2.5:32b"
+
     # Legacy backend (for webhook routing)
     LEGACY_BACKEND_URL: str = "http://localhost:5000"
 

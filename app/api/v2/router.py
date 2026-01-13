@@ -81,6 +81,8 @@ from app.api.v2 import (
     gps_tracking,
     # Work Order Photos
     work_order_photos,
+    # Local AI (R730 ML Workstation)
+    local_ai,
 )
 # Phase 25: Enterprise Customer Success Platform
 from app.api.v2.customer_success import (
@@ -227,3 +229,6 @@ api_router.include_router(gps_tracking.router, tags=["gps-tracking"])
 
 # Work Order Photos (same prefix as work_orders)
 api_router.include_router(work_order_photos.router, prefix="/work-orders", tags=["work-order-photos"])
+
+# Local AI (R730 ML Workstation) - Vision, OCR, Transcription
+api_router.include_router(local_ai.router, prefix="/local-ai", tags=["local-ai"])
