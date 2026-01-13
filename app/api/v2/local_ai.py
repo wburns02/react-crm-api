@@ -115,6 +115,49 @@ async def transcribe_audio(request: TranscriptionRequest):
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 
+@router.post("/transcribe/upload")
+async def transcribe_audio_file(
+    file: UploadFile = File(...),
+    language: str = Form("en")
+):
+    """
+    Upload and transcribe an audio file using local Whisper on R730.
+
+    Accepts audio files (WAV, MP3, WebM, M4A) and returns full transcript.
+    """
+    if not settings.USE_LOCAL_AI:
+        raise HTTPException(
+            status_code=400,
+            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
+        )
+
+    # Validate file type
+    valid_types = ["audio/wav", "audio/mpeg", "audio/mp3", "audio/webm", "audio/mp4", "audio/m4a", "audio/x-m4a"]
+    if file.content_type and not any(t in file.content_type for t in valid_types):
+        raise HTTPException(
+            status_code=400,
+            detail=f"File must be an audio file. Got: {file.content_type}"
+        )
+
+    try:
+        contents = await file.read()
+        audio_base64 = base64.b64encode(contents).decode("utf-8")
+
+        result = await local_ai_service.transcribe_audio_base64(
+            audio_base64=audio_base64,
+            language=language,
+            filename=file.filename
+        )
+        result["filename"] = file.filename
+        result["file_size_bytes"] = len(contents)
+        return result
+    except LocalAIError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Audio transcription error: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+
 @router.post("/suggest-disposition")
 async def suggest_disposition(request: DispositionRequest):
     """

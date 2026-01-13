@@ -1,13 +1,13 @@
 """AI Gateway Service - Connection to local GPU-powered AI server.
 
 This service provides access to:
-- LLM inference (Llama 3.1 70B via vLLM)
-- Embeddings (BGE-large-en-v1.5)
+- LLM inference (Llama 3.1 via Ollama)
+- Embeddings (nomic-embed-text)
 - Speech-to-text (Whisper)
 - Semantic search (pgvector)
 
-The AI server runs on local hardware with RTX 5090 (32GB) and is accessed
-via Twingate secure tunnel from Railway.
+The AI server runs on Dell PowerEdge R730 with 2x RTX 3090 (48GB VRAM)
+and 768GB system RAM, running Ollama 0.13.5.
 """
 import httpx
 import logging
@@ -23,10 +23,14 @@ logger = logging.getLogger(__name__)
 
 class AIGatewayConfig(BaseModel):
     """Configuration for AI gateway connection."""
-    base_url: str = "http://localhost:8000"  # Local AI server URL (via Twingate)
-    api_key: Optional[str] = None  # API key for authentication
+    base_url: str = "http://192.168.7.71:11434"  # ML workstation Ollama server
+    api_key: Optional[str] = None  # API key for authentication (not needed for Ollama)
     timeout: float = 120.0  # LLM inference can take time
     max_retries: int = 3
+    # Ollama model names
+    default_model: str = "llama3.1:8b"  # Fast model for quick tasks
+    heavy_model: str = "llama3.1:70b"   # Large model for complex analysis
+    embed_model: str = "nomic-embed-text"  # Embedding model
 
 
 class ChatMessage(BaseModel):
@@ -87,8 +91,16 @@ class AIGateway:
         """Check if AI server is healthy."""
         try:
             client = await self.get_client()
-            response = await client.get("/health")
-            return {"status": "healthy", "server": response.json()}
+            # Ollama uses /api/tags to list models, which confirms it's running
+            response = await client.get("/api/tags")
+            data = response.json()
+            models = [m.get("name", m.get("model", "unknown")) for m in data.get("models", [])]
+            return {
+                "status": "healthy",
+                "server": "ollama",
+                "models": models,
+                "base_url": self.config.base_url,
+            }
         except httpx.ConnectError:
             return {"status": "unavailable", "error": "Cannot connect to AI server"}
         except Exception as e:
@@ -100,6 +112,7 @@ class AIGateway:
         max_tokens: int = 1024,
         temperature: float = 0.7,
         system_prompt: Optional[str] = None,
+        use_heavy_model: bool = False,
     ) -> Dict[str, Any]:
         """Generate chat completion using local LLM.
 
@@ -108,6 +121,7 @@ class AIGateway:
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature (0-1)
             system_prompt: Optional system prompt to prepend
+            use_heavy_model: Use the larger 70B model for complex analysis
 
         Returns:
             Dict with 'content' key containing generated text
@@ -119,8 +133,11 @@ class AIGateway:
             if system_prompt:
                 messages = [{"role": "system", "content": system_prompt}] + messages
 
+            # Select model based on task complexity
+            model = self.config.heavy_model if use_heavy_model else self.config.default_model
+
             payload = {
-                "model": "llama3",  # Required by OpenAI-compatible endpoints
+                "model": model,  # Ollama model name
                 "messages": messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
@@ -153,7 +170,7 @@ class AIGateway:
             return {
                 "content": content,
                 "usage": data.get("usage", {}),
-                "model": data.get("model", "llama3"),
+                "model": data.get("model", self.config.default_model),
             }
         except httpx.ConnectError:
             logger.warning("AI server unavailable, using fallback response")
@@ -169,7 +186,7 @@ class AIGateway:
     async def generate_embeddings(
         self,
         texts: List[str],
-        model: str = "embed",
+        model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Generate embeddings for texts.
 
@@ -182,10 +199,11 @@ class AIGateway:
         """
         try:
             client = await self.get_client()
+            embed_model = model or self.config.embed_model
 
             payload = {
                 "input": texts,
-                "model": model,
+                "model": embed_model,
             }
 
             response = await client.post("/v1/embeddings", json=payload)
@@ -196,7 +214,7 @@ class AIGateway:
 
             return {
                 "embeddings": embeddings,
-                "model": model,
+                "model": embed_model,
                 "dimensions": len(embeddings[0]) if embeddings else 0,
             }
         except httpx.ConnectError:

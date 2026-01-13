@@ -297,6 +297,79 @@ Respond ONLY with valid JSON, no additional text."""
             logger.error(f"Transcription error: {e}")
             raise LocalAIError(f"Transcription failed: {str(e)}")
 
+    async def transcribe_audio_base64(
+        self,
+        audio_base64: str,
+        language: str = "en",
+        filename: str = "recording.webm"
+    ) -> Dict[str, Any]:
+        """
+        Transcribe audio from base64-encoded data using Whisper on R730.
+
+        Args:
+            audio_base64: Base64-encoded audio data
+            language: Language code (default: en)
+            filename: Original filename for content type detection
+
+        Returns:
+            Dict with transcription results including text and segments
+        """
+        import base64
+        start_time = time.time()
+
+        try:
+            # Decode base64 to bytes
+            audio_bytes = base64.b64decode(audio_base64)
+
+            # Determine content type from filename
+            ext = filename.split('.')[-1].lower() if '.' in filename else 'webm'
+            content_types = {
+                'wav': 'audio/wav',
+                'mp3': 'audio/mpeg',
+                'webm': 'audio/webm',
+                'm4a': 'audio/mp4',
+                'mp4': 'audio/mp4',
+                'ogg': 'audio/ogg',
+            }
+            content_type = content_types.get(ext, 'audio/webm')
+
+            async with aiohttp.ClientSession(timeout=self.timeout) as session:
+                # Create form data with audio bytes
+                data = aiohttp.FormData()
+                data.add_field(
+                    'file',
+                    audio_bytes,
+                    filename=filename,
+                    content_type=content_type
+                )
+                data.add_field('language', language)
+
+                async with session.post(
+                    f"{self.whisper_base_url}/transcribe",
+                    data=data
+                ) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        raise LocalAIError(f"Whisper request failed: {resp.status} - {error_text}")
+
+                    result = await resp.json()
+                    processing_time = time.time() - start_time
+
+                    return {
+                        "status": "success",
+                        "transcript": result.get("text", ""),
+                        "text": result.get("text", ""),  # Alias for compatibility
+                        "language": result.get("language", language),
+                        "segments": result.get("segments", []),
+                        "duration_seconds": result.get("duration", 0),
+                        "processing_time_seconds": processing_time,
+                        "model_used": self.whisper_model
+                    }
+
+        except Exception as e:
+            logger.error(f"Base64 transcription error: {e}")
+            raise LocalAIError(f"Transcription failed: {str(e)}")
+
     async def generate_call_summary(self, transcript: str) -> str:
         """Generate a brief summary of a call transcript."""
         prompt = f"""Summarize this customer service call in 2-3 sentences:
