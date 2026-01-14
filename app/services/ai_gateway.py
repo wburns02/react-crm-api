@@ -8,6 +8,8 @@ This service provides access to:
 
 The AI server runs on Dell PowerEdge R730 with 2x RTX 3090 (48GB VRAM)
 and 768GB system RAM, running Ollama 0.13.5.
+
+Falls back to OpenAI/Anthropic when local AI is unreachable.
 """
 import httpx
 import logging
@@ -15,6 +17,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 import json
 import traceback
+import os
 
 from app.config import settings
 
@@ -172,16 +175,68 @@ class AIGateway:
                 "usage": data.get("usage", {}),
                 "model": data.get("model", self.config.default_model),
             }
-        except httpx.ConnectError:
-            logger.warning("AI server unavailable, using fallback response")
-            return {
-                "content": "[AI server unavailable - please try again later]",
-                "error": "connection_failed",
-            }
+        except (httpx.ConnectError, httpx.HTTPStatusError) as conn_err:
+            logger.warning(f"Local AI unavailable ({conn_err}), trying OpenAI fallback...")
+            return await self._openai_fallback(messages, max_tokens, temperature, system_prompt)
         except Exception as e:
             logger.error(f"Chat completion error: {e}")
             logger.error(traceback.format_exc())
-            return {"content": "", "error": str(e)}
+            # Try fallback on any error
+            return await self._openai_fallback(messages, max_tokens, temperature, system_prompt)
+
+    async def _openai_fallback(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        system_prompt: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fallback to OpenAI when local AI is unavailable."""
+        openai_key = getattr(settings, 'OPENAI_API_KEY', None) or os.getenv('OPENAI_API_KEY')
+
+        if not openai_key:
+            logger.error("No OpenAI API key configured for fallback")
+            return {
+                "content": "[AI server unavailable and no cloud fallback configured]",
+                "error": "no_fallback_available",
+            }
+
+        try:
+            # Prepend system prompt if provided
+            if system_prompt:
+                messages = [{"role": "system", "content": system_prompt}] + messages
+
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {openai_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "gpt-4o-mini",  # Fast and cheap
+                        "messages": messages,
+                        "max_tokens": max_tokens,
+                        "temperature": temperature,
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                content = data["choices"][0]["message"]["content"]
+                logger.info("Successfully used OpenAI fallback")
+
+                return {
+                    "content": content,
+                    "usage": data.get("usage", {}),
+                    "model": "gpt-4o-mini (fallback)",
+                }
+        except Exception as e:
+            logger.error(f"OpenAI fallback error: {e}")
+            return {
+                "content": f"[AI temporarily unavailable - {str(e)[:50]}]",
+                "error": str(e),
+            }
 
     async def generate_embeddings(
         self,
