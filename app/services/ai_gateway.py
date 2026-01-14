@@ -28,11 +28,11 @@ class AIGatewayConfig(BaseModel):
     """Configuration for AI gateway connection."""
     base_url: str = "https://localhost-0.tailad2d5f.ts.net/ollama"  # ML workstation via Tailscale
     api_key: Optional[str] = None  # API key for authentication (not needed for Ollama)
-    timeout: float = 120.0  # LLM inference can take time
+    timeout: float = 300.0  # 70B models need more time
     max_retries: int = 3
-    # Ollama model names - use models that are actually installed on R730
-    default_model: str = "llama3.2:3b"  # Fast model for quick tasks (installed on R730)
-    heavy_model: str = "qwen2.5:7b"   # Medium model for complex analysis (installed on R730)
+    # Ollama model names for R730 (2x RTX 3090, 48GB VRAM, 768GB RAM)
+    default_model: str = "qwen2.5:7b"   # Fast model for quick tasks
+    heavy_model: str = "llama3.1:70b"   # 70B model for complex analysis
     embed_model: str = "nomic-embed-text"  # Embedding model
 
 
