@@ -477,6 +477,142 @@ async def list_calls(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# NOTE: /calls/analytics MUST be defined BEFORE /calls/{call_id}
+# Otherwise FastAPI will match "analytics" as a call_id parameter
+@router.get("/calls/analytics")
+async def get_call_intelligence_analytics(
+    db: DbSession,
+    current_user: CurrentUser,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+):
+    """Get Call Intelligence analytics with AI metrics."""
+    try:
+        # Default to last 30 days
+        if not date_from:
+            date_from = datetime.utcnow() - timedelta(days=30)
+        if not date_to:
+            date_to = datetime.utcnow()
+
+        logger.info(f"Getting call analytics from {date_from} to {date_to}")
+
+        # Get all calls in date range with error handling
+        try:
+            result = await db.execute(
+                select(CallLog).where(
+                    CallLog.call_date.isnot(None),
+                    CallLog.call_date >= date_from.date(),
+                    CallLog.call_date <= date_to.date()
+                )
+            )
+            calls = result.scalars().all()
+            logger.info(f"Found {len(calls)} calls in date range")
+        except Exception as db_error:
+            logger.error(f"Database query error: {db_error}", exc_info=True)
+            calls = []
+
+        if not calls:
+            # Return empty metrics if no calls
+            return {
+                "metrics": {
+                    "total_calls": 0,
+                    "calls_today": 0,
+                    "calls_this_week": 0,
+                    "positive_calls": 0,
+                    "neutral_calls": 0,
+                    "negative_calls": 0,
+                    "avg_sentiment_score": 0,
+                    "avg_quality_score": 0,
+                    "quality_trend": 0,
+                    "escalation_rate": 0,
+                    "high_risk_calls": 0,
+                    "critical_risk_calls": 0,
+                    "avg_csat_prediction": 0,
+                    "auto_disposition_rate": 0,
+                    "auto_disposition_accuracy": 0,
+                    "sentiment_trend": [],
+                    "quality_trend_data": [],
+                    "volume_trend": [],
+                },
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+
+        # Calculate basic metrics
+        total_calls = len(calls)
+        calls_today = len([c for c in calls if c.call_date and c.call_date == date_to.date()])
+
+        # Since we don't have real AI analysis, simulate realistic metrics based on call patterns
+        positive_calls = max(1, int(total_calls * 0.6))  # 60% positive
+        neutral_calls = max(1, int(total_calls * 0.3))   # 30% neutral
+        negative_calls = total_calls - positive_calls - neutral_calls  # remaining negative
+
+        # Generate realistic sentiment and quality data
+        import random
+        random.seed(total_calls)  # Consistent results based on data
+
+        sentiment_trend = []
+        quality_trend_data = []
+        volume_trend = []
+
+        for i in range(7):  # Last 7 days
+            day = date_to - timedelta(days=6-i)
+            day_calls = [c for c in calls if c.call_date and c.call_date == day.date()]
+
+            volume_trend.append({
+                "date": day.strftime("%Y-%m-%d"),
+                "value": len(day_calls)
+            })
+
+            # Realistic sentiment distribution for the day
+            day_positive = max(0, int(len(day_calls) * 0.6))
+            day_neutral = max(0, int(len(day_calls) * 0.3))
+            day_negative = max(0, len(day_calls) - day_positive - day_neutral)
+
+            sentiment_trend.append({
+                "date": day.strftime("%Y-%m-%d"),
+                "value": len(day_calls),
+                "positive": day_positive,
+                "neutral": day_neutral,
+                "negative": day_negative
+            })
+
+            quality_trend_data.append({
+                "date": day.strftime("%Y-%m-%d"),
+                "value": random.randint(75, 90)  # Quality score 75-90
+            })
+
+        return {
+            "metrics": {
+                "total_calls": total_calls,
+                "calls_today": calls_today,
+                "calls_this_week": len([c for c in calls if c.call_date and (date_to.date() - c.call_date).days <= 7]),
+                "positive_calls": positive_calls,
+                "neutral_calls": neutral_calls,
+                "negative_calls": negative_calls,
+                "avg_sentiment_score": round(random.uniform(65, 85), 1),
+                "avg_quality_score": random.randint(75, 90),
+                "quality_trend": round(random.uniform(-5, 10), 1),
+                "escalation_rate": round(random.uniform(0.1, 0.3), 2),
+                "high_risk_calls": max(0, int(total_calls * 0.1)),
+                "critical_risk_calls": max(0, int(total_calls * 0.05)),
+                "avg_csat_prediction": round(random.uniform(3.8, 4.5), 1),
+                "auto_disposition_rate": round(random.uniform(0.7, 0.9), 2),
+                "auto_disposition_accuracy": round(random.uniform(0.8, 0.95), 2),
+                "sentiment_trend": sentiment_trend,
+                "quality_trend_data": quality_trend_data,
+                "volume_trend": volume_trend,
+            },
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+
+    except Exception as e:
+        import traceback
+        error_detail = f"{type(e).__name__}: {str(e)}"
+        tb = traceback.format_exc()
+        logger.error(f"Error getting call intelligence analytics: {error_detail}\n{tb}")
+        raise HTTPException(status_code=500, detail=error_detail)
+
+
 @router.get("/calls/{call_id}")
 async def get_call(
     call_id: str,
@@ -870,7 +1006,7 @@ async def stream_recording_content(
 @router.get("/deployment-check")
 async def get_deployment_check():
     """Check deployment version - returns timestamp of this code."""
-    return {"version": "2026-01-14-v7", "message": "Query params test"}
+    return {"version": "2026-01-14-v8", "message": "Route order fix - analytics before call_id"}
 
 
 @router.get("/auth-test")
@@ -1099,141 +1235,6 @@ async def get_debug_analytics(
     except Exception as e:
         logger.error(f"Error getting debug analytics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/calls/analytics")
-async def get_call_intelligence_analytics(
-    db: DbSession,
-    current_user: CurrentUser,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
-):
-    """Get Call Intelligence analytics with AI metrics."""
-    try:
-        # Default to last 30 days
-        if not date_from:
-            date_from = datetime.utcnow() - timedelta(days=30)
-        if not date_to:
-            date_to = datetime.utcnow()
-
-        logger.info(f"Getting call analytics from {date_from} to {date_to}")
-
-        # Get all calls in date range with error handling
-        try:
-            result = await db.execute(
-                select(CallLog).where(
-                    CallLog.call_date.isnot(None),
-                    CallLog.call_date >= date_from.date(),
-                    CallLog.call_date <= date_to.date()
-                )
-            )
-            calls = result.scalars().all()
-            logger.info(f"Found {len(calls)} calls in date range")
-        except Exception as db_error:
-            logger.error(f"Database query error: {db_error}", exc_info=True)
-            calls = []
-
-        if not calls:
-            # Return empty metrics if no calls
-            return {
-                "metrics": {
-                    "total_calls": 0,
-                    "calls_today": 0,
-                    "calls_this_week": 0,
-                    "positive_calls": 0,
-                    "neutral_calls": 0,
-                    "negative_calls": 0,
-                    "avg_sentiment_score": 0,
-                    "avg_quality_score": 0,
-                    "quality_trend": 0,
-                    "escalation_rate": 0,
-                    "high_risk_calls": 0,
-                    "critical_risk_calls": 0,
-                    "avg_csat_prediction": 0,
-                    "auto_disposition_rate": 0,
-                    "auto_disposition_accuracy": 0,
-                    "sentiment_trend": [],
-                    "quality_trend_data": [],
-                    "volume_trend": [],
-                },
-                "updated_at": datetime.utcnow().isoformat(),
-            }
-
-        # Calculate basic metrics
-        total_calls = len(calls)
-        calls_today = len([c for c in calls if c.call_date and c.call_date == date_to.date()])
-
-        # Since we don't have real AI analysis, simulate realistic metrics based on call patterns
-        positive_calls = max(1, int(total_calls * 0.6))  # 60% positive
-        neutral_calls = max(1, int(total_calls * 0.3))   # 30% neutral
-        negative_calls = total_calls - positive_calls - neutral_calls  # remaining negative
-
-        # Generate realistic sentiment and quality data
-        import random
-        random.seed(total_calls)  # Consistent results based on data
-
-        sentiment_trend = []
-        quality_trend_data = []
-        volume_trend = []
-
-        for i in range(7):  # Last 7 days
-            day = date_to - timedelta(days=6-i)
-            day_calls = [c for c in calls if c.call_date and c.call_date == day.date()]
-
-            volume_trend.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": len(day_calls)
-            })
-
-            # Realistic sentiment distribution for the day
-            day_positive = max(0, int(len(day_calls) * 0.6))
-            day_neutral = max(0, int(len(day_calls) * 0.3))
-            day_negative = max(0, len(day_calls) - day_positive - day_neutral)
-
-            sentiment_trend.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": len(day_calls),
-                "positive": day_positive,
-                "neutral": day_neutral,
-                "negative": day_negative
-            })
-
-            quality_trend_data.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": random.randint(75, 90)  # Quality score 75-90
-            })
-
-        return {
-            "metrics": {
-                "total_calls": total_calls,
-                "calls_today": calls_today,
-                "calls_this_week": len([c for c in calls if c.call_date and (date_to.date() - c.call_date).days <= 7]),
-                "positive_calls": positive_calls,
-                "neutral_calls": neutral_calls,
-                "negative_calls": negative_calls,
-                "avg_sentiment_score": round(random.uniform(65, 85), 1),
-                "avg_quality_score": random.randint(75, 90),
-                "quality_trend": round(random.uniform(-5, 10), 1),
-                "escalation_rate": round(random.uniform(0.1, 0.3), 2),
-                "high_risk_calls": max(0, int(total_calls * 0.1)),
-                "critical_risk_calls": max(0, int(total_calls * 0.05)),
-                "avg_csat_prediction": round(random.uniform(3.8, 4.5), 1),
-                "auto_disposition_rate": round(random.uniform(0.7, 0.9), 2),
-                "auto_disposition_accuracy": round(random.uniform(0.8, 0.95), 2),
-                "sentiment_trend": sentiment_trend,
-                "quality_trend_data": quality_trend_data,
-                "volume_trend": volume_trend,
-            },
-            "updated_at": datetime.utcnow().isoformat(),
-        }
-
-    except Exception as e:
-        import traceback
-        error_detail = f"{type(e).__name__}: {str(e)}"
-        tb = traceback.format_exc()
-        logger.error(f"Error getting call intelligence analytics: {error_detail}\n{tb}")
-        # Return the actual error in production for debugging
-        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @router.get("/agents/performance")
