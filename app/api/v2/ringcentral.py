@@ -1119,8 +1119,12 @@ async def get_call_intelligence_analytics(
         }
 
     except Exception as e:
-        logger.error(f"Error getting call intelligence analytics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_detail = f"{type(e).__name__}: {str(e)}"
+        tb = traceback.format_exc()
+        logger.error(f"Error getting call intelligence analytics: {error_detail}\n{tb}")
+        # Return the actual error in production for debugging
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @router.get("/agents/performance")

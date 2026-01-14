@@ -8,7 +8,7 @@ SECURITY FEATURES:
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -182,13 +182,22 @@ if __name__ == "__main__":
 async def global_exception_handler(request: Request, exc: Exception):
     """Handle all unhandled exceptions with proper CORS headers."""
     logger.error(f"Unhandled exception: {type(exc).__name__}: {str(exc)}")
-    if settings.DEBUG:
-        logger.error(traceback.format_exc())
+    # Always log traceback for debugging production issues
+    logger.error(traceback.format_exc())
 
     origin = request.headers.get("origin", "")
+
+    # Preserve HTTPException details instead of masking them
+    if isinstance(exc, HTTPException):
+        status_code = exc.status_code
+        detail = exc.detail
+    else:
+        status_code = 500
+        detail = "Internal server error"
+
     response = JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"},
+        status_code=status_code,
+        content={"detail": detail},
     )
 
     if origin in allowed_origins:
