@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class AIGatewayConfig(BaseModel):
     """Configuration for AI gateway connection."""
-    base_url: str = "http://192.168.7.71:11434"  # ML workstation Ollama server
+    base_url: str = "https://localhost-0.tailad2d5f.ts.net/ollama"  # ML workstation via Tailscale
     api_key: Optional[str] = None  # API key for authentication (not needed for Ollama)
     timeout: float = 120.0  # LLM inference can take time
     max_retries: int = 3
@@ -65,7 +65,7 @@ class AIGateway:
     def __init__(self, config: Optional[AIGatewayConfig] = None):
         self.config = config or AIGatewayConfig(
             api_key=getattr(settings, 'AI_SERVER_API_KEY', None),
-            base_url=getattr(settings, 'AI_SERVER_URL', 'http://localhost:8000')
+            base_url=getattr(settings, 'OLLAMA_BASE_URL', 'https://localhost-0.tailad2d5f.ts.net/ollama')
         )
         self._client: Optional[httpx.AsyncClient] = None
 
