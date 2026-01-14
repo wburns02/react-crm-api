@@ -870,7 +870,7 @@ async def stream_recording_content(
 @router.get("/deployment-check")
 async def get_deployment_check():
     """Check deployment version - returns timestamp of this code."""
-    return {"version": "2026-01-14-v6", "message": "Full analytics test"}
+    return {"version": "2026-01-14-v7", "message": "Query params test"}
 
 
 @router.get("/auth-test")
@@ -885,12 +885,16 @@ async def get_auth_test(
 async def get_db_auth_test(
     db: DbSession,
     current_user: CurrentUser,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
 ):
-    """Test the full analytics endpoint logic."""
+    """Test the full analytics endpoint logic with query params."""
     try:
         # Same date filtering logic as analytics endpoint
-        date_from = datetime.utcnow() - timedelta(days=30)
-        date_to = datetime.utcnow()
+        if not date_from:
+            date_from = datetime.utcnow() - timedelta(days=30)
+        if not date_to:
+            date_to = datetime.utcnow()
 
         # Same query as analytics endpoint
         result = await db.execute(
