@@ -870,7 +870,7 @@ async def stream_recording_content(
 @router.get("/deployment-check")
 async def get_deployment_check():
     """Check deployment version - returns timestamp of this code."""
-    return {"version": "2026-01-14-v3", "message": "Auth test endpoint added"}
+    return {"version": "2026-01-14-v4", "message": "DB+Auth test endpoint added"}
 
 
 @router.get("/auth-test")
@@ -879,6 +879,22 @@ async def get_auth_test(
 ):
     """Test authentication - returns user info if auth works."""
     return {"authenticated": True, "user_id": current_user.id, "email": current_user.email}
+
+
+@router.get("/db-auth-test")
+async def get_db_auth_test(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Test both DbSession and CurrentUser together."""
+    try:
+        # Simple query to test db session
+        result = await db.execute(select(CallLog).limit(1))
+        call_count = len(result.scalars().all())
+        return {"db_works": True, "user_id": current_user.id, "call_sample_count": call_count}
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 
 @router.get("/debug-analytics")
