@@ -1006,14 +1006,18 @@ async def get_call_intelligence_analytics(
         if not date_to:
             date_to = datetime.utcnow()
 
-        # Get all calls in date range
-        result = await db.execute(
-            select(CallLog).where(
-                CallLog.call_date >= date_from.date(),
-                CallLog.call_date <= date_to.date()
+        # Get all calls in date range with error handling
+        try:
+            result = await db.execute(
+                select(CallLog).where(
+                    CallLog.call_date >= date_from.date(),
+                    CallLog.call_date <= date_to.date()
+                )
             )
-        )
-        calls = result.scalars().all()
+            calls = result.scalars().all()
+        except Exception as db_error:
+            logger.error(f"Database query error: {db_error}")
+            calls = []
 
         if not calls:
             # Return empty metrics if no calls
