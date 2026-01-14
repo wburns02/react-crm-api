@@ -193,6 +193,47 @@ async def get_debug_config():
         return {"error": str(e), "type": type(e).__name__}
 
 
+@router.post("/create-test-data")
+async def create_test_data(db: DbSession):
+    """Create test call data for Call Intelligence testing."""
+    try:
+        # Create some test call data
+        from datetime import date, time
+        import random
+
+        test_calls = []
+        for i in range(10):
+            call_date = date.today() - timedelta(days=random.randint(0, 7))
+            call_time = time(hour=random.randint(8, 17), minute=random.randint(0, 59))
+
+            call_log = CallLog(
+                ringcentral_call_id=f"test-call-{i}",
+                caller_number=f"+1214555010{i}",
+                called_number="+12145550100",
+                direction=random.choice(["inbound", "outbound"]),
+                call_disposition=random.choice(["completed", "missed", "busy"]),
+                call_date=call_date,
+                call_time=call_time,
+                duration_seconds=random.randint(30, 600),
+                assigned_to=f"test-agent-{random.randint(1, 3)}",
+                recording_url=f"https://example.com/recording-{i}.mp3" if random.random() > 0.3 else None,
+            )
+            test_calls.append(call_log)
+            db.add(call_log)
+
+        await db.commit()
+
+        return {
+            "success": True,
+            "created_calls": len(test_calls),
+            "message": "Test call data created successfully"
+        }
+
+    except Exception as e:
+        logger.error(f"Error creating test data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/debug-sync")
 async def debug_sync_calls(
     db: DbSession,
