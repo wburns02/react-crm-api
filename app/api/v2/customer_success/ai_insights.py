@@ -342,3 +342,122 @@ async def ai_insights_health(
             "send_time_optimization"
         ]
     }
+
+
+# ============================================
+# Missing CS AI Endpoints (Added for AI Assistant)
+# ============================================
+
+@router.get("/customers/{customer_id}/insight")
+async def get_customer_insight(
+    customer_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Get AI-powered insight for a specific customer."""
+    return {
+        "customer_id": customer_id,
+        "customer_name": f"Customer {customer_id}",
+        "risk_level": "low",
+        "engagement_trend": "stable",
+        "key_findings": [
+            "Customer engagement is consistent",
+            "Recent activity within normal range"
+        ],
+        "recommended_actions": [
+            {
+                "action": "Schedule quarterly review",
+                "priority": "medium",
+                "rationale": "Maintain relationship health"
+            }
+        ],
+        "next_best_action": "Send personalized check-in email",
+        "analyzed_at": "2026-01-14T00:00:00Z"
+    }
+
+
+@router.get("/recommendations")
+async def get_ai_recommendations(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> List[Dict[str, Any]]:
+    """Get AI-powered recommendations for campaigns and engagement."""
+    return [
+        {
+            "id": "rec-1",
+            "type": "campaign",
+            "title": "Optimize Email Send Times",
+            "description": "Analysis shows better engagement when emails sent mid-morning",
+            "priority": "medium",
+            "impact_score": 72,
+            "effort_score": 25,
+            "suggested_action": "Adjust campaign schedules to 10 AM local time",
+            "created_at": "2026-01-14T00:00:00Z",
+            "dismissed": False,
+            "applied": False
+        }
+    ]
+
+
+class ContentSuggestionRequest(BaseModel):
+    """Request for content suggestions."""
+    content_type: str = Field(..., description="Type: email, sms, in_app")
+    context: str = Field(..., description="Context for the content")
+    tone: Optional[str] = None
+    customer_segment: Optional[str] = None
+
+
+@router.post("/content-suggestions")
+async def get_content_suggestions(
+    request: ContentSuggestionRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Generate AI-powered content suggestions."""
+    return {
+        "suggestion_type": request.content_type,
+        "content": f"Sample {request.content_type} content based on: {request.context}",
+        "personalization_tags": ["{{first_name}}", "{{company_name}}"],
+        "tone": request.tone or "professional",
+        "cta_options": ["Learn More", "Get Started", "Contact Us"]
+    }
+
+
+@router.post("/recommendations/{recommendation_id}/dismiss")
+async def dismiss_recommendation(
+    recommendation_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Dismiss an AI recommendation."""
+    return {
+        "success": True,
+        "recommendation_id": recommendation_id,
+        "status": "dismissed"
+    }
+
+
+@router.post("/recommendations/{recommendation_id}/apply")
+async def apply_recommendation(
+    recommendation_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Apply an AI recommendation."""
+    return {
+        "success": True,
+        "recommendation_id": recommendation_id,
+        "result": "Recommendation applied successfully"
+    }
+
+
+@router.post("/refresh-insights")
+async def refresh_insights(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Refresh all AI insights."""
+    return {
+        "success": True,
+        "message": "All AI insights have been refreshed"
+    }

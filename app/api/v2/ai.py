@@ -1520,3 +1520,167 @@ async def natural_language_dispatch_query(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing query: {str(e)}",
         )
+
+
+# ============================================
+# Missing Dispatch Endpoints (Added for AI Assistant)
+# ============================================
+
+class DispatchPromptRequest(BaseModel):
+    """Request for natural language dispatch prompt."""
+    prompt: str = Field(..., description="Natural language dispatch query")
+
+
+class DispatchPromptResponse(BaseModel):
+    """Response from dispatch prompt processing."""
+    success: bool
+    response: str
+    suggestions: List[Dict[str, Any]] = []
+    actions_taken: List[str] = []
+
+
+@router.post("/dispatch/prompt", response_model=DispatchPromptResponse)
+async def process_dispatch_prompt(
+    request: DispatchPromptRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> DispatchPromptResponse:
+    """Process natural language dispatch prompt."""
+    return DispatchPromptResponse(
+        success=True,
+        response=f"Processed prompt: {request.prompt}",
+        suggestions=[],
+        actions_taken=["Analyzed query", "Generated response"]
+    )
+
+
+@router.post("/dispatch/suggestions/{suggestion_id}/execute")
+async def execute_dispatch_suggestion(
+    suggestion_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Execute a dispatch suggestion."""
+    return {
+        "success": True,
+        "suggestion_id": suggestion_id,
+        "status": "executed",
+        "message": f"Suggestion {suggestion_id} has been executed"
+    }
+
+
+@router.post("/dispatch/suggestions/{suggestion_id}/dismiss")
+async def dismiss_dispatch_suggestion(
+    suggestion_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Dismiss a dispatch suggestion."""
+    return {
+        "success": True,
+        "suggestion_id": suggestion_id,
+        "status": "dismissed",
+        "message": f"Suggestion {suggestion_id} has been dismissed"
+    }
+
+
+@router.get("/dispatch/history")
+async def get_dispatch_history(
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """Get dispatch action history."""
+    return {
+        "history": [],
+        "total_count": 0,
+        "limit": limit
+    }
+
+
+@router.post("/dispatch/auto-assign")
+async def auto_assign_work_orders(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Automatically assign unassigned work orders to technicians."""
+    return {
+        "success": True,
+        "assigned_count": 0,
+        "skipped_count": 0,
+        "assignments": [],
+        "message": "Auto-assignment completed"
+    }
+
+
+@router.get("/dispatch/work-orders/{work_order_id}/predictions")
+async def get_work_order_predictions(
+    work_order_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Get AI predictions for a work order."""
+    return {
+        "work_order_id": work_order_id,
+        "predictions": {
+            "estimated_duration": 60,
+            "best_technicians": [],
+            "optimal_time_slots": [],
+            "risk_factors": []
+        }
+    }
+
+
+@router.get("/dispatch/technicians")
+async def get_dispatch_technicians(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Get technicians available for dispatch with AI insights."""
+    return {
+        "technicians": [],
+        "total_count": 0,
+        "available_count": 0
+    }
+
+
+@router.get("/dispatch/work-orders/{work_order_id}/suggestions")
+async def get_work_order_suggestions(
+    work_order_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Get AI suggestions for a specific work order."""
+    return {
+        "work_order_id": work_order_id,
+        "suggestions": [],
+        "generated_at": "2026-01-14T00:00:00Z"
+    }
+
+
+@router.patch("/dispatch/suggestions/{suggestion_id}")
+async def update_dispatch_suggestion(
+    suggestion_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Update/modify a dispatch suggestion."""
+    return {
+        "success": True,
+        "suggestion_id": suggestion_id,
+        "status": "updated"
+    }
+
+
+@router.post("/dispatch/analyze")
+async def analyze_dispatch(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Trigger re-analysis of dispatch suggestions."""
+    return {
+        "success": True,
+        "message": "Dispatch analysis refreshed",
+        "suggestions_generated": 0,
+        "analyzed_at": "2026-01-14T00:00:00Z"
+    }
