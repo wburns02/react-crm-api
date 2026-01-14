@@ -881,9 +881,10 @@ async def get_debug_analytics(
         if not date_to:
             date_to = datetime.utcnow()
 
-        # Get all calls in date range
+        # Get all calls in date range (filter out null call_date)
         result = await db.execute(
             select(CallLog).where(
+                CallLog.call_date.isnot(None),
                 CallLog.call_date >= date_from.date(),
                 CallLog.call_date <= date_to.date()
             )
