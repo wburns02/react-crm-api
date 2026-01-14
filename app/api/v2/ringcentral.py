@@ -870,7 +870,15 @@ async def stream_recording_content(
 @router.get("/deployment-check")
 async def get_deployment_check():
     """Check deployment version - returns timestamp of this code."""
-    return {"version": "2026-01-14-v2", "message": "HTTPException detail fix deployed"}
+    return {"version": "2026-01-14-v3", "message": "Auth test endpoint added"}
+
+
+@router.get("/auth-test")
+async def get_auth_test(
+    current_user: CurrentUser,
+):
+    """Test authentication - returns user info if auth works."""
+    return {"authenticated": True, "user_id": current_user.id, "email": current_user.email}
 
 
 @router.get("/debug-analytics")
