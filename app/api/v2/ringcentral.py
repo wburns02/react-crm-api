@@ -870,7 +870,7 @@ async def stream_recording_content(
 @router.get("/deployment-check")
 async def get_deployment_check():
     """Check deployment version - returns timestamp of this code."""
-    return {"version": "2026-01-14-v4", "message": "DB+Auth test endpoint added"}
+    return {"version": "2026-01-14-v5", "message": "Date filtering test added"}
 
 
 @router.get("/auth-test")
@@ -886,12 +886,32 @@ async def get_db_auth_test(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Test both DbSession and CurrentUser together."""
+    """Test both DbSession and CurrentUser together with date filtering."""
     try:
-        # Simple query to test db session
-        result = await db.execute(select(CallLog).limit(1))
-        call_count = len(result.scalars().all())
-        return {"db_works": True, "user_id": current_user.id, "call_sample_count": call_count}
+        # Same date filtering logic as analytics endpoint
+        date_from = datetime.utcnow() - timedelta(days=30)
+        date_to = datetime.utcnow()
+
+        # Same query as analytics endpoint
+        result = await db.execute(
+            select(CallLog).where(
+                CallLog.call_date.isnot(None),
+                CallLog.call_date >= date_from.date(),
+                CallLog.call_date <= date_to.date()
+            )
+        )
+        calls = result.scalars().all()
+
+        # Same basic metrics calculation
+        total_calls = len(calls)
+        calls_today = len([c for c in calls if c.call_date and c.call_date == date_to.date()])
+
+        return {
+            "db_works": True,
+            "user_id": current_user.id,
+            "total_calls": total_calls,
+            "calls_today": calls_today
+        }
     except Exception as e:
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}
