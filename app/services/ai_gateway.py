@@ -30,9 +30,9 @@ class AIGatewayConfig(BaseModel):
     api_key: Optional[str] = None  # API key for authentication (not needed for Ollama)
     timeout: float = 120.0  # LLM inference can take time
     max_retries: int = 3
-    # Ollama model names
-    default_model: str = "llama3.1:8b"  # Fast model for quick tasks
-    heavy_model: str = "llama3.1:70b"   # Large model for complex analysis
+    # Ollama model names - use models that are actually installed on R730
+    default_model: str = "llama3.2:3b"  # Fast model for quick tasks (installed on R730)
+    heavy_model: str = "qwen2.5:7b"   # Medium model for complex analysis (installed on R730)
     embed_model: str = "nomic-embed-text"  # Embedding model
 
 
@@ -138,23 +138,30 @@ class AIGateway:
 
             # Select model based on task complexity
             model = self.config.heavy_model if use_heavy_model else self.config.default_model
+            logger.info(f"Attempting chat with model={model}, base_url={self.config.base_url}")
 
             payload = {
                 "model": model,  # Ollama model name
                 "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
                 "stream": False,
             }
 
-            response = await client.post("/v1/chat/completions", json=payload)
-            response.raise_for_status()
+            # Try OpenAI-compatible endpoint first
+            try:
+                response = await client.post("/v1/chat/completions", json=payload)
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                logger.warning(f"OpenAI-compat endpoint failed ({e}), trying native Ollama API...")
+                # Fall back to native Ollama /api/chat endpoint
+                response = await client.post("/api/chat", json=payload)
+                response.raise_for_status()
 
             data = response.json()
             logger.info(f"LLM response keys: {data.keys()}")
-            
+
             # Handle different response formats
             if "choices" in data and len(data["choices"]) > 0:
+                # OpenAI-compatible format
                 choice = data["choices"][0]
                 if "message" in choice:
                     content = choice["message"].get("content", "")
@@ -162,6 +169,9 @@ class AIGateway:
                     content = choice["text"]
                 else:
                     content = str(choice)
+            elif "message" in data:
+                # Native Ollama format: {"message": {"role": "assistant", "content": "..."}}
+                content = data["message"].get("content", "")
             elif "response" in data:
                 content = data["response"]
             elif "content" in data:
