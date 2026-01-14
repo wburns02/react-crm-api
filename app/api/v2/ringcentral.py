@@ -867,6 +867,12 @@ async def stream_recording_content(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/deployment-check")
+async def get_deployment_check():
+    """Check deployment version - returns timestamp of this code."""
+    return {"version": "2026-01-14-v2", "message": "HTTPException detail fix deployed"}
+
+
 @router.get("/debug-analytics")
 async def get_debug_analytics(
     db: DbSession,
