@@ -870,7 +870,7 @@ async def stream_recording_content(
 @router.get("/deployment-check")
 async def get_deployment_check():
     """Check deployment version - returns timestamp of this code."""
-    return {"version": "2026-01-14-v5", "message": "Date filtering test added"}
+    return {"version": "2026-01-14-v6", "message": "Full analytics test"}
 
 
 @router.get("/auth-test")
@@ -886,7 +886,7 @@ async def get_db_auth_test(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Test both DbSession and CurrentUser together with date filtering."""
+    """Test the full analytics endpoint logic."""
     try:
         # Same date filtering logic as analytics endpoint
         date_from = datetime.utcnow() - timedelta(days=30)
@@ -902,15 +902,70 @@ async def get_db_auth_test(
         )
         calls = result.scalars().all()
 
-        # Same basic metrics calculation
+        # Same metrics calculation as analytics endpoint
         total_calls = len(calls)
         calls_today = len([c for c in calls if c.call_date and c.call_date == date_to.date()])
 
+        positive_calls = max(1, int(total_calls * 0.6))
+        neutral_calls = max(1, int(total_calls * 0.3))
+        negative_calls = total_calls - positive_calls - neutral_calls
+
+        import random
+        random.seed(total_calls)
+
+        sentiment_trend = []
+        quality_trend_data = []
+        volume_trend = []
+
+        for i in range(7):
+            day = date_to - timedelta(days=6-i)
+            day_calls = [c for c in calls if c.call_date and c.call_date == day.date()]
+
+            volume_trend.append({
+                "date": day.strftime("%Y-%m-%d"),
+                "value": len(day_calls)
+            })
+
+            day_positive = max(0, int(len(day_calls) * 0.6))
+            day_neutral = max(0, int(len(day_calls) * 0.3))
+            day_negative = max(0, len(day_calls) - day_positive - day_neutral)
+
+            sentiment_trend.append({
+                "date": day.strftime("%Y-%m-%d"),
+                "value": len(day_calls),
+                "positive": day_positive,
+                "neutral": day_neutral,
+                "negative": day_negative
+            })
+
+            quality_trend_data.append({
+                "date": day.strftime("%Y-%m-%d"),
+                "value": random.randint(75, 90)
+            })
+
         return {
-            "db_works": True,
-            "user_id": current_user.id,
-            "total_calls": total_calls,
-            "calls_today": calls_today
+            "metrics": {
+                "total_calls": total_calls,
+                "calls_today": calls_today,
+                "calls_this_week": len([c for c in calls if c.call_date and (date_to.date() - c.call_date).days <= 7]),
+                "positive_calls": positive_calls,
+                "neutral_calls": neutral_calls,
+                "negative_calls": negative_calls,
+                "avg_sentiment_score": round(random.uniform(65, 85), 1),
+                "avg_quality_score": random.randint(75, 90),
+                "quality_trend": round(random.uniform(-5, 10), 1),
+                "escalation_rate": round(random.uniform(0.1, 0.3), 2),
+                "high_risk_calls": max(0, int(total_calls * 0.1)),
+                "critical_risk_calls": max(0, int(total_calls * 0.05)),
+                "avg_csat_prediction": round(random.uniform(3.8, 4.5), 1),
+                "auto_disposition_rate": round(random.uniform(0.7, 0.9), 2),
+                "auto_disposition_accuracy": round(random.uniform(0.8, 0.95), 2),
+                "sentiment_trend": sentiment_trend,
+                "quality_trend_data": quality_trend_data,
+                "volume_trend": volume_trend,
+            },
+            "updated_at": datetime.utcnow().isoformat(),
+            "test_user_id": current_user.id
         }
     except Exception as e:
         import traceback
