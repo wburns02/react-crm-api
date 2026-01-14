@@ -1,4 +1,4 @@
-# FastAPI and server (updated for CS platform)
+# FastAPI and server (updated for CS platform - v2.1)
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 
