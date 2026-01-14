@@ -193,6 +193,87 @@ async def get_debug_config():
         return {"error": str(e), "type": type(e).__name__}
 
 
+@router.post("/debug-sync")
+async def debug_sync_calls(
+    db: DbSession,
+    hours_back: int = Query(24, ge=1, le=168, description="Hours of history to sync"),
+):
+    """DEBUG: Sync calls without authentication (temporary for testing)."""
+    if not ringcentral_service.is_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RingCentral not configured",
+        )
+
+    date_from = datetime.utcnow() - timedelta(hours=hours_back)
+
+    rc_logs = await ringcentral_service.get_call_log(
+        date_from=date_from,
+        per_page=250,
+    )
+
+    if rc_logs.get("error"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=rc_logs["error"],
+        )
+
+    records = rc_logs.get("records", [])
+    synced = 0
+    skipped = 0
+
+    for record in records:
+        rc_call_id = record.get("id")
+
+        # Check if already exists
+        existing = await db.execute(
+            select(CallLog).where(CallLog.ringcentral_call_id == rc_call_id)
+        )
+        if existing.scalar_one_or_none():
+            skipped += 1
+            continue
+
+        # Create new call log
+        from_info = record.get("from", {})
+        to_info = record.get("to", {})
+
+        # Parse start time
+        start_dt = datetime.utcnow()
+        if record.get("startTime"):
+            start_dt = datetime.fromisoformat(record["startTime"].replace("Z", "+00:00"))
+
+        call_log = CallLog(
+            ringcentral_call_id=rc_call_id,
+            ringcentral_session_id=record.get("sessionId"),
+            caller_number=from_info.get("phoneNumber", ""),
+            called_number=to_info.get("phoneNumber", ""),
+            direction=record.get("direction", "").lower(),
+            call_disposition=record.get("result", "unknown").lower(),
+            call_type=record.get("type", "voice").lower(),
+            call_date=start_dt.date(),
+            call_time=start_dt.time(),
+            duration_seconds=record.get("duration"),
+            assigned_to="debug-sync",  # Placeholder user
+        )
+
+        # Check for recording
+        recording = record.get("recording")
+        if recording:
+            call_log.recording_url = recording.get("contentUri")
+
+        db.add(call_log)
+        synced += 1
+
+    await db.commit()
+
+    return {
+        "synced": synced,
+        "skipped": skipped,
+        "total_records": len(records),
+        "message": f"Synced {synced} calls from RingCentral"
+    }
+
+
 @router.get("/debug-forwarding")
 async def debug_forwarding_numbers(current_user: CurrentUser):
     """DEBUG: Show raw forwarding numbers for the authenticated extension."""
