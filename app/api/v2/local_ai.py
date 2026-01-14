@@ -448,3 +448,72 @@ async def heavy_analysis(request: HeavyAnalysisRequest):
     except Exception as e:
         logger.error(f"Heavy analysis error: {e}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+# ===== RAG / KNOWLEDGE BASE ENDPOINTS =====
+
+class RAGQueryRequest(BaseModel):
+    """Request model for RAG knowledge query."""
+    question: str
+    context: Optional[str] = None
+    collection: str = "septic_knowledge"
+
+
+class ChatRequest(BaseModel):
+    """Request model for AI chat."""
+    message: str
+    context: Optional[str] = None
+
+
+@router.post("/rag/ask")
+async def rag_query(request: RAGQueryRequest):
+    """
+    Query the RAG knowledge base for answers.
+
+    Uses the R730's Qdrant vector database with septic domain knowledge.
+    Returns answer with sources and confidence score.
+    """
+    if not settings.USE_LOCAL_AI:
+        raise HTTPException(
+            status_code=400,
+            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
+        )
+
+    try:
+        result = await local_ai_service.rag_query(
+            question=request.question,
+            context=request.context,
+            collection=request.collection
+        )
+        return result
+    except LocalAIError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"RAG query error: {e}")
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+
+@router.post("/chat")
+async def ai_chat(request: ChatRequest):
+    """
+    General AI chat endpoint using local Ollama.
+
+    For simple conversational queries that don't need RAG.
+    """
+    if not settings.USE_LOCAL_AI:
+        raise HTTPException(
+            status_code=400,
+            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
+        )
+
+    try:
+        result = await local_ai_service.chat(
+            message=request.message,
+            context=request.context
+        )
+        return result
+    except LocalAIError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")

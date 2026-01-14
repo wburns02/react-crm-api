@@ -710,6 +710,115 @@ Respond ONLY with valid JSON."""
             logger.error(f"Heavy analysis error: {e}")
             raise LocalAIError(f"Heavy analysis failed: {str(e)}")
 
+    async def rag_query(
+        self,
+        question: str,
+        context: Optional[str] = None,
+        collection: str = "septic_knowledge"
+    ) -> Dict[str, Any]:
+        """
+        Query the RAG knowledge base on R730.
+
+        Args:
+            question: User's question
+            context: Optional context for the query
+            collection: Vector collection to search (default: septic_knowledge)
+
+        Returns:
+            Dict with answer, sources, and confidence
+        """
+        start_time = time.time()
+
+        # Build the query payload
+        query_data = {
+            "question": question,
+            "collection": collection
+        }
+        if context:
+            query_data["context"] = context
+
+        try:
+            # R730 RAG endpoint
+            rag_url = "https://localhost-0.tailad2d5f.ts.net/crm/api/rag/knowledge/query"
+
+            async with aiohttp.ClientSession(timeout=self.timeout) as session:
+                async with session.post(rag_url, json=query_data) as resp:
+                    if resp.status != 200:
+                        # Fallback to basic Ollama chat if RAG not available
+                        logger.warning(f"RAG query failed ({resp.status}), falling back to basic chat")
+                        return await self.chat(question, context)
+
+                    result = await resp.json()
+                    processing_time = time.time() - start_time
+
+                    return {
+                        "answer": result.get("answer", result.get("response", "")),
+                        "sources": result.get("sources", []),
+                        "confidence": result.get("confidence", 0.0),
+                        "processing_time_seconds": processing_time
+                    }
+
+        except aiohttp.ClientError as e:
+            logger.warning(f"RAG connection error: {e}, falling back to basic chat")
+            return await self.chat(question, context)
+        except Exception as e:
+            logger.error(f"RAG query error: {e}")
+            raise LocalAIError(f"RAG query failed: {str(e)}")
+
+    async def chat(
+        self,
+        message: str,
+        context: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Simple chat using local Ollama.
+
+        Args:
+            message: User's message
+            context: Optional context
+
+        Returns:
+            Dict with response
+        """
+        start_time = time.time()
+
+        prompt = message
+        if context:
+            prompt = f"Context: {context}\n\nUser: {message}\n\nAssistant:"
+
+        try:
+            async with aiohttp.ClientSession(timeout=self.timeout) as session:
+                payload = {
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False
+                }
+
+                async with session.post(
+                    f"{self.ollama_base_url}/api/generate",
+                    json=payload
+                ) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        raise LocalAIError(f"Ollama chat failed: {resp.status} - {error_text}")
+
+                    result = await resp.json()
+                    processing_time = time.time() - start_time
+
+                    return {
+                        "response": result.get("response", ""),
+                        "content": result.get("response", ""),  # Alias
+                        "model": self.model,
+                        "processing_time_seconds": processing_time
+                    }
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Chat connection error: {e}")
+            raise LocalAIError(f"Failed to connect to Ollama: {str(e)}")
+        except Exception as e:
+            logger.error(f"Chat error: {e}")
+            raise LocalAIError(f"Chat failed: {str(e)}")
+
 
 # Create singleton instance
 local_ai_service = LocalAIService()
