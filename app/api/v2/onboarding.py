@@ -291,6 +291,177 @@ async def complete_onboarding(
     }
 
 
+@router.get("/recommendations")
+async def get_onboarding_recommendations(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> list[dict]:
+    """Get AI-powered onboarding recommendations based on user progress."""
+    return [
+        {
+            "id": "rec-1",
+            "title": "Import Your Customer Data",
+            "description": "You haven't imported any existing customer data yet. Importing customers will help you get started faster.",
+            "reason": "Based on your account age and current customer count",
+            "priority": "high",
+            "estimated_impact": "Save 2-3 hours of manual data entry",
+            "next_steps": [
+                "Export customers from your previous system as CSV",
+                "Go to Settings > Import Data",
+                "Map your columns to CRM fields",
+                "Review and confirm the import",
+            ],
+        },
+        {
+            "id": "rec-2",
+            "title": "Set Up Automated Reminders",
+            "description": "Automated appointment reminders can reduce no-shows by up to 40%.",
+            "reason": "You have scheduled work orders but no reminder templates",
+            "priority": "medium",
+            "estimated_impact": "Reduce no-shows and improve customer satisfaction",
+            "next_steps": [
+                "Navigate to Settings > Notifications",
+                "Enable appointment reminders",
+                "Customize the reminder timing (e.g., 24 hours before)",
+                "Review the default message template",
+            ],
+        },
+        {
+            "id": "rec-3",
+            "title": "Complete Your Company Profile",
+            "description": "A complete company profile improves customer communications and invoice professionalism.",
+            "reason": "Missing: logo, business hours, service areas",
+            "priority": "low",
+            "estimated_impact": "Professional appearance on all customer-facing documents",
+            "next_steps": [
+                "Go to Settings > Company Profile",
+                "Upload your company logo",
+                "Set your business hours",
+                "Define your service areas",
+            ],
+        },
+    ]
+
+
+@router.get("/contextual-help")
+async def get_contextual_help(
+    db: DbSession,
+    current_user: CurrentUser,
+    page: str = Query(default="default"),
+    action: Optional[str] = None,
+) -> list[dict]:
+    """Get context-aware help suggestions based on current page/action."""
+    help_by_page = {
+        "workorders": [
+            {
+                "id": "help-1",
+                "title": "Quick Tip: Work Order Status",
+                "content": "Drag work orders between columns to update their status quickly. The system will automatically notify relevant parties.",
+                "type": "tip",
+                "relevance_score": 0.95,
+                "related_feature": "work-order-management",
+            },
+            {
+                "id": "help-2",
+                "title": "New Feature: AI Scheduling",
+                "content": "Try our AI-powered scheduling assistant to automatically find the best time slots based on technician availability and location.",
+                "type": "feature",
+                "relevance_score": 0.88,
+                "related_feature": "ai-scheduling",
+                "action": {"label": "Try It", "url": "/schedule?ai=true"},
+            },
+        ],
+        "customers": [
+            {
+                "id": "help-3",
+                "title": "Customer Health Scores",
+                "content": "The health score indicates how likely a customer is to remain active. Scores below 60 may need attention.",
+                "type": "tutorial",
+                "relevance_score": 0.92,
+                "related_feature": "customer-health",
+            },
+        ],
+        "schedule": [
+            {
+                "id": "help-4",
+                "title": "Drag & Drop Scheduling",
+                "content": "Simply drag unassigned work orders from the sidebar onto a technician's timeline to schedule them.",
+                "type": "tip",
+                "relevance_score": 0.97,
+                "related_feature": "scheduling",
+            },
+        ],
+        "default": [
+            {
+                "id": "help-default",
+                "title": "Need Help?",
+                "content": "Click the help icon in the bottom right to access tutorials, documentation, and support.",
+                "type": "tip",
+                "relevance_score": 0.7,
+                "related_feature": "help-center",
+            },
+        ],
+    }
+    return help_by_page.get(page, help_by_page["default"])
+
+
+@router.get("/tour/{feature_id}")
+async def get_feature_tour(
+    db: DbSession,
+    current_user: CurrentUser,
+    feature_id: str,
+) -> dict:
+    """Get guided tour steps for a specific feature."""
+    tours = {
+        "work-orders": {
+            "steps": [
+                {
+                    "id": "step-1",
+                    "target": "[data-tour='create-button']",
+                    "title": "Create Work Orders",
+                    "content": "Click here to create a new work order. You can also use keyboard shortcut Ctrl+N.",
+                    "position": "bottom",
+                },
+                {
+                    "id": "step-2",
+                    "target": "[data-tour='filters']",
+                    "title": "Filter & Search",
+                    "content": "Use filters to find specific work orders by status, date, technician, or customer.",
+                    "position": "bottom",
+                },
+                {
+                    "id": "step-3",
+                    "target": "[data-tour='kanban']",
+                    "title": "Kanban View",
+                    "content": "Drag work orders between columns to update their status. Changes are saved automatically.",
+                    "position": "left",
+                },
+            ],
+            "estimated_duration": 3,
+        },
+        "schedule": {
+            "steps": [
+                {
+                    "id": "step-1",
+                    "target": "[data-tour='unscheduled']",
+                    "title": "Unscheduled Work Orders",
+                    "content": "Work orders waiting to be scheduled appear here. Drag them to the timeline to schedule.",
+                    "position": "right",
+                },
+                {
+                    "id": "step-2",
+                    "target": "[data-tour='timeline']",
+                    "title": "Technician Timeline",
+                    "content": "Each row shows a technician's schedule. Hover to see details, drag to reschedule.",
+                    "position": "bottom",
+                },
+            ],
+            "estimated_duration": 2,
+        },
+    }
+    return tours.get(feature_id, {"steps": [], "estimated_duration": 0})
+
+
 # =============================================================================
 # Import Endpoints
 # =============================================================================
