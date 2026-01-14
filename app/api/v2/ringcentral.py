@@ -919,7 +919,7 @@ async def get_debug_analytics(
 
         # Calculate basic metrics
         total_calls = len(calls)
-        calls_today = len([c for c in calls if c.call_date == date_to.date()])
+        calls_today = len([c for c in calls if c.call_date and c.call_date == date_to.date()])
 
         # Since we don't have real AI analysis, simulate realistic metrics based on call patterns
         positive_calls = max(1, int(total_calls * 0.6))  # 60% positive
@@ -936,7 +936,7 @@ async def get_debug_analytics(
 
         for i in range(7):  # Last 7 days
             day = date_to - timedelta(days=6-i)
-            day_calls = [c for c in calls if c.call_date == day.date()]
+            day_calls = [c for c in calls if c.call_date and c.call_date == day.date()]
 
             volume_trend.append({
                 "date": day.strftime("%Y-%m-%d"),
@@ -965,7 +965,7 @@ async def get_debug_analytics(
             "metrics": {
                 "total_calls": total_calls,
                 "calls_today": calls_today,
-                "calls_this_week": len([c for c in calls if (date_to.date() - c.call_date).days <= 7]),
+                "calls_this_week": len([c for c in calls if c.call_date and (date_to.date() - c.call_date).days <= 7]),
                 "positive_calls": positive_calls,
                 "neutral_calls": neutral_calls,
                 "negative_calls": negative_calls,
@@ -1006,17 +1006,21 @@ async def get_call_intelligence_analytics(
         if not date_to:
             date_to = datetime.utcnow()
 
+        logger.info(f"Getting call analytics from {date_from} to {date_to}")
+
         # Get all calls in date range with error handling
         try:
             result = await db.execute(
                 select(CallLog).where(
+                    CallLog.call_date.isnot(None),
                     CallLog.call_date >= date_from.date(),
                     CallLog.call_date <= date_to.date()
                 )
             )
             calls = result.scalars().all()
+            logger.info(f"Found {len(calls)} calls in date range")
         except Exception as db_error:
-            logger.error(f"Database query error: {db_error}")
+            logger.error(f"Database query error: {db_error}", exc_info=True)
             calls = []
 
         if not calls:
@@ -1047,7 +1051,7 @@ async def get_call_intelligence_analytics(
 
         # Calculate basic metrics
         total_calls = len(calls)
-        calls_today = len([c for c in calls if c.call_date == date_to.date()])
+        calls_today = len([c for c in calls if c.call_date and c.call_date == date_to.date()])
 
         # Since we don't have real AI analysis, simulate realistic metrics based on call patterns
         positive_calls = max(1, int(total_calls * 0.6))  # 60% positive
@@ -1064,7 +1068,7 @@ async def get_call_intelligence_analytics(
 
         for i in range(7):  # Last 7 days
             day = date_to - timedelta(days=6-i)
-            day_calls = [c for c in calls if c.call_date == day.date()]
+            day_calls = [c for c in calls if c.call_date and c.call_date == day.date()]
 
             volume_trend.append({
                 "date": day.strftime("%Y-%m-%d"),
@@ -1093,7 +1097,7 @@ async def get_call_intelligence_analytics(
             "metrics": {
                 "total_calls": total_calls,
                 "calls_today": calls_today,
-                "calls_this_week": len([c for c in calls if (date_to.date() - c.call_date).days <= 7]),
+                "calls_this_week": len([c for c in calls if c.call_date and (date_to.date() - c.call_date).days <= 7]),
                 "positive_calls": positive_calls,
                 "neutral_calls": neutral_calls,
                 "negative_calls": negative_calls,
@@ -1190,56 +1194,42 @@ async def get_coaching_insights(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get coaching insights and recommendations."""
+    """Get coaching insights and recommendations.
+
+    Returns data in the format expected by the frontend:
+    - insights.top_strengths: Array of {name, count, percentage}
+    - insights.top_improvements: Array of {name, count, percentage}
+    - insights.trending_topics: Array of {topic, count, trend}
+    - insights.recommended_training: Array of {module, priority, agents_affected}
+    """
     try:
         # This would normally analyze call transcripts and performance data
-        # For now, return realistic coaching recommendations
+        # For now, return realistic coaching recommendations in the correct format
 
         return {
-            "insights": [
-                {
-                    "category": "call_handling",
-                    "priority": "high",
-                    "title": "Improve Active Listening",
-                    "description": "Several agents could benefit from active listening training. Customers report feeling unheard.",
-                    "affected_agents": ["agent-1", "agent-3"],
-                    "recommendation": "Implement active listening workshop focusing on summarization and acknowledgment techniques.",
-                    "expected_impact": "15-20% improvement in customer satisfaction scores"
-                },
-                {
-                    "category": "product_knowledge",
-                    "priority": "medium",
-                    "title": "Technical Knowledge Gaps",
-                    "description": "Agents are escalating technical questions that could be resolved at first contact.",
-                    "affected_agents": ["agent-2", "agent-4"],
-                    "recommendation": "Provide additional training on common technical issues and troubleshooting steps.",
-                    "expected_impact": "10-15% reduction in escalation rate"
-                },
-                {
-                    "category": "call_efficiency",
-                    "priority": "medium",
-                    "title": "Call Resolution Time",
-                    "description": "Average call duration is above target. Focus on efficient problem-solving.",
-                    "affected_agents": ["agent-1", "agent-2"],
-                    "recommendation": "Review call scripts and provide training on efficient information gathering.",
-                    "expected_impact": "5-10% reduction in average call time"
-                }
-            ],
-            "recommendations": [
-                {
-                    "type": "training",
-                    "title": "Active Listening Workshop",
-                    "urgency": "high",
-                    "timeline": "Next 2 weeks"
-                },
-                {
-                    "type": "knowledge_base",
-                    "title": "Update Technical FAQ",
-                    "urgency": "medium",
-                    "timeline": "Next month"
-                }
-            ],
-            "updated_at": datetime.utcnow().isoformat(),
+            "insights": {
+                "top_strengths": [
+                    {"name": "Active Listening", "count": 45, "percentage": 78},
+                    {"name": "Problem Resolution", "count": 38, "percentage": 65},
+                    {"name": "Clear Communication", "count": 32, "percentage": 55}
+                ],
+                "top_improvements": [
+                    {"name": "Technical Knowledge", "count": 15, "percentage": 26},
+                    {"name": "Call Efficiency", "count": 12, "percentage": 21},
+                    {"name": "Product Knowledge", "count": 8, "percentage": 14}
+                ],
+                "trending_topics": [
+                    {"topic": "Billing Questions", "count": 28, "trend": "up"},
+                    {"topic": "Service Issues", "count": 22, "trend": "stable"},
+                    {"topic": "New Customer Setup", "count": 18, "trend": "up"}
+                ],
+                "recommended_training": [
+                    {"module": "Technical Troubleshooting", "priority": "high", "agents_affected": 5},
+                    {"module": "Product Knowledge Deep Dive", "priority": "medium", "agents_affected": 3},
+                    {"module": "Call Efficiency Best Practices", "priority": "low", "agents_affected": 2}
+                ]
+            },
+            "period": "last_7_days"
         }
 
     except Exception as e:
