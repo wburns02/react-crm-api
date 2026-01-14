@@ -517,3 +517,83 @@ async def ai_chat(request: ChatRequest):
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
+
+
+# ===== BATCH OCR PROCESSING =====
+
+class BatchOCRRequest(BaseModel):
+    """Request model for batch OCR processing."""
+    documents: List[dict]  # List of {id, image_base64, filename}
+    document_type: str = "service_record"
+
+
+@router.post("/batch/ocr")
+async def start_batch_ocr(request: BatchOCRRequest):
+    """
+    Start a batch OCR processing job for multiple documents.
+
+    Upload multiple document images and process them asynchronously.
+    Returns a job_id to track progress.
+    """
+    if not settings.USE_LOCAL_AI:
+        raise HTTPException(
+            status_code=400,
+            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
+        )
+
+    if not request.documents:
+        raise HTTPException(status_code=400, detail="No documents provided")
+
+    if len(request.documents) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 100 documents per batch"
+        )
+
+    try:
+        result = await local_ai_service.start_batch_ocr(
+            documents=request.documents,
+            document_type=request.document_type
+        )
+        return result
+    except LocalAIError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Batch OCR start error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start batch job: {str(e)}")
+
+
+@router.get("/batch/status/{job_id}")
+async def get_batch_status(job_id: str):
+    """
+    Get the current status of a batch OCR job.
+
+    Returns progress information including documents processed/failed.
+    """
+    status = local_ai_service.get_batch_status(job_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return status
+
+
+@router.get("/batch/results/{job_id}")
+async def get_batch_results(job_id: str):
+    """
+    Get full results of a batch OCR job.
+
+    Returns all extracted data for completed jobs.
+    """
+    results = local_ai_service.get_batch_results(job_id)
+    if not results:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return results
+
+
+@router.get("/batch/jobs")
+async def list_batch_jobs(limit: int = 50):
+    """
+    List recent batch OCR jobs.
+
+    Returns summary info for tracking multiple jobs.
+    """
+    return {"jobs": local_ai_service.list_batch_jobs(limit=limit)}

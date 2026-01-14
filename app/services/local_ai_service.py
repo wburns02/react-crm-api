@@ -8,10 +8,21 @@ import asyncio
 import time
 import json
 import aiohttp
+import uuid
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from enum import Enum
 
 from app.config import settings
+
+
+class BatchJobStatus(str, Enum):
+    """Status of a batch processing job."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +51,132 @@ class LocalAIService:
         self.llava_model = getattr(settings, 'LLAVA_MODEL', 'llava:13b')
         self.hctg_ai_url = getattr(settings, 'HCTG_AI_URL', 'https://hctg-ai.tailad2d5f.ts.net')
         self.hctg_ai_model = getattr(settings, 'HCTG_AI_MODEL', 'qwen2.5:32b')
+
+        # Batch job storage (in-memory, could migrate to Redis)
+        self._batch_jobs: Dict[str, Dict[str, Any]] = {}
+
+    async def start_batch_ocr(
+        self,
+        documents: List[Dict[str, str]],
+        document_type: str = "service_record"
+    ) -> Dict[str, Any]:
+        """
+        Start a batch OCR processing job.
+
+        Args:
+            documents: List of dicts with 'id', 'image_base64', and optional 'filename'
+            document_type: Type of documents being processed
+
+        Returns:
+            Dict with job_id and initial status
+        """
+        job_id = str(uuid.uuid4())
+
+        # Initialize job
+        self._batch_jobs[job_id] = {
+            "job_id": job_id,
+            "status": BatchJobStatus.PENDING,
+            "document_type": document_type,
+            "total_documents": len(documents),
+            "processed": 0,
+            "failed": 0,
+            "results": [],
+            "errors": [],
+            "started_at": datetime.utcnow().isoformat(),
+            "completed_at": None,
+            "processing_time_seconds": None
+        }
+
+        # Start processing in background
+        asyncio.create_task(self._process_batch_ocr(job_id, documents, document_type))
+
+        return {
+            "job_id": job_id,
+            "status": BatchJobStatus.PENDING,
+            "total_documents": len(documents),
+            "message": "Batch OCR job started"
+        }
+
+    async def _process_batch_ocr(
+        self,
+        job_id: str,
+        documents: List[Dict[str, str]],
+        document_type: str
+    ):
+        """Background task to process batch OCR."""
+        start_time = time.time()
+        job = self._batch_jobs[job_id]
+        job["status"] = BatchJobStatus.PROCESSING
+
+        for doc in documents:
+            doc_id = doc.get("id", str(uuid.uuid4()))
+            try:
+                result = await self.extract_document_data(
+                    image_base64=doc["image_base64"],
+                    document_type=document_type
+                )
+
+                job["results"].append({
+                    "document_id": doc_id,
+                    "filename": doc.get("filename", "unknown"),
+                    "status": "success",
+                    "extraction": result.get("extraction", result.get("raw_text")),
+                    "processing_time": result.get("processing_time_seconds", 0)
+                })
+                job["processed"] += 1
+
+            except Exception as e:
+                logger.error(f"Batch OCR error for doc {doc_id}: {e}")
+                job["errors"].append({
+                    "document_id": doc_id,
+                    "filename": doc.get("filename", "unknown"),
+                    "error": str(e)
+                })
+                job["failed"] += 1
+                job["processed"] += 1
+
+        # Mark complete
+        job["status"] = BatchJobStatus.COMPLETED
+        job["completed_at"] = datetime.utcnow().isoformat()
+        job["processing_time_seconds"] = time.time() - start_time
+
+    def get_batch_status(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Get the status of a batch job."""
+        return self._batch_jobs.get(job_id)
+
+    def get_batch_results(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Get full results of a completed batch job."""
+        job = self._batch_jobs.get(job_id)
+        if not job:
+            return None
+
+        return {
+            "job_id": job_id,
+            "status": job["status"],
+            "total_documents": job["total_documents"],
+            "processed": job["processed"],
+            "failed": job["failed"],
+            "results": job["results"],
+            "errors": job["errors"],
+            "started_at": job["started_at"],
+            "completed_at": job["completed_at"],
+            "processing_time_seconds": job["processing_time_seconds"]
+        }
+
+    def list_batch_jobs(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """List recent batch jobs."""
+        jobs = list(self._batch_jobs.values())
+        # Sort by started_at descending
+        jobs.sort(key=lambda x: x.get("started_at", ""), reverse=True)
+        return [{
+            "job_id": j["job_id"],
+            "status": j["status"],
+            "total_documents": j["total_documents"],
+            "processed": j["processed"],
+            "failed": j["failed"],
+            "started_at": j["started_at"],
+            "completed_at": j["completed_at"]
+        } for j in jobs[:limit]]
 
     async def health_check(self) -> Dict[str, Any]:
         """Check if local AI services are available."""
