@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 class AIGatewayConfig(BaseModel):
     """Configuration for AI gateway connection."""
     base_url: str = "https://localhost-0.tailad2d5f.ts.net/ollama"  # ML workstation via Tailscale
+    whisper_url: str = "https://localhost-0.tailad2d5f.ts.net/whisper"  # Whisper API via Tailscale
     api_key: Optional[str] = None  # API key for authentication (not needed for Ollama)
     timeout: float = 300.0  # 70B models need more time
     max_retries: int = 3
@@ -294,35 +295,41 @@ class AIGateway:
         audio_url: str,
         language: str = "en",
     ) -> Dict[str, Any]:
-        """Transcribe audio using Whisper.
+        """Transcribe audio using Whisper API.
 
         Args:
-            audio_url: URL to audio file
+            audio_url: URL to audio file (must be accessible by the Whisper server)
             language: Language code
 
         Returns:
             Dict with 'text' key containing transcription
         """
         try:
-            client = await self.get_client()
+            # Use separate Whisper client (different from Ollama)
+            async with httpx.AsyncClient(timeout=self.config.timeout) as whisper_client:
+                logger.info(f"Transcribing audio from URL: {audio_url[:80]}...")
 
-            payload = {
-                "audio_url": audio_url,
-                "language": language,
-            }
+                # Use /transcribe_url endpoint with query parameters
+                response = await whisper_client.post(
+                    f"{self.config.whisper_url}/transcribe_url",
+                    params={"url": audio_url, "language": language}
+                )
+                response.raise_for_status()
 
-            response = await client.post("/v1/audio/transcriptions", json=payload)
-            response.raise_for_status()
-
-            data = response.json()
-            return {
-                "text": data.get("text", ""),
-                "language": language,
-                "duration": data.get("duration"),
-            }
-        except httpx.ConnectError:
-            logger.warning("AI server unavailable for transcription")
+                data = response.json()
+                text = data.get("text", "")
+                logger.info(f"Transcription complete, length: {len(text)} chars")
+                return {
+                    "text": text,
+                    "language": data.get("language", language),
+                    "duration": data.get("duration"),
+                }
+        except httpx.ConnectError as e:
+            logger.warning(f"Whisper server unavailable: {e}")
             return {"text": "", "error": "connection_failed"}
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Whisper API error: {e.response.status_code} - {e.response.text}")
+            return {"text": "", "error": f"http_{e.response.status_code}"}
         except Exception as e:
             logger.error(f"Transcription error: {e}")
             return {"text": "", "error": str(e)}
