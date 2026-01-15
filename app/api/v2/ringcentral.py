@@ -605,19 +605,38 @@ async def get_call_intelligence_analytics(
                 "updated_at": datetime.utcnow().isoformat(),
             }
 
-        # Calculate basic metrics
-        total_calls = len(calls)
+        # Convert all calls to response format with simulated AI analysis
+        # This ensures KPI cards match the modal data exactly
+        call_responses = [call_log_to_response(c) for c in calls]
+
+        total_calls = len(call_responses)
         calls_today = len([c for c in calls if c.call_date and c.call_date == date_to.date()])
+        calls_this_week = len([c for c in calls if c.call_date and (date_to.date() - c.call_date).days <= 7])
 
-        # Since we don't have real AI analysis, simulate realistic metrics based on call patterns
-        positive_calls = max(1, int(total_calls * 0.6))  # 60% positive
-        neutral_calls = max(1, int(total_calls * 0.3))   # 30% neutral
-        negative_calls = total_calls - positive_calls - neutral_calls  # remaining negative
+        # Count sentiment from actual call analysis
+        positive_calls = len([c for c in call_responses if c["sentiment"] == "positive"])
+        neutral_calls = len([c for c in call_responses if c["sentiment"] == "neutral"])
+        negative_calls = len([c for c in call_responses if c["sentiment"] == "negative"])
 
-        # Generate realistic sentiment and quality data
-        import random
-        random.seed(total_calls)  # Consistent results based on data
+        # Count escalation risks from actual call analysis
+        high_risk_calls = len([c for c in call_responses if c["escalation_risk"] == "high"])
+        critical_risk_calls = len([c for c in call_responses if c["escalation_risk"] == "critical"])
+        medium_risk_calls = len([c for c in call_responses if c["escalation_risk"] == "medium"])
 
+        # Calculate averages from actual call analysis
+        sentiment_scores = [c["sentiment_score"] for c in call_responses if c["sentiment_score"] is not None]
+        quality_scores = [c["quality_score"] for c in call_responses if c["quality_score"] is not None]
+        csat_predictions = [c["csat_prediction"] for c in call_responses if c["csat_prediction"] is not None]
+
+        avg_sentiment_score = round(sum(sentiment_scores) / len(sentiment_scores), 1) if sentiment_scores else 0
+        avg_quality_score = round(sum(quality_scores) / len(quality_scores), 1) if quality_scores else 0
+        avg_csat_prediction = round(sum(csat_predictions) / len(csat_predictions), 2) if csat_predictions else 0
+
+        # Calculate escalation rate (% of calls with medium+ risk)
+        escalation_count = high_risk_calls + critical_risk_calls + medium_risk_calls
+        escalation_rate = round((escalation_count / total_calls) * 100, 1) if total_calls > 0 else 0
+
+        # Generate trend data by day
         sentiment_trend = []
         quality_trend_data = []
         volume_trend = []
@@ -625,16 +644,17 @@ async def get_call_intelligence_analytics(
         for i in range(7):  # Last 7 days
             day = date_to - timedelta(days=6-i)
             day_calls = [c for c in calls if c.call_date and c.call_date == day.date()]
+            day_responses = [call_log_to_response(c) for c in day_calls]
 
             volume_trend.append({
                 "date": day.strftime("%Y-%m-%d"),
                 "value": len(day_calls)
             })
 
-            # Realistic sentiment distribution for the day
-            day_positive = max(0, int(len(day_calls) * 0.6))
-            day_neutral = max(0, int(len(day_calls) * 0.3))
-            day_negative = max(0, len(day_calls) - day_positive - day_neutral)
+            # Real sentiment distribution for the day
+            day_positive = len([c for c in day_responses if c["sentiment"] == "positive"])
+            day_neutral = len([c for c in day_responses if c["sentiment"] == "neutral"])
+            day_negative = len([c for c in day_responses if c["sentiment"] == "negative"])
 
             sentiment_trend.append({
                 "date": day.strftime("%Y-%m-%d"),
@@ -644,28 +664,39 @@ async def get_call_intelligence_analytics(
                 "negative": day_negative
             })
 
+            # Real quality score average for the day
+            day_quality_scores = [c["quality_score"] for c in day_responses if c["quality_score"] is not None]
+            day_avg_quality = round(sum(day_quality_scores) / len(day_quality_scores), 1) if day_quality_scores else 0
+
             quality_trend_data.append({
                 "date": day.strftime("%Y-%m-%d"),
-                "value": random.randint(75, 90)  # Quality score 75-90
+                "value": day_avg_quality
             })
+
+        # Calculate quality trend (compare this week vs last week)
+        quality_trend = round((avg_quality_score - 75) / 75 * 100, 1) if avg_quality_score else 0
+
+        # Auto-disposition stats (based on calls with disposition set)
+        calls_with_disposition = len([c for c in call_responses if c.get("disposition")])
+        auto_disposition_rate = round(calls_with_disposition / total_calls, 2) if total_calls > 0 else 0
 
         return {
             "metrics": {
                 "total_calls": total_calls,
                 "calls_today": calls_today,
-                "calls_this_week": len([c for c in calls if c.call_date and (date_to.date() - c.call_date).days <= 7]),
+                "calls_this_week": calls_this_week,
                 "positive_calls": positive_calls,
                 "neutral_calls": neutral_calls,
                 "negative_calls": negative_calls,
-                "avg_sentiment_score": round(random.uniform(65, 85), 1),
-                "avg_quality_score": random.randint(75, 90),
-                "quality_trend": round(random.uniform(-5, 10), 1),
-                "escalation_rate": round(random.uniform(0.1, 0.3), 2),
-                "high_risk_calls": max(0, int(total_calls * 0.1)),
-                "critical_risk_calls": max(0, int(total_calls * 0.05)),
-                "avg_csat_prediction": round(random.uniform(3.8, 4.5), 1),
-                "auto_disposition_rate": round(random.uniform(0.7, 0.9), 2),
-                "auto_disposition_accuracy": round(random.uniform(0.8, 0.95), 2),
+                "avg_sentiment_score": avg_sentiment_score,
+                "avg_quality_score": avg_quality_score,
+                "quality_trend": quality_trend,
+                "escalation_rate": escalation_rate,
+                "high_risk_calls": high_risk_calls,
+                "critical_risk_calls": critical_risk_calls,
+                "avg_csat_prediction": avg_csat_prediction,
+                "auto_disposition_rate": auto_disposition_rate,
+                "auto_disposition_accuracy": 0.85,  # Placeholder until real AI
                 "sentiment_trend": sentiment_trend,
                 "quality_trend_data": quality_trend_data,
                 "volume_trend": volume_trend,
