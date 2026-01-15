@@ -1,5 +1,5 @@
 FROM python:3.12-slim
-# Build: v2.5.1 - Technician Performance Stats
+# Build: v2.5.2 - Fix port binding for Railway
 
 WORKDIR /app
 
@@ -20,8 +20,8 @@ COPY . .
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Expose port
-EXPOSE 5001
+# Railway provides PORT env var - expose a default but app uses $PORT
+EXPOSE 8080
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5001"]
+# Use shell form to enable environment variable expansion
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
