@@ -312,114 +312,8 @@ async def list_technicians(
         return {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}
 
 
-@router.get("/{technician_id}", response_model=TechnicianResponse)
-async def get_technician(
-    technician_id: str,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Get a single technician by ID."""
-    result = await db.execute(select(Technician).where(Technician.id == technician_id))
-    technician = result.scalar_one_or_none()
-
-    if not technician:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Technician not found",
-        )
-
-    return technician_to_response(technician)
-
-
-@router.post("", response_model=TechnicianResponse, status_code=status.HTTP_201_CREATED)
-async def create_technician(
-    technician_data: TechnicianCreate,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Create a new technician."""
-    import uuid
-    from datetime import datetime
-    import traceback
-
-    try:
-        # Generate UUID for the technician ID
-        tech_data = technician_data.model_dump()
-        tech_data["id"] = str(uuid.uuid4())
-        tech_data["created_at"] = datetime.utcnow()
-        tech_data["updated_at"] = datetime.utcnow()
-
-        # Remove None employee_id to avoid unique constraint issues with empty strings
-        if tech_data.get("employee_id") is None or tech_data.get("employee_id") == "":
-            tech_data.pop("employee_id", None)
-
-        # Convert vehicle_capacity_gallons to int if present (model expects Integer)
-        if tech_data.get("vehicle_capacity_gallons") is not None:
-            tech_data["vehicle_capacity_gallons"] = int(tech_data["vehicle_capacity_gallons"])
-
-        technician = Technician(**tech_data)
-        db.add(technician)
-        await db.commit()
-        await db.refresh(technician)
-        return technician_to_response(technician)
-    except Exception as e:
-        logger.error(f"Error creating technician: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create technician: {str(e)}"
-        )
-
-
-@router.patch("/{technician_id}", response_model=TechnicianResponse)
-async def update_technician(
-    technician_id: str,
-    technician_data: TechnicianUpdate,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Update a technician."""
-    result = await db.execute(select(Technician).where(Technician.id == technician_id))
-    technician = result.scalar_one_or_none()
-
-    if not technician:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Technician not found",
-        )
-
-    # Update only provided fields
-    update_data = technician_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(technician, field, value)
-
-    await db.commit()
-    await db.refresh(technician)
-    return technician_to_response(technician)
-
-
-@router.delete("/{technician_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_technician(
-    technician_id: str,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Delete a technician (soft delete - sets is_active=false)."""
-    result = await db.execute(select(Technician).where(Technician.id == technician_id))
-    technician = result.scalar_one_or_none()
-
-    if not technician:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Technician not found",
-        )
-
-    # Soft delete - set is_active to False
-    technician.is_active = False
-    await db.commit()
-
-
 # =====================================================
-# Performance Stats Endpoints
+# Performance Stats Endpoints (MUST be before /{technician_id})
 # =====================================================
 
 @router.get("/{technician_id}/performance", response_model=TechnicianPerformanceStats)
@@ -655,3 +549,113 @@ async def get_technician_jobs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get jobs: {str(e)}"
         )
+
+
+# =====================================================
+# Basic CRUD Endpoints
+# =====================================================
+
+@router.get("/{technician_id}", response_model=TechnicianResponse)
+async def get_technician(
+    technician_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a single technician by ID."""
+    result = await db.execute(select(Technician).where(Technician.id == technician_id))
+    technician = result.scalar_one_or_none()
+
+    if not technician:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Technician not found",
+        )
+
+    return technician_to_response(technician)
+
+
+@router.post("", response_model=TechnicianResponse, status_code=status.HTTP_201_CREATED)
+async def create_technician(
+    technician_data: TechnicianCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Create a new technician."""
+    import uuid
+    from datetime import datetime
+    import traceback
+
+    try:
+        # Generate UUID for the technician ID
+        tech_data = technician_data.model_dump()
+        tech_data["id"] = str(uuid.uuid4())
+        tech_data["created_at"] = datetime.utcnow()
+        tech_data["updated_at"] = datetime.utcnow()
+
+        # Remove None employee_id to avoid unique constraint issues with empty strings
+        if tech_data.get("employee_id") is None or tech_data.get("employee_id") == "":
+            tech_data.pop("employee_id", None)
+
+        # Convert vehicle_capacity_gallons to int if present (model expects Integer)
+        if tech_data.get("vehicle_capacity_gallons") is not None:
+            tech_data["vehicle_capacity_gallons"] = int(tech_data["vehicle_capacity_gallons"])
+
+        technician = Technician(**tech_data)
+        db.add(technician)
+        await db.commit()
+        await db.refresh(technician)
+        return technician_to_response(technician)
+    except Exception as e:
+        logger.error(f"Error creating technician: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create technician: {str(e)}"
+        )
+
+
+@router.patch("/{technician_id}", response_model=TechnicianResponse)
+async def update_technician(
+    technician_id: str,
+    technician_data: TechnicianUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update a technician."""
+    result = await db.execute(select(Technician).where(Technician.id == technician_id))
+    technician = result.scalar_one_or_none()
+
+    if not technician:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Technician not found",
+        )
+
+    # Update only provided fields
+    update_data = technician_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(technician, field, value)
+
+    await db.commit()
+    await db.refresh(technician)
+    return technician_to_response(technician)
+
+
+@router.delete("/{technician_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_technician(
+    technician_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Delete a technician (soft delete - sets is_active=false)."""
+    result = await db.execute(select(Technician).where(Technician.id == technician_id))
+    technician = result.scalar_one_or_none()
+
+    if not technician:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Technician not found",
+        )
+
+    # Soft delete - set is_active to False
+    technician.is_active = False
+    await db.commit()
