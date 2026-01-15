@@ -335,7 +335,16 @@ async def create_technician(
     current_user: CurrentUser,
 ):
     """Create a new technician."""
-    technician = Technician(**technician_data.model_dump())
+    import uuid
+    from datetime import datetime
+
+    # Generate UUID for the technician ID
+    tech_data = technician_data.model_dump()
+    tech_data["id"] = str(uuid.uuid4())
+    tech_data["created_at"] = datetime.utcnow()
+    tech_data["updated_at"] = datetime.utcnow()
+
+    technician = Technician(**tech_data)
     db.add(technician)
     await db.commit()
     await db.refresh(technician)
