@@ -197,23 +197,39 @@ async def list_technicians(
     try:
         from sqlalchemy import text as sql_text
 
+        # Build WHERE clause based on filters
+        where_clauses = []
+        params = {"limit": page_size, "offset": (page - 1) * page_size}
+
+        if active_only:
+            where_clauses.append("is_active = true")
+
+        if search:
+            where_clauses.append("(first_name ILIKE :search OR last_name ILIKE :search OR email ILIKE :search OR employee_id ILIKE :search)")
+            params["search"] = f"%{search}%"
+
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+
         # Use raw SQL to avoid ORM issues
-        sql = """
+        sql = f"""
             SELECT id, first_name, last_name, email, phone, employee_id, is_active,
                    skills, assigned_vehicle, vehicle_capacity_gallons,
                    license_number, license_expiry, hourly_rate, notes,
                    home_region, home_address, home_city, home_state, home_postal_code,
                    home_latitude, home_longitude, created_at, updated_at
             FROM technicians
+            {where_sql}
             ORDER BY first_name, last_name
             LIMIT :limit OFFSET :offset
         """
-        offset_val = (page - 1) * page_size
-        result = await db.execute(sql_text(sql), {"limit": page_size, "offset": offset_val})
+        result = await db.execute(sql_text(sql), params)
         rows = result.fetchall()
 
-        # Count total
-        count_result = await db.execute(sql_text("SELECT COUNT(*) FROM technicians"))
+        # Count total with same filter
+        count_sql = f"SELECT COUNT(*) FROM technicians {where_sql}"
+        count_result = await db.execute(sql_text(count_sql), params)
         total = count_result.scalar()
 
         # Convert rows to response dicts
