@@ -669,128 +669,7 @@ async def get_call_intelligence_analytics(
         raise HTTPException(status_code=500, detail=error_detail)
 
 
-@router.get("/calls/{call_id}")
-async def get_call(
-    call_id: str,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Get a specific call log."""
-    result = await db.execute(select(CallLog).where(CallLog.id == call_id))
-    call = result.scalar_one_or_none()
-
-    if not call:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Call not found",
-        )
-
-    return call_log_to_response(call)
-
-
-@router.patch("/calls/{call_id}")
-async def update_call(
-    call_id: str,
-    request: UpdateCallLogRequest,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Update call log (notes, disposition, customer link)."""
-    result = await db.execute(select(CallLog).where(CallLog.id == call_id))
-    call = result.scalar_one_or_none()
-
-    if not call:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Call not found",
-        )
-
-    update_data = request.model_dump(exclude_unset=True)
-    if "customer_id" in update_data and update_data["customer_id"]:
-        update_data["customer_id"] = int(update_data["customer_id"])
-
-    for field, value in update_data.items():
-        setattr(call, field, value)
-
-    await db.commit()
-    await db.refresh(call)
-
-    return call_log_to_response(call)
-
-
-@router.post("/calls/{call_id}/transcribe")
-async def transcribe_call(
-    call_id: str,
-    background_tasks: BackgroundTasks,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Transcribe a call recording using AI."""
-    result = await db.execute(select(CallLog).where(CallLog.id == call_id))
-    call = result.scalar_one_or_none()
-
-    if not call:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Call not found",
-        )
-
-    if not call.recording_url:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Call has no recording",
-        )
-
-    # Mark as pending
-    call.transcription_status = "pending"
-    await db.commit()
-
-    # Queue transcription in background
-    async def do_transcription():
-        try:
-            result = await ai_gateway.transcribe_audio(call.recording_url)
-            if result.get("text"):
-                call.transcription = result["text"]
-                call.transcription_status = "completed"
-
-                # Run comprehensive call analysis if transcript is substantial
-                if len(result["text"]) > 50:
-                    # Get comprehensive quality analysis
-                    analysis = await ai_gateway.analyze_call_quality(
-                        transcript=result["text"],
-                        call_direction=call.direction or "inbound",
-                        duration_seconds=call.duration_seconds or 0,
-                    )
-
-                    # Update call with analysis results
-                    call.ai_summary = analysis.get("summary")
-                    call.sentiment = analysis.get("sentiment")
-                    call.sentiment_score = analysis.get("sentiment_score")
-                    call.quality_score = analysis.get("quality_score")
-                    call.csat_prediction = analysis.get("csat_prediction")
-                    call.escalation_risk = analysis.get("escalation_risk")
-                    call.professionalism_score = analysis.get("professionalism_score")
-                    call.empathy_score = analysis.get("empathy_score")
-                    call.clarity_score = analysis.get("clarity_score")
-                    call.resolution_score = analysis.get("resolution_score")
-                    call.topics = analysis.get("topics")
-                    call.analyzed_at = datetime.utcnow()
-
-                    logger.info(f"Call {call_id} analyzed: quality={call.quality_score}, sentiment={call.sentiment}")
-            else:
-                call.transcription_status = "failed"
-
-            await db.commit()
-        except Exception as e:
-            logger.error(f"Transcription failed for call {call_id}: {e}")
-            call.transcription_status = "failed"
-            await db.commit()
-
-    background_tasks.add_task(do_transcription)
-
-    return {"status": "transcription_queued", "call_id": call_id}
-
-
+# NOTE: Static routes MUST come before parameterized routes like /calls/{call_id}
 @router.post("/calls/analyze-batch")
 async def analyze_calls_batch(
     background_tasks: BackgroundTasks,
@@ -960,6 +839,128 @@ async def get_analysis_status(
         "unanalyzed_calls": total_with_recordings - analyzed_count,
         "coverage_percentage": round((analyzed_count / total_with_recordings * 100), 1) if total_with_recordings > 0 else 0,
     }
+
+
+@router.get("/calls/{call_id}")
+async def get_call(
+    call_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a specific call log."""
+    result = await db.execute(select(CallLog).where(CallLog.id == call_id))
+    call = result.scalar_one_or_none()
+
+    if not call:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Call not found",
+        )
+
+    return call_log_to_response(call)
+
+
+@router.patch("/calls/{call_id}")
+async def update_call(
+    call_id: str,
+    request: UpdateCallLogRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update call log (notes, disposition, customer link)."""
+    result = await db.execute(select(CallLog).where(CallLog.id == call_id))
+    call = result.scalar_one_or_none()
+
+    if not call:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Call not found",
+        )
+
+    update_data = request.model_dump(exclude_unset=True)
+    if "customer_id" in update_data and update_data["customer_id"]:
+        update_data["customer_id"] = int(update_data["customer_id"])
+
+    for field, value in update_data.items():
+        setattr(call, field, value)
+
+    await db.commit()
+    await db.refresh(call)
+
+    return call_log_to_response(call)
+
+
+@router.post("/calls/{call_id}/transcribe")
+async def transcribe_call(
+    call_id: str,
+    background_tasks: BackgroundTasks,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Transcribe a call recording using AI."""
+    result = await db.execute(select(CallLog).where(CallLog.id == call_id))
+    call = result.scalar_one_or_none()
+
+    if not call:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Call not found",
+        )
+
+    if not call.recording_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Call has no recording",
+        )
+
+    # Mark as pending
+    call.transcription_status = "pending"
+    await db.commit()
+
+    # Queue transcription in background
+    async def do_transcription():
+        try:
+            result = await ai_gateway.transcribe_audio(call.recording_url)
+            if result.get("text"):
+                call.transcription = result["text"]
+                call.transcription_status = "completed"
+
+                # Run comprehensive call analysis if transcript is substantial
+                if len(result["text"]) > 50:
+                    # Get comprehensive quality analysis
+                    analysis = await ai_gateway.analyze_call_quality(
+                        transcript=result["text"],
+                        call_direction=call.direction or "inbound",
+                        duration_seconds=call.duration_seconds or 0,
+                    )
+
+                    # Update call with analysis results
+                    call.ai_summary = analysis.get("summary")
+                    call.sentiment = analysis.get("sentiment")
+                    call.sentiment_score = analysis.get("sentiment_score")
+                    call.quality_score = analysis.get("quality_score")
+                    call.csat_prediction = analysis.get("csat_prediction")
+                    call.escalation_risk = analysis.get("escalation_risk")
+                    call.professionalism_score = analysis.get("professionalism_score")
+                    call.empathy_score = analysis.get("empathy_score")
+                    call.clarity_score = analysis.get("clarity_score")
+                    call.resolution_score = analysis.get("resolution_score")
+                    call.topics = analysis.get("topics")
+                    call.analyzed_at = datetime.utcnow()
+
+                    logger.info(f"Call {call_id} analyzed: quality={call.quality_score}, sentiment={call.sentiment}")
+            else:
+                call.transcription_status = "failed"
+
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Transcription failed for call {call_id}: {e}")
+            call.transcription_status = "failed"
+            await db.commit()
+
+    background_tasks.add_task(do_transcription)
+
+    return {"status": "transcription_queued", "call_id": call_id}
 
 
 @router.post("/sync")
