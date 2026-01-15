@@ -55,11 +55,9 @@ class CallLog(Base):
     # External system reference
     external_system = Column(String(100), nullable=True)
 
-    # AI Analysis fields (from migration 006)
-    transcription = Column(Text, nullable=True)  # Full call transcript
-    transcription_status = Column(String(20), nullable=True)  # pending/completed/failed
-    ai_summary = Column(Text, nullable=True)  # AI-generated summary
-    sentiment_score = Column(Float, nullable=True)  # -100 to 100
+    # NOTE: AI Analysis columns (transcription, ai_summary, sentiment_score)
+    # are NOT in the production database yet. Do not add them to the model
+    # until migration is run manually. Use getattr() in endpoints instead.
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
