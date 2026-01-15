@@ -135,7 +135,11 @@ async def delete_customer(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Delete a customer."""
+    """Delete a customer (soft delete - sets is_active=false).
+
+    Note: Hard delete is not possible due to foreign key constraints
+    from work_orders, messages, activities, invoices, and many other tables.
+    """
     result = await db.execute(select(Customer).where(Customer.id == customer_id))
     customer = result.scalar_one_or_none()
 
@@ -145,5 +149,7 @@ async def delete_customer(
             detail="Customer not found",
         )
 
-    await db.delete(customer)
+    # Soft delete - set is_active to False instead of hard delete
+    # This preserves data integrity and historical records
+    customer.is_active = False
     await db.commit()
