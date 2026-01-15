@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func, or_
-from typing import Optional
+from sqlalchemy import select, func, or_, text as sql_text
+from typing import Optional, Literal
 import logging
 
 from app.api.deps import DbSession, CurrentUser
@@ -10,6 +10,9 @@ from app.schemas.technician import (
     TechnicianUpdate,
     TechnicianResponse,
     TechnicianListResponse,
+    TechnicianPerformanceStats,
+    TechnicianJobDetail,
+    TechnicianJobsResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -308,6 +311,227 @@ async def list_technicians(
         logger.error(f"Error in list_technicians: {traceback.format_exc()}")
         return {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}
 
+
+# =====================================================
+# Performance Stats Endpoints (MUST be before /{technician_id})
+# =====================================================
+
+@router.get("/{technician_id}/performance", response_model=TechnicianPerformanceStats)
+async def get_technician_performance(
+    technician_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get aggregated performance statistics for a technician."""
+    import traceback
+
+    try:
+        # First verify technician exists
+        tech_result = await db.execute(
+            select(Technician).where(Technician.id == technician_id)
+        )
+        if not tech_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Technician not found",
+            )
+
+        # Get performance stats using raw SQL for efficiency
+        stats_sql = """
+            WITH completed_jobs AS (
+                SELECT
+                    id, customer_id, job_type,
+                    COALESCE(total_amount, 0) as total_amount,
+                    scheduled_date
+                FROM work_orders
+                WHERE technician_id = :tech_id
+                  AND status = 'completed'
+            ),
+            returns_calc AS (
+                SELECT COUNT(DISTINCT c1.id) as return_count
+                FROM completed_jobs c1
+                WHERE EXISTS (
+                    SELECT 1 FROM completed_jobs c2
+                    WHERE c1.customer_id = c2.customer_id
+                      AND c1.id != c2.id
+                      AND c1.scheduled_date > c2.scheduled_date
+                      AND c1.scheduled_date - c2.scheduled_date <= 30
+                )
+            )
+            SELECT
+                COUNT(*) as total_jobs,
+                COALESCE(SUM(total_amount), 0) as total_revenue,
+                COUNT(*) FILTER (WHERE job_type IN ('pumping', 'grease_trap')) as pump_out_jobs,
+                COALESCE(SUM(total_amount) FILTER (WHERE job_type IN ('pumping', 'grease_trap')), 0) as pump_out_revenue,
+                COUNT(*) FILTER (WHERE job_type IN ('repair', 'maintenance')) as repair_jobs,
+                COALESCE(SUM(total_amount) FILTER (WHERE job_type IN ('repair', 'maintenance')), 0) as repair_revenue,
+                COUNT(*) FILTER (WHERE job_type NOT IN ('pumping', 'grease_trap', 'repair', 'maintenance')) as other_jobs,
+                COALESCE(SUM(total_amount) FILTER (WHERE job_type NOT IN ('pumping', 'grease_trap', 'repair', 'maintenance')), 0) as other_revenue,
+                COALESCE((SELECT return_count FROM returns_calc), 0) as returns_count
+            FROM completed_jobs
+        """
+
+        result = await db.execute(sql_text(stats_sql), {"tech_id": technician_id})
+        row = result.fetchone()
+
+        if row:
+            return TechnicianPerformanceStats(
+                technician_id=technician_id,
+                total_jobs_completed=int(row[0] or 0),
+                total_revenue=float(row[1] or 0),
+                pump_out_jobs=int(row[2] or 0),
+                pump_out_revenue=float(row[3] or 0),
+                repair_jobs=int(row[4] or 0),
+                repair_revenue=float(row[5] or 0),
+                other_jobs=int(row[6] or 0),
+                other_revenue=float(row[7] or 0),
+                returns_count=int(row[8] or 0),
+            )
+        else:
+            return TechnicianPerformanceStats(technician_id=technician_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting technician performance: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get performance stats: {str(e)}"
+        )
+
+
+@router.get("/{technician_id}/jobs", response_model=TechnicianJobsResponse)
+async def get_technician_jobs(
+    technician_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+    job_category: Literal["pump_outs", "repairs", "all"] = Query("all"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """Get detailed list of jobs for a technician."""
+    import traceback
+    import re
+
+    try:
+        # First verify technician exists
+        tech_result = await db.execute(
+            select(Technician).where(Technician.id == technician_id)
+        )
+        if not tech_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Technician not found",
+            )
+
+        # Build job type filter
+        if job_category == "pump_outs":
+            job_type_filter = "AND wo.job_type IN ('pumping', 'grease_trap')"
+        elif job_category == "repairs":
+            job_type_filter = "AND wo.job_type IN ('repair', 'maintenance')"
+        else:
+            job_type_filter = ""
+
+        offset = (page - 1) * page_size
+
+        # Get jobs with customer info
+        jobs_sql = f"""
+            SELECT
+                wo.id,
+                wo.scheduled_date::text,
+                wo.actual_end_time::text as completed_date,
+                wo.customer_id,
+                COALESCE(c.first_name || ' ' || c.last_name, 'Customer #' || wo.customer_id::text) as customer_name,
+                wo.service_location,
+                wo.job_type,
+                wo.status,
+                COALESCE(wo.total_amount, 0) as total_amount,
+                wo.total_labor_minutes as duration_minutes,
+                wo.notes,
+                (SELECT COALESCE(SUM(quantity), 0) FROM job_costs
+                 WHERE work_order_id = wo.id AND cost_type = 'labor' AND unit = 'hour') as labor_hours,
+                (SELECT COALESCE(SUM(total_cost), 0) FROM job_costs
+                 WHERE work_order_id = wo.id AND cost_type = 'materials') as parts_cost
+            FROM work_orders wo
+            LEFT JOIN customers c ON wo.customer_id = c.id
+            WHERE wo.technician_id = :tech_id
+              AND wo.status = 'completed'
+              {job_type_filter}
+            ORDER BY wo.scheduled_date DESC NULLS LAST
+            LIMIT :limit OFFSET :offset
+        """
+
+        result = await db.execute(
+            sql_text(jobs_sql),
+            {"tech_id": technician_id, "limit": page_size, "offset": offset}
+        )
+        rows = result.fetchall()
+
+        # Get total count
+        count_sql = f"""
+            SELECT COUNT(*)
+            FROM work_orders wo
+            WHERE wo.technician_id = :tech_id
+              AND wo.status = 'completed'
+              {job_type_filter}
+        """
+        count_result = await db.execute(sql_text(count_sql), {"tech_id": technician_id})
+        total = count_result.scalar() or 0
+
+        # Build response items
+        items = []
+        for row in rows:
+            gallons_pumped = None
+            tank_size = None
+            notes = row[10] or ""
+
+            if row[6] in ('pumping', 'grease_trap'):
+                gallon_match = re.search(r'(\d+)\s*(?:gallons?|gal)', notes, re.IGNORECASE)
+                if gallon_match:
+                    gallons_pumped = int(gallon_match.group(1))
+                tank_match = re.search(r'(\d+)\s*(?:gallon)?\s*tank', notes, re.IGNORECASE)
+                if tank_match:
+                    tank_size = f"{tank_match.group(1)} gallon"
+
+            items.append(TechnicianJobDetail(
+                id=str(row[0]),
+                scheduled_date=row[1],
+                completed_date=row[2],
+                customer_id=row[3],
+                customer_name=row[4],
+                service_location=row[5],
+                job_type=row[6],
+                status=row[7],
+                total_amount=float(row[8] or 0),
+                duration_minutes=int(row[9]) if row[9] else None,
+                notes=notes if notes else None,
+                gallons_pumped=gallons_pumped,
+                tank_size=tank_size,
+                labor_hours=float(row[11]) if row[11] else None,
+                parts_cost=float(row[12]) if row[12] else None,
+            ))
+
+        return TechnicianJobsResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            job_category=job_category,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting technician jobs: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get jobs: {str(e)}"
+        )
+
+
+# =====================================================
+# Basic CRUD Endpoints
+# =====================================================
 
 @router.get("/{technician_id}", response_model=TechnicianResponse)
 async def get_technician(

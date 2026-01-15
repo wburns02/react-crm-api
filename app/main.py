@@ -159,9 +159,9 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.4.1",  # Added CS Platform APIs (surveys, campaigns, escalations, collaboration)
+        "version": "2.5.2",  # Added Technician Performance Stats
         "environment": settings.ENVIRONMENT,
-        "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status"],
+        "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "technician_performance"],
     }
 
 
