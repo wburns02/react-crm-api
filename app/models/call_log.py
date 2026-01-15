@@ -55,9 +55,21 @@ class CallLog(Base):
     # External system reference
     external_system = Column(String(100), nullable=True)
 
-    # NOTE: AI Analysis columns (transcription, ai_summary, sentiment_score)
-    # are NOT in the production database yet. Do not add them to the model
-    # until migration is run manually. Use getattr() in endpoints instead.
+    # AI Analysis fields (added via direct SQL 2026-01-15)
+    transcription = Column(Text, nullable=True)  # Full call transcript
+    transcription_status = Column(String(20), nullable=True)  # pending/completed/failed
+    ai_summary = Column(Text, nullable=True)  # AI-generated summary
+    sentiment = Column(String(20), nullable=True)  # positive/negative/neutral
+    sentiment_score = Column(Float, nullable=True)  # -100 to 100
+    quality_score = Column(Float, nullable=True)  # 0-100 overall quality
+    csat_prediction = Column(Float, nullable=True)  # 1-5 predicted CSAT
+    escalation_risk = Column(String(20), nullable=True)  # low/medium/high/critical
+    professionalism_score = Column(Float, nullable=True)  # 0-100
+    empathy_score = Column(Float, nullable=True)  # 0-100
+    clarity_score = Column(Float, nullable=True)  # 0-100
+    resolution_score = Column(Float, nullable=True)  # 0-100
+    topics = Column(JSON, nullable=True)  # List of topic strings
+    analyzed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
