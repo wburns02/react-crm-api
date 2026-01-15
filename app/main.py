@@ -159,9 +159,9 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.5.0",  # Added Call Intelligence AI analysis
+        "version": "2.5.1",  # Added Technician Performance Stats
         "environment": settings.ENVIRONMENT,
-        "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "call_intelligence"],
+        "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "call_intelligence", "technician_performance"],
     }
 
 
