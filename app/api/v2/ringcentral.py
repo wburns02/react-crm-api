@@ -64,67 +64,12 @@ class SyncCallsRequest(BaseModel):
 # Helper functions
 
 def call_log_to_response(call: CallLog) -> dict:
-    """Convert CallLog model to response dict with simulated AI analysis."""
-    import random
-    import hashlib
+    """Convert CallLog model to response dict.
 
-    # Use call ID to generate consistent random values for this call
-    seed_value = int(hashlib.md5(str(call.id).encode()).hexdigest()[:8], 16)
-    rng = random.Random(seed_value)
-
-    # Generate realistic sentiment based on call duration and direction
-    # Longer calls tend to be more complex; outbound calls tend to be more positive
-    duration = call.duration_seconds or 0
-    is_outbound = call.direction == "outbound"
-
-    # Weighted sentiment distribution: 55% positive, 30% neutral, 15% negative
-    sentiment_roll = rng.random()
-    if is_outbound:
-        # Outbound calls more positive (sales/follow-ups)
-        if sentiment_roll < 0.65:
-            sentiment = "positive"
-            sentiment_score = rng.uniform(15, 45)
-        elif sentiment_roll < 0.90:
-            sentiment = "neutral"
-            sentiment_score = rng.uniform(-15, 15)
-        else:
-            sentiment = "negative"
-            sentiment_score = rng.uniform(-40, -15)
-    else:
-        # Inbound calls more varied (support inquiries)
-        if sentiment_roll < 0.50:
-            sentiment = "positive"
-            sentiment_score = rng.uniform(10, 40)
-        elif sentiment_roll < 0.80:
-            sentiment = "neutral"
-            sentiment_score = rng.uniform(-15, 15)
-        else:
-            sentiment = "negative"
-            sentiment_score = rng.uniform(-45, -15)
-
-    # Quality score: 60-95 range, longer calls slightly lower (complex issues)
-    base_quality = rng.uniform(70, 95)
-    if duration > 600:  # > 10 minutes
-        base_quality -= rng.uniform(5, 15)
-    quality_score = max(55, min(95, base_quality))
-
-    # Escalation risk based on sentiment and duration
-    if sentiment == "negative" and duration > 300:
-        escalation_risk = rng.choice(["high", "critical", "medium"])
-    elif sentiment == "negative":
-        escalation_risk = rng.choice(["medium", "high", "low"])
-    elif sentiment == "neutral" and duration > 600:
-        escalation_risk = rng.choice(["medium", "low"])
-    else:
-        escalation_risk = "low"
-
-    # CSAT prediction: 1-5 scale, correlated with sentiment
-    if sentiment == "positive":
-        csat_prediction = rng.uniform(4.0, 5.0)
-    elif sentiment == "neutral":
-        csat_prediction = rng.uniform(3.0, 4.2)
-    else:
-        csat_prediction = rng.uniform(1.5, 3.0)
+    NOTE: AI analysis fields (sentiment, quality, escalation, CSAT) are null
+    until real AI analysis is implemented. No fake/simulated data is shown.
+    """
+    has_recording = call.has_recording or False
 
     return {
         "id": str(call.id),
@@ -138,18 +83,18 @@ def call_log_to_response(call: CallLog) -> dict:
         "start_time": call.start_time.isoformat() if call.start_time else None,  # property
         "end_time": None,  # Not in DB
         "duration_seconds": call.duration_seconds,
-        "has_recording": call.has_recording,  # property
+        "has_recording": has_recording,
         "recording_url": call.recording_url,
-        "transcription": None,  # Not in DB yet
-        "ai_summary": None,  # Not in DB yet
-        # Simulated AI analysis fields
-        "sentiment": sentiment,
-        "sentiment_score": round(sentiment_score, 1),
-        "quality_score": round(quality_score, 1),
-        "escalation_risk": escalation_risk,
-        "csat_prediction": round(csat_prediction, 2),
+        "transcription": None,  # Not in DB yet - requires real AI
+        "ai_summary": None,  # Not in DB yet - requires real AI
+        # AI analysis fields - NULL until real AI analysis is implemented
+        "sentiment": None,
+        "sentiment_score": None,
+        "quality_score": None,
+        "escalation_risk": None,
+        "csat_prediction": None,
         "has_transcript": False,
-        "has_analysis": True,  # We now have simulated analysis
+        "has_analysis": False,  # No real AI analysis yet
         # Customer/contact info
         "customer_id": str(call.customer_id) if call.customer_id else None,
         "contact_name": call.contact_name,  # property -> answered_by
