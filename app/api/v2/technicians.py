@@ -442,16 +442,17 @@ async def get_technician_jobs(
                 wo.actual_end_time::text as completed_date,
                 wo.customer_id,
                 COALESCE(c.first_name || ' ' || c.last_name, 'Customer #' || wo.customer_id::text) as customer_name,
-                wo.service_location,
+                COALESCE(
+                    NULLIF(TRIM(COALESCE(wo.service_address_line1, '') || ' ' || COALESCE(wo.service_city, '') || ', ' || COALESCE(wo.service_state, '')), ' , '),
+                    'No address'
+                ) as service_location,
                 wo.job_type,
                 wo.status,
                 COALESCE(wo.total_amount, 0) as total_amount,
                 wo.total_labor_minutes as duration_minutes,
                 wo.notes,
-                (SELECT COALESCE(SUM(quantity), 0) FROM job_costs
-                 WHERE work_order_id = wo.id AND cost_type = 'labor' AND unit = 'hour') as labor_hours,
-                (SELECT COALESCE(SUM(total_cost), 0) FROM job_costs
-                 WHERE work_order_id = wo.id AND cost_type = 'materials') as parts_cost
+                wo.estimated_duration_hours as labor_hours,
+                0.0 as parts_cost
             FROM work_orders wo
             LEFT JOIN customers c ON wo.customer_id = c.id
             WHERE wo.technician_id = :tech_id
