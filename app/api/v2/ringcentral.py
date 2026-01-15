@@ -176,9 +176,10 @@ async def analyze_single_call(call_id: int):
 
     Steps:
     1. Load the call record
-    2. Transcribe the recording using Whisper
-    3. Analyze the transcript using LLM
-    4. Save results to database
+    2. Download recording via RingCentral API (requires auth)
+    3. Transcribe the recording using Whisper
+    4. Analyze the transcript using LLM
+    5. Save results to database
     """
     logger.info(f"Starting analysis for call {call_id}")
 
@@ -202,9 +203,37 @@ async def analyze_single_call(call_id: int):
             call.transcription_status = "pending"
             await db.commit()
 
-            # Step 1: Transcribe the recording
-            logger.info(f"Transcribing call {call_id} from {call.recording_url}")
-            transcription_result = await ai_gateway.transcribe_audio(call.recording_url)
+            # Step 1: Extract recording ID and download via RingCentral
+            # URL format: https://media.ringcentral.com/restapi/v1.0/account/.../recording/{id}/content
+            recording_url = call.recording_url
+            logger.info(f"Downloading recording for call {call_id} from {recording_url[:80]}...")
+
+            # Extract recording ID from URL
+            import re
+            match = re.search(r'/recording/(\d+)/content', recording_url)
+            if not match:
+                logger.error(f"Could not extract recording ID from URL: {recording_url}")
+                call.transcription_status = "failed"
+                await db.commit()
+                return
+
+            recording_id = match.group(1)
+            audio_data = await ringcentral_service.get_recording_content(recording_id)
+
+            if not audio_data:
+                logger.error(f"Failed to download recording {recording_id} for call {call_id}")
+                call.transcription_status = "failed"
+                await db.commit()
+                return
+
+            logger.info(f"Downloaded {len(audio_data)} bytes of audio for call {call_id}")
+
+            # Step 2: Transcribe the recording using audio bytes
+            transcription_result = await ai_gateway.transcribe_audio_bytes(
+                audio_data=audio_data,
+                filename=f"call_{call_id}.mp3",
+                language="en"
+            )
 
             if transcription_result.get("error"):
                 logger.error(f"Transcription failed for call {call_id}: {transcription_result['error']}")

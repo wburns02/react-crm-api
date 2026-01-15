@@ -334,6 +334,53 @@ class AIGateway:
             logger.error(f"Transcription error: {e}")
             return {"text": "", "error": str(e)}
 
+    async def transcribe_audio_bytes(
+        self,
+        audio_data: bytes,
+        filename: str = "recording.mp3",
+        language: str = "en",
+    ) -> Dict[str, Any]:
+        """Transcribe audio from raw bytes using Whisper API.
+
+        Args:
+            audio_data: Raw audio bytes
+            filename: Filename to use in multipart upload
+            language: Language code
+
+        Returns:
+            Dict with 'text' key containing transcription
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self.config.timeout) as whisper_client:
+                logger.info(f"Transcribing {len(audio_data)} bytes of audio...")
+
+                # Use multipart file upload to /transcribe endpoint
+                files = {"file": (filename, audio_data, "audio/mpeg")}
+                response = await whisper_client.post(
+                    f"{self.config.whisper_url}/transcribe",
+                    files=files,
+                    params={"language": language}
+                )
+                response.raise_for_status()
+
+                data = response.json()
+                text = data.get("text", "")
+                logger.info(f"Transcription complete, length: {len(text)} chars")
+                return {
+                    "text": text,
+                    "language": data.get("language", language),
+                    "duration": data.get("duration"),
+                }
+        except httpx.ConnectError as e:
+            logger.warning(f"Whisper server unavailable: {e}")
+            return {"text": "", "error": "connection_failed"}
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Whisper API error: {e.response.status_code} - {e.response.text}")
+            return {"text": "", "error": f"http_{e.response.status_code}"}
+        except Exception as e:
+            logger.error(f"Transcription error: {e}")
+            return {"text": "", "error": str(e)}
+
     async def summarize_text(
         self,
         text: str,
