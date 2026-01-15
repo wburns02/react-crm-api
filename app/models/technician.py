@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric, ARRAY
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -18,8 +18,8 @@ class Technician(Base):
     employee_id = Column(String(50), unique=True, index=True)
     is_active = Column(Boolean, default=True)
 
-    # Skills (stored as JSON for SQLite test compatibility)
-    skills = Column(JSON)
+    # Skills (PostgreSQL VARCHAR[] array - matches Flask database schema)
+    skills = Column(ARRAY(String))
 
     # Vehicle info
     assigned_vehicle = Column(String(100))
