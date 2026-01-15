@@ -66,10 +66,12 @@ class SyncCallsRequest(BaseModel):
 def call_log_to_response(call: CallLog) -> dict:
     """Convert CallLog model to response dict.
 
-    NOTE: AI analysis fields (sentiment, quality, escalation, CSAT) are null
-    until real AI analysis is implemented. No fake/simulated data is shown.
+    Returns real AI analysis data from the database when available.
+    Calls without analysis will have null values for AI fields.
     """
     has_recording = call.has_recording or False
+    has_transcript = bool(call.transcription and len(call.transcription) > 0)
+    has_analysis = bool(call.analyzed_at is not None)
 
     return {
         "id": str(call.id),
@@ -85,16 +87,26 @@ def call_log_to_response(call: CallLog) -> dict:
         "duration_seconds": call.duration_seconds,
         "has_recording": has_recording,
         "recording_url": call.recording_url,
-        "transcription": None,  # Not in DB yet - requires real AI
-        "ai_summary": None,  # Not in DB yet - requires real AI
-        # AI analysis fields - NULL until real AI analysis is implemented
-        "sentiment": None,
-        "sentiment_score": None,
-        "quality_score": None,
-        "escalation_risk": None,
-        "csat_prediction": None,
-        "has_transcript": False,
-        "has_analysis": False,  # No real AI analysis yet
+        # Transcription and AI analysis - from real DB data
+        "transcription": call.transcription,
+        "transcription_status": call.transcription_status,
+        "ai_summary": call.ai_summary,
+        # AI analysis fields - real data from database
+        "sentiment": call.sentiment,
+        "sentiment_score": call.sentiment_score,
+        "quality_score": call.quality_score,
+        "escalation_risk": call.escalation_risk,
+        "csat_prediction": call.csat_prediction,
+        # Quality breakdown scores
+        "professionalism_score": call.professionalism_score,
+        "empathy_score": call.empathy_score,
+        "clarity_score": call.clarity_score,
+        "resolution_score": call.resolution_score,
+        # Topics and analysis metadata
+        "topics": call.topics,
+        "analyzed_at": call.analyzed_at.isoformat() if call.analyzed_at else None,
+        "has_transcript": has_transcript,
+        "has_analysis": has_analysis,
         # Customer/contact info
         "customer_id": str(call.customer_id) if call.customer_id else None,
         "contact_name": call.contact_name,  # property -> answered_by
@@ -741,18 +753,30 @@ async def transcribe_call(
                 call.transcription = result["text"]
                 call.transcription_status = "completed"
 
-                # Also generate summary and sentiment
+                # Run comprehensive call analysis if transcript is substantial
                 if len(result["text"]) > 50:
-                    summary_result = await ai_gateway.summarize_text(
-                        result["text"],
-                        max_length=100,
-                        style="concise",
+                    # Get comprehensive quality analysis
+                    analysis = await ai_gateway.analyze_call_quality(
+                        transcript=result["text"],
+                        call_direction=call.direction or "inbound",
+                        duration_seconds=call.duration_seconds or 0,
                     )
-                    call.ai_summary = summary_result.get("summary")
 
-                    sentiment_result = await ai_gateway.analyze_sentiment(result["text"])
-                    call.sentiment = sentiment_result.get("sentiment")
-                    call.sentiment_score = sentiment_result.get("score")
+                    # Update call with analysis results
+                    call.ai_summary = analysis.get("summary")
+                    call.sentiment = analysis.get("sentiment")
+                    call.sentiment_score = analysis.get("sentiment_score")
+                    call.quality_score = analysis.get("quality_score")
+                    call.csat_prediction = analysis.get("csat_prediction")
+                    call.escalation_risk = analysis.get("escalation_risk")
+                    call.professionalism_score = analysis.get("professionalism_score")
+                    call.empathy_score = analysis.get("empathy_score")
+                    call.clarity_score = analysis.get("clarity_score")
+                    call.resolution_score = analysis.get("resolution_score")
+                    call.topics = analysis.get("topics")
+                    call.analyzed_at = datetime.utcnow()
+
+                    logger.info(f"Call {call_id} analyzed: quality={call.quality_score}, sentiment={call.sentiment}")
             else:
                 call.transcription_status = "failed"
 
@@ -765,6 +789,177 @@ async def transcribe_call(
     background_tasks.add_task(do_transcription)
 
     return {"status": "transcription_queued", "call_id": call_id}
+
+
+@router.post("/calls/analyze-batch")
+async def analyze_calls_batch(
+    background_tasks: BackgroundTasks,
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = 50,
+    force: bool = False,
+):
+    """Batch analyze calls with recordings that haven't been analyzed yet.
+
+    Args:
+        limit: Maximum number of calls to queue for analysis (default 50)
+        force: Re-analyze calls that already have analysis (default False)
+
+    Returns:
+        Summary of queued analyses
+    """
+    # Find calls with recordings that need analysis
+    if force:
+        # Re-analyze all calls with recordings
+        result = await db.execute(
+            select(CallLog)
+            .where(CallLog.recording_url.isnot(None))
+            .order_by(CallLog.call_date.desc())
+            .limit(limit)
+        )
+    else:
+        # Only analyze calls without existing analysis
+        result = await db.execute(
+            select(CallLog)
+            .where(
+                CallLog.recording_url.isnot(None),
+                CallLog.analyzed_at.is_(None),
+            )
+            .order_by(CallLog.call_date.desc())
+            .limit(limit)
+        )
+
+    calls = result.scalars().all()
+
+    if not calls:
+        return {
+            "status": "no_calls_to_analyze",
+            "message": "No calls with recordings found that need analysis",
+            "queued": 0,
+        }
+
+    queued_count = 0
+    already_transcribed = 0
+
+    for call in calls:
+        # If call already has transcription, just run analysis
+        if call.transcription and len(call.transcription) > 50:
+            async def analyze_existing(c=call):
+                try:
+                    analysis = await ai_gateway.analyze_call_quality(
+                        transcript=c.transcription,
+                        call_direction=c.direction or "inbound",
+                        duration_seconds=c.duration_seconds or 0,
+                    )
+
+                    c.ai_summary = analysis.get("summary")
+                    c.sentiment = analysis.get("sentiment")
+                    c.sentiment_score = analysis.get("sentiment_score")
+                    c.quality_score = analysis.get("quality_score")
+                    c.csat_prediction = analysis.get("csat_prediction")
+                    c.escalation_risk = analysis.get("escalation_risk")
+                    c.professionalism_score = analysis.get("professionalism_score")
+                    c.empathy_score = analysis.get("empathy_score")
+                    c.clarity_score = analysis.get("clarity_score")
+                    c.resolution_score = analysis.get("resolution_score")
+                    c.topics = analysis.get("topics")
+                    c.analyzed_at = datetime.utcnow()
+
+                    await db.commit()
+                    logger.info(f"Re-analyzed call {c.id}: quality={c.quality_score}")
+                except Exception as e:
+                    logger.error(f"Analysis failed for call {c.id}: {e}")
+
+            background_tasks.add_task(analyze_existing)
+            already_transcribed += 1
+        else:
+            # Need to transcribe first, then analyze
+            async def transcribe_and_analyze(c=call):
+                try:
+                    c.transcription_status = "pending"
+                    await db.commit()
+
+                    result = await ai_gateway.transcribe_audio(c.recording_url)
+                    if result.get("text") and len(result["text"]) > 50:
+                        c.transcription = result["text"]
+                        c.transcription_status = "completed"
+
+                        analysis = await ai_gateway.analyze_call_quality(
+                            transcript=result["text"],
+                            call_direction=c.direction or "inbound",
+                            duration_seconds=c.duration_seconds or 0,
+                        )
+
+                        c.ai_summary = analysis.get("summary")
+                        c.sentiment = analysis.get("sentiment")
+                        c.sentiment_score = analysis.get("sentiment_score")
+                        c.quality_score = analysis.get("quality_score")
+                        c.csat_prediction = analysis.get("csat_prediction")
+                        c.escalation_risk = analysis.get("escalation_risk")
+                        c.professionalism_score = analysis.get("professionalism_score")
+                        c.empathy_score = analysis.get("empathy_score")
+                        c.clarity_score = analysis.get("clarity_score")
+                        c.resolution_score = analysis.get("resolution_score")
+                        c.topics = analysis.get("topics")
+                        c.analyzed_at = datetime.utcnow()
+
+                        logger.info(f"Transcribed and analyzed call {c.id}: quality={c.quality_score}")
+                    else:
+                        c.transcription_status = "failed"
+
+                    await db.commit()
+                except Exception as e:
+                    logger.error(f"Transcription/analysis failed for call {c.id}: {e}")
+                    c.transcription_status = "failed"
+                    await db.commit()
+
+            background_tasks.add_task(transcribe_and_analyze)
+
+        queued_count += 1
+
+    return {
+        "status": "analysis_queued",
+        "queued": queued_count,
+        "already_transcribed": already_transcribed,
+        "needs_transcription": queued_count - already_transcribed,
+        "message": f"Queued {queued_count} calls for analysis",
+    }
+
+
+@router.get("/calls/analysis-status")
+async def get_analysis_status(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get status of call analysis coverage."""
+    # Count total calls with recordings
+    total_result = await db.execute(
+        select(func.count()).where(CallLog.recording_url.isnot(None))
+    )
+    total_with_recordings = total_result.scalar() or 0
+
+    # Count analyzed calls
+    analyzed_result = await db.execute(
+        select(func.count()).where(
+            CallLog.recording_url.isnot(None),
+            CallLog.analyzed_at.isnot(None),
+        )
+    )
+    analyzed_count = analyzed_result.scalar() or 0
+
+    # Count pending transcriptions
+    pending_result = await db.execute(
+        select(func.count()).where(CallLog.transcription_status == "pending")
+    )
+    pending_count = pending_result.scalar() or 0
+
+    return {
+        "total_calls_with_recordings": total_with_recordings,
+        "analyzed_calls": analyzed_count,
+        "pending_transcriptions": pending_count,
+        "unanalyzed_calls": total_with_recordings - analyzed_count,
+        "coverage_percentage": round((analyzed_count / total_with_recordings * 100), 1) if total_with_recordings > 0 else 0,
+    }
 
 
 @router.post("/sync")

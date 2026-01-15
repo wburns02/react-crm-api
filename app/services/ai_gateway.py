@@ -403,6 +403,116 @@ Text: {text}"""
                 "error": "parse_failed",
             }
 
+    async def analyze_call_quality(
+        self,
+        transcript: str,
+        call_direction: str = "inbound",
+        duration_seconds: int = 0,
+    ) -> Dict[str, Any]:
+        """Comprehensive call quality analysis using LLM.
+
+        Analyzes a call transcript for:
+        - Sentiment (-100 to +100)
+        - Quality score (0-100)
+        - CSAT prediction (1-5)
+        - Escalation risk (low/medium/high/critical)
+        - Quality breakdown scores
+        - Topics discussed
+
+        Args:
+            transcript: Full call transcript text
+            call_direction: inbound or outbound
+            duration_seconds: Call duration for context
+
+        Returns:
+            Dict with all analysis metrics
+        """
+        analysis_prompt = f"""Analyze this customer service call transcript and provide detailed quality metrics.
+
+Call Direction: {call_direction}
+Duration: {duration_seconds} seconds
+
+TRANSCRIPT:
+{transcript}
+
+Respond with ONLY valid JSON (no markdown, no explanation):
+{{
+    "sentiment": "positive" or "negative" or "neutral",
+    "sentiment_score": number from -100 (very negative) to +100 (very positive),
+    "quality_score": number 0-100 (overall call quality),
+    "csat_prediction": number 1.0-5.0 (predicted customer satisfaction),
+    "escalation_risk": "low" or "medium" or "high" or "critical",
+    "professionalism_score": number 0-100,
+    "empathy_score": number 0-100,
+    "clarity_score": number 0-100,
+    "resolution_score": number 0-100,
+    "topics": ["topic1", "topic2", "topic3"],
+    "summary": "2-3 sentence call summary"
+}}
+
+Scoring guidelines:
+- sentiment_score: Base on customer emotion, frustration level, satisfaction expressed
+- quality_score: Overall agent performance combining all factors
+- csat_prediction: 1=very dissatisfied, 3=neutral, 5=very satisfied
+- escalation_risk: "critical" if customer threatens to cancel/escalate, "high" if very frustrated
+- professionalism_score: Agent's professional demeanor and language
+- empathy_score: How well agent acknowledged customer feelings/concerns
+- clarity_score: How clearly agent explained information/solutions
+- resolution_score: How effectively the issue was resolved"""
+
+        result = await self.chat_completion(
+            messages=[{"role": "user", "content": analysis_prompt}],
+            max_tokens=500,
+            temperature=0.2,  # Low temp for consistent analysis
+            use_heavy_model=True,  # Use 70B model for complex analysis
+        )
+
+        try:
+            content = result.get("content", "{}")
+            # Strip markdown code blocks if present
+            if "```" in content:
+                parts = content.split("```")
+                for part in parts:
+                    if part.strip().startswith("{"):
+                        content = part.strip()
+                        break
+                    elif part.strip().startswith("json"):
+                        content = part.strip()[4:].strip()
+                        break
+
+            analysis = json.loads(content.strip())
+
+            # Validate and clamp values
+            return {
+                "sentiment": analysis.get("sentiment", "neutral"),
+                "sentiment_score": max(-100, min(100, float(analysis.get("sentiment_score", 0)))),
+                "quality_score": max(0, min(100, float(analysis.get("quality_score", 50)))),
+                "csat_prediction": max(1.0, min(5.0, float(analysis.get("csat_prediction", 3.0)))),
+                "escalation_risk": analysis.get("escalation_risk", "low") if analysis.get("escalation_risk") in ["low", "medium", "high", "critical"] else "low",
+                "professionalism_score": max(0, min(100, float(analysis.get("professionalism_score", 50)))),
+                "empathy_score": max(0, min(100, float(analysis.get("empathy_score", 50)))),
+                "clarity_score": max(0, min(100, float(analysis.get("clarity_score", 50)))),
+                "resolution_score": max(0, min(100, float(analysis.get("resolution_score", 50)))),
+                "topics": analysis.get("topics", [])[:10],  # Limit to 10 topics
+                "summary": analysis.get("summary", ""),
+            }
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            logger.error(f"Failed to parse call analysis: {e}")
+            return {
+                "sentiment": "neutral",
+                "sentiment_score": 0,
+                "quality_score": 50,
+                "csat_prediction": 3.0,
+                "escalation_risk": "low",
+                "professionalism_score": 50,
+                "empathy_score": 50,
+                "clarity_score": 50,
+                "resolution_score": 50,
+                "topics": [],
+                "summary": "",
+                "error": "analysis_parse_failed",
+            }
+
 
 # Singleton instance
 ai_gateway = AIGateway()
