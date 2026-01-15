@@ -98,7 +98,7 @@ redoc_url = "/redoc" if settings.DOCS_ENABLED else None
 app = FastAPI(
     title="React CRM API",
     description="API for React CRM - Nationwide Septic Service Management. Includes Public API with OAuth2 authentication.",
-    version="2.5.0",  # Added Call Intelligence AI analysis
+    version="2.4.0",  # Added demo mode role switching
     docs_url=docs_url,
     redoc_url=redoc_url,
     lifespan=lifespan,
@@ -159,9 +159,9 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.5.1",  # Added Technician Performance Stats
+        "version": "2.4.1",  # Added CS Platform APIs (surveys, campaigns, escalations, collaboration)
         "environment": settings.ENVIRONMENT,
-        "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "call_intelligence", "technician_performance"],
+        "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status"],
     }
 
 

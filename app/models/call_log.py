@@ -3,7 +3,7 @@
 NOTE: This model matches the EXISTING production database schema.
 The column names here must match the actual call_logs table.
 """
-from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Time, JSON, Float
+from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Time, JSON
 from sqlalchemy.sql import func
 
 
@@ -54,26 +54,6 @@ class CallLog(Base):
 
     # External system reference
     external_system = Column(String(100), nullable=True)
-
-    # AI Analysis fields (Call Intelligence)
-    # These columns exist from migration 006:
-    transcription = Column(Text, nullable=True)  # Full call transcript
-    transcription_status = Column(String(20), nullable=True)  # pending/completed/failed
-    ai_summary = Column(Text, nullable=True)  # AI-generated summary
-    sentiment_score = Column(Float, nullable=True)  # -100 to 100
-
-    # TODO: Enable these after running migration 022 manually
-    # These columns need migration 022 to be run:
-    # sentiment = Column(String(20), nullable=True)  # positive/negative/neutral
-    # quality_score = Column(Float, nullable=True)  # 0-100 overall quality
-    # csat_prediction = Column(Float, nullable=True)  # 1-5 predicted CSAT
-    # escalation_risk = Column(String(20), nullable=True)  # low/medium/high/critical
-    # professionalism_score = Column(Float, nullable=True)
-    # empathy_score = Column(Float, nullable=True)
-    # clarity_score = Column(Float, nullable=True)
-    # resolution_score = Column(Float, nullable=True)
-    # topics = Column(JSON, nullable=True)  # List of topic strings
-    # analyzed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

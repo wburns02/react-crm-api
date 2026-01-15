@@ -66,21 +66,10 @@ class SyncCallsRequest(BaseModel):
 def call_log_to_response(call: CallLog) -> dict:
     """Convert CallLog model to response dict.
 
-    Returns real AI analysis data from the database when available.
-    Calls without analysis will have null values for AI fields.
-
-    NOTE: Some AI analysis columns are pending migration 022.
-    Until then, they return None.
+    NOTE: AI analysis fields (sentiment, quality, escalation, CSAT) are null
+    until real AI analysis is implemented. No fake/simulated data is shown.
     """
     has_recording = call.has_recording or False
-    has_transcript = bool(call.transcription and len(call.transcription) > 0)
-
-    # Safely get attributes that may not exist yet (pending migration)
-    def safe_get(obj, attr, default=None):
-        try:
-            return getattr(obj, attr, default)
-        except Exception:
-            return default
 
     return {
         "id": str(call.id),
@@ -96,26 +85,16 @@ def call_log_to_response(call: CallLog) -> dict:
         "duration_seconds": call.duration_seconds,
         "has_recording": has_recording,
         "recording_url": call.recording_url,
-        # Transcription and AI analysis - from real DB data
-        "transcription": call.transcription,
-        "transcription_status": call.transcription_status,
-        "ai_summary": call.ai_summary,
-        # AI analysis fields - pending migration 022
-        "sentiment": None,  # safe_get(call, 'sentiment'),
-        "sentiment_score": call.sentiment_score,  # From migration 006
-        "quality_score": None,  # safe_get(call, 'quality_score'),
-        "escalation_risk": None,  # safe_get(call, 'escalation_risk'),
-        "csat_prediction": None,  # safe_get(call, 'csat_prediction'),
-        # Quality breakdown scores - pending migration 022
-        "professionalism_score": None,
-        "empathy_score": None,
-        "clarity_score": None,
-        "resolution_score": None,
-        # Topics and analysis metadata - pending migration 022
-        "topics": None,
-        "analyzed_at": None,
-        "has_transcript": has_transcript,
-        "has_analysis": False,  # Until migration runs
+        "transcription": None,  # Not in DB yet - requires real AI
+        "ai_summary": None,  # Not in DB yet - requires real AI
+        # AI analysis fields - NULL until real AI analysis is implemented
+        "sentiment": None,
+        "sentiment_score": None,
+        "quality_score": None,
+        "escalation_risk": None,
+        "csat_prediction": None,
+        "has_transcript": False,
+        "has_analysis": False,  # No real AI analysis yet
         # Customer/contact info
         "customer_id": str(call.customer_id) if call.customer_id else None,
         "contact_name": call.contact_name,  # property -> answered_by
@@ -678,219 +657,6 @@ async def get_call_intelligence_analytics(
         raise HTTPException(status_code=500, detail=error_detail)
 
 
-# NOTE: Static routes MUST come before parameterized routes like /calls/{call_id}
-@router.post("/calls/analyze-batch")
-async def analyze_calls_batch(
-    background_tasks: BackgroundTasks,
-    db: DbSession,
-    current_user: CurrentUser,
-    limit: int = 50,
-    force: bool = False,
-):
-    """Batch analyze calls with recordings that haven't been analyzed yet.
-
-    Args:
-        limit: Maximum number of calls to queue for analysis (default 50)
-        force: Re-analyze calls that already have analysis (default False)
-
-    Returns:
-        Summary of queued analyses
-    """
-    try:
-        # Find calls with recordings that need analysis
-        if force:
-            # Re-analyze all calls with recordings
-            result = await db.execute(
-                select(CallLog)
-                .where(CallLog.recording_url.isnot(None))
-                .order_by(CallLog.call_date.desc())
-                .limit(limit)
-            )
-        else:
-            # Only analyze calls without existing analysis
-            try:
-                result = await db.execute(
-                    select(CallLog)
-                    .where(
-                        CallLog.recording_url.isnot(None),
-                        CallLog.analyzed_at.is_(None),
-                    )
-                    .order_by(CallLog.call_date.desc())
-                    .limit(limit)
-                )
-            except Exception:
-                # analyzed_at column may not exist - fall back to all recordings
-                result = await db.execute(
-                    select(CallLog)
-                    .where(CallLog.recording_url.isnot(None))
-                    .order_by(CallLog.call_date.desc())
-                    .limit(limit)
-                )
-    except Exception as e:
-        logger.error(f"Error in analyze-batch query: {e}")
-        return {
-            "status": "error",
-            "message": "Database query failed - migration may be pending",
-            "queued": 0,
-        }
-
-    calls = result.scalars().all()
-
-    if not calls:
-        return {
-            "status": "no_calls_to_analyze",
-            "message": "No calls with recordings found that need analysis",
-            "queued": 0,
-        }
-
-    queued_count = 0
-    already_transcribed = 0
-
-    for call in calls:
-        # If call already has transcription, just run analysis
-        if call.transcription and len(call.transcription) > 50:
-            async def analyze_existing(c=call):
-                try:
-                    analysis = await ai_gateway.analyze_call_quality(
-                        transcript=c.transcription,
-                        call_direction=c.direction or "inbound",
-                        duration_seconds=c.duration_seconds or 0,
-                    )
-
-                    # Only set columns that exist (from migration 006)
-                    c.ai_summary = analysis.get("summary")
-                    c.sentiment_score = analysis.get("sentiment_score")
-
-                    # TODO: Enable after migration 022 is run
-                    # c.sentiment = analysis.get("sentiment")
-                    # c.quality_score = analysis.get("quality_score")
-                    # c.csat_prediction = analysis.get("csat_prediction")
-                    # c.escalation_risk = analysis.get("escalation_risk")
-                    # c.professionalism_score = analysis.get("professionalism_score")
-                    # c.empathy_score = analysis.get("empathy_score")
-                    # c.clarity_score = analysis.get("clarity_score")
-                    # c.resolution_score = analysis.get("resolution_score")
-                    # c.topics = analysis.get("topics")
-                    # c.analyzed_at = datetime.utcnow()
-
-                    await db.commit()
-                    logger.info(f"Re-analyzed call {c.id}: summary saved")
-                except Exception as e:
-                    logger.error(f"Analysis failed for call {c.id}: {e}")
-
-            background_tasks.add_task(analyze_existing)
-            already_transcribed += 1
-        else:
-            # Need to transcribe first, then analyze
-            async def transcribe_and_analyze(c=call):
-                try:
-                    c.transcription_status = "pending"
-                    await db.commit()
-
-                    result = await ai_gateway.transcribe_audio(c.recording_url)
-                    if result.get("text") and len(result["text"]) > 50:
-                        c.transcription = result["text"]
-                        c.transcription_status = "completed"
-
-                        analysis = await ai_gateway.analyze_call_quality(
-                            transcript=result["text"],
-                            call_direction=c.direction or "inbound",
-                            duration_seconds=c.duration_seconds or 0,
-                        )
-
-                        # Only set columns that exist (from migration 006)
-                        c.ai_summary = analysis.get("summary")
-                        c.sentiment_score = analysis.get("sentiment_score")
-
-                        # TODO: Enable after migration 022 is run
-                        # c.sentiment = analysis.get("sentiment")
-                        # c.quality_score = analysis.get("quality_score")
-                        # c.csat_prediction = analysis.get("csat_prediction")
-                        # c.escalation_risk = analysis.get("escalation_risk")
-                        # c.professionalism_score = analysis.get("professionalism_score")
-                        # c.empathy_score = analysis.get("empathy_score")
-                        # c.clarity_score = analysis.get("clarity_score")
-                        # c.resolution_score = analysis.get("resolution_score")
-                        # c.topics = analysis.get("topics")
-                        # c.analyzed_at = datetime.utcnow()
-
-                        logger.info(f"Transcribed and analyzed call {c.id}")
-                    else:
-                        c.transcription_status = "failed"
-
-                    await db.commit()
-                except Exception as e:
-                    logger.error(f"Transcription/analysis failed for call {c.id}: {e}")
-                    c.transcription_status = "failed"
-                    await db.commit()
-
-            background_tasks.add_task(transcribe_and_analyze)
-
-        queued_count += 1
-
-    return {
-        "status": "analysis_queued",
-        "queued": queued_count,
-        "already_transcribed": already_transcribed,
-        "needs_transcription": queued_count - already_transcribed,
-        "message": f"Queued {queued_count} calls for analysis",
-    }
-
-
-@router.get("/calls/analysis-status")
-async def get_analysis_status(
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Get status of call analysis coverage."""
-    try:
-        # Count total calls with recordings
-        total_result = await db.execute(
-            select(func.count()).where(CallLog.recording_url.isnot(None))
-        )
-        total_with_recordings = total_result.scalar() or 0
-
-        # Count analyzed calls (may fail if analyzed_at column doesn't exist)
-        try:
-            analyzed_result = await db.execute(
-                select(func.count()).where(
-                    CallLog.recording_url.isnot(None),
-                    CallLog.analyzed_at.isnot(None),
-                )
-            )
-            analyzed_count = analyzed_result.scalar() or 0
-        except Exception:
-            # Column may not exist yet - migration pending
-            analyzed_count = 0
-
-        # Count pending transcriptions
-        try:
-            pending_result = await db.execute(
-                select(func.count()).where(CallLog.transcription_status == "pending")
-            )
-            pending_count = pending_result.scalar() or 0
-        except Exception:
-            pending_count = 0
-
-        return {
-            "total_calls_with_recordings": total_with_recordings,
-            "analyzed_calls": analyzed_count,
-            "pending_transcriptions": pending_count,
-            "unanalyzed_calls": total_with_recordings - analyzed_count,
-            "coverage_percentage": round((analyzed_count / total_with_recordings * 100), 1) if total_with_recordings > 0 else 0,
-        }
-    except Exception as e:
-        logger.error(f"Error getting analysis status: {e}")
-        return {
-            "total_calls_with_recordings": 0,
-            "analyzed_calls": 0,
-            "pending_transcriptions": 0,
-            "unanalyzed_calls": 0,
-            "coverage_percentage": 0,
-            "error": "Analysis status temporarily unavailable",
-        }
-
-
 @router.get("/calls/{call_id}")
 async def get_call(
     call_id: str,
@@ -975,32 +741,18 @@ async def transcribe_call(
                 call.transcription = result["text"]
                 call.transcription_status = "completed"
 
-                # Run comprehensive call analysis if transcript is substantial
+                # Also generate summary and sentiment
                 if len(result["text"]) > 50:
-                    # Get comprehensive quality analysis
-                    analysis = await ai_gateway.analyze_call_quality(
-                        transcript=result["text"],
-                        call_direction=call.direction or "inbound",
-                        duration_seconds=call.duration_seconds or 0,
+                    summary_result = await ai_gateway.summarize_text(
+                        result["text"],
+                        max_length=100,
+                        style="concise",
                     )
+                    call.ai_summary = summary_result.get("summary")
 
-                    # Update call with analysis results (only columns from migration 006)
-                    call.ai_summary = analysis.get("summary")
-                    call.sentiment_score = analysis.get("sentiment_score")
-
-                    # TODO: Enable after migration 022 is run
-                    # call.sentiment = analysis.get("sentiment")
-                    # call.quality_score = analysis.get("quality_score")
-                    # call.csat_prediction = analysis.get("csat_prediction")
-                    # call.escalation_risk = analysis.get("escalation_risk")
-                    # call.professionalism_score = analysis.get("professionalism_score")
-                    # call.empathy_score = analysis.get("empathy_score")
-                    # call.clarity_score = analysis.get("clarity_score")
-                    # call.resolution_score = analysis.get("resolution_score")
-                    # call.topics = analysis.get("topics")
-                    # call.analyzed_at = datetime.utcnow()
-
-                    logger.info(f"Call {call_id} analyzed: summary saved")
+                    sentiment_result = await ai_gateway.analyze_sentiment(result["text"])
+                    call.sentiment = sentiment_result.get("sentiment")
+                    call.sentiment_score = sentiment_result.get("score")
             else:
                 call.transcription_status = "failed"
 
