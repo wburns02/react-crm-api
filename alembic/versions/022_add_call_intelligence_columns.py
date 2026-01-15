@@ -54,45 +54,17 @@ def safe_add_column(table_name, column):
 
 
 def upgrade():
-    """Add AI analysis columns to call_logs table."""
-    conn = op.get_bind()
+    """Add AI analysis columns to call_logs table.
 
-    # List of columns to add (excluding ones from migration 006)
-    columns_to_add = [
-        ('sentiment', sa.String(20)),
-        ('quality_score', sa.Float),
-        ('csat_prediction', sa.Float),
-        ('escalation_risk', sa.String(20)),
-        ('professionalism_score', sa.Float),
-        ('empathy_score', sa.Float),
-        ('clarity_score', sa.Float),
-        ('resolution_score', sa.Float),
-        ('topics', sa.JSON),
-        ('analyzed_at', sa.DateTime(timezone=True)),
-    ]
-
-    for col_name, col_type in columns_to_add:
-        if not column_exists(conn, 'call_logs', col_name):
-            safe_add_column('call_logs', sa.Column(col_name, col_type, nullable=True))
-
-    print("Call Intelligence columns migration completed")
+    NOTE: This migration has been simplified to avoid deployment timeouts.
+    The columns will be added via direct SQL commands if needed.
+    """
+    print("Migration 022: Call Intelligence columns - skipped for now")
+    # The columns will be added manually or via a separate deployment
+    pass
 
 
 def downgrade():
     """Remove AI analysis columns added by this migration."""
-    conn = op.get_bind()
-
-    # Only drop columns added by THIS migration (not ones from 006)
-    columns_to_drop = [
-        'sentiment', 'quality_score', 'csat_prediction',
-        'escalation_risk', 'professionalism_score', 'empathy_score',
-        'clarity_score', 'resolution_score', 'topics', 'analyzed_at'
-    ]
-
-    for col in columns_to_drop:
-        try:
-            if column_exists(conn, 'call_logs', col):
-                op.drop_column('call_logs', col)
-                print(f"Dropped {col} column")
-        except Exception as e:
-            print(f"Could not drop {col}: {e}")
+    print("Migration 022 downgrade: No columns to drop (migration was skipped)")
+    pass

@@ -56,26 +56,24 @@ class CallLog(Base):
     external_system = Column(String(100), nullable=True)
 
     # AI Analysis fields (Call Intelligence)
+    # These columns exist from migration 006:
     transcription = Column(Text, nullable=True)  # Full call transcript
     transcription_status = Column(String(20), nullable=True)  # pending/completed/failed
     ai_summary = Column(Text, nullable=True)  # AI-generated summary
-    sentiment = Column(String(20), nullable=True)  # positive/negative/neutral
     sentiment_score = Column(Float, nullable=True)  # -100 to 100
-    quality_score = Column(Float, nullable=True)  # 0-100 overall quality
-    csat_prediction = Column(Float, nullable=True)  # 1-5 predicted CSAT
-    escalation_risk = Column(String(20), nullable=True)  # low/medium/high/critical
 
-    # Quality breakdown scores (0-100 each)
-    professionalism_score = Column(Float, nullable=True)
-    empathy_score = Column(Float, nullable=True)
-    clarity_score = Column(Float, nullable=True)
-    resolution_score = Column(Float, nullable=True)
-
-    # Topics discussed
-    topics = Column(JSON, nullable=True)  # List of topic strings
-
-    # Analysis timestamp
-    analyzed_at = Column(DateTime(timezone=True), nullable=True)
+    # TODO: Enable these after running migration 022 manually
+    # These columns need migration 022 to be run:
+    # sentiment = Column(String(20), nullable=True)  # positive/negative/neutral
+    # quality_score = Column(Float, nullable=True)  # 0-100 overall quality
+    # csat_prediction = Column(Float, nullable=True)  # 1-5 predicted CSAT
+    # escalation_risk = Column(String(20), nullable=True)  # low/medium/high/critical
+    # professionalism_score = Column(Float, nullable=True)
+    # empathy_score = Column(Float, nullable=True)
+    # clarity_score = Column(Float, nullable=True)
+    # resolution_score = Column(Float, nullable=True)
+    # topics = Column(JSON, nullable=True)  # List of topic strings
+    # analyzed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
