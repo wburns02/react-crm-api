@@ -337,18 +337,34 @@ async def create_technician(
     """Create a new technician."""
     import uuid
     from datetime import datetime
+    import traceback
 
-    # Generate UUID for the technician ID
-    tech_data = technician_data.model_dump()
-    tech_data["id"] = str(uuid.uuid4())
-    tech_data["created_at"] = datetime.utcnow()
-    tech_data["updated_at"] = datetime.utcnow()
+    try:
+        # Generate UUID for the technician ID
+        tech_data = technician_data.model_dump()
+        tech_data["id"] = str(uuid.uuid4())
+        tech_data["created_at"] = datetime.utcnow()
+        tech_data["updated_at"] = datetime.utcnow()
 
-    technician = Technician(**tech_data)
-    db.add(technician)
-    await db.commit()
-    await db.refresh(technician)
-    return technician_to_response(technician)
+        # Remove None employee_id to avoid unique constraint issues with empty strings
+        if tech_data.get("employee_id") is None or tech_data.get("employee_id") == "":
+            tech_data.pop("employee_id", None)
+
+        # Convert vehicle_capacity_gallons to int if present (model expects Integer)
+        if tech_data.get("vehicle_capacity_gallons") is not None:
+            tech_data["vehicle_capacity_gallons"] = int(tech_data["vehicle_capacity_gallons"])
+
+        technician = Technician(**tech_data)
+        db.add(technician)
+        await db.commit()
+        await db.refresh(technician)
+        return technician_to_response(technician)
+    except Exception as e:
+        logger.error(f"Error creating technician: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create technician: {str(e)}"
+        )
 
 
 @router.patch("/{technician_id}", response_model=TechnicianResponse)
