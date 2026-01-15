@@ -117,3 +117,55 @@ Real data from work order `50fd9c44-6bbd-4379-855e-534a27a1b008` is now present 
 - Customer: Steph Burns
 - Location: 808 Georgia St San Marcos, TX
 - Gallons: 1000
+
+---
+
+## Task 4: Remove Fake Data from Frontend (ReactCRM)
+
+### Date: 2026-01-15
+
+### Problems Found
+1. **Assigned Work Orders showed 0 completed** - Frontend was filtering by `assigned_technician` name only, but work orders used `technician_id`
+2. **Performance Coach showed fake data** - The `useTechnicianCoachAI.ts` file had hardcoded demo data (score 87, fake achievements, etc.) that displayed when the AI API failed
+
+### Solution (ReactCRM commit c2aecd1)
+1. **TechnicianDetailPage.tsx**: Updated filter to check both `technician_id` AND `assigned_technician`
+2. **workOrder.ts**: Added `technician_id` field to WorkOrder type schema
+3. **useTechnicianCoachAI.ts**: Removed all fake demo data generators - functions now return `null` when API is unavailable
+
+### Result: SUCCESS
+- Fake Performance Coach data is removed
+- Assigned Work Orders section now shows work orders assigned by `technician_id`
+
+---
+
+## Task 5: Call Intelligence AI Analysis with Real Data
+
+### Date: 2026-01-15
+
+### Goal
+Implement Call Intelligence AI analysis with REAL data in KPI cards
+
+### AI Server Status (100.85.99.69 via Tailscale)
+- **Ollama v0.13.5** running with models:
+  - qwen2.5:72b (47GB) - Best for complex text analysis
+  - llama3.1:70b (42GB) - Good general purpose
+  - qwen2.5:7b (4.6GB) - Fast for simple tasks
+  - llama3.2:3b (2GB) - Very fast, lightweight
+- **GPU Status** (2x RTX 3090, 48GB total):
+  - GPU 0: 18.7GB free
+  - GPU 1: 24.1GB free
+  - Total: ~43GB free - plenty for Whisper large-v3
+
+### Recommended Models
+- **Transcription**: faster-whisper large-v3 (best quality)
+- **Call Analysis**: qwen2.5:7b (fast) or qwen2.5:72b (best quality)
+
+### Implementation Steps
+- [x] Checked AI server models and GPU status
+- [ ] Install faster-whisper on AI server
+- [ ] Set up Whisper API endpoint on AI server
+- [ ] Run migration 022 on production DB
+- [ ] Update CallLog model with AI columns
+- [ ] Implement auto-analysis for call recordings
+- [ ] Playwright verification
