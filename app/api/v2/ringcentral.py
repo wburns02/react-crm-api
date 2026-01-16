@@ -1123,6 +1123,54 @@ async def get_analysis_status(
         }
 
 
+@router.post("/calls/analyze/{call_id}")
+async def analyze_single_call_endpoint(
+    call_id: str,
+    background_tasks: BackgroundTasks,
+    db: DbSession,
+    current_user: CurrentUser,
+    force: bool = Query(False, description="Re-analyze even if already analyzed"),
+):
+    """Trigger AI analysis for a single call.
+
+    This endpoint queues a specific call for AI analysis (transcription + quality scoring).
+    Analysis runs in the background and updates the database within ~10 seconds.
+
+    Returns immediately with queued status. Poll GET /calls/{call_id} to check results.
+    """
+    # Get the call
+    result = await db.execute(select(CallLog).where(CallLog.id == call_id))
+    call = result.scalar_one_or_none()
+
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+
+    if not call.recording_url:
+        raise HTTPException(status_code=400, detail="Call has no recording to analyze")
+
+    # Check if already analyzed (unless force=true)
+    if call.analyzed_at and not force:
+        return {
+            "status": "already_analyzed",
+            "message": "Call already has analysis. Use ?force=true to re-analyze.",
+            "call_id": call_id,
+            "analyzed_at": call.analyzed_at.isoformat(),
+            "sentiment": call.sentiment,
+            "quality_score": call.quality_score,
+        }
+
+    # Queue for background analysis
+    background_tasks.add_task(analyze_single_call, int(call_id))
+
+    return {
+        "status": "queued",
+        "message": "Call analysis started. Results will be available in ~10 seconds.",
+        "call_id": call_id,
+        "previous_sentiment": call.sentiment,
+        "previous_quality_score": call.quality_score,
+    }
+
+
 @router.get("/calls/{call_id}")
 async def get_call(
     call_id: str,
