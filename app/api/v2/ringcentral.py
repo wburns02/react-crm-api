@@ -6,6 +6,7 @@ Features:
 - Recording management
 - AI transcription of calls
 - Presence/availability status
+- Automatic background sync every 15 minutes
 """
 from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy import select, func, or_
@@ -13,6 +14,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 import logging
+import asyncio
 
 from app.api.deps import DbSession, CurrentUser
 from app.services.ringcentral_service import ringcentral_service
@@ -24,6 +26,144 @@ from app.database import async_session_maker
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Global state for auto-sync
+_auto_sync_task: Optional[asyncio.Task] = None
+_last_sync_time: Optional[datetime] = None
+_last_sync_status: Optional[dict] = None
+AUTO_SYNC_INTERVAL_SECONDS = 15 * 60  # 15 minutes
+
+
+async def _perform_sync(hours_back: int = 2) -> dict:
+    """Perform a sync of RingCentral calls.
+
+    Args:
+        hours_back: How many hours of call history to sync (default 2)
+
+    Returns:
+        dict with synced, skipped, total_records counts
+    """
+    global _last_sync_time, _last_sync_status
+
+    if not ringcentral_service.is_configured:
+        logger.warning("Auto-sync skipped: RingCentral not configured")
+        return {"error": "RingCentral not configured", "synced": 0, "skipped": 0}
+
+    date_from = datetime.utcnow() - timedelta(hours=hours_back)
+
+    try:
+        rc_logs = await ringcentral_service.get_call_log(
+            date_from=date_from,
+            per_page=250,
+        )
+
+        if rc_logs.get("error"):
+            logger.error(f"Auto-sync error: {rc_logs['error']}")
+            return {"error": rc_logs["error"], "synced": 0, "skipped": 0}
+
+        records = rc_logs.get("records", [])
+        synced = 0
+        skipped = 0
+
+        async with async_session_maker() as db:
+            for record in records:
+                rc_call_id = record.get("id")
+
+                # Check if already exists
+                existing = await db.execute(
+                    select(CallLog).where(CallLog.ringcentral_call_id == rc_call_id)
+                )
+                if existing.scalar_one_or_none():
+                    skipped += 1
+                    continue
+
+                # Create new call log
+                from_info = record.get("from", {})
+                to_info = record.get("to", {})
+
+                # Parse start time
+                start_dt = datetime.utcnow()
+                if record.get("startTime"):
+                    start_dt = datetime.fromisoformat(record["startTime"].replace("Z", "+00:00"))
+
+                call_log = CallLog(
+                    ringcentral_call_id=rc_call_id,
+                    ringcentral_session_id=record.get("sessionId"),
+                    caller_number=from_info.get("phoneNumber", ""),
+                    called_number=to_info.get("phoneNumber", ""),
+                    direction=record.get("direction", "").lower(),
+                    call_disposition=record.get("result", "unknown").lower(),
+                    call_type=record.get("type", "voice").lower(),
+                    call_date=start_dt.date(),
+                    call_time=start_dt.time(),
+                    duration_seconds=record.get("duration"),
+                    assigned_to="auto-sync",
+                )
+
+                # Check for recording
+                recording = record.get("recording")
+                if recording:
+                    call_log.recording_url = recording.get("contentUri")
+
+                db.add(call_log)
+                synced += 1
+
+            await db.commit()
+
+        result = {
+            "synced": synced,
+            "skipped": skipped,
+            "total_records": len(records),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+        _last_sync_time = datetime.utcnow()
+        _last_sync_status = result
+
+        if synced > 0:
+            logger.info(f"Auto-sync completed: {synced} new calls synced, {skipped} skipped")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Auto-sync exception: {e}")
+        return {"error": str(e), "synced": 0, "skipped": 0}
+
+
+async def _auto_sync_loop():
+    """Background task that syncs RingCentral calls every 15 minutes."""
+    logger.info("Starting RingCentral auto-sync background task (15-minute interval)")
+
+    # Initial sync on startup
+    await asyncio.sleep(5)  # Wait 5 seconds for app to stabilize
+    await _perform_sync(hours_back=24)  # Initial sync: last 24 hours
+
+    while True:
+        try:
+            await asyncio.sleep(AUTO_SYNC_INTERVAL_SECONDS)
+            await _perform_sync(hours_back=2)  # Subsequent syncs: last 2 hours
+        except asyncio.CancelledError:
+            logger.info("Auto-sync task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Auto-sync loop error: {e}")
+            await asyncio.sleep(60)  # Wait 1 minute before retrying
+
+
+def start_auto_sync():
+    """Start the auto-sync background task. Called from app startup."""
+    global _auto_sync_task
+    if _auto_sync_task is None or _auto_sync_task.done():
+        _auto_sync_task = asyncio.create_task(_auto_sync_loop())
+        logger.info("RingCentral auto-sync task started")
+
+
+def stop_auto_sync():
+    """Stop the auto-sync background task. Called from app shutdown."""
+    global _auto_sync_task
+    if _auto_sync_task and not _auto_sync_task.done():
+        _auto_sync_task.cancel()
+        logger.info("RingCentral auto-sync task stopped")
 
 
 # Request/Response Models
@@ -381,6 +521,47 @@ async def create_test_data(db: DbSession):
     except Exception as e:
         logger.error(f"Error creating test data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sync-status")
+async def get_sync_status(db: DbSession):
+    """Get the status of RingCentral call synchronization.
+
+    Returns:
+        - last_sync: Timestamp of last successful sync
+        - last_sync_result: Details of last sync (synced, skipped counts)
+        - auto_sync_enabled: Whether auto-sync is running
+        - sync_interval_minutes: How often auto-sync runs
+        - most_recent_call: Timestamp of the most recent call in database
+    """
+    # Get most recent call from database
+    result = await db.execute(
+        select(CallLog.call_date, CallLog.call_time)
+        .order_by(CallLog.call_date.desc(), CallLog.call_time.desc())
+        .limit(1)
+    )
+    most_recent = result.first()
+
+    most_recent_call = None
+    if most_recent and most_recent.call_date:
+        most_recent_call = datetime.combine(
+            most_recent.call_date,
+            most_recent.call_time or datetime.min.time()
+        ).isoformat()
+
+    # Get total call count
+    count_result = await db.execute(select(func.count(CallLog.id)))
+    total_calls = count_result.scalar() or 0
+
+    return {
+        "last_sync": _last_sync_time.isoformat() if _last_sync_time else None,
+        "last_sync_result": _last_sync_status,
+        "auto_sync_enabled": _auto_sync_task is not None and not _auto_sync_task.done(),
+        "sync_interval_minutes": AUTO_SYNC_INTERVAL_SECONDS // 60,
+        "most_recent_call": most_recent_call,
+        "total_calls": total_calls,
+        "ringcentral_configured": ringcentral_service.is_configured,
+    }
 
 
 @router.post("/debug-sync")

@@ -20,6 +20,7 @@ from app.api.public.router import public_router
 from app.webhooks.twilio import twilio_router
 from app.config import settings
 from app.database import init_db
+from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
     # Core models
@@ -86,9 +87,19 @@ async def lifespan(app: FastAPI):
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
         logger.warning("App starting without database - some features may not work")
+
+    # Start RingCentral auto-sync background task
+    try:
+        start_auto_sync()
+        logger.info("RingCentral auto-sync started")
+    except Exception as e:
+        logger.warning(f"Failed to start RingCentral auto-sync: {e}")
+
     yield
+
     # Shutdown
     logger.info("Shutting down React CRM API...")
+    stop_auto_sync()
 
 
 # SECURITY: Conditionally enable docs based on settings
