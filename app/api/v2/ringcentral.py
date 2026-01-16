@@ -1138,37 +1138,48 @@ async def analyze_single_call_endpoint(
 
     Returns immediately with queued status. Poll GET /calls/{call_id} to check results.
     """
-    # Get the call
-    result = await db.execute(select(CallLog).where(CallLog.id == call_id))
-    call = result.scalar_one_or_none()
+    try:
+        # Convert call_id to int for database query
+        call_id_int = int(call_id)
 
-    if not call:
-        raise HTTPException(status_code=404, detail="Call not found")
+        # Get the call
+        result = await db.execute(select(CallLog).where(CallLog.id == call_id_int))
+        call = result.scalar_one_or_none()
 
-    if not call.recording_url:
-        raise HTTPException(status_code=400, detail="Call has no recording to analyze")
+        if not call:
+            raise HTTPException(status_code=404, detail="Call not found")
 
-    # Check if already analyzed (unless force=true)
-    if call.analyzed_at and not force:
+        if not call.recording_url:
+            raise HTTPException(status_code=400, detail="Call has no recording to analyze")
+
+        # Check if already analyzed (unless force=true)
+        if call.analyzed_at and not force:
+            return {
+                "status": "already_analyzed",
+                "message": "Call already has analysis. Use ?force=true to re-analyze.",
+                "call_id": call_id,
+                "analyzed_at": call.analyzed_at.isoformat(),
+                "sentiment": call.sentiment,
+                "quality_score": call.quality_score,
+            }
+
+        # Queue for background analysis
+        background_tasks.add_task(analyze_single_call, call_id_int)
+
         return {
-            "status": "already_analyzed",
-            "message": "Call already has analysis. Use ?force=true to re-analyze.",
+            "status": "queued",
+            "message": "Call analysis started. Results will be available in ~10 seconds.",
             "call_id": call_id,
-            "analyzed_at": call.analyzed_at.isoformat(),
-            "sentiment": call.sentiment,
-            "quality_score": call.quality_score,
+            "previous_sentiment": call.sentiment,
+            "previous_quality_score": call.quality_score,
         }
-
-    # Queue for background analysis
-    background_tasks.add_task(analyze_single_call, int(call_id))
-
-    return {
-        "status": "queued",
-        "message": "Call analysis started. Results will be available in ~10 seconds.",
-        "call_id": call_id,
-        "previous_sentiment": call.sentiment,
-        "previous_quality_score": call.quality_score,
-    }
+    except HTTPException:
+        raise
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid call_id format")
+    except Exception as e:
+        logger.error(f"Error in analyze_single_call_endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/calls/{call_id}")
