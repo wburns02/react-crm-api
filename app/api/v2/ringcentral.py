@@ -585,6 +585,9 @@ async def list_calls(
     status_filter: Optional[str] = Query(None, alias="status"),
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
+    has_recording: Optional[bool] = Query(None, description="Filter for calls with recordings only"),
+    has_analysis: Optional[bool] = Query(None, description="Filter for calls with AI analysis"),
+    has_transcript: Optional[bool] = Query(None, description="Filter for calls with transcripts"),
 ):
     """List call logs with filtering and pagination."""
     try:
@@ -602,6 +605,22 @@ async def list_calls(
             query = query.where(CallLog.call_date >= date_from.date())
         if date_to:
             query = query.where(CallLog.call_date <= date_to.date())
+
+        # New filters for RingCentral-specific features
+        if has_recording is True:
+            query = query.where(CallLog.recording_url.isnot(None))
+        elif has_recording is False:
+            query = query.where(CallLog.recording_url.is_(None))
+
+        if has_analysis is True:
+            query = query.where(CallLog.quality_score.isnot(None))
+        elif has_analysis is False:
+            query = query.where(CallLog.quality_score.is_(None))
+
+        if has_transcript is True:
+            query = query.where(CallLog.transcription.isnot(None))
+        elif has_transcript is False:
+            query = query.where(CallLog.transcription.is_(None))
 
         # Count
         count_query = select(func.count()).select_from(query.subquery())
@@ -1310,6 +1329,82 @@ async def stream_recording_content(
         raise
     except Exception as e:
         logger.error(f"Error streaming recording content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/calls/{call_id}/transcript")
+async def get_call_transcript(
+    call_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get transcript for a call with full analysis details.
+
+    Returns the transcript text along with AI analysis results.
+    If transcript doesn't exist but recording does, returns info about
+    how to trigger transcription.
+    """
+    try:
+        result = await db.execute(select(CallLog).where(CallLog.id == call_id))
+        call = result.scalar_one_or_none()
+
+        if not call:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Call not found",
+            )
+
+        # Build response with all transcript/analysis data
+        response = {
+            "call_id": call_id,
+            "has_recording": bool(call.recording_url),
+            "has_transcript": bool(call.transcription),
+            "has_analysis": bool(call.quality_score is not None),
+            "transcription_status": call.transcription_status,
+
+            # Transcript data
+            "transcript": call.transcription,
+            "ai_summary": call.ai_summary,
+
+            # Sentiment analysis
+            "sentiment": call.sentiment,
+            "sentiment_score": call.sentiment_score,
+
+            # Quality metrics
+            "quality_score": call.quality_score,
+            "csat_prediction": call.csat_prediction,
+            "escalation_risk": call.escalation_risk,
+
+            # Detailed scores
+            "professionalism_score": call.professionalism_score,
+            "empathy_score": call.empathy_score,
+            "clarity_score": call.clarity_score,
+            "resolution_score": call.resolution_score,
+
+            # Topics/keywords
+            "topics": call.topics,
+
+            # Metadata
+            "analyzed_at": call.analyzed_at.isoformat() if call.analyzed_at else None,
+            "call_date": call.call_date.isoformat() if call.call_date else None,
+            "duration_seconds": call.duration_seconds,
+            "direction": call.direction,
+        }
+
+        # Add guidance if transcript doesn't exist
+        if not call.transcription and call.recording_url:
+            response["transcription_available"] = True
+            response["transcription_hint"] = "POST /api/v2/ringcentral/calls/{call_id}/transcribe to generate transcript"
+        elif not call.recording_url:
+            response["transcription_available"] = False
+            response["transcription_hint"] = "No recording available for this call"
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting call transcript: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
