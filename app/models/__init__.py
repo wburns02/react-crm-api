@@ -68,6 +68,12 @@ from app.models.role_view import RoleView, UserRoleSession
 # Work Order Photos
 from app.models.work_order_photo import WorkOrderPhoto
 
+# National Septic OCR Permit System
+from app.models.septic_permit import (
+    State, County, SepticSystemType, SourcePortal,
+    SepticPermit, PermitVersion, PermitDuplicate, PermitImportBatch
+)
+
 __all__ = [
     # Core models
     "Customer",
@@ -153,4 +159,13 @@ __all__ = [
     "UserRoleSession",
     # Work Order Photos
     "WorkOrderPhoto",
+    # National Septic OCR Permit System
+    "State",
+    "County",
+    "SepticSystemType",
+    "SourcePortal",
+    "SepticPermit",
+    "PermitVersion",
+    "PermitDuplicate",
+    "PermitImportBatch",
 ]

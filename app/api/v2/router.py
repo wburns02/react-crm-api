@@ -84,6 +84,8 @@ from app.api.v2 import (
     work_order_photos,
     # Local AI (R730 ML Workstation)
     local_ai,
+    # National Septic OCR Permit System
+    permits,
 )
 # Phase 25: Enterprise Customer Success Platform
 from app.api.v2.customer_success import (
@@ -234,3 +236,6 @@ api_router.include_router(work_order_photos.router, prefix="/work-orders", tags=
 
 # Local AI (R730 ML Workstation) - Vision, OCR, Transcription
 api_router.include_router(local_ai.router, prefix="/local-ai", tags=["local-ai"])
+
+# National Septic OCR Permit System
+api_router.include_router(permits.router, prefix="/permits", tags=["permits"])
