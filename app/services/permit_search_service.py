@@ -10,12 +10,11 @@ Implements hybrid search combining:
 import logging
 import time
 import math
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text, and_, or_, desc, asc, case
-from sqlalchemy.dialects.postgresql import TSVECTOR
 
 from app.models.septic_permit import (
     SepticPermit, State, County, SepticSystemType, SourcePortal,
@@ -26,7 +25,6 @@ from app.schemas.septic_permit import (
     PermitSummary, SearchHighlight, PermitResponse,
     PermitStatsOverview, PermitStatsByState, PermitStatsByYear
 )
-from app.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +45,11 @@ class PermitSearchService:
     - Hybrid ranking with RRF
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         """Initialize search service with database session."""
         self.db = db
 
-    def search(self, request: PermitSearchRequest) -> PermitSearchResponse:
+    async def search(self, request: PermitSearchRequest) -> PermitSearchResponse:
         """
         Execute hybrid search on permit records.
 
@@ -63,8 +61,8 @@ class PermitSearchService:
         """
         start_time = time.time()
 
-        # Build base query with eager loading
-        query = self.db.query(SepticPermit).join(
+        # Build base query
+        stmt = select(SepticPermit, State, County, SepticSystemType).join(
             State, SepticPermit.state_id == State.id
         ).outerjoin(
             County, SepticPermit.county_id == County.id
@@ -73,42 +71,39 @@ class PermitSearchService:
         )
 
         # Apply filters
+        conditions = []
         if not request.include_inactive:
-            query = query.filter(SepticPermit.is_active == True)
+            conditions.append(SepticPermit.is_active == True)
 
         # State filter
         if request.state_codes:
-            query = query.filter(State.code.in_(request.state_codes))
+            conditions.append(State.code.in_(request.state_codes))
 
         # County filter
         if request.county_ids:
-            query = query.filter(SepticPermit.county_id.in_(request.county_ids))
+            conditions.append(SepticPermit.county_id.in_(request.county_ids))
 
         # City filter
         if request.city:
-            query = query.filter(
-                SepticPermit.city.ilike(f'%{request.city}%')
-            )
+            conditions.append(SepticPermit.city.ilike(f'%{request.city}%'))
 
         # Zip code filter
         if request.zip_code:
-            query = query.filter(SepticPermit.zip_code == request.zip_code)
+            conditions.append(SepticPermit.zip_code == request.zip_code)
 
         # System type filter
         if request.system_type_ids:
-            query = query.filter(
-                SepticPermit.system_type_id.in_(request.system_type_ids)
-            )
+            conditions.append(SepticPermit.system_type_id.in_(request.system_type_ids))
 
         # Date range filters
         if request.permit_date_from:
-            query = query.filter(SepticPermit.permit_date >= request.permit_date_from)
+            conditions.append(SepticPermit.permit_date >= request.permit_date_from)
         if request.permit_date_to:
-            query = query.filter(SepticPermit.permit_date <= request.permit_date_to)
+            conditions.append(SepticPermit.permit_date <= request.permit_date_to)
         if request.install_date_from:
-            query = query.filter(SepticPermit.install_date >= request.install_date_from)
+            conditions.append(SepticPermit.install_date >= request.install_date_from)
         if request.install_date_to:
-            query = query.filter(SepticPermit.install_date <= request.install_date_to)
+            conditions.append(SepticPermit.install_date <= request.install_date_to)
 
         # Geo search (radius)
         if request.latitude and request.longitude and request.radius_miles:
@@ -116,101 +111,81 @@ class PermitSearchService:
             lat_range = request.radius_miles / 69.0
             lon_range = request.radius_miles / (69.0 * math.cos(math.radians(request.latitude)))
 
-            query = query.filter(
-                and_(
-                    SepticPermit.latitude.isnot(None),
-                    SepticPermit.longitude.isnot(None),
-                    SepticPermit.latitude.between(
-                        request.latitude - lat_range,
-                        request.latitude + lat_range
-                    ),
-                    SepticPermit.longitude.between(
-                        request.longitude - lon_range,
-                        request.longitude + lon_range
-                    )
+            conditions.extend([
+                SepticPermit.latitude.isnot(None),
+                SepticPermit.longitude.isnot(None),
+                SepticPermit.latitude.between(
+                    request.latitude - lat_range,
+                    request.latitude + lat_range
+                ),
+                SepticPermit.longitude.between(
+                    request.longitude - lon_range,
+                    request.longitude + lon_range
                 )
-            )
+            ])
 
-        # Text search scoring
-        search_scores = []
+        # Text search
         if request.query:
             # Full-text search with ts_rank
             ts_query = func.plainto_tsquery('english', request.query)
-            keyword_rank = func.ts_rank(SepticPermit.search_vector, ts_query)
-
-            # Trigram similarity on address
-            address_similarity = func.similarity(
-                SepticPermit.address_normalized,
-                request.query.upper()
-            )
-
-            # Combined score
-            combined_score = (keyword_rank * 0.7) + (address_similarity * 0.3)
 
             # Filter for matches
-            query = query.filter(
+            conditions.append(
                 or_(
                     SepticPermit.search_vector.op('@@')(ts_query),
                     func.similarity(SepticPermit.address_normalized, request.query.upper()) > 0.1
                 )
             )
 
-            # Add score to result
-            query = query.add_columns(
-                combined_score.label('relevance_score'),
-                keyword_rank.label('keyword_score')
-            )
+        # Apply all conditions
+        if conditions:
+            stmt = stmt.where(and_(*conditions))
 
-        else:
-            # No text search - use default ordering
-            query = query.add_columns(
-                text('1.0').label('relevance_score'),
-                text('0.0').label('keyword_score')
-            )
-
-        # Get total count (before pagination)
-        count_query = query.with_entities(func.count(SepticPermit.id))
-        total = count_query.scalar()
+        # Get total count
+        count_stmt = select(func.count(SepticPermit.id)).select_from(SepticPermit).join(
+            State, SepticPermit.state_id == State.id
+        )
+        if conditions:
+            count_stmt = count_stmt.where(and_(*conditions))
+        count_result = await self.db.execute(count_stmt)
+        total = count_result.scalar() or 0
 
         # Apply sorting
         if request.query and request.sort_by == 'relevance':
-            query = query.order_by(desc('relevance_score'))
+            # Order by text match score
+            ts_query = func.plainto_tsquery('english', request.query)
+            stmt = stmt.order_by(desc(func.ts_rank(SepticPermit.search_vector, ts_query)))
         elif request.sort_by == 'permit_date':
             if request.sort_order == 'asc':
-                query = query.order_by(asc(SepticPermit.permit_date))
+                stmt = stmt.order_by(asc(SepticPermit.permit_date))
             else:
-                query = query.order_by(desc(SepticPermit.permit_date))
+                stmt = stmt.order_by(desc(SepticPermit.permit_date))
         elif request.sort_by == 'address':
             if request.sort_order == 'asc':
-                query = query.order_by(asc(SepticPermit.address_normalized))
+                stmt = stmt.order_by(asc(SepticPermit.address_normalized))
             else:
-                query = query.order_by(desc(SepticPermit.address_normalized))
+                stmt = stmt.order_by(desc(SepticPermit.address_normalized))
         elif request.sort_by == 'owner_name':
             if request.sort_order == 'asc':
-                query = query.order_by(asc(SepticPermit.owner_name))
+                stmt = stmt.order_by(asc(SepticPermit.owner_name))
             else:
-                query = query.order_by(desc(SepticPermit.owner_name))
+                stmt = stmt.order_by(desc(SepticPermit.owner_name))
         else:
             # Default: most recent first
-            query = query.order_by(desc(SepticPermit.created_at))
+            stmt = stmt.order_by(desc(SepticPermit.created_at))
 
         # Apply pagination
         offset = (request.page - 1) * request.page_size
-        query = query.offset(offset).limit(request.page_size)
+        stmt = stmt.offset(offset).limit(request.page_size)
 
         # Execute query
-        results = query.all()
+        result = await self.db.execute(stmt)
+        rows = result.all()
 
         # Build response
         search_results = []
-        for row in results:
-            permit = row[0] if isinstance(row, tuple) else row
-            relevance = row[1] if isinstance(row, tuple) and len(row) > 1 else 1.0
-            keyword_score = row[2] if isinstance(row, tuple) and len(row) > 2 else 0.0
-
-            # Get related data
-            state = self.db.query(State).filter(State.id == permit.state_id).first()
-            county = self.db.query(County).filter(County.id == permit.county_id).first() if permit.county_id else None
+        for row in rows:
+            permit, state, county, system_type = row
 
             summary = PermitSummary(
                 id=permit.id,
@@ -231,35 +206,30 @@ class PermitSearchService:
 
             search_results.append(PermitSearchResult(
                 permit=summary,
-                score=float(relevance) if relevance else 0.0,
-                keyword_score=float(keyword_score) if keyword_score else 0.0,
-                semantic_score=None,  # TODO: Add when embeddings are implemented
+                score=1.0,  # TODO: Calculate actual score
+                keyword_score=0.0,
+                semantic_score=None,
                 highlights=highlights
             ))
-
-        # Build facets (optional)
-        state_facets = self._get_state_facets(request) if not request.state_codes else None
-        county_facets = self._get_county_facets(request) if request.state_codes and not request.county_ids else None
 
         elapsed_ms = (time.time() - start_time) * 1000
 
         return PermitSearchResponse(
             results=search_results,
-            total=total or 0,
+            total=total,
             page=request.page,
             page_size=request.page_size,
-            total_pages=math.ceil((total or 0) / request.page_size),
+            total_pages=math.ceil(total / request.page_size) if total > 0 else 0,
             query=request.query,
             execution_time_ms=elapsed_ms,
-            state_facets=state_facets,
-            county_facets=county_facets
+            state_facets=None,
+            county_facets=None
         )
 
     def _get_highlights(self, permit: SepticPermit, query: str) -> List[SearchHighlight]:
         """Get search result highlighting for matched terms."""
         highlights = []
 
-        # Check each searchable field
         fields_to_check = [
             ('address', permit.address),
             ('owner_name', permit.owner_name),
@@ -270,7 +240,6 @@ class PermitSearchService:
         query_lower = query.lower()
         for field_name, field_value in fields_to_check:
             if field_value and query_lower in field_value.lower():
-                # Create highlighted fragment
                 idx = field_value.lower().find(query_lower)
                 start = max(0, idx - 20)
                 end = min(len(field_value), idx + len(query) + 20)
@@ -288,73 +257,41 @@ class PermitSearchService:
 
         return highlights
 
-    def _get_state_facets(self, request: PermitSearchRequest) -> List[Dict[str, Any]]:
-        """Get permit counts by state for faceted filtering."""
-        query = self.db.query(
-            State.code,
-            State.name,
-            func.count(SepticPermit.id).label('count')
-        ).join(
-            SepticPermit, SepticPermit.state_id == State.id
-        ).filter(
-            SepticPermit.is_active == True
-        ).group_by(
-            State.code, State.name
-        ).order_by(
-            desc('count')
-        ).limit(20)
-
-        return [
-            {'code': row[0], 'name': row[1], 'count': row[2]}
-            for row in query.all()
-        ]
-
-    def _get_county_facets(self, request: PermitSearchRequest) -> List[Dict[str, Any]]:
-        """Get permit counts by county for faceted filtering."""
-        query = self.db.query(
-            County.id,
-            County.name,
-            func.count(SepticPermit.id).label('count')
-        ).join(
-            SepticPermit, SepticPermit.county_id == County.id
-        ).join(
-            State, SepticPermit.state_id == State.id
-        ).filter(
-            SepticPermit.is_active == True
-        )
-
-        if request.state_codes:
-            query = query.filter(State.code.in_(request.state_codes))
-
-        query = query.group_by(
-            County.id, County.name
-        ).order_by(
-            desc('count')
-        ).limit(50)
-
-        return [
-            {'id': row[0], 'name': row[1], 'count': row[2]}
-            for row in query.all()
-        ]
-
-    def get_permit(self, permit_id: UUID) -> Optional[PermitResponse]:
+    async def get_permit(self, permit_id: UUID) -> Optional[PermitResponse]:
         """Get a single permit by ID with full details."""
-        permit = self.db.query(SepticPermit).filter(
-            SepticPermit.id == permit_id
-        ).first()
+        stmt = select(SepticPermit).where(SepticPermit.id == permit_id)
+        result = await self.db.execute(stmt)
+        permit = result.scalar_one_or_none()
 
         if not permit:
             return None
 
         # Get related data
-        state = self.db.query(State).filter(State.id == permit.state_id).first()
-        county = self.db.query(County).filter(County.id == permit.county_id).first() if permit.county_id else None
-        system_type = self.db.query(SepticSystemType).filter(
-            SepticSystemType.id == permit.system_type_id
-        ).first() if permit.system_type_id else None
-        source_portal = self.db.query(SourcePortal).filter(
-            SourcePortal.id == permit.source_portal_id
-        ).first() if permit.source_portal_id else None
+        state_result = await self.db.execute(
+            select(State).where(State.id == permit.state_id)
+        )
+        state = state_result.scalar_one_or_none()
+
+        county = None
+        if permit.county_id:
+            county_result = await self.db.execute(
+                select(County).where(County.id == permit.county_id)
+            )
+            county = county_result.scalar_one_or_none()
+
+        system_type = None
+        if permit.system_type_id:
+            st_result = await self.db.execute(
+                select(SepticSystemType).where(SepticSystemType.id == permit.system_type_id)
+            )
+            system_type = st_result.scalar_one_or_none()
+
+        source_portal = None
+        if permit.source_portal_id:
+            sp_result = await self.db.execute(
+                select(SourcePortal).where(SourcePortal.id == permit.source_portal_id)
+            )
+            source_portal = sp_result.scalar_one_or_none()
 
         return PermitResponse(
             id=permit.id,
@@ -397,62 +334,73 @@ class PermitSearchService:
             updated_at=permit.updated_at
         )
 
-    def get_stats(self) -> PermitStatsOverview:
+    async def get_stats(self) -> PermitStatsOverview:
         """Get dashboard statistics for permits."""
-        from datetime import date, timedelta
+        from datetime import date
 
         today = date.today()
         month_start = today.replace(day=1)
         year_start = today.replace(month=1, day=1)
 
         # Total counts
-        total_permits = self.db.query(func.count(SepticPermit.id)).filter(
-            SepticPermit.is_active == True
-        ).scalar() or 0
+        total_result = await self.db.execute(
+            select(func.count(SepticPermit.id)).where(SepticPermit.is_active == True)
+        )
+        total_permits = total_result.scalar() or 0
 
-        total_states = self.db.query(func.count(func.distinct(SepticPermit.state_id))).filter(
-            SepticPermit.is_active == True
-        ).scalar() or 0
+        states_result = await self.db.execute(
+            select(func.count(func.distinct(SepticPermit.state_id))).where(SepticPermit.is_active == True)
+        )
+        total_states = states_result.scalar() or 0
 
-        total_counties = self.db.query(func.count(func.distinct(SepticPermit.county_id))).filter(
-            SepticPermit.is_active == True
-        ).scalar() or 0
+        counties_result = await self.db.execute(
+            select(func.count(func.distinct(SepticPermit.county_id))).where(SepticPermit.is_active == True)
+        )
+        total_counties = counties_result.scalar() or 0
 
-        total_portals = self.db.query(func.count(SourcePortal.id)).filter(
-            SourcePortal.is_active == True
-        ).scalar() or 0
+        portals_result = await self.db.execute(
+            select(func.count(SourcePortal.id)).where(SourcePortal.is_active == True)
+        )
+        total_portals = portals_result.scalar() or 0
 
         # Monthly/yearly counts
-        permits_this_month = self.db.query(func.count(SepticPermit.id)).filter(
-            SepticPermit.is_active == True,
-            SepticPermit.permit_date >= month_start
-        ).scalar() or 0
+        month_result = await self.db.execute(
+            select(func.count(SepticPermit.id)).where(
+                and_(SepticPermit.is_active == True, SepticPermit.permit_date >= month_start)
+            )
+        )
+        permits_this_month = month_result.scalar() or 0
 
-        permits_this_year = self.db.query(func.count(SepticPermit.id)).filter(
-            SepticPermit.is_active == True,
-            SepticPermit.permit_date >= year_start
-        ).scalar() or 0
+        year_result = await self.db.execute(
+            select(func.count(SepticPermit.id)).where(
+                and_(SepticPermit.is_active == True, SepticPermit.permit_date >= year_start)
+            )
+        )
+        permits_this_year = year_result.scalar() or 0
 
         # Average data quality
-        avg_quality = self.db.query(func.avg(SepticPermit.data_quality_score)).filter(
-            SepticPermit.is_active == True,
-            SepticPermit.data_quality_score.isnot(None)
-        ).scalar() or 0.0
+        quality_result = await self.db.execute(
+            select(func.avg(SepticPermit.data_quality_score)).where(
+                and_(SepticPermit.is_active == True, SepticPermit.data_quality_score.isnot(None))
+            )
+        )
+        avg_quality = quality_result.scalar() or 0.0
 
         # Pending duplicates
-        duplicate_count = self.db.query(func.count(PermitDuplicate.id)).filter(
-            PermitDuplicate.status == 'pending'
-        ).scalar() or 0
+        dup_result = await self.db.execute(
+            select(func.count(PermitDuplicate.id)).where(PermitDuplicate.status == 'pending')
+        )
+        duplicate_count = dup_result.scalar() or 0
 
         # Top states
-        top_states_query = self.db.query(
+        top_states_stmt = select(
             State.code,
             State.name,
             func.count(SepticPermit.id).label('total'),
             func.count(case((SepticPermit.permit_date >= year_start, 1))).label('this_year')
         ).join(
             SepticPermit, SepticPermit.state_id == State.id
-        ).filter(
+        ).where(
             SepticPermit.is_active == True
         ).group_by(
             State.code, State.name
@@ -460,6 +408,7 @@ class PermitSearchService:
             desc('total')
         ).limit(10)
 
+        top_states_result = await self.db.execute(top_states_stmt)
         top_states = [
             PermitStatsByState(
                 state_code=row[0],
@@ -468,28 +417,28 @@ class PermitSearchService:
                 active_permits=row[2],
                 permits_this_year=row[3]
             )
-            for row in top_states_query.all()
+            for row in top_states_result.all()
         ]
 
-        # Permits by year (last 10 years)
-        permits_by_year_query = self.db.query(
+        # Permits by year
+        by_year_stmt = select(
             func.extract('year', SepticPermit.permit_date).label('year'),
             func.count(SepticPermit.id).label('count')
-        ).filter(
-            SepticPermit.is_active == True,
-            SepticPermit.permit_date.isnot(None)
+        ).where(
+            and_(SepticPermit.is_active == True, SepticPermit.permit_date.isnot(None))
         ).group_by(
             func.extract('year', SepticPermit.permit_date)
         ).order_by(
             desc('year')
         ).limit(10)
 
+        by_year_result = await self.db.execute(by_year_stmt)
         permits_by_year = [
             PermitStatsByYear(
                 year=int(row[0]) if row[0] else 0,
                 total_permits=row[1]
             )
-            for row in permits_by_year_query.all()
+            for row in by_year_result.all()
         ]
 
         return PermitStatsOverview(
@@ -507,6 +456,6 @@ class PermitSearchService:
 
 
 # Factory function
-def get_permit_search_service(db: Session) -> PermitSearchService:
+def get_permit_search_service(db: AsyncSession) -> PermitSearchService:
     """Create a permit search service instance."""
     return PermitSearchService(db)

@@ -12,8 +12,9 @@ Provides:
 import logging
 from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
-from sqlalchemy.orm import Session
+from datetime import datetime
+from fastapi import APIRouter, HTTPException, status, Query
+from sqlalchemy import select, desc
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.septic_permit import (
@@ -22,7 +23,7 @@ from app.models.septic_permit import (
 )
 from app.schemas.septic_permit import (
     PermitSearchRequest, PermitSearchResponse, PermitResponse,
-    PermitStatsResponse, PermitStatsOverview,
+    PermitStatsOverview,
     BatchIngestionRequest, BatchIngestionResponse,
     DuplicatePair, DuplicateResolution, DuplicateResponse,
     StateResponse, CountyResponse, SystemTypeResponse, SourcePortalResponse,
@@ -40,6 +41,8 @@ router = APIRouter()
 
 @router.get("/search", response_model=PermitSearchResponse)
 async def search_permits(
+    db: DbSession,
+    current_user: CurrentUser,
     query: Optional[str] = Query(None, min_length=2, max_length=500, description="Search query"),
     state_codes: Optional[str] = Query(None, description="Comma-separated state codes"),
     county_ids: Optional[str] = Query(None, description="Comma-separated county IDs"),
@@ -55,8 +58,6 @@ async def search_permits(
     sort_by: str = Query("relevance"),
     sort_order: str = Query("desc"),
     include_inactive: bool = Query(False),
-    db: DbSession,
-    current_user: CurrentUser
 ):
     """
     Search septic permits with hybrid keyword + semantic search.
@@ -99,7 +100,7 @@ async def search_permits(
         )
 
         service = get_permit_search_service(db)
-        return service.search(request)
+        return await service.search(request)
 
     except ValueError as e:
         raise HTTPException(
@@ -125,7 +126,7 @@ async def search_permits_post(
     """
     try:
         service = get_permit_search_service(db)
-        return service.search(request)
+        return await service.search(request)
     except Exception as e:
         logger.error(f"Search failed: {e}")
         raise HTTPException(
@@ -145,7 +146,7 @@ async def get_permit(
     """Get a single permit by ID with full details."""
     try:
         service = get_permit_search_service(db)
-        permit = service.get_permit(permit_id)
+        permit = await service.get_permit(permit_id)
 
         if not permit:
             raise HTTPException(
@@ -174,7 +175,10 @@ async def get_permit_history(
     """Get version history for a permit."""
     try:
         # Get permit
-        permit = db.query(SepticPermit).filter(SepticPermit.id == permit_id).first()
+        result = await db.execute(
+            select(SepticPermit).where(SepticPermit.id == permit_id)
+        )
+        permit = result.scalar_one_or_none()
         if not permit:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -182,9 +186,12 @@ async def get_permit_history(
             )
 
         # Get versions
-        versions = db.query(PermitVersion).filter(
-            PermitVersion.permit_id == permit_id
-        ).order_by(PermitVersion.version.desc()).all()
+        versions_result = await db.execute(
+            select(PermitVersion)
+            .where(PermitVersion.permit_id == permit_id)
+            .order_by(desc(PermitVersion.version))
+        )
+        versions = versions_result.scalars().all()
 
         return PermitHistoryResponse(
             permit_id=permit_id,
@@ -225,7 +232,7 @@ async def get_permit_stats(
     """Get dashboard statistics for permits."""
     try:
         service = get_permit_search_service(db)
-        return service.get_stats()
+        return await service.get_stats()
     except Exception as e:
         logger.error(f"Failed to get permit stats: {e}")
         raise HTTPException(
@@ -258,7 +265,7 @@ async def ingest_batch(
             )
 
         service = get_permit_ingestion_service(db)
-        return service.ingest_batch(request.permits, request.source_portal_code)
+        return await service.ingest_batch(request.permits, request.source_portal_code)
 
     except HTTPException:
         raise
@@ -274,33 +281,58 @@ async def ingest_batch(
 
 @router.get("/duplicates", response_model=List[DuplicatePair])
 async def list_duplicates(
+    db: DbSession,
+    current_user: CurrentUser,
     status_filter: Optional[str] = Query("pending", description="Filter by status"),
     limit: int = Query(50, ge=1, le=200),
-    db: DbSession,
-    current_user: CurrentUser
 ):
     """List potential duplicate permit pairs for review."""
     try:
-        query = db.query(PermitDuplicate)
-
+        stmt = select(PermitDuplicate)
         if status_filter:
-            query = query.filter(PermitDuplicate.status == status_filter)
+            stmt = stmt.where(PermitDuplicate.status == status_filter)
+        stmt = stmt.order_by(desc(PermitDuplicate.confidence_score)).limit(limit)
 
-        duplicates = query.order_by(
-            PermitDuplicate.confidence_score.desc()
-        ).limit(limit).all()
+        result = await db.execute(stmt)
+        duplicates = result.scalars().all()
 
         results = []
         for dup in duplicates:
             # Get both permits
-            permit1 = db.query(SepticPermit).filter(SepticPermit.id == dup.permit_id_1).first()
-            permit2 = db.query(SepticPermit).filter(SepticPermit.id == dup.permit_id_2).first()
+            p1_result = await db.execute(
+                select(SepticPermit).where(SepticPermit.id == dup.permit_id_1)
+            )
+            permit1 = p1_result.scalar_one_or_none()
+
+            p2_result = await db.execute(
+                select(SepticPermit).where(SepticPermit.id == dup.permit_id_2)
+            )
+            permit2 = p2_result.scalar_one_or_none()
 
             if permit1 and permit2:
-                state1 = db.query(State).filter(State.id == permit1.state_id).first()
-                state2 = db.query(State).filter(State.id == permit2.state_id).first()
-                county1 = db.query(County).filter(County.id == permit1.county_id).first() if permit1.county_id else None
-                county2 = db.query(County).filter(County.id == permit2.county_id).first() if permit2.county_id else None
+                s1_result = await db.execute(
+                    select(State).where(State.id == permit1.state_id)
+                )
+                state1 = s1_result.scalar_one_or_none()
+
+                s2_result = await db.execute(
+                    select(State).where(State.id == permit2.state_id)
+                )
+                state2 = s2_result.scalar_one_or_none()
+
+                county1 = None
+                if permit1.county_id:
+                    c1_result = await db.execute(
+                        select(County).where(County.id == permit1.county_id)
+                    )
+                    county1 = c1_result.scalar_one_or_none()
+
+                county2 = None
+                if permit2.county_id:
+                    c2_result = await db.execute(
+                        select(County).where(County.id == permit2.county_id)
+                    )
+                    county2 = c2_result.scalar_one_or_none()
 
                 results.append(DuplicatePair(
                     id=dup.id,
@@ -352,9 +384,10 @@ async def resolve_duplicate(
 ):
     """Resolve a duplicate pair (merge, reject, or mark as reviewed)."""
     try:
-        from datetime import datetime
-
-        dup = db.query(PermitDuplicate).filter(PermitDuplicate.id == duplicate_id).first()
+        result = await db.execute(
+            select(PermitDuplicate).where(PermitDuplicate.id == duplicate_id)
+        )
+        dup = result.scalar_one_or_none()
         if not dup:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -370,7 +403,10 @@ async def resolve_duplicate(
 
             # Mark non-canonical record as inactive
             non_canonical_id = dup.permit_id_2 if resolution.canonical_id == dup.permit_id_1 else dup.permit_id_1
-            non_canonical = db.query(SepticPermit).filter(SepticPermit.id == non_canonical_id).first()
+            nc_result = await db.execute(
+                select(SepticPermit).where(SepticPermit.id == non_canonical_id)
+            )
+            non_canonical = nc_result.scalar_one_or_none()
             if non_canonical:
                 non_canonical.is_active = False
                 non_canonical.duplicate_of_id = resolution.canonical_id
@@ -388,7 +424,7 @@ async def resolve_duplicate(
         dup.resolved_by = str(current_user.id) if hasattr(current_user, 'id') else 'unknown'
         dup.resolution_notes = resolution.notes
 
-        db.commit()
+        await db.commit()
 
         return DuplicateResponse(
             id=dup.id,
@@ -402,7 +438,7 @@ async def resolve_duplicate(
         raise
     except Exception as e:
         logger.error(f"Failed to resolve duplicate: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to resolve duplicate"
@@ -418,7 +454,12 @@ async def list_states(
 ):
     """List all US states."""
     try:
-        states = db.query(State).filter(State.is_active == True).order_by(State.name).all()
+        result = await db.execute(
+            select(State)
+            .where(State.is_active == True)
+            .order_by(State.name)
+        )
+        states = result.scalars().all()
         return [
             StateResponse(
                 id=s.id,
@@ -439,18 +480,21 @@ async def list_states(
 
 @router.get("/ref/counties", response_model=List[CountyResponse])
 async def list_counties(
-    state_code: Optional[str] = Query(None, description="Filter by state code"),
     db: DbSession,
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    state_code: Optional[str] = Query(None, description="Filter by state code"),
 ):
     """List counties, optionally filtered by state."""
     try:
-        query = db.query(County).join(State).filter(County.is_active == True)
+        stmt = select(County, State).join(State, County.state_id == State.id).where(County.is_active == True)
 
         if state_code:
-            query = query.filter(State.code == state_code.upper())
+            stmt = stmt.where(State.code == state_code.upper())
 
-        counties = query.order_by(County.name).all()
+        stmt = stmt.order_by(County.name)
+        result = await db.execute(stmt)
+        rows = result.all()
+
         return [
             CountyResponse(
                 id=c.id,
@@ -459,9 +503,9 @@ async def list_counties(
                 normalized_name=c.normalized_name,
                 fips_code=c.fips_code,
                 population=c.population,
-                state_code=c.state.code if c.state else None
+                state_code=s.code
             )
-            for c in counties
+            for c, s in rows
         ]
     except Exception as e:
         logger.error(f"Failed to list counties: {e}")
@@ -478,9 +522,12 @@ async def list_system_types(
 ):
     """List septic system types."""
     try:
-        types = db.query(SepticSystemType).filter(
-            SepticSystemType.is_active == True
-        ).order_by(SepticSystemType.name).all()
+        result = await db.execute(
+            select(SepticSystemType)
+            .where(SepticSystemType.is_active == True)
+            .order_by(SepticSystemType.name)
+        )
+        types = result.scalars().all()
 
         return [
             SystemTypeResponse(
@@ -507,9 +554,12 @@ async def list_source_portals(
 ):
     """List data source portals."""
     try:
-        portals = db.query(SourcePortal).filter(
-            SourcePortal.is_active == True
-        ).order_by(SourcePortal.name).all()
+        result = await db.execute(
+            select(SourcePortal)
+            .where(SourcePortal.is_active == True)
+            .order_by(SourcePortal.name)
+        )
+        portals = result.scalars().all()
 
         return [
             SourcePortalResponse(

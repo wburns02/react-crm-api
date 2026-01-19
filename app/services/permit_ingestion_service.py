@@ -14,7 +14,7 @@ import time
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
 
@@ -29,7 +29,6 @@ from app.utils.address_normalization import (
     normalize_address, normalize_county, normalize_state,
     normalize_owner_name, compute_address_hash
 )
-from app.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ class PermitIngestionService:
     - Duplicate candidate flagging
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         """Initialize ingestion service with database session."""
         self.db = db
         self._state_cache: Dict[str, int] = {}
@@ -59,7 +58,7 @@ class PermitIngestionService:
         self._system_type_cache: Dict[str, int] = {}
         self._portal_cache: Dict[str, int] = {}
 
-    def _get_or_create_state(self, state_code: str) -> Optional[int]:
+    async def _get_or_create_state(self, state_code: str) -> Optional[int]:
         """Get state ID by code, using cache."""
         if not state_code:
             return None
@@ -71,14 +70,17 @@ class PermitIngestionService:
         if code in self._state_cache:
             return self._state_cache[code]
 
-        state = self.db.query(State).filter(State.code == code).first()
+        result = await self.db.execute(
+            select(State).where(State.code == code)
+        )
+        state = result.scalar_one_or_none()
         if state:
             self._state_cache[code] = state.id
             return state.id
 
         return None
 
-    def _get_or_create_county(self, county_name: str, state_id: int) -> Optional[int]:
+    async def _get_or_create_county(self, county_name: str, state_id: int) -> Optional[int]:
         """Get or create county ID."""
         if not county_name or not state_id:
             return None
@@ -91,10 +93,13 @@ class PermitIngestionService:
         if cache_key in self._county_cache:
             return self._county_cache[cache_key]
 
-        county = self.db.query(County).filter(
-            County.state_id == state_id,
-            County.normalized_name == normalized
-        ).first()
+        result = await self.db.execute(
+            select(County).where(
+                County.state_id == state_id,
+                County.normalized_name == normalized
+            )
+        )
+        county = result.scalar_one_or_none()
 
         if county:
             self._county_cache[cache_key] = county.id
@@ -108,47 +113,51 @@ class PermitIngestionService:
             is_active=True
         )
         self.db.add(county)
-        self.db.flush()
+        await self.db.flush()
         self._county_cache[cache_key] = county.id
         return county.id
 
-    def _get_system_type_id(self, system_type: str) -> Optional[int]:
+    async def _get_system_type_id(self, system_type: str) -> Optional[int]:
         """Get system type ID by raw name."""
         if not system_type:
             return None
 
-        # Normalize to uppercase for matching
         normalized = system_type.upper().strip()
 
         if normalized in self._system_type_cache:
             return self._system_type_cache[normalized]
 
         # Try exact match on code first
-        sys_type = self.db.query(SepticSystemType).filter(
-            SepticSystemType.code == normalized
-        ).first()
+        result = await self.db.execute(
+            select(SepticSystemType).where(SepticSystemType.code == normalized)
+        )
+        sys_type = result.scalar_one_or_none()
 
         if not sys_type:
             # Try partial match on name
-            sys_type = self.db.query(SepticSystemType).filter(
-                SepticSystemType.name.ilike(f'%{normalized}%')
-            ).first()
+            result = await self.db.execute(
+                select(SepticSystemType).where(
+                    SepticSystemType.name.ilike(f'%{normalized}%')
+                )
+            )
+            sys_type = result.scalar_one_or_none()
 
         if sys_type:
             self._system_type_cache[normalized] = sys_type.id
             return sys_type.id
 
         # Default to UNKNOWN
-        unknown = self.db.query(SepticSystemType).filter(
-            SepticSystemType.code == 'UNKNOWN'
-        ).first()
+        result = await self.db.execute(
+            select(SepticSystemType).where(SepticSystemType.code == 'UNKNOWN')
+        )
+        unknown = result.scalar_one_or_none()
         if unknown:
             self._system_type_cache[normalized] = unknown.id
             return unknown.id
 
         return None
 
-    def _get_or_create_portal(self, portal_code: str, state_id: Optional[int] = None) -> Optional[int]:
+    async def _get_or_create_portal(self, portal_code: str, state_id: Optional[int] = None) -> Optional[int]:
         """Get or create source portal ID."""
         if not portal_code:
             return None
@@ -156,9 +165,10 @@ class PermitIngestionService:
         if portal_code in self._portal_cache:
             return self._portal_cache[portal_code]
 
-        portal = self.db.query(SourcePortal).filter(
-            SourcePortal.code == portal_code
-        ).first()
+        result = await self.db.execute(
+            select(SourcePortal).where(SourcePortal.code == portal_code)
+        )
+        portal = result.scalar_one_or_none()
 
         if portal:
             self._portal_cache[portal_code] = portal.id
@@ -172,11 +182,11 @@ class PermitIngestionService:
             is_active=True
         )
         self.db.add(portal)
-        self.db.flush()
+        await self.db.flush()
         self._portal_cache[portal_code] = portal.id
         return portal.id
 
-    def _find_existing_permit(
+    async def _find_existing_permit(
         self,
         address_hash: Optional[str],
         permit_number: Optional[str],
@@ -191,21 +201,27 @@ class PermitIngestionService:
         2. Permit number + state match
         """
         if address_hash:
-            existing = self.db.query(SepticPermit).filter(
-                SepticPermit.address_hash == address_hash,
-                SepticPermit.state_id == state_id,
-                SepticPermit.county_id == county_id,
-                SepticPermit.is_active == True
-            ).first()
+            result = await self.db.execute(
+                select(SepticPermit).where(
+                    SepticPermit.address_hash == address_hash,
+                    SepticPermit.state_id == state_id,
+                    SepticPermit.county_id == county_id,
+                    SepticPermit.is_active == True
+                )
+            )
+            existing = result.scalar_one_or_none()
             if existing:
                 return existing
 
         if permit_number:
-            existing = self.db.query(SepticPermit).filter(
-                SepticPermit.permit_number == permit_number,
-                SepticPermit.state_id == state_id,
-                SepticPermit.is_active == True
-            ).first()
+            result = await self.db.execute(
+                select(SepticPermit).where(
+                    SepticPermit.permit_number == permit_number,
+                    SepticPermit.state_id == state_id,
+                    SepticPermit.is_active == True
+                )
+            )
+            existing = result.scalar_one_or_none()
             if existing:
                 return existing
 
@@ -215,14 +231,13 @@ class PermitIngestionService:
         """Compute hash of permit data for change detection."""
         return SepticPermit.compute_record_hash(permit_data)
 
-    def _create_version(
+    async def _create_version(
         self,
         permit: SepticPermit,
         change_source: str = 'scraper',
         changed_fields: Optional[List[str]] = None
     ) -> PermitVersion:
         """Create a version history record for a permit."""
-        # Serialize current permit data
         permit_data = {
             'permit_number': permit.permit_number,
             'address': permit.address,
@@ -282,7 +297,6 @@ class PermitIngestionService:
             old_val = getattr(existing, field, None)
             new_val = new_data.get(field)
 
-            # Convert dates to strings for comparison
             if hasattr(old_val, 'isoformat'):
                 old_val = str(old_val)
             if hasattr(new_val, 'isoformat'):
@@ -293,7 +307,7 @@ class PermitIngestionService:
 
         return changed
 
-    def ingest_permit(self, permit_data: PermitCreate) -> Tuple[Optional[uuid.UUID], str]:
+    async def ingest_permit(self, permit_data: PermitCreate) -> Tuple[Optional[uuid.UUID], str]:
         """
         Ingest a single permit record.
 
@@ -302,20 +316,23 @@ class PermitIngestionService:
         """
         try:
             # Get state ID
-            state_id = self._get_or_create_state(permit_data.state_code)
+            state_id = await self._get_or_create_state(permit_data.state_code)
             if not state_id:
                 logger.warning(f"Unknown state code: {permit_data.state_code}")
                 return None, 'error'
 
             # Get county ID
-            county_id = self._get_or_create_county(permit_data.county_name, state_id)
+            county_id = await self._get_or_create_county(permit_data.county_name, state_id)
 
             # Normalize address
             address_normalized = normalize_address(permit_data.address)
             owner_normalized = normalize_owner_name(permit_data.owner_name)
 
             # Compute address hash for deduplication
-            state = self.db.query(State).filter(State.id == state_id).first()
+            result = await self.db.execute(
+                select(State).where(State.id == state_id)
+            )
+            state = result.scalar_one_or_none()
             address_hash = compute_address_hash(
                 address_normalized,
                 permit_data.county_name,
@@ -323,7 +340,7 @@ class PermitIngestionService:
             )
 
             # Look for existing permit
-            existing = self._find_existing_permit(
+            existing = await self._find_existing_permit(
                 address_hash, permit_data.permit_number, state_id, county_id
             )
 
@@ -359,12 +376,11 @@ class PermitIngestionService:
                 # Check if data actually changed
                 new_hash = self._compute_record_hash(data_dict)
                 if existing.record_hash == new_hash:
-                    # No changes - skip
                     return existing.id, 'skipped'
 
                 # Data changed - create version and update
                 changed_fields = self._get_changed_fields(existing, data_dict)
-                self._create_version(existing, 'scraper', changed_fields)
+                await self._create_version(existing, 'scraper', changed_fields)
 
                 # Update existing record
                 for field, value in data_dict.items():
@@ -373,8 +389,8 @@ class PermitIngestionService:
 
                 existing.address_hash = address_hash
                 existing.owner_name_normalized = owner_normalized
-                existing.system_type_id = self._get_system_type_id(permit_data.system_type)
-                existing.source_portal_id = self._get_or_create_portal(
+                existing.system_type_id = await self._get_system_type_id(permit_data.system_type)
+                existing.source_portal_id = await self._get_or_create_portal(
                     permit_data.source_portal_code, state_id
                 )
                 existing.version += 1
@@ -392,8 +408,8 @@ class PermitIngestionService:
                     county_id=county_id,
                     address_hash=address_hash,
                     owner_name_normalized=owner_normalized,
-                    system_type_id=self._get_system_type_id(permit_data.system_type),
-                    source_portal_id=self._get_or_create_portal(
+                    system_type_id=await self._get_system_type_id(permit_data.system_type),
+                    source_portal_id=await self._get_or_create_portal(
                         permit_data.source_portal_code, state_id
                     ),
                     is_active=True,
@@ -407,13 +423,13 @@ class PermitIngestionService:
 
         except IntegrityError as e:
             logger.warning(f"Integrity error ingesting permit: {e}")
-            self.db.rollback()
+            await self.db.rollback()
             return None, 'error'
         except Exception as e:
             logger.error(f"Error ingesting permit: {e}")
             return None, 'error'
 
-    def ingest_batch(
+    async def ingest_batch(
         self,
         permits: List[PermitCreate],
         source_portal_code: str
@@ -440,7 +456,7 @@ class PermitIngestionService:
             started_at=datetime.utcnow()
         )
         self.db.add(import_batch)
-        self.db.commit()
+        await self.db.commit()
 
         stats = BatchIngestionStats(
             batch_id=batch_id,
@@ -452,7 +468,7 @@ class PermitIngestionService:
 
         for i, permit_data in enumerate(permits):
             try:
-                permit_id, action = self.ingest_permit(permit_data)
+                permit_id, action = await self.ingest_permit(permit_data)
 
                 if action == 'inserted':
                     stats.inserted += 1
@@ -470,7 +486,7 @@ class PermitIngestionService:
 
                 # Commit every 100 records
                 if (i + 1) % 100 == 0:
-                    self.db.commit()
+                    await self.db.commit()
                     logger.info(f"Processed {i + 1}/{len(permits)} permits")
 
             except Exception as e:
@@ -480,15 +496,18 @@ class PermitIngestionService:
                     'permit_number': getattr(permit_data, 'permit_number', 'unknown'),
                     'error': str(e)
                 })
-                self.db.rollback()
+                await self.db.rollback()
 
         # Final commit
-        self.db.commit()
+        await self.db.commit()
 
         # Update source portal stats
         portal_id = self._portal_cache.get(source_portal_code)
         if portal_id:
-            portal = self.db.query(SourcePortal).filter(SourcePortal.id == portal_id).first()
+            result = await self.db.execute(
+                select(SourcePortal).where(SourcePortal.id == portal_id)
+            )
+            portal = result.scalar_one_or_none()
             if portal:
                 portal.last_scraped_at = datetime.utcnow()
                 portal.total_records_scraped += stats.inserted + stats.updated
@@ -504,7 +523,7 @@ class PermitIngestionService:
         import_batch.errors = stats.errors
         import_batch.error_details = errors if errors else None
 
-        self.db.commit()
+        await self.db.commit()
 
         stats.processing_time_seconds = elapsed
         stats.error_details = errors if errors else None
@@ -523,6 +542,6 @@ class PermitIngestionService:
 
 
 # Factory function for easy service creation
-def get_permit_ingestion_service(db: Session) -> PermitIngestionService:
+def get_permit_ingestion_service(db: AsyncSession) -> PermitIngestionService:
     """Create a permit ingestion service instance."""
     return PermitIngestionService(db)
