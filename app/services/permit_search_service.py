@@ -187,6 +187,9 @@ class PermitSearchService:
         for row in rows:
             permit, state, county, system_type = row
 
+            # Check if permit has property_id column (may not exist in older schema)
+            has_property = getattr(permit, 'property_id', None) is not None
+
             summary = PermitSummary(
                 id=permit.id,
                 permit_number=permit.permit_number,
@@ -197,7 +200,7 @@ class PermitSearchService:
                 owner_name=permit.owner_name,
                 permit_date=permit.permit_date,
                 system_type=permit.system_type_raw,
-                has_property=permit.property_id is not None
+                has_property=has_property
             )
 
             # Get highlights if text search
