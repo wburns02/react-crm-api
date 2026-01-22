@@ -166,6 +166,123 @@ async def get_permit(
         )
 
 
+@router.get("/{permit_id}/property")
+async def get_permit_property(
+    permit_id: UUID,
+    db: DbSession,
+    current_user: CurrentUser
+):
+    """
+    Get linked property data for a permit.
+    Returns the permit's own data as a synthetic property record
+    so the frontend can display permit details in the property panel.
+    """
+    try:
+        service = get_permit_search_service(db)
+        permit = await service.get_permit(permit_id)
+
+        if not permit:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Permit {permit_id} not found"
+            )
+
+        # Check if permit has rich data (same logic as has_property in search)
+        has_data = bool(permit.parcel_number) or \
+                   (permit.latitude is not None and permit.longitude is not None) or \
+                   bool(permit.pdf_url) or bool(permit.permit_url)
+
+        if not has_data:
+            return {
+                "permit_id": str(permit_id),
+                "property": None,
+                "all_permits": [],
+                "total_permits": 0,
+                "message": "No property data available for this permit"
+            }
+
+        # Return permit data as synthetic property
+        return {
+            "permit_id": str(permit_id),
+            "property": {
+                "id": str(permit.id),
+                "address": permit.address,
+                "address_normalized": permit.address_normalized,
+                "street_number": None,
+                "street_name": None,
+                "city": permit.city,
+                "zip_code": permit.zip_code,
+                "subdivision": None,
+                "parcel_id": permit.parcel_number,
+                "gis_link": None,
+                "latitude": permit.latitude,
+                "longitude": permit.longitude,
+                "year_built": None,
+                "square_footage": None,
+                "bedrooms": permit.bedrooms,
+                "bathrooms": None,
+                "stories": None,
+                "foundation_type": None,
+                "construction_type": None,
+                "lot_size_acres": None,
+                "lot_size_sqft": None,
+                "calculated_acres": None,
+                "assessed_value": None,
+                "assessed_land": None,
+                "assessed_improvement": None,
+                "market_value": None,
+                "market_land": None,
+                "market_improvement": None,
+                "last_assessed_date": None,
+                "owner_name": permit.owner_name,
+                "owner_name_2": None,
+                "owner_mailing_address": None,
+                "owner_city": None,
+                "owner_state": None,
+                "owner_zip": None,
+                "last_sale_date": None,
+                "last_sale_price": None,
+                "deed_book": None,
+                "deed_page": None,
+                "property_type": None,
+                "property_type_code": None,
+                "parcel_type": None,
+                "zoning": None,
+                "data_quality_score": permit.data_quality_score,
+                "has_building_details": False,
+                "source_portal_code": permit.source_portal_code,
+                "scraped_at": str(permit.scraped_at) if permit.scraped_at else None
+            },
+            "all_permits": [{
+                "id": str(permit.id),
+                "permit_number": permit.permit_number,
+                "address": permit.address,
+                "city": permit.city,
+                "state_code": permit.state_code,
+                "county_name": permit.county_name,
+                "owner_name": permit.owner_name,
+                "permit_date": str(permit.permit_date) if permit.permit_date else None,
+                "install_date": str(permit.install_date) if permit.install_date else None,
+                "system_type": permit.system_type_raw,
+                "tank_size_gallons": permit.tank_size_gallons,
+                "drainfield_size_sqft": permit.drainfield_size_sqft,
+                "permit_url": permit.permit_url,
+                "pdf_url": permit.pdf_url,
+                "is_current": True
+            }],
+            "total_permits": 1
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get permit property: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve permit property data"
+        )
+
+
 @router.get("/{permit_id}/history", response_model=PermitHistoryResponse)
 async def get_permit_history(
     permit_id: UUID,
