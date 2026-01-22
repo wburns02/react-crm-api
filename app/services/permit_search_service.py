@@ -196,7 +196,8 @@ class PermitSearchService:
                 county_name=county.name if county else None,
                 owner_name=permit.owner_name,
                 permit_date=permit.permit_date,
-                system_type=permit.system_type_raw
+                system_type=permit.system_type_raw,
+                has_property=permit.property_id is not None
             )
 
             # Get highlights if text search

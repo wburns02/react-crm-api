@@ -245,6 +245,7 @@ class PermitSummary(BaseModel):
     owner_name: Optional[str] = None
     permit_date: Optional[date] = None
     system_type: Optional[str] = None
+    has_property: bool = False  # Whether permit is linked to a property
 
     class Config:
         from_attributes = True
