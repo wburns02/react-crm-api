@@ -187,12 +187,13 @@ class PermitSearchService:
         for row in rows:
             permit, state, county, system_type = row
 
-            # Determine "linked" status - has property_id, parcel number, or coordinates
-            # This indicates the permit has additional data linking it to a physical property
+            # Determine "linked" status - indicates permit has rich data/links
+            # Priority: property_id > parcel_number > coordinates > document URL
             has_property_id = getattr(permit, 'property_id', None) is not None
             has_parcel = bool(permit.parcel_number)
             has_coordinates = permit.latitude is not None and permit.longitude is not None
-            has_property = has_property_id or has_parcel or has_coordinates
+            has_document = bool(permit.pdf_url) or bool(permit.permit_url)
+            has_property = has_property_id or has_parcel or has_coordinates or has_document
 
             summary = PermitSummary(
                 id=permit.id,
