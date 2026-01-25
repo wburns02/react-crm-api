@@ -1,9 +1,17 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Numeric, JSON, Date
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Numeric, JSON, Date, Enum
+from sqlalchemy.dialects.postgresql import UUID, ENUM
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
 import uuid
+
+
+# PostgreSQL ENUM type for invoice status (matches existing DB enum)
+InvoiceStatusEnum = ENUM(
+    'draft', 'sent', 'paid', 'overdue', 'void',
+    name='invoice_status_enum',
+    create_type=False  # Don't create - already exists in DB
+)
 
 
 class Invoice(Base):
@@ -32,8 +40,8 @@ class Invoice(Base):
     paid_amount = Column(Numeric(10, 2))
     currency = Column(String(3), default="USD")
 
-    # Status is a USER-DEFINED type in Flask DB
-    status = Column(String(20), default="draft")  # draft, sent, paid, overdue, void
+    # Status is a PostgreSQL ENUM type in the DB
+    status = Column(InvoiceStatusEnum, default="draft")
 
     # Line items stored as JSON
     line_items = Column(JSON, default=list)
