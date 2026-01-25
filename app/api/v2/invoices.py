@@ -173,6 +173,12 @@ async def create_invoice(
         if not data.get("issue_date"):
             data["issue_date"] = date.today()
 
+        # Calculate total amount from line items if not provided
+        if not data.get("amount"):
+            line_items = data.get("line_items", [])
+            total = sum(item.get("amount", 0) for item in line_items if isinstance(item, dict))
+            data["amount"] = total if total > 0 else 0
+
         invoice = Invoice(**data)
         db.add(invoice)
         await db.commit()
