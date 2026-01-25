@@ -159,6 +159,11 @@ async def create_invoice(
         if data.get("work_order_id"):
             data["work_order_id"] = uuid.UUID(data["work_order_id"])
 
+        # Remove status field - let DB use its default value
+        # This avoids ENUM type mismatch issues with invoice_status_enum
+        if "status" in data:
+            del data["status"]
+
         # Generate invoice number if not provided
         if not data.get("invoice_number"):
             data["invoice_number"] = generate_invoice_number()

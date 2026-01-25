@@ -6,12 +6,8 @@ from app.database import Base
 import uuid
 
 
-# PostgreSQL ENUM type for invoice status (matches existing DB enum)
-InvoiceStatusEnum = ENUM(
-    'draft', 'sent', 'paid', 'overdue', 'void',
-    name='invoice_status_enum',
-    create_type=False  # Don't create - already exists in DB
-)
+# Note: Database uses invoice_status_enum PostgreSQL type
+# We'll use Text and handle validation in application layer
 
 
 class Invoice(Base):
@@ -40,8 +36,9 @@ class Invoice(Base):
     paid_amount = Column(Numeric(10, 2))
     currency = Column(String(3), default="USD")
 
-    # Status is a PostgreSQL ENUM type in the DB
-    status = Column(InvoiceStatusEnum, default="draft")
+    # Status is a PostgreSQL ENUM type (invoice_status_enum) in the DB
+    # Don't set default here - let DB handle it
+    status = Column(Text)
 
     # Line items stored as JSON
     line_items = Column(JSON, default=list)
