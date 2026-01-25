@@ -30,7 +30,7 @@ def invoice_to_response(invoice: Invoice) -> dict:
     return {
         "id": str(invoice.id),
         "invoice_number": invoice.invoice_number,
-        "customer_id": str(invoice.customer_id),
+        "customer_id": invoice.customer_id,  # Integer FK
         "customer_name": None,  # Would need to join to get this
         "customer": None,
         "work_order_id": str(invoice.work_order_id) if invoice.work_order_id else None,
@@ -138,8 +138,8 @@ async def create_invoice(
     try:
         data = invoice_data.model_dump()
 
-        # Convert string UUIDs to UUID objects
-        data["customer_id"] = uuid.UUID(data["customer_id"])
+        # customer_id is already an integer, no conversion needed
+        # Convert work_order_id string to UUID if provided
         if data.get("work_order_id"):
             data["work_order_id"] = uuid.UUID(data["work_order_id"])
 
@@ -187,9 +187,8 @@ async def update_invoice(
         # Update only provided fields
         update_data = invoice_data.model_dump(exclude_unset=True)
 
-        # Convert string UUIDs to UUID objects
-        if "customer_id" in update_data and update_data["customer_id"]:
-            update_data["customer_id"] = uuid.UUID(update_data["customer_id"])
+        # customer_id is already an integer, no conversion needed
+        # Convert work_order_id string to UUID if provided
         if "work_order_id" in update_data and update_data["work_order_id"]:
             update_data["work_order_id"] = uuid.UUID(update_data["work_order_id"])
 

@@ -14,9 +14,9 @@ class Invoice(Base):
 
     __tablename__ = "invoices"
 
-    # Flask uses UUID for primary key
+    # Primary key is UUID, but customer_id references Integer customers.id
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
     work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True, index=True)
 
     invoice_number = Column(String(50), unique=True, index=True)

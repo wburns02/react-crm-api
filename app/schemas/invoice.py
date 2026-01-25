@@ -28,8 +28,8 @@ class CustomerSummary(BaseModel):
 
 
 class InvoiceBase(BaseModel):
-    """Base invoice schema - matches Flask database with UUIDs."""
-    customer_id: str  # UUID as string
+    """Base invoice schema - customer_id is integer, work_order_id is UUID."""
+    customer_id: int  # Integer FK to customers.id
     work_order_id: Optional[str] = None  # UUID as string
     status: str = "draft"
     line_items: Optional[list[LineItem]] = []
@@ -47,7 +47,7 @@ class InvoiceCreate(InvoiceBase):
 
 class InvoiceUpdate(BaseModel):
     """Schema for updating an invoice (all fields optional)."""
-    customer_id: Optional[str] = None
+    customer_id: Optional[int] = None
     work_order_id: Optional[str] = None
     status: Optional[str] = None
     line_items: Optional[list[LineItem]] = None
@@ -60,10 +60,10 @@ class InvoiceUpdate(BaseModel):
 
 
 class InvoiceResponse(BaseModel):
-    """Schema for invoice response - matches Flask database."""
+    """Schema for invoice response."""
     id: str  # UUID as string
     invoice_number: Optional[str] = None
-    customer_id: str  # UUID as string
+    customer_id: int  # Integer FK to customers.id
     customer_name: Optional[str] = None
     customer: Optional[CustomerSummary] = None
     work_order_id: Optional[str] = None  # UUID as string
