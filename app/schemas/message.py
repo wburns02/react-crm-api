@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 from app.models.message import MessageType, MessageDirection, MessageStatus
 
 
@@ -29,12 +29,47 @@ class SendSMSRequest(BaseModel):
 
 
 class SendEmailRequest(BaseModel):
-    """Schema for sending email."""
+    """Schema for sending email.
+
+    Accepts both new field names (to, body) and legacy field names (email, message)
+    for backwards compatibility with deployed frontends.
+    """
     customer_id: Optional[int] = None
-    to: str = Field(..., description="Email address")
+    to: Optional[str] = Field(None, description="Email address")
+    email: Optional[str] = Field(None, description="Email address (legacy)")
     subject: str = Field(..., min_length=1)
-    body: str = Field(..., min_length=1)
+    body: Optional[str] = Field(None, min_length=1)
+    message: Optional[str] = Field(None, description="Message content (legacy)")
     source: str = "react"
+
+    @field_validator('customer_id', mode='before')
+    @classmethod
+    def parse_customer_id(cls, v):
+        """Handle empty string as None for customer_id."""
+        if v == '' or v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                return int(v)
+            except ValueError:
+                return None
+        return v
+
+    @model_validator(mode='after')
+    def normalize_fields(self):
+        """Normalize legacy field names to new ones."""
+        # Use 'email' if 'to' is not provided
+        if not self.to and self.email:
+            self.to = self.email
+        # Use 'message' if 'body' is not provided
+        if not self.body and self.message:
+            self.body = self.message
+        # Validate required fields
+        if not self.to:
+            raise ValueError("Either 'to' or 'email' field is required")
+        if not self.body:
+            raise ValueError("Either 'body' or 'message' field is required")
+        return self
 
 
 class MessageResponse(BaseModel):

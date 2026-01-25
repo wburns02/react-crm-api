@@ -4,6 +4,7 @@ from app.api.v2 import (
     customers,
     work_orders,
     communications,
+    email,
     technicians,
     invoices,
     dashboard,
@@ -113,6 +114,7 @@ api_router.include_router(customers.router, prefix="/customers", tags=["customer
 api_router.include_router(prospects.router, prefix="/prospects", tags=["prospects"])
 api_router.include_router(work_orders.router, prefix="/work-orders", tags=["work-orders"])
 api_router.include_router(communications.router, prefix="/communications", tags=["communications"])
+api_router.include_router(email.router, prefix="/email", tags=["email"])
 api_router.include_router(technicians.router, prefix="/technicians", tags=["technicians"])
 api_router.include_router(invoices.router, prefix="/invoices", tags=["invoices"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
