@@ -6,7 +6,7 @@ import uuid
 import logging
 
 from app.api.deps import DbSession, CurrentUser
-from app.models.invoice import Invoice
+from app.models.invoice import Invoice, InvoiceStatus
 from app.schemas.invoice import (
     InvoiceCreate,
     InvoiceUpdate,
@@ -159,9 +159,8 @@ async def create_invoice(
         if data.get("work_order_id"):
             data["work_order_id"] = uuid.UUID(data["work_order_id"])
 
-        # Set status to "draft" for PostgreSQL ENUM - must be valid value
-        # The invoice_status_enum type doesn't accept NULL or VARCHAR
-        data["status"] = "draft"
+        # Set status to DRAFT using Python enum for PostgreSQL ENUM type
+        data["status"] = InvoiceStatus.DRAFT
 
         # Remove None values to let DB use defaults
         data = {k: v for k, v in data.items() if v is not None}

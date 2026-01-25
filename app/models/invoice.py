@@ -4,12 +4,22 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
 import uuid
+from enum import Enum as PyEnum
 
 
-# Define ENUM type to match existing PostgreSQL enum
-# create_type=False because it already exists in the database
+# Python Enum matching the PostgreSQL invoice_status_enum type
+class InvoiceStatus(str, PyEnum):
+    DRAFT = 'draft'
+    SENT = 'sent'
+    PAID = 'paid'
+    OVERDUE = 'overdue'
+    VOID = 'void'
+    PARTIAL = 'partial'
+
+
+# SQLAlchemy ENUM using the Python enum, matches existing PostgreSQL type
 invoice_status_enum = ENUM(
-    'draft', 'sent', 'paid', 'overdue', 'void',
+    InvoiceStatus,
     name='invoice_status_enum',
     create_type=False
 )
@@ -42,7 +52,7 @@ class Invoice(Base):
     currency = Column(String(3), default="USD")
 
     # Status uses PostgreSQL ENUM type (invoice_status_enum)
-    status = Column(invoice_status_enum, default='draft')
+    status = Column(invoice_status_enum, default=InvoiceStatus.DRAFT)
 
     # Line items stored as JSON
     line_items = Column(JSON, default=list)
