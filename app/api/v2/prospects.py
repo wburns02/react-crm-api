@@ -33,11 +33,13 @@ async def list_prospects(
 ):
     """List prospects (customers not yet won) with pagination and filtering."""
     # Base query - filter to prospect stages only (exclude 'won')
+    # Also exclude soft-deleted prospects (is_active=False)
     query = select(Customer).where(
         or_(
             Customer.prospect_stage.in_(PROSPECT_STAGES),
             Customer.prospect_stage.is_(None)
-        )
+        ),
+        Customer.is_active == True  # Exclude soft-deleted prospects
     )
 
     # Apply filters
@@ -171,7 +173,12 @@ async def delete_prospect(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Delete a prospect."""
+    """
+    Delete a prospect (soft delete).
+
+    Sets is_active=False instead of hard deleting to preserve
+    related records (work orders, invoices, messages, etc.).
+    """
     result = await db.execute(select(Customer).where(Customer.id == prospect_id))
     prospect = result.scalar_one_or_none()
 
@@ -181,5 +188,8 @@ async def delete_prospect(
             detail="Prospect not found",
         )
 
-    await db.delete(prospect)
+    # Soft delete - set is_active=False to preserve related records
+    # Hard delete would fail due to foreign key constraints from
+    # work_orders, invoices, messages, equipment, etc.
+    prospect.is_active = False
     await db.commit()
