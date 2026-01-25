@@ -150,7 +150,7 @@ async def create_invoice(
 ):
     """Create a new invoice."""
     try:
-        data = invoice_data.model_dump()
+        data = invoice_data.model_dump(exclude_unset=True)
 
         # Convert integer customer_id to UUID (database column is UUID type)
         data["customer_id"] = customer_id_to_uuid(data["customer_id"])
@@ -161,8 +161,10 @@ async def create_invoice(
 
         # Remove status field - let DB use its default value
         # This avoids ENUM type mismatch issues with invoice_status_enum
-        if "status" in data:
-            del data["status"]
+        data.pop("status", None)
+
+        # Remove None values to let DB use defaults
+        data = {k: v for k, v in data.items() if v is not None}
 
         # Generate invoice number if not provided
         if not data.get("invoice_number"):

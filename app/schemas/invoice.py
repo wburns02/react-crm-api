@@ -31,7 +31,7 @@ class InvoiceBase(BaseModel):
     """Base invoice schema - customer_id is integer, work_order_id is UUID."""
     customer_id: int  # Integer FK to customers.id
     work_order_id: Optional[str] = None  # UUID as string
-    status: str = "draft"
+    status: Optional[str] = None  # Don't send default - let DB handle
     line_items: Optional[list[LineItem]] = []
     notes: Optional[str] = None
 
