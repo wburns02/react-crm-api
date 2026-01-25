@@ -159,9 +159,9 @@ async def create_invoice(
         if data.get("work_order_id"):
             data["work_order_id"] = uuid.UUID(data["work_order_id"])
 
-        # Remove status field - let DB use its default value
-        # This avoids ENUM type mismatch issues with invoice_status_enum
-        data.pop("status", None)
+        # Set status to "draft" for PostgreSQL ENUM - must be valid value
+        # The invoice_status_enum type doesn't accept NULL or VARCHAR
+        data["status"] = "draft"
 
         # Remove None values to let DB use defaults
         data = {k: v for k, v in data.items() if v is not None}
