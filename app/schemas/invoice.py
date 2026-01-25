@@ -63,7 +63,7 @@ class InvoiceResponse(BaseModel):
     """Schema for invoice response."""
     id: str  # UUID as string
     invoice_number: Optional[str] = None
-    customer_id: int  # Integer FK to customers.id
+    customer_id: str  # UUID derived from integer customer ID
     customer_name: Optional[str] = None
     customer: Optional[CustomerSummary] = None
     work_order_id: Optional[str] = None  # UUID as string

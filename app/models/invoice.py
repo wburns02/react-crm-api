@@ -14,9 +14,10 @@ class Invoice(Base):
 
     __tablename__ = "invoices"
 
-    # Primary key is UUID, but customer_id references Integer customers.id
+    # Primary key and customer_id are UUIDs (legacy Flask schema)
+    # Note: customer_id stores a deterministic UUID derived from integer customer ID
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # No FK constraint due to type mismatch
     work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True, index=True)
 
     invoice_number = Column(String(50), unique=True, index=True)

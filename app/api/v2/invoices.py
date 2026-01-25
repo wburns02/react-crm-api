@@ -25,12 +25,26 @@ def generate_invoice_number() -> str:
     return f"INV-{date_part}-{random_part}"
 
 
+# Namespace for deterministic customer UUID generation
+# This allows converting integer customer IDs to UUIDs consistently
+CUSTOMER_UUID_NAMESPACE = uuid.UUID('12345678-1234-5678-1234-567812345678')
+
+
+def customer_id_to_uuid(customer_id: int) -> uuid.UUID:
+    """Convert integer customer ID to deterministic UUID.
+
+    Since invoices.customer_id is UUID but customers.id is Integer,
+    we generate a deterministic UUID from the integer.
+    """
+    return uuid.uuid5(CUSTOMER_UUID_NAMESPACE, str(customer_id))
+
+
 def invoice_to_response(invoice: Invoice) -> dict:
     """Convert Invoice model to response dict."""
     return {
         "id": str(invoice.id),
         "invoice_number": invoice.invoice_number,
-        "customer_id": invoice.customer_id,  # Integer FK
+        "customer_id": str(invoice.customer_id) if invoice.customer_id else None,
         "customer_name": None,  # Would need to join to get this
         "customer": None,
         "work_order_id": str(invoice.work_order_id) if invoice.work_order_id else None,
@@ -138,7 +152,9 @@ async def create_invoice(
     try:
         data = invoice_data.model_dump()
 
-        # customer_id is already an integer, no conversion needed
+        # Convert integer customer_id to UUID (database column is UUID type)
+        data["customer_id"] = customer_id_to_uuid(data["customer_id"])
+
         # Convert work_order_id string to UUID if provided
         if data.get("work_order_id"):
             data["work_order_id"] = uuid.UUID(data["work_order_id"])
@@ -187,7 +203,10 @@ async def update_invoice(
         # Update only provided fields
         update_data = invoice_data.model_dump(exclude_unset=True)
 
-        # customer_id is already an integer, no conversion needed
+        # Convert integer customer_id to UUID if provided
+        if "customer_id" in update_data and update_data["customer_id"]:
+            update_data["customer_id"] = customer_id_to_uuid(update_data["customer_id"])
+
         # Convert work_order_id string to UUID if provided
         if "work_order_id" in update_data and update_data["work_order_id"]:
             update_data["work_order_id"] = uuid.UUID(update_data["work_order_id"])
