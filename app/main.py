@@ -305,12 +305,13 @@ async def run_database_migrations():
 
 @app.post("/health/db/create-admin")
 async def create_admin_user():
-    """Create admin user for testing."""
+    """Create or reset admin user for testing."""
     from sqlalchemy import text
     from app.database import async_session_maker
     import bcrypt
 
-    hashed = bcrypt.hashpw("Admin123!".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    password = "admin123"  # Simple password without special chars
+    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
     try:
         async with async_session_maker() as session:
@@ -318,8 +319,15 @@ async def create_admin_user():
             result = await session.execute(text(
                 "SELECT id FROM api_users WHERE email = 'admin@macseptic.com'"
             ))
-            if result.scalar():
-                return {"status": "exists", "email": "admin@macseptic.com"}
+            user_id = result.scalar()
+
+            if user_id:
+                # Update existing user's password
+                await session.execute(text("""
+                    UPDATE api_users SET hashed_password = :hashed WHERE email = 'admin@macseptic.com'
+                """), {"hashed": hashed})
+                await session.commit()
+                return {"status": "password_reset", "email": "admin@macseptic.com", "password": password}
 
             # Create user
             await session.execute(text("""
@@ -328,7 +336,7 @@ async def create_admin_user():
             """), {"hashed": hashed})
             await session.commit()
 
-            return {"status": "created", "email": "admin@macseptic.com", "password": "Admin123!"}
+            return {"status": "created", "email": "admin@macseptic.com", "password": password}
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
