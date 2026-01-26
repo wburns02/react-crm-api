@@ -341,6 +341,97 @@ async def create_admin_user():
         return {"status": "error", "error": str(e)}
 
 
+@app.post("/health/db/fix-schema")
+async def fix_table_schema():
+    """Add missing columns to existing tables."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"columns_added": [], "errors": []}
+
+    # Columns to add to each table (column_name, type)
+    missing_columns = {
+        "customers": [
+            ("lead_notes", "TEXT"),
+            ("prospect_stage", "VARCHAR(50)"),
+            ("assigned_sales_rep", "VARCHAR(100)"),
+            ("estimated_value", "FLOAT"),
+            ("manufacturer", "VARCHAR(100)"),
+            ("installer_name", "VARCHAR(100)"),
+            ("system_issued_date", "DATE"),
+            ("tags", "VARCHAR(500)"),
+            ("utm_source", "VARCHAR(255)"),
+            ("utm_medium", "VARCHAR(255)"),
+            ("utm_campaign", "VARCHAR(255)"),
+            ("utm_term", "VARCHAR(255)"),
+            ("utm_content", "VARCHAR(255)"),
+            ("gclid", "VARCHAR(255)"),
+            ("landing_page", "VARCHAR(500)"),
+            ("first_touch_ts", "TIMESTAMP"),
+            ("last_touch_ts", "TIMESTAMP"),
+            ("default_payment_terms", "VARCHAR(50)"),
+            ("quickbooks_customer_id", "VARCHAR(100)"),
+            ("hubspot_contact_id", "VARCHAR(100)"),
+            ("servicenow_ticket_ref", "VARCHAR(100)"),
+            ("next_follow_up_date", "DATE"),
+        ],
+        "payments": [
+            ("work_order_id", "VARCHAR(36) REFERENCES work_orders(id)"),
+            ("currency", "VARCHAR(3) DEFAULT 'USD'"),
+            ("status", "VARCHAR(30) DEFAULT 'pending'"),
+            ("stripe_payment_intent_id", "VARCHAR(255)"),
+            ("stripe_charge_id", "VARCHAR(255)"),
+            ("stripe_customer_id", "VARCHAR(255)"),
+            ("description", "TEXT"),
+            ("receipt_url", "VARCHAR(500)"),
+            ("failure_reason", "TEXT"),
+            ("refund_amount", "NUMERIC(10,2)"),
+            ("refund_reason", "TEXT"),
+            ("refunded", "BOOLEAN DEFAULT FALSE"),
+            ("refund_id", "VARCHAR(255)"),
+            ("refunded_at", "TIMESTAMP"),
+            ("processed_at", "TIMESTAMP"),
+        ],
+        "quotes": [
+            ("title", "VARCHAR(255)"),
+            ("description", "TEXT"),
+            ("discount", "NUMERIC(10,2) DEFAULT 0"),
+            ("signature_data", "TEXT"),
+            ("signed_at", "TIMESTAMP WITH TIME ZONE"),
+            ("signed_by", "VARCHAR(150)"),
+            ("approval_status", "VARCHAR(30)"),
+            ("approved_by", "VARCHAR(100)"),
+            ("approved_at", "TIMESTAMP WITH TIME ZONE"),
+            ("converted_to_work_order_id", "VARCHAR(36) REFERENCES work_orders(id)"),
+            ("converted_at", "TIMESTAMP WITH TIME ZONE"),
+            ("sent_at", "TIMESTAMP WITH TIME ZONE"),
+        ],
+    }
+
+    try:
+        async with async_session_maker() as session:
+            for table_name, columns in missing_columns.items():
+                for col_name, col_type in columns:
+                    try:
+                        # Check if column exists
+                        result = await session.execute(text(f"""
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name = '{table_name}' AND column_name = '{col_name}'
+                        """))
+                        if not result.scalar():
+                            await session.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"))
+                            results["columns_added"].append(f"{table_name}.{col_name}")
+                    except Exception as e:
+                        results["errors"].append(f"{table_name}.{col_name}: {str(e)}")
+
+            await session.commit()
+
+    except Exception as e:
+        results["errors"].append(str(e))
+
+    return results
+
+
 @app.post("/health/db/create-tables")
 async def create_core_tables():
     """Create core CRM tables directly using raw SQL (bypasses alembic async issues)."""
