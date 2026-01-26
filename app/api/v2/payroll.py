@@ -332,9 +332,9 @@ async def approve_payroll(
 @router.post("/{period_id}/export")
 async def export_payroll(
     period_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
     format: str = Query("csv", pattern="^(csv|nacha|pdf)$"),
-    db: DbSession = None,
-    current_user: CurrentUser = None,
 ):
     """Export payroll data for payroll systems."""
     result = await db.execute(
@@ -404,10 +404,11 @@ async def list_time_entries(
     entries = result.scalars().all()
 
     return {
-        "items": [
+        "entries": [
             {
                 "id": str(e.id),
                 "technician_id": e.technician_id,
+                "date": e.entry_date.isoformat(),
                 "entry_date": e.entry_date.isoformat(),
                 "clock_in": e.clock_in.isoformat() if e.clock_in else None,
                 "clock_out": e.clock_out.isoformat() if e.clock_out else None,
@@ -593,6 +594,68 @@ async def list_payroll_periods_v2(
             }
             for p in periods
         ]
+    }
+
+
+class CreatePeriodRequest(BaseModel):
+    """Request to create a new payroll period."""
+    start_date: date
+    end_date: date
+    period_type: str = "biweekly"
+
+
+@router.post("/periods")
+async def create_payroll_period(
+    request: CreatePeriodRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Create a new payroll period."""
+    # Validate dates
+    if request.end_date <= request.start_date:
+        raise HTTPException(
+            status_code=400,
+            detail="End date must be after start date"
+        )
+
+    # Check for overlapping periods
+    overlap_result = await db.execute(
+        select(PayrollPeriod).where(
+            and_(
+                PayrollPeriod.start_date <= request.end_date,
+                PayrollPeriod.end_date >= request.start_date,
+            )
+        )
+    )
+    if overlap_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail="Period overlaps with existing period"
+        )
+
+    # Create the period
+    period = PayrollPeriod(
+        start_date=request.start_date,
+        end_date=request.end_date,
+        period_type=request.period_type,
+        status="open",
+    )
+
+    db.add(period)
+    await db.commit()
+    await db.refresh(period)
+
+    return {
+        "id": str(period.id),
+        "start_date": period.start_date.isoformat(),
+        "end_date": period.end_date.isoformat(),
+        "period_type": period.period_type,
+        "status": period.status,
+        "total_regular_hours": period.total_regular_hours,
+        "total_overtime_hours": period.total_overtime_hours,
+        "total_gross_pay": period.total_gross_pay,
+        "total_commissions": period.total_commissions,
+        "technician_count": period.technician_count,
     }
 
 

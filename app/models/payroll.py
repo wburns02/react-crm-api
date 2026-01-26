@@ -125,7 +125,7 @@ class TechnicianPayRate(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
-    technician_id = Column(String(36), unique=True, nullable=False, index=True)
+    technician_id = Column(String(36), nullable=False, index=True)  # Not unique - techs can have multiple rate records
 
     # Hourly rates
     hourly_rate = Column(Float, nullable=False)
