@@ -295,7 +295,11 @@ async def get_samsara_status(current_user: CurrentUser) -> dict:
             "configured": False,
             "connected": False,
             "message": "SAMSARA_API_TOKEN not set in environment",
+            "token_prefix": None,
         }
+
+    # Show first 10 chars of token for debugging (safe - not the full token)
+    token_prefix = settings.SAMSARA_API_TOKEN[:10] + "..." if len(settings.SAMSARA_API_TOKEN) > 10 else "too_short"
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -308,26 +312,35 @@ async def get_samsara_status(current_user: CurrentUser) -> dict:
             )
 
             if response.status_code == 200:
+                data = response.json()
+                vehicle_count = len(data.get("data", []))
                 return {
                     "configured": True,
                     "connected": True,
                     "message": "Samsara API connected successfully",
+                    "token_prefix": token_prefix,
+                    "vehicle_count": vehicle_count,
                 }
             elif response.status_code == 401:
                 return {
                     "configured": True,
                     "connected": False,
                     "message": "Invalid API token - authentication failed",
+                    "token_prefix": token_prefix,
+                    "samsara_error": response.text[:200] if response.text else None,
                 }
             else:
                 return {
                     "configured": True,
                     "connected": False,
                     "message": f"API error: {response.status_code}",
+                    "token_prefix": token_prefix,
+                    "samsara_error": response.text[:200] if response.text else None,
                 }
     except Exception as e:
         return {
             "configured": True,
             "connected": False,
             "message": f"Connection failed: {str(e)}",
+            "token_prefix": token_prefix,
         }
