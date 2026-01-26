@@ -15,6 +15,7 @@ from app.api.v2 import (
     prospects,
     payments,
     quotes,
+    payment_plans,
     sms_consent,
     payroll,
     activities,
@@ -119,6 +120,7 @@ api_router.include_router(technicians.router, prefix="/technicians", tags=["tech
 api_router.include_router(invoices.router, prefix="/invoices", tags=["invoices"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(quotes.router, prefix="/quotes", tags=["quotes"])
+api_router.include_router(payment_plans.router, prefix="/payment-plans", tags=["payment-plans"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(schedule.router, prefix="/schedule", tags=["schedule"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
