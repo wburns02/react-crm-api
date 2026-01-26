@@ -97,6 +97,54 @@ async def payroll_debug_health(
     return diagnostics
 
 
+@router.get("/debug/test-endpoints")
+async def debug_test_endpoints(
+    db: DbSession,
+    status: Optional[str] = None,
+    is_active: Optional[bool] = None,
+):
+    """Test the endpoint queries without auth."""
+    import traceback
+    results = {"status_param": status, "is_active_param": is_active, "tests": {}}
+
+    # Test time-entries query
+    try:
+        query = select(TimeEntry)
+        if status:
+            query = query.where(TimeEntry.status == status)
+        count_query = select(func.count()).select_from(query.subquery())
+        result = await db.execute(count_query)
+        count = result.scalar()
+        results["tests"]["time_entries"] = {"success": True, "count": count}
+    except Exception as e:
+        results["tests"]["time_entries"] = {"success": False, "error": f"{type(e).__name__}: {str(e)}", "traceback": traceback.format_exc()}
+
+    # Test commissions query
+    try:
+        query = select(Commission)
+        if status:
+            query = query.where(Commission.status == status)
+        count_query = select(func.count()).select_from(query.subquery())
+        result = await db.execute(count_query)
+        count = result.scalar()
+        results["tests"]["commissions"] = {"success": True, "count": count}
+    except Exception as e:
+        results["tests"]["commissions"] = {"success": False, "error": f"{type(e).__name__}: {str(e)}", "traceback": traceback.format_exc()}
+
+    # Test pay-rates query
+    try:
+        query = select(TechnicianPayRate)
+        if is_active is not None:
+            query = query.where(TechnicianPayRate.is_active == is_active)
+        result = await db.execute(query)
+        rates = result.scalars().all()
+        results["tests"]["pay_rates"] = {"success": True, "count": len(rates)}
+    except Exception as e:
+        results["tests"]["pay_rates"] = {"success": False, "error": f"{type(e).__name__}: {str(e)}", "traceback": traceback.format_exc()}
+
+    return results
+
+
 @router.get("/debug/data")
 async def payroll_check_data(
     db: DbSession,
