@@ -59,44 +59,18 @@ def upgrade():
             sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
         )
 
-    # Create work_order_status enum if not exists
-    conn.execute(text("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_status_enum') THEN
-                CREATE TYPE work_order_status_enum AS ENUM (
-                    'scheduled', 'in_progress', 'completed', 'cancelled', 'on_hold', 'pending'
-                );
-            END IF;
-        END
-        $$;
-    """))
+    # Create enums with proper existence check
+    enums = [
+        ("work_order_status_enum", ['scheduled', 'in_progress', 'completed', 'cancelled', 'on_hold', 'pending']),
+        ("work_order_priority_enum", ['low', 'medium', 'high', 'urgent']),
+        ("work_order_job_type_enum", ['pumping', 'repair', 'inspection', 'installation', 'maintenance', 'emergency', 'other']),
+    ]
 
-    # Create work_order_priority enum if not exists
-    conn.execute(text("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_priority_enum') THEN
-                CREATE TYPE work_order_priority_enum AS ENUM (
-                    'low', 'medium', 'high', 'urgent'
-                );
-            END IF;
-        END
-        $$;
-    """))
-
-    # Create work_order_job_type enum if not exists
-    conn.execute(text("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_job_type_enum') THEN
-                CREATE TYPE work_order_job_type_enum AS ENUM (
-                    'pumping', 'repair', 'inspection', 'installation', 'maintenance', 'emergency', 'other'
-                );
-            END IF;
-        END
-        $$;
-    """))
+    for enum_name, values in enums:
+        result = conn.execute(text(f"SELECT 1 FROM pg_type WHERE typname = '{enum_name}'"))
+        if not result.scalar():
+            values_str = ", ".join([f"'{v}'" for v in values])
+            conn.execute(text(f"CREATE TYPE {enum_name} AS ENUM ({values_str})"))
 
     # Create technicians table first (work_orders references it)
     result = conn.execute(text(
