@@ -24,10 +24,10 @@ router = APIRouter()
 
 
 # Diagnostic endpoint - temporarily added to debug 500 errors
+# NOTE: Temporarily public for debugging - remove auth requirement after diagnosis
 @router.get("/debug/health")
 async def payroll_debug_health(
     db: DbSession,
-    current_user: CurrentUser,
 ):
     """Diagnostic endpoint to check payroll database tables."""
     from sqlalchemy import text
