@@ -91,18 +91,45 @@ async def payroll_debug_health(
     return diagnostics
 
 
+@router.get("/debug/data")
+async def payroll_check_data(
+    db: DbSession,
+):
+    """Check what data exists in payroll tables."""
+    from sqlalchemy import text
+
+    results = {}
+
+    for table in ["payroll_periods", "time_entries", "commissions", "technician_pay_rates"]:
+        try:
+            count_result = await db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            count = count_result.scalar()
+            results[table] = {"count": count, "sample": None}
+
+            if count > 0 and count <= 5:
+                # Get sample data
+                sample_result = await db.execute(text(f"SELECT * FROM {table} LIMIT 5"))
+                rows = sample_result.fetchall()
+                results[table]["sample"] = [dict(row._mapping) for row in rows]
+        except Exception as e:
+            results[table] = {"error": str(e)}
+
+    return results
+
+
 @router.post("/debug/migrate")
 async def payroll_migrate_tables(
     db: DbSession,
+    force: bool = False,
 ):
     """TEMPORARY: Drop and recreate payroll tables with correct schema.
 
     WARNING: This will delete all data in payroll tables.
-    Only use when tables are empty and schema is wrong.
+    Pass force=true to drop tables even if they have data.
     """
     from sqlalchemy import text
 
-    results = {"dropped": [], "created": [], "errors": []}
+    results = {"dropped": [], "created": [], "errors": [], "data_deleted": {}}
 
     tables = ["time_entries", "commissions", "technician_pay_rates", "payroll_periods"]
 
@@ -112,10 +139,12 @@ async def payroll_migrate_tables(
             result = await db.execute(text(f"SELECT COUNT(*) FROM {table}"))
             count = result.scalar()
             if count > 0:
-                return {
-                    "error": f"Table {table} has {count} records. Cannot drop tables with data.",
-                    "hint": "Backup data first or use proper Alembic migrations."
-                }
+                results["data_deleted"][table] = count
+                if not force:
+                    return {
+                        "error": f"Table {table} has {count} records. Cannot drop tables with data.",
+                        "hint": "Use force=true to delete data, or use /debug/data to check first."
+                    }
         except Exception:
             pass  # Table doesn't exist, that's fine
 
