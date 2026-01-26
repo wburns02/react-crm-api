@@ -238,13 +238,14 @@ async def database_health_check():
 
 @app.post("/health/db/migrate")
 async def run_database_migrations():
-    """Run alembic migrations to create missing tables."""
+    """Reset alembic and run migrations from scratch."""
     from sqlalchemy import text
     from app.database import async_session_maker
     import subprocess
     import os
 
     results = {
+        "alembic_reset": False,
         "alembic_run": False,
         "tables_before": [],
         "tables_after": [],
@@ -260,19 +261,31 @@ async def run_database_migrations():
             """))
             results["tables_before"] = [row[0] for row in result.fetchall()]
 
+            # Get current alembic version
+            try:
+                result = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["current_version"] = result.scalar_one_or_none()
+            except:
+                results["current_version"] = None
+
+            # Delete alembic_version to reset state
+            await session.execute(text("DELETE FROM alembic_version"))
+            await session.commit()
+            results["alembic_reset"] = True
+
         # Run alembic upgrade head
         os.chdir("/app")
         proc = subprocess.run(
             ["alembic", "upgrade", "head"],
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=300
         )
         results["alembic_run"] = proc.returncode == 0
         if proc.stdout:
-            results["alembic_stdout"] = proc.stdout
+            results["alembic_stdout"] = proc.stdout[-2000:]  # Last 2000 chars
         if proc.stderr:
-            results["alembic_stderr"] = proc.stderr
+            results["alembic_stderr"] = proc.stderr[-2000:]
 
         # Get tables after
         async with async_session_maker() as session:
