@@ -23,6 +23,64 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# Diagnostic endpoint - temporarily added to debug 500 errors
+@router.get("/debug/health")
+async def payroll_debug_health(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Diagnostic endpoint to check payroll database tables."""
+    from sqlalchemy import text
+    import traceback
+
+    diagnostics = {
+        "database_connected": False,
+        "payroll_periods_table": False,
+        "time_entries_table": False,
+        "commissions_table": False,
+        "technician_pay_rates_table": False,
+        "period_count": 0,
+        "errors": [],
+    }
+
+    try:
+        # Test basic connection
+        result = await db.execute(text("SELECT 1"))
+        diagnostics["database_connected"] = True
+
+        # Check each table
+        for table_name, key in [
+            ("payroll_periods", "payroll_periods_table"),
+            ("time_entries", "time_entries_table"),
+            ("commissions", "commissions_table"),
+            ("technician_pay_rates", "technician_pay_rates_table"),
+        ]:
+            try:
+                result = await db.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                count = result.scalar()
+                diagnostics[key] = True
+                if table_name == "payroll_periods":
+                    diagnostics["period_count"] = count
+            except Exception as e:
+                diagnostics["errors"].append(f"{table_name}: {type(e).__name__}: {str(e)}")
+
+        # Try actual query
+        try:
+            result = await db.execute(select(PayrollPeriod).limit(1))
+            _ = result.scalars().all()
+            diagnostics["sqlalchemy_query_works"] = True
+        except Exception as e:
+            diagnostics["sqlalchemy_query_works"] = False
+            diagnostics["errors"].append(f"SQLAlchemy query: {type(e).__name__}: {str(e)}")
+            diagnostics["errors"].append(traceback.format_exc())
+
+    except Exception as e:
+        diagnostics["errors"].append(f"Connection: {type(e).__name__}: {str(e)}")
+        diagnostics["errors"].append(traceback.format_exc())
+
+    return diagnostics
+
+
 # Request Models
 
 class TimeEntryCreate(BaseModel):

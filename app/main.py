@@ -170,7 +170,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.5.10",  # Added payroll error diagnostics
+        "version": "2.5.11",  # Added payroll debug/health endpoint
         "environment": settings.ENVIRONMENT,
         "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "technician_performance", "call_intelligence"],
     }
