@@ -308,10 +308,9 @@ async def create_admin_user():
     """Create admin user for testing."""
     from sqlalchemy import text
     from app.database import async_session_maker
-    from passlib.context import CryptContext
+    import bcrypt
 
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    hashed = pwd_context.hash("Admin123!")
+    hashed = bcrypt.hashpw("Admin123!".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
     try:
         async with async_session_maker() as session:
