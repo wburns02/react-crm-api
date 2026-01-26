@@ -110,6 +110,37 @@ async def debug_auth_test(
     }
 
 
+@router.get("/debug/time-entries-simple")
+async def debug_time_entries_simple(
+    db: DbSession,
+    current_user: CurrentUser,
+    status: Optional[str] = None,
+):
+    """Minimal time entries endpoint for debugging."""
+    import traceback
+    try:
+        logger.info(f"debug_time_entries_simple called by user {current_user.id} with status={status}")
+        query = select(TimeEntry)
+        if status:
+            query = query.where(TimeEntry.status == status)
+        result = await db.execute(query.limit(10))
+        entries = result.scalars().all()
+        return {
+            "success": True,
+            "count": len(entries),
+            "user_id": current_user.id,
+            "status_param": status,
+        }
+    except Exception as e:
+        logger.error(f"Error in debug_time_entries_simple: {type(e).__name__}: {str(e)}")
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": f"{type(e).__name__}: {str(e)}",
+            "traceback": traceback.format_exc(),
+        }
+
+
 @router.get("/debug/test-endpoints")
 async def debug_test_endpoints(
     db: DbSession,
