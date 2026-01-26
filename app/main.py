@@ -238,15 +238,56 @@ async def database_health_check():
 
 @app.post("/health/db/migrate")
 async def run_database_migrations():
-    """Run SQLAlchemy create_all to create missing tables."""
-    from app.database import engine, Base
+    """Run alembic migrations to create missing tables."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    import subprocess
+    import os
+
+    results = {
+        "alembic_run": False,
+        "tables_before": [],
+        "tables_after": [],
+        "errors": []
+    }
 
     try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        return {"success": True, "message": "Database migrations completed"}
+        # Get tables before
+        async with async_session_maker() as session:
+            result = await session.execute(text("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public' ORDER BY table_name
+            """))
+            results["tables_before"] = [row[0] for row in result.fetchall()]
+
+        # Run alembic upgrade head
+        os.chdir("/app")
+        proc = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        results["alembic_run"] = proc.returncode == 0
+        if proc.stdout:
+            results["alembic_stdout"] = proc.stdout
+        if proc.stderr:
+            results["alembic_stderr"] = proc.stderr
+
+        # Get tables after
+        async with async_session_maker() as session:
+            result = await session.execute(text("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public' ORDER BY table_name
+            """))
+            results["tables_after"] = [row[0] for row in result.fetchall()]
+
+        results["new_tables"] = [t for t in results["tables_after"] if t not in results["tables_before"]]
+
     except Exception as e:
-        return {"success": False, "error": f"{type(e).__name__}: {str(e)}"}
+        results["errors"].append(f"{type(e).__name__}: {str(e)}")
+
+    return results
 
 
 # For running with uvicorn directly (development only)
