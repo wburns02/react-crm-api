@@ -41,6 +41,7 @@ async def payroll_debug_health(
         "technician_pay_rates_table": False,
         "period_count": 0,
         "errors": [],
+        "table_schemas": {},
     }
 
     try:
@@ -48,7 +49,7 @@ async def payroll_debug_health(
         result = await db.execute(text("SELECT 1"))
         diagnostics["database_connected"] = True
 
-        # Check each table
+        # Check each table and get schema
         for table_name, key in [
             ("payroll_periods", "payroll_periods_table"),
             ("time_entries", "time_entries_table"),
@@ -61,6 +62,16 @@ async def payroll_debug_health(
                 diagnostics[key] = True
                 if table_name == "payroll_periods":
                     diagnostics["period_count"] = count
+
+                # Get actual columns
+                schema_result = await db.execute(text(
+                    f"SELECT column_name, data_type FROM information_schema.columns "
+                    f"WHERE table_name = '{table_name}' ORDER BY ordinal_position"
+                ))
+                columns = schema_result.fetchall()
+                diagnostics["table_schemas"][table_name] = [
+                    {"column": c[0], "type": c[1]} for c in columns
+                ]
             except Exception as e:
                 diagnostics["errors"].append(f"{table_name}: {type(e).__name__}: {str(e)}")
 
@@ -72,13 +83,74 @@ async def payroll_debug_health(
         except Exception as e:
             diagnostics["sqlalchemy_query_works"] = False
             diagnostics["errors"].append(f"SQLAlchemy query: {type(e).__name__}: {str(e)}")
-            diagnostics["errors"].append(traceback.format_exc())
 
     except Exception as e:
         diagnostics["errors"].append(f"Connection: {type(e).__name__}: {str(e)}")
         diagnostics["errors"].append(traceback.format_exc())
 
     return diagnostics
+
+
+@router.post("/debug/migrate")
+async def payroll_migrate_tables(
+    db: DbSession,
+):
+    """TEMPORARY: Drop and recreate payroll tables with correct schema.
+
+    WARNING: This will delete all data in payroll tables.
+    Only use when tables are empty and schema is wrong.
+    """
+    from sqlalchemy import text
+
+    results = {"dropped": [], "created": [], "errors": []}
+
+    tables = ["time_entries", "commissions", "technician_pay_rates", "payroll_periods"]
+
+    # First check if any table has data
+    for table in tables:
+        try:
+            result = await db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            count = result.scalar()
+            if count > 0:
+                return {
+                    "error": f"Table {table} has {count} records. Cannot drop tables with data.",
+                    "hint": "Backup data first or use proper Alembic migrations."
+                }
+        except Exception:
+            pass  # Table doesn't exist, that's fine
+
+    # Drop tables in order (respecting foreign keys)
+    for table in tables:
+        try:
+            await db.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
+            results["dropped"].append(table)
+        except Exception as e:
+            results["errors"].append(f"Drop {table}: {str(e)}")
+
+    await db.commit()
+
+    # Recreate using SQLAlchemy metadata
+    from app.database import Base, engine
+
+    try:
+        async with engine.begin() as conn:
+            # Only create payroll tables
+            await conn.run_sync(
+                lambda sync_conn: Base.metadata.create_all(
+                    sync_conn,
+                    tables=[
+                        PayrollPeriod.__table__,
+                        TimeEntry.__table__,
+                        Commission.__table__,
+                        TechnicianPayRate.__table__,
+                    ]
+                )
+            )
+        results["created"] = ["payroll_periods", "time_entries", "commissions", "technician_pay_rates"]
+    except Exception as e:
+        results["errors"].append(f"Create tables: {str(e)}")
+
+    return results
 
 
 # Request Models
