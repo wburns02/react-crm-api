@@ -341,6 +341,114 @@ async def create_admin_user():
         return {"status": "error", "error": str(e)}
 
 
+@app.post("/health/db/fix-invoices")
+async def fix_invoices_table():
+    """Recreate invoices table with correct UUID types and create job_costs table."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"actions": [], "errors": []}
+
+    try:
+        async with async_session_maker() as session:
+            # Create invoice_status_enum if not exists
+            try:
+                await session.execute(text("""
+                    DO $$
+                    BEGIN
+                        CREATE TYPE invoice_status_enum AS ENUM ('draft', 'sent', 'paid', 'overdue', 'void', 'partial');
+                    EXCEPTION
+                        WHEN duplicate_object THEN NULL;
+                    END $$;
+                """))
+                results["actions"].append("invoice_status_enum: created or already exists")
+            except Exception as e:
+                results["errors"].append(f"invoice_status_enum: {str(e)}")
+
+            # Drop old invoices table and recreate with UUID types
+            try:
+                await session.execute(text("DROP TABLE IF EXISTS invoices CASCADE"))
+                await session.execute(text("""
+                    CREATE TABLE invoices (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        customer_id UUID NOT NULL,
+                        work_order_id UUID,
+                        invoice_number VARCHAR(50) UNIQUE,
+                        issue_date DATE,
+                        due_date DATE,
+                        paid_date DATE,
+                        amount NUMERIC(10,2),
+                        paid_amount NUMERIC(10,2),
+                        currency VARCHAR(3) DEFAULT 'USD',
+                        status invoice_status_enum DEFAULT 'draft',
+                        line_items JSONB DEFAULT '[]',
+                        notes TEXT,
+                        external_payment_link VARCHAR(255),
+                        quickbooks_invoice_id VARCHAR(100),
+                        pdf_url VARCHAR(255),
+                        pdf_generated_at TIMESTAMP,
+                        last_sent_at TIMESTAMP,
+                        sent_count INTEGER DEFAULT 0,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                        updated_at TIMESTAMP WITH TIME ZONE
+                    )
+                """))
+                await session.execute(text("CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON invoices(customer_id)"))
+                await session.execute(text("CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number)"))
+                results["actions"].append("invoices table: recreated with UUID types")
+            except Exception as e:
+                results["errors"].append(f"invoices table: {str(e)}")
+
+            # Create job_costs table
+            try:
+                result = await session.execute(text(
+                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'job_costs')"
+                ))
+                if not result.scalar():
+                    await session.execute(text("""
+                        CREATE TABLE job_costs (
+                            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                            work_order_id VARCHAR(36) NOT NULL,
+                            cost_type VARCHAR(50) NOT NULL,
+                            category VARCHAR(100),
+                            description VARCHAR(500) NOT NULL,
+                            notes TEXT,
+                            quantity FLOAT DEFAULT 1.0,
+                            unit VARCHAR(20) DEFAULT 'each',
+                            unit_cost FLOAT NOT NULL,
+                            total_cost FLOAT NOT NULL,
+                            markup_percent FLOAT DEFAULT 0.0,
+                            billable_amount FLOAT,
+                            technician_id VARCHAR(36),
+                            technician_name VARCHAR(255),
+                            cost_date DATE NOT NULL,
+                            is_billable BOOLEAN DEFAULT TRUE,
+                            is_billed BOOLEAN DEFAULT FALSE,
+                            invoice_id VARCHAR(36),
+                            vendor_name VARCHAR(255),
+                            vendor_invoice VARCHAR(100),
+                            receipt_url VARCHAR(500),
+                            created_by VARCHAR(100),
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                            updated_at TIMESTAMP WITH TIME ZONE
+                        )
+                    """))
+                    await session.execute(text("CREATE INDEX IF NOT EXISTS idx_job_costs_work_order_id ON job_costs(work_order_id)"))
+                    await session.execute(text("CREATE INDEX IF NOT EXISTS idx_job_costs_cost_date ON job_costs(cost_date)"))
+                    results["actions"].append("job_costs table: created")
+                else:
+                    results["actions"].append("job_costs table: already exists")
+            except Exception as e:
+                results["errors"].append(f"job_costs table: {str(e)}")
+
+            await session.commit()
+
+    except Exception as e:
+        results["errors"].append(f"General error: {str(e)}")
+
+    return results
+
+
 @app.post("/health/db/fix-schema")
 async def fix_table_schema():
     """Add missing columns to existing tables."""
