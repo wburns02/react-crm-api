@@ -170,7 +170,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.5.8",  # Added /permits/{id}/property endpoint for detail page
+        "version": "2.5.9",  # Fixed payroll endpoints
         "environment": settings.ENVIRONMENT,
         "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "technician_performance", "call_intelligence"],
     }
