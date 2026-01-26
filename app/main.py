@@ -219,6 +219,82 @@ async def database_health_check():
     return checks
 
 
+@app.post("/health/db/fix")
+async def fix_database_schema():
+    """Create missing api_users table and seed initial admin user."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    from app.api.deps import get_password_hash
+
+    results = {
+        "table_created": False,
+        "user_created": False,
+        "errors": []
+    }
+
+    try:
+        async with async_session_maker() as session:
+            # Check if table exists
+            result = await session.execute(text("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_name = 'api_users'
+            """))
+            table_exists = result.scalar_one_or_none()
+
+            if not table_exists:
+                # Create api_users table
+                await session.execute(text("""
+                    CREATE TABLE api_users (
+                        id SERIAL PRIMARY KEY,
+                        email VARCHAR(255) NOT NULL UNIQUE,
+                        hashed_password VARCHAR(255) NOT NULL,
+                        first_name VARCHAR(100),
+                        last_name VARCHAR(100),
+                        is_active BOOLEAN DEFAULT TRUE,
+                        is_superuser BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP WITH TIME ZONE
+                    )
+                """))
+                await session.execute(text("""
+                    CREATE INDEX ix_api_users_email ON api_users(email)
+                """))
+                await session.commit()
+                results["table_created"] = True
+            else:
+                results["table_created"] = "already_exists"
+
+            # Check for admin user
+            result = await session.execute(text("""
+                SELECT id FROM api_users WHERE email = 'will@macseptic.com'
+            """))
+            user_exists = result.scalar_one_or_none()
+
+            if not user_exists:
+                # Create admin user with hashed password
+                hashed = get_password_hash("#Espn2025")
+                await session.execute(text("""
+                    INSERT INTO api_users (email, hashed_password, first_name, last_name, is_active, is_superuser)
+                    VALUES (:email, :hashed_password, :first_name, :last_name, :is_active, :is_superuser)
+                """), {
+                    "email": "will@macseptic.com",
+                    "hashed_password": hashed,
+                    "first_name": "Will",
+                    "last_name": "Burns",
+                    "is_active": True,
+                    "is_superuser": True
+                })
+                await session.commit()
+                results["user_created"] = True
+            else:
+                results["user_created"] = "already_exists"
+
+    except Exception as e:
+        results["errors"].append(f"{type(e).__name__}: {str(e)}")
+
+    return results
+
+
 # For running with uvicorn directly (development only)
 if __name__ == "__main__":
     import uvicorn
