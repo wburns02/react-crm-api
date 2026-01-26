@@ -186,8 +186,16 @@ async def database_health_check():
         "database_connected": False,
         "api_users_table_exists": False,
         "api_users_columns": [],
+        "all_tables": [],
+        "core_tables_missing": [],
         "errors": []
     }
+
+    # Core tables that should exist
+    core_tables = [
+        "api_users", "customers", "work_orders", "invoices", "technicians",
+        "payments", "quotes", "messages", "activities"
+    ]
 
     try:
         async with async_session_maker() as session:
@@ -195,12 +203,21 @@ async def database_health_check():
             result = await session.execute(text("SELECT 1"))
             checks["database_connected"] = True
 
-            # Check if api_users table exists
+            # Get all tables
             result = await session.execute(text("""
                 SELECT table_name FROM information_schema.tables
-                WHERE table_name = 'api_users'
+                WHERE table_schema = 'public'
+                ORDER BY table_name
             """))
-            if result.scalar_one_or_none():
+            checks["all_tables"] = [row[0] for row in result.fetchall()]
+
+            # Check core tables
+            for table in core_tables:
+                if table not in checks["all_tables"]:
+                    checks["core_tables_missing"].append(table)
+
+            # Check if api_users table exists
+            if "api_users" in checks["all_tables"]:
                 checks["api_users_table_exists"] = True
 
                 # Get columns
@@ -219,8 +236,17 @@ async def database_health_check():
     return checks
 
 
-# SECURITY: /health/db/fix endpoint removed after one-time use
-# The api_users table and admin user have been created
+@app.post("/health/db/migrate")
+async def run_database_migrations():
+    """Run SQLAlchemy create_all to create missing tables."""
+    from app.database import engine, Base
+
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        return {"success": True, "message": "Database migrations completed"}
+    except Exception as e:
+        return {"success": False, "error": f"{type(e).__name__}: {str(e)}"}
 
 
 # For running with uvicorn directly (development only)
