@@ -565,18 +565,25 @@ async def list_payroll_periods_v2(
     year: Optional[int] = Query(None),
 ):
     """List payroll periods (alias for frontend compatibility)."""
-    query = select(PayrollPeriod)
+    try:
+        query = select(PayrollPeriod)
 
-    if status:
-        query = query.where(PayrollPeriod.status == status)
-    if year:
-        from datetime import date as date_type
-        query = query.where(PayrollPeriod.start_date >= date_type(year, 1, 1))
-        query = query.where(PayrollPeriod.end_date <= date_type(year, 12, 31))
+        if status:
+            query = query.where(PayrollPeriod.status == status)
+        if year:
+            from datetime import date as date_type
+            query = query.where(PayrollPeriod.start_date >= date_type(year, 1, 1))
+            query = query.where(PayrollPeriod.end_date <= date_type(year, 12, 31))
 
-    query = query.order_by(PayrollPeriod.start_date.desc())
-    result = await db.execute(query)
-    periods = result.scalars().all()
+        query = query.order_by(PayrollPeriod.start_date.desc())
+        result = await db.execute(query)
+        periods = result.scalars().all()
+    except Exception as e:
+        logger.error(f"Error fetching payroll periods: {type(e).__name__}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {type(e).__name__} - check if payroll_periods table exists"
+        )
 
     return {
         "periods": [
