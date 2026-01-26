@@ -593,9 +593,7 @@ async def list_time_entries(
     page_size: int = Query(50, ge=1, le=200),
 ):
     """List time entries."""
-    import traceback
-    try:
-        query = select(TimeEntry)
+    query = select(TimeEntry)
 
     if technician_id:
         query = query.where(TimeEntry.technician_id == technician_id)
@@ -641,10 +639,6 @@ async def list_time_entries(
         "page": page,
         "page_size": page_size,
     }
-    except Exception as e:
-        logger.error(f"Error in list_time_entries: {type(e).__name__}: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Error fetching time entries: {type(e).__name__}: {str(e)}")
 
 
 @router.post("/time-entries")
@@ -953,9 +947,7 @@ async def list_commissions(
     page_size: int = Query(50, ge=1, le=200),
 ):
     """List commissions."""
-    import traceback
-    try:
-        query = select(Commission)
+    query = select(Commission)
 
     if technician_id:
         query = query.where(Commission.technician_id == technician_id)
@@ -999,10 +991,6 @@ async def list_commissions(
         "page": page,
         "page_size": page_size,
     }
-    except Exception as e:
-        logger.error(f"Error in list_commissions: {type(e).__name__}: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Error fetching commissions: {type(e).__name__}: {str(e)}")
 
 
 class BulkApproveTimeEntriesRequest(BaseModel):
@@ -1065,9 +1053,7 @@ async def list_pay_rates(
     is_active: Optional[bool] = None,
 ):
     """List all pay rates."""
-    import traceback
-    try:
-        query = select(TechnicianPayRate)
+    query = select(TechnicianPayRate)
 
     if technician_id:
         query = query.where(TechnicianPayRate.technician_id == technician_id)
@@ -1094,10 +1080,6 @@ async def list_pay_rates(
             for r in rates
         ]
     }
-    except Exception as e:
-        logger.error(f"Error in list_pay_rates: {type(e).__name__}: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Error fetching pay rates: {type(e).__name__}: {str(e)}")
 
 
 # Stats
