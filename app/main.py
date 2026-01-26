@@ -170,10 +170,53 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.6.0",  # Payroll endpoints stable - removed debug endpoints
+        "version": "2.6.1",  # Added database diagnostic endpoint
         "environment": settings.ENVIRONMENT,
         "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "technician_performance", "call_intelligence"],
     }
+
+
+@app.get("/health/db")
+async def database_health_check():
+    """Database connectivity and schema check endpoint."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    checks = {
+        "database_connected": False,
+        "api_users_table_exists": False,
+        "api_users_columns": [],
+        "errors": []
+    }
+
+    try:
+        async with async_session_maker() as session:
+            # Test connection
+            result = await session.execute(text("SELECT 1"))
+            checks["database_connected"] = True
+
+            # Check if api_users table exists
+            result = await session.execute(text("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_name = 'api_users'
+            """))
+            if result.scalar_one_or_none():
+                checks["api_users_table_exists"] = True
+
+                # Get columns
+                result = await session.execute(text("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'api_users'
+                    ORDER BY ordinal_position
+                """))
+                checks["api_users_columns"] = [row[0] for row in result.fetchall()]
+            else:
+                checks["errors"].append("api_users table does not exist")
+
+    except Exception as e:
+        checks["errors"].append(f"{type(e).__name__}: {str(e)}")
+
+    return checks
 
 
 # For running with uvicorn directly (development only)
