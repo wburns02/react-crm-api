@@ -59,7 +59,7 @@ def upgrade():
             sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
         )
 
-    # Create enums with proper existence check
+    # Create enums using DO block with exception handling (works with async drivers)
     enums = [
         ("work_order_status_enum", ['scheduled', 'in_progress', 'completed', 'cancelled', 'on_hold', 'pending']),
         ("work_order_priority_enum", ['low', 'medium', 'high', 'urgent']),
@@ -67,10 +67,16 @@ def upgrade():
     ]
 
     for enum_name, values in enums:
-        result = conn.execute(text(f"SELECT 1 FROM pg_type WHERE typname = '{enum_name}'"))
-        if not result.scalar():
-            values_str = ", ".join([f"'{v}'" for v in values])
-            conn.execute(text(f"CREATE TYPE {enum_name} AS ENUM ({values_str})"))
+        values_str = ", ".join([f"'{v}'" for v in values])
+        # Use DO block with exception handling - this is idempotent
+        conn.execute(text(f"""
+            DO $$
+            BEGIN
+                CREATE TYPE {enum_name} AS ENUM ({values_str});
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
+        """))
 
     # Create technicians table first (work_orders references it)
     result = conn.execute(text(
