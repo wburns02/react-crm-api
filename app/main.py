@@ -303,6 +303,37 @@ async def run_database_migrations():
     return results
 
 
+@app.post("/health/db/create-admin")
+async def create_admin_user():
+    """Create admin user for testing."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    from passlib.context import CryptContext
+
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    hashed = pwd_context.hash("Admin123!")
+
+    try:
+        async with async_session_maker() as session:
+            # Check if user exists
+            result = await session.execute(text(
+                "SELECT id FROM api_users WHERE email = 'admin@macseptic.com'"
+            ))
+            if result.scalar():
+                return {"status": "exists", "email": "admin@macseptic.com"}
+
+            # Create user
+            await session.execute(text("""
+                INSERT INTO api_users (email, hashed_password, first_name, last_name, is_active, is_superuser, created_at)
+                VALUES ('admin@macseptic.com', :hashed, 'Admin', 'User', TRUE, TRUE, NOW())
+            """), {"hashed": hashed})
+            await session.commit()
+
+            return {"status": "created", "email": "admin@macseptic.com", "password": "Admin123!"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 @app.post("/health/db/create-tables")
 async def create_core_tables():
     """Create core CRM tables directly using raw SQL (bypasses alembic async issues)."""
