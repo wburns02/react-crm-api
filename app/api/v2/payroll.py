@@ -222,7 +222,7 @@ def calculate_hours(clock_in: datetime, clock_out: datetime, break_minutes: int 
 
 # Payroll Period Endpoints
 
-@router.get("")
+@router.get("/periods")
 async def list_payroll_periods(
     db: DbSession,
     current_user: CurrentUser,

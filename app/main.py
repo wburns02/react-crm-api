@@ -170,7 +170,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.5.14",  # Added force flag to migrate and data check endpoint
+        "version": "2.5.15",  # Fixed GET /periods path to match frontend
         "environment": settings.ENVIRONMENT,
         "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "technician_performance", "call_intelligence"],
     }
