@@ -75,14 +75,20 @@ async def payroll_debug_health(
             except Exception as e:
                 diagnostics["errors"].append(f"{table_name}: {type(e).__name__}: {str(e)}")
 
-        # Try actual query
-        try:
-            result = await db.execute(select(PayrollPeriod).limit(1))
-            _ = result.scalars().all()
-            diagnostics["sqlalchemy_query_works"] = True
-        except Exception as e:
-            diagnostics["sqlalchemy_query_works"] = False
-            diagnostics["errors"].append(f"SQLAlchemy query: {type(e).__name__}: {str(e)}")
+        # Try actual queries on all tables
+        for model, key in [
+            (PayrollPeriod, "periods_query"),
+            (TimeEntry, "time_entries_query"),
+            (Commission, "commissions_query"),
+            (TechnicianPayRate, "pay_rates_query"),
+        ]:
+            try:
+                result = await db.execute(select(model).limit(1))
+                _ = result.scalars().all()
+                diagnostics[f"{key}_works"] = True
+            except Exception as e:
+                diagnostics[f"{key}_works"] = False
+                diagnostics["errors"].append(f"{key}: {type(e).__name__}: {str(e)}")
 
     except Exception as e:
         diagnostics["errors"].append(f"Connection: {type(e).__name__}: {str(e)}")
