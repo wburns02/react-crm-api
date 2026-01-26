@@ -97,6 +97,19 @@ async def payroll_debug_health(
     return diagnostics
 
 
+@router.get("/debug/auth-test")
+async def debug_auth_test(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Test that auth works."""
+    return {
+        "user_id": current_user.id,
+        "email": current_user.email,
+        "message": "Auth works!",
+    }
+
+
 @router.get("/debug/test-endpoints")
 async def debug_test_endpoints(
     db: DbSession,
@@ -593,6 +606,7 @@ async def list_time_entries(
     page_size: int = Query(50, ge=1, le=200),
 ):
     """List time entries."""
+    logger.info(f"list_time_entries called by user {current_user.id} with status={status_filter}")
     query = select(TimeEntry)
 
     if technician_id:
