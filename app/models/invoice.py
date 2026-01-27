@@ -17,9 +17,10 @@ class InvoiceStatus(str, PyEnum):
     PARTIAL = 'partial'
 
 
-# SQLAlchemy ENUM using the Python enum, matches existing PostgreSQL type
+# SQLAlchemy ENUM using string values that match PostgreSQL enum exactly
+# Using string values instead of Python enum to avoid case mismatch with asyncpg
 invoice_status_enum = ENUM(
-    InvoiceStatus,
+    'draft', 'sent', 'paid', 'overdue', 'void', 'partial',
     name='invoice_status_enum',
     create_type=False
 )
@@ -52,7 +53,8 @@ class Invoice(Base):
     currency = Column(String(3), default="USD")
 
     # Status uses PostgreSQL ENUM type (invoice_status_enum)
-    status = Column(invoice_status_enum, default=InvoiceStatus.DRAFT)
+    # Use lowercase string to match PostgreSQL enum values exactly
+    status = Column(invoice_status_enum, default='draft')
 
     # Line items stored as JSON
     line_items = Column(JSON, default=list)

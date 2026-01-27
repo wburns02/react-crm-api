@@ -159,8 +159,9 @@ async def create_invoice(
         if data.get("work_order_id"):
             data["work_order_id"] = uuid.UUID(data["work_order_id"])
 
-        # Set status to DRAFT using Python enum for PostgreSQL ENUM type
-        data["status"] = InvoiceStatus.DRAFT
+        # Set status to 'draft' using lowercase string for PostgreSQL ENUM type
+        # Note: PostgreSQL ENUM expects lowercase values, not Python enum names
+        data["status"] = "draft"
 
         # Remove None values to let DB use defaults
         data = {k: v for k, v in data.items() if v is not None}
