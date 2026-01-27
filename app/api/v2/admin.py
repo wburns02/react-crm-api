@@ -1000,6 +1000,77 @@ async def run_migrations(
         }
 
 
+@router.post("/migrations/create-work-order-enums")
+async def create_work_order_enums(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Create work order ENUM types if they don't exist."""
+    from sqlalchemy import text
+
+    results = {}
+
+    try:
+        # Create work_order_status_enum
+        await db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_status_enum') THEN
+                    CREATE TYPE work_order_status_enum AS ENUM (
+                        'draft', 'scheduled', 'confirmed', 'enroute', 'on_site',
+                        'in_progress', 'completed', 'canceled', 'requires_followup'
+                    );
+                END IF;
+            END
+            $$;
+        """))
+        results["work_order_status_enum"] = "created or exists"
+
+        # Create work_order_job_type_enum
+        await db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_job_type_enum') THEN
+                    CREATE TYPE work_order_job_type_enum AS ENUM (
+                        'pumping', 'inspection', 'repair', 'installation',
+                        'emergency', 'maintenance', 'grease_trap', 'camera_inspection'
+                    );
+                END IF;
+            END
+            $$;
+        """))
+        results["work_order_job_type_enum"] = "created or exists"
+
+        # Create work_order_priority_enum
+        await db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_priority_enum') THEN
+                    CREATE TYPE work_order_priority_enum AS ENUM (
+                        'low', 'normal', 'high', 'urgent', 'emergency'
+                    );
+                END IF;
+            END
+            $$;
+        """))
+        results["work_order_priority_enum"] = "created or exists"
+
+        await db.commit()
+
+        return {
+            "success": True,
+            "results": results
+        }
+
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error creating ENUM types: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error: {str(e)}"
+        )
+
+
 @router.post("/migrations/create-missing-tables")
 async def create_missing_tables(
     db: DbSession,
