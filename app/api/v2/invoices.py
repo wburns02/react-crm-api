@@ -40,7 +40,28 @@ def customer_id_to_uuid(customer_id: int) -> uuid.UUID:
 
 
 def invoice_to_response(invoice: Invoice) -> dict:
-    """Convert Invoice model to response dict."""
+    """Convert Invoice model to response dict.
+
+    Frontend expects subtotal, tax, total, tax_rate fields.
+    We calculate these from line_items or use amount as total.
+    """
+    line_items = invoice.line_items or []
+
+    # Calculate subtotal from line items
+    subtotal = 0.0
+    for item in line_items:
+        if isinstance(item, dict):
+            subtotal += float(item.get("amount", 0) or 0)
+
+    # Total from amount field, or calculated subtotal
+    total = float(invoice.amount) if invoice.amount else subtotal
+
+    # Estimate tax (difference between total and subtotal)
+    tax = max(0, total - subtotal)
+
+    # Estimate tax_rate
+    tax_rate = (tax / subtotal * 100) if subtotal > 0 else 0
+
     return {
         "id": str(invoice.id),
         "invoice_number": invoice.invoice_number,
@@ -49,7 +70,13 @@ def invoice_to_response(invoice: Invoice) -> dict:
         "customer": None,
         "work_order_id": str(invoice.work_order_id) if invoice.work_order_id else None,
         "status": invoice.status or "draft",
-        "line_items": invoice.line_items or [],
+        "line_items": line_items,
+        # Frontend expects these fields:
+        "subtotal": subtotal,
+        "tax_rate": tax_rate,
+        "tax": tax,
+        "total": total,
+        # Legacy fields
         "amount": float(invoice.amount) if invoice.amount else 0,
         "paid_amount": float(invoice.paid_amount) if invoice.paid_amount else 0,
         "currency": invoice.currency or "USD",
@@ -59,6 +86,7 @@ def invoice_to_response(invoice: Invoice) -> dict:
         "external_payment_link": invoice.external_payment_link,
         "pdf_url": invoice.pdf_url,
         "notes": invoice.notes,
+        "terms": None,  # Not stored in DB, but frontend expects it
         "created_at": invoice.created_at,
         "updated_at": invoice.updated_at,
     }

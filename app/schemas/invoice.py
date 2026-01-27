@@ -70,7 +70,13 @@ class InvoiceResponse(BaseModel):
     status: str
     line_items: Optional[list[LineItem]] = []
 
-    # Flask DB uses 'amount' instead of separate subtotal/tax/total
+    # Frontend expects these calculated fields
+    subtotal: Optional[float] = 0
+    tax_rate: Optional[float] = 0
+    tax: Optional[float] = 0
+    total: Optional[float] = 0
+
+    # Legacy fields (also kept for compatibility)
     amount: Optional[float] = 0
     paid_amount: Optional[float] = 0
     currency: Optional[str] = "USD"
@@ -84,6 +90,7 @@ class InvoiceResponse(BaseModel):
     external_payment_link: Optional[str] = None
     pdf_url: Optional[str] = None
     notes: Optional[str] = None
+    terms: Optional[str] = None
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
