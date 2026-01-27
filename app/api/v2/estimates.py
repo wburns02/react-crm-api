@@ -3,7 +3,7 @@ Estimates API - Alias for Quotes API.
 The frontend uses /estimates for listing while /quotes is used for CRUD.
 This provides compatibility for the estimates listing endpoint.
 """
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException, status
 from sqlalchemy import select, func
 from typing import Optional
 
@@ -21,7 +21,7 @@ async def list_estimates(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
     customer_id: Optional[int] = None,
-    status: Optional[str] = None,
+    status_filter: Optional[str] = Query(None, alias="status"),
 ):
     """List estimates/quotes with pagination and filtering."""
     # Base query
@@ -31,8 +31,8 @@ async def list_estimates(
     if customer_id:
         query = query.where(Quote.customer_id == customer_id)
 
-    if status:
-        query = query.where(Quote.status == status)
+    if status_filter:
+        query = query.where(Quote.status == status_filter)
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
@@ -68,7 +68,6 @@ async def get_estimate(
     quote = result.scalar_one_or_none()
 
     if not quote:
-        from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Estimate not found",

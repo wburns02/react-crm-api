@@ -189,7 +189,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.6.5",  # Fixed invoice creation ENUM case mismatch
+        "version": "2.6.6",  # Fixed invoice creation ENUM case mismatch
         "environment": settings.ENVIRONMENT,
         "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "technician_performance", "call_intelligence"],
     }
