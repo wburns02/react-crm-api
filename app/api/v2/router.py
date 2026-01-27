@@ -27,6 +27,7 @@ from app.api.v2 import (
     call_dispositions,
     # Phase 1: AI Infrastructure
     ai,
+    ai_jobs,
     # Phase 3: E-Signatures
     signatures,
     # Phase 4: Pricing Engine
@@ -138,6 +139,7 @@ api_router.include_router(call_dispositions.router, prefix="/call-dispositions",
 
 # Phase 1: AI Infrastructure
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
+api_router.include_router(ai_jobs.router, prefix="/ai/jobs", tags=["ai-jobs"])
 
 # Phase 3: E-Signatures
 api_router.include_router(signatures.router, prefix="/signatures", tags=["signatures"])

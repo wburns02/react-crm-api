@@ -30,7 +30,7 @@ from app.models import (
     # Phase 1: AI
     AIEmbedding, AIConversation, AIMessage,
     # Phase 2: RingCentral
-    CallLog,
+    CallLog, CallDisposition,
     # Phase 3: E-Signatures
     SignatureRequest, Signature, SignedDocument,
     # Phase 4: Pricing
@@ -43,6 +43,25 @@ from app.models import (
     MarketingCampaign, MarketingWorkflow, WorkflowEnrollment, EmailTemplate, SMSTemplate,
     # Phase 10: Payroll
     PayrollPeriod, TimeEntry, Commission, TechnicianPayRate,
+    # Phase 11: Compliance
+    License, Certification, Inspection,
+    # Phase 12: Contracts
+    Contract, ContractTemplate,
+    # Phase 13: Job Costing
+    JobCost,
+    # Enterprise Customer Success Platform
+    HealthScore, HealthScoreEvent,
+    Segment, CustomerSegment,
+    Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution,
+    Playbook, PlaybookStep, PlaybookExecution,
+    CSTask, Touchpoint,
+    # Demo Mode Role Switching
+    RoleView, UserRoleSession,
+    # Work Order Photos
+    WorkOrderPhoto,
+    # National Septic OCR Permit System
+    State, County, SepticSystemType, SourcePortal,
+    SepticPermit, PermitVersion, PermitDuplicate, PermitImportBatch,
 )
 # OAuth models for public API
 from app.models.oauth import APIClient, APIToken
