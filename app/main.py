@@ -189,7 +189,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.6.2",  # Added migration endpoints
+        "version": "2.6.3",  # Added work order ENUM creation endpoint
         "environment": settings.ENVIRONMENT,
         "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "technician_performance", "call_intelligence"],
     }
