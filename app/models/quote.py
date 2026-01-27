@@ -1,73 +1,88 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Numeric, Boolean, JSON
+"""
+SQLAlchemy model for Quotes/Estimates.
+"""
+import uuid
+from datetime import datetime, date
+from sqlalchemy import (
+    Column, DateTime, Date, Float, Integer, String, Text, JSON, Index
+)
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-from app.database import Base
+
+from app.database.base_class import Base
 
 
 class Quote(Base):
-    """Quote model for customer quotes/estimates."""
-
+    """Quote/Estimate model for customer pricing proposals."""
     __tablename__ = "quotes"
 
-    id = Column(Integer, primary_key=True, index=True)
-    quote_number = Column(String(50), unique=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    # Primary key - UUID for frontend compatibility
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    # Quote details
-    title = Column(String(255))
-    description = Column(Text)
+    # Auto-generated quote number (e.g., "Q-2026-0001")
+    quote_number = Column(String(50), unique=True, nullable=False, index=True)
+
+    # Customer relationship (integer ID from legacy system)
+    customer_id = Column(Integer, nullable=False, index=True)
+
+    # Status: draft, sent, accepted, declined, expired
+    status = Column(String(20), nullable=False, default="draft", index=True)
 
     # Line items stored as JSON array
-    # [{service: str, description: str, quantity: float, rate: float, amount: float}]
-    line_items = Column(JSON, default=list)
+    # Each item: { service, description, quantity, rate, amount }
+    line_items = Column(JSON, nullable=False, default=list)
 
-    # Totals
-    subtotal = Column(Numeric(10, 2), default=0)
-    tax_rate = Column(Numeric(5, 2), default=0)
-    tax = Column(Numeric(10, 2), default=0)
-    discount = Column(Numeric(10, 2), default=0)
-    total = Column(Numeric(10, 2), default=0)
-
-    # Status
-    status = Column(String(30), default="draft")  # draft, sent, viewed, accepted, rejected, expired, converted
+    # Pricing
+    subtotal = Column(Float, nullable=False, default=0.0)
+    tax_rate = Column(Float, nullable=False, default=0.0)  # Percentage (e.g., 8.25)
+    tax = Column(Float, nullable=False, default=0.0)
+    total = Column(Float, nullable=False, default=0.0)
 
     # Validity
-    valid_until = Column(DateTime(timezone=True))
+    valid_until = Column(Date, nullable=True)
 
-    # E-signature
-    signature_data = Column(Text)  # Base64 encoded signature image
-    signed_at = Column(DateTime(timezone=True))
-    signed_by = Column(String(150))
-
-    # Approval workflow
-    approval_status = Column(String(30))  # pending, approved, rejected
-    approved_by = Column(String(100))
-    approved_at = Column(DateTime(timezone=True))
-
-    # Conversion tracking
-    converted_to_work_order_id = Column(String(36), ForeignKey("work_orders.id"), nullable=True)
-    converted_at = Column(DateTime(timezone=True))
-
-    # Notes
-    notes = Column(Text)
-    terms = Column(Text)
+    # Additional fields
+    notes = Column(Text, nullable=True)
+    terms = Column(Text, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    sent_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Note: Relationship commented out to avoid import/backref issues
-    # customer = relationship("Customer", backref="quotes")
-
-    def __repr__(self):
-        return f"<Quote {self.quote_number}>"
+    # Indexes for common queries
+    __table_args__ = (
+        Index('idx_quotes_customer_status', 'customer_id', 'status'),
+        Index('idx_quotes_created_at', 'created_at'),
+    )
 
     def calculate_totals(self):
         """Calculate subtotal, tax, and total from line items."""
         if self.line_items:
-            self.subtotal = sum(item.get("amount", 0) for item in self.line_items)
+            # Calculate subtotal from line items
+            subtotal = 0.0
+            processed_items = []
+            for item in self.line_items:
+                quantity = float(item.get('quantity', 0))
+                rate = float(item.get('rate', 0))
+                amount = round(quantity * rate, 2)
+                processed_item = {
+                    'service': item.get('service', ''),
+                    'description': item.get('description'),
+                    'quantity': quantity,
+                    'rate': rate,
+                    'amount': amount,
+                }
+                processed_items.append(processed_item)
+                subtotal += amount
+
+            self.line_items = processed_items
+            self.subtotal = round(subtotal, 2)
+            self.tax = round(self.subtotal * (self.tax_rate / 100), 2)
+            self.total = round(self.subtotal + self.tax, 2)
         else:
-            self.subtotal = 0
-        self.tax = float(self.subtotal) * float(self.tax_rate or 0) / 100
-        self.total = float(self.subtotal) + float(self.tax) - float(self.discount or 0)
+            self.subtotal = 0.0
+            self.tax = 0.0
+            self.total = 0.0
+
+    def __repr__(self):
+        return f"<Quote(id={self.id}, quote_number={self.quote_number}, status={self.status})>"
