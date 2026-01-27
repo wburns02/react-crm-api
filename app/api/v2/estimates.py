@@ -9,7 +9,7 @@ from typing import Optional
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.quote import Quote
-from app.schemas.quote import QuoteListResponse
+from app.schemas.quote import QuoteListResponse, QuoteResponse
 
 router = APIRouter()
 
@@ -53,3 +53,25 @@ async def list_estimates(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/{estimate_id}", response_model=QuoteResponse)
+async def get_estimate(
+    estimate_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a single estimate/quote by ID."""
+    result = await db.execute(
+        select(Quote).where(Quote.id == estimate_id)
+    )
+    quote = result.scalar_one_or_none()
+
+    if not quote:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Estimate not found",
+        )
+
+    return quote

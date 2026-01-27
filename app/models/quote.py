@@ -1,59 +1,68 @@
 """
 SQLAlchemy model for Quotes/Estimates.
 """
-import uuid
-from datetime import datetime, date
-from sqlalchemy import (
-    Column, DateTime, Date, Float, Integer, String, Text, JSON, Index
-)
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Numeric, Boolean, JSON, Index
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 
-from app.database.base_class import Base
+from app.database import Base
 
 
 class Quote(Base):
-    """Quote/Estimate model for customer pricing proposals."""
+    """Quote model for customer quotes/estimates."""
     __tablename__ = "quotes"
 
-    # Primary key - UUID for frontend compatibility
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Integer primary key (matches existing database schema)
+    id = Column(Integer, primary_key=True, index=True)
+    quote_number = Column(String(50), unique=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
 
-    # Auto-generated quote number (e.g., "Q-2026-0001")
-    quote_number = Column(String(50), unique=True, nullable=False, index=True)
-
-    # Customer relationship (integer ID from legacy system)
-    customer_id = Column(Integer, nullable=False, index=True)
-
-    # Status: draft, sent, accepted, declined, expired
-    status = Column(String(20), nullable=False, default="draft", index=True)
+    # Quote details
+    title = Column(String(255))
+    description = Column(Text)
 
     # Line items stored as JSON array
-    # Each item: { service, description, quantity, rate, amount }
-    line_items = Column(JSON, nullable=False, default=list)
+    # [{service: str, description: str, quantity: float, rate: float, amount: float}]
+    line_items = Column(JSON, default=list)
 
-    # Pricing
-    subtotal = Column(Float, nullable=False, default=0.0)
-    tax_rate = Column(Float, nullable=False, default=0.0)  # Percentage (e.g., 8.25)
-    tax = Column(Float, nullable=False, default=0.0)
-    total = Column(Float, nullable=False, default=0.0)
+    # Totals
+    subtotal = Column(Numeric(10, 2), default=0)
+    tax_rate = Column(Numeric(5, 2), default=0)
+    tax = Column(Numeric(10, 2), default=0)
+    discount = Column(Numeric(10, 2), default=0)
+    total = Column(Numeric(10, 2), default=0)
+
+    # Status
+    status = Column(String(30), default="draft")  # draft, sent, viewed, accepted, rejected, expired, converted
 
     # Validity
-    valid_until = Column(Date, nullable=True)
+    valid_until = Column(DateTime(timezone=True))
 
-    # Additional fields
-    notes = Column(Text, nullable=True)
-    terms = Column(Text, nullable=True)
+    # Notes
+    notes = Column(Text)
+    terms = Column(Text)
+
+    # Signature
+    signature_data = Column(Text)  # Base64 signature image
+    signed_at = Column(DateTime(timezone=True))
+    signed_by = Column(String(255))
+
+    # Approval workflow
+    approval_status = Column(String(30))  # pending, approved, rejected
+    approved_by = Column(Integer)
+    approved_at = Column(DateTime(timezone=True))
+
+    # Conversion tracking
+    converted_to_work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True)
+    converted_at = Column(DateTime(timezone=True))
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    sent_at = Column(DateTime(timezone=True))
 
-    # Indexes for common queries
-    __table_args__ = (
-        Index('idx_quotes_customer_status', 'customer_id', 'status'),
-        Index('idx_quotes_created_at', 'created_at'),
-    )
+    # Relationships
+    customer = relationship("Customer", backref="quotes")
 
     def calculate_totals(self):
         """Calculate subtotal, tax, and total from line items."""
@@ -77,7 +86,8 @@ class Quote(Base):
 
             self.line_items = processed_items
             self.subtotal = round(subtotal, 2)
-            self.tax = round(self.subtotal * (self.tax_rate / 100), 2)
+            tax_rate = float(self.tax_rate or 0)
+            self.tax = round(self.subtotal * (tax_rate / 100), 2)
             self.total = round(self.subtotal + self.tax, 2)
         else:
             self.subtotal = 0.0

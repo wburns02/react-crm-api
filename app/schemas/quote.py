@@ -3,10 +3,11 @@ Pydantic schemas for Quote/Estimate API endpoints.
 """
 from typing import Optional, List, Literal
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 
 # Status literals matching frontend
-QuoteStatus = Literal["draft", "sent", "accepted", "declined", "expired"]
+QuoteStatus = Literal["draft", "sent", "accepted", "declined", "expired", "viewed", "rejected", "converted"]
 
 
 class LineItemBase(BaseModel):
@@ -30,7 +31,7 @@ class LineItemResponse(LineItemBase):
 
 class CustomerSummary(BaseModel):
     """Embedded customer info for quote responses."""
-    id: str
+    id: int
     first_name: str
     last_name: str
     email: Optional[str] = None
@@ -40,8 +41,8 @@ class CustomerSummary(BaseModel):
 class QuoteBase(BaseModel):
     """Base quote fields."""
     customer_id: int = Field(..., ge=1, description="Customer ID")
-    status: QuoteStatus = Field(default="draft", description="Quote status")
-    tax_rate: float = Field(default=0.0, ge=0, le=100, description="Tax rate percentage")
+    status: Optional[str] = Field(default="draft", description="Quote status")
+    tax_rate: Optional[float] = Field(default=0.0, ge=0, le=100, description="Tax rate percentage")
     valid_until: Optional[str] = Field(None, description="Expiration date YYYY-MM-DD")
     notes: Optional[str] = Field(None, description="Additional notes")
     terms: Optional[str] = Field(None, description="Terms and conditions")
@@ -59,7 +60,7 @@ class QuoteCreate(QuoteBase):
 class QuoteUpdate(BaseModel):
     """Schema for updating a quote (all fields optional for PATCH)."""
     customer_id: Optional[int] = Field(None, ge=1)
-    status: Optional[QuoteStatus] = None
+    status: Optional[str] = None
     line_items: Optional[List[LineItemCreate]] = None
     tax_rate: Optional[float] = Field(None, ge=0, le=100)
     valid_until: Optional[str] = None
@@ -69,26 +70,48 @@ class QuoteUpdate(BaseModel):
 
 class QuoteResponse(BaseModel):
     """Full quote response matching frontend Quote type."""
-    id: str  # UUID as string for frontend
+    id: int  # Integer ID from database
     quote_number: str
-    customer_id: str
+    customer_id: int  # Integer customer ID
     customer_name: Optional[str] = None
     customer: Optional[CustomerSummary] = None
 
-    status: QuoteStatus
-    line_items: List[LineItemResponse]
+    # Quote details
+    title: Optional[str] = None
+    description: Optional[str] = None
 
-    subtotal: float
-    tax_rate: float
-    tax: float
-    total: float
+    status: str
+    line_items: Optional[List[LineItemResponse]] = []
+
+    # Totals
+    subtotal: Optional[float] = 0
+    tax_rate: Optional[float] = 0
+    tax: Optional[float] = 0
+    discount: Optional[float] = 0
+    total: Optional[float] = 0
 
     valid_until: Optional[str] = None
     notes: Optional[str] = None
     terms: Optional[str] = None
 
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    # Signature fields
+    signature_data: Optional[str] = None
+    signed_at: Optional[datetime] = None
+    signed_by: Optional[str] = None
+
+    # Approval workflow
+    approval_status: Optional[str] = None
+    approved_by: Optional[int] = None
+    approved_at: Optional[datetime] = None
+
+    # Conversion tracking
+    converted_to_work_order_id: Optional[int] = None
+    converted_at: Optional[datetime] = None
+
+    # Timestamps
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    sent_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
