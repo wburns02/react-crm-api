@@ -737,3 +737,165 @@ async def fix_journey_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error: {str(e)}"
         )
+
+
+# =============================================================================
+# SEED DATA - Central Texas Demo Data
+# =============================================================================
+
+# Technicians data
+SEED_TECHNICIANS = [
+    {"first_name": "Marcus", "last_name": "Rodriguez", "email": "marcus.rodriguez@ecbtx.com", "phone": "(512) 555-0101", "employee_id": "TECH-001", "skills": ["pumping", "repairs", "inspections", "camera"], "assigned_vehicle": "Truck-101", "vehicle_capacity_gallons": 3500, "hourly_rate": 32.00, "home_city": "Round Rock"},
+    {"first_name": "Jake", "last_name": "Thompson", "email": "jake.thompson@ecbtx.com", "phone": "(512) 555-0102", "employee_id": "TECH-002", "skills": ["pumping", "maintenance", "emergency"], "assigned_vehicle": "Truck-102", "vehicle_capacity_gallons": 3000, "hourly_rate": 28.50, "home_city": "Georgetown"},
+    {"first_name": "Sarah", "last_name": "Chen", "email": "sarah.chen@ecbtx.com", "phone": "(512) 555-0103", "employee_id": "TECH-003", "skills": ["inspections", "camera", "installations"], "assigned_vehicle": "Truck-103", "vehicle_capacity_gallons": 2500, "hourly_rate": 30.00, "home_city": "Cedar Park"},
+    {"first_name": "David", "last_name": "Martinez", "email": "david.martinez@ecbtx.com", "phone": "(512) 555-0104", "employee_id": "TECH-004", "skills": ["pumping", "grease_trap", "repairs"], "assigned_vehicle": "Truck-104", "vehicle_capacity_gallons": 4000, "hourly_rate": 29.00, "home_city": "Austin"},
+    {"first_name": "Chris", "last_name": "Williams", "email": "chris.williams@ecbtx.com", "phone": "(512) 555-0105", "employee_id": "TECH-005", "skills": ["pumping", "repairs", "inspections", "camera", "installations", "emergency"], "assigned_vehicle": "Truck-105", "vehicle_capacity_gallons": 3500, "hourly_rate": 35.00, "home_city": "Pflugerville"},
+]
+
+# Customers from real Central Texas permit data
+SEED_CUSTOMERS = [
+    {"first_name": "John", "last_name": "Cooke", "email": "john.cooke@example.com", "phone": "(512) 555-1001", "address_line1": "294 Call Dr", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1000, "system_type": "Conventional"},
+    {"first_name": "Brad", "last_name": "Hoff", "email": "brad.hoff@example.com", "phone": "(512) 555-1002", "address_line1": "495 July Johnson Dr", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1500, "system_type": "Aerobic"},
+    {"first_name": "Robert", "last_name": "Bitterli", "email": "robert.bitterli@example.com", "phone": "(512) 555-1003", "address_line1": "1911 Lohman Ford Rd", "city": "Leander", "state": "TX", "postal_code": "78641", "customer_type": "commercial", "tank_size_gallons": 2000, "system_type": "Conventional"},
+    {"first_name": "Thomas", "last_name": "Vetter", "email": "thomas.vetter@example.com", "phone": "(512) 555-1004", "address_line1": "12961 Trail Driver", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1000, "system_type": "Conventional"},
+    {"first_name": "Keith", "last_name": "Hansen", "email": "keith.hansen@example.com", "phone": "(512) 555-1005", "address_line1": "855 Gato Del Sol Ave", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1500, "system_type": "ATU"},
+    {"first_name": "William", "last_name": "Curtis", "email": "william.curtis@example.com", "phone": "(830) 555-1006", "address_line1": "3106 Golf Course Dr", "city": "Horseshoe Bay", "state": "TX", "postal_code": "78657", "customer_type": "residential", "tank_size_gallons": 2000, "system_type": "Mound"},
+    {"first_name": "Darrell", "last_name": "Minton", "email": "darrell.minton@example.com", "phone": "(512) 555-1007", "address_line1": "428 Big Brown Dr", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1250, "system_type": "Conventional"},
+    {"first_name": "Bobby", "last_name": "Dean", "email": "bobby.dean@example.com", "phone": "(512) 555-1008", "address_line1": "623 July Johnson Dr", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1250, "system_type": "Chamber"},
+    {"first_name": "Tommy", "last_name": "Mathis", "email": "tommy.mathis@lonestarbrewing.com", "phone": "(512) 555-1009", "address_line1": "2110 County Road 118", "city": "Burnet", "state": "TX", "postal_code": "78611", "customer_type": "commercial", "tank_size_gallons": 2500, "system_type": "Grease Trap"},
+    {"first_name": "Alfred", "last_name": "Stone", "email": "alfred.stone@example.com", "phone": "(512) 555-1010", "address_line1": "11104 Trails End Rd", "city": "Leander", "state": "TX", "postal_code": "78641", "customer_type": "residential", "tank_size_gallons": 1000, "system_type": "Conventional"},
+    {"first_name": "John", "last_name": "Miller", "email": "john.miller@example.com", "phone": "(830) 555-1011", "address_line1": "2905 Blue Lake Dr", "city": "Horseshoe Bay", "state": "TX", "postal_code": "78657", "customer_type": "residential", "tank_size_gallons": 1500, "system_type": "Conventional"},
+    {"first_name": "Charles", "last_name": "Castro", "email": "charles.castro@example.com", "phone": "(830) 555-1012", "address_line1": "406 Lakeview Dr", "city": "Horseshoe Bay", "state": "TX", "postal_code": "78657", "customer_type": "residential", "tank_size_gallons": 1500, "system_type": "Aerobic"},
+    {"first_name": "Eugene", "last_name": "Zimmermann", "email": "eugene.zimmermann@example.com", "phone": "(325) 555-1013", "address_line1": "4016 River Oaks Dr", "city": "Kingsland", "state": "TX", "postal_code": "78639", "customer_type": "residential", "tank_size_gallons": 1500, "system_type": "Conventional"},
+    {"first_name": "Robert", "last_name": "Anderson", "email": "robert.anderson@example.com", "phone": "(512) 555-1014", "address_line1": "129 Lakeway Dr", "city": "Austin", "state": "TX", "postal_code": "78734", "customer_type": "residential", "tank_size_gallons": 1000, "system_type": "Conventional"},
+    {"first_name": "Steven", "last_name": "Wellman", "email": "steven.wellman@example.com", "phone": "(512) 555-1015", "address_line1": "1305 Cat Hollow Club Dr", "city": "Spicewood", "state": "TX", "postal_code": "78669", "customer_type": "residential", "tank_size_gallons": 2000, "system_type": "ATU"},
+]
+
+# Prospects from real Central Texas permit data
+SEED_PROSPECTS = [
+    {"first_name": "Dennis", "last_name": "Glover", "email": "dennis.glover@example.com", "phone": "(512) 555-2001", "address_line1": "21802 Mockingbird St", "city": "Leander", "state": "TX", "postal_code": "78641", "prospect_stage": "qualified", "estimated_value": 4500.00, "lead_source": "Google", "lead_notes": "ATU repair needed - compressor failing"},
+    {"first_name": "Teresa", "last_name": "Wildi", "email": "teresa.wildi@example.com", "phone": "(512) 555-2002", "address_line1": "18222 Center St", "city": "Leander", "state": "TX", "postal_code": "78641", "prospect_stage": "new_lead", "estimated_value": 350.00, "lead_source": "Referral", "lead_notes": "Due for routine pump out"},
+    {"first_name": "Michael", "last_name": "Kaspar", "email": "michael.kaspar@example.com", "phone": "(512) 555-2003", "address_line1": "21909 Surrey Ln", "city": "Leander", "state": "TX", "postal_code": "78641", "prospect_stage": "quoted", "estimated_value": 8200.00, "lead_source": "Website", "lead_notes": "New septic system installation"},
+    {"first_name": "Jester King", "last_name": "Holdings LLC", "email": "info@jesterkingbrewery.com", "phone": "(512) 555-2004", "address_line1": "13187 Fitzhugh Rd", "city": "Austin", "state": "TX", "postal_code": "78736", "prospect_stage": "negotiation", "estimated_value": 12000.00, "lead_source": "Cold Call", "lead_notes": "Commercial brewery - multiple grease traps", "customer_type": "commercial"},
+    {"first_name": "Harriet", "last_name": "Brandon", "email": "harriet.brandon@example.com", "phone": "(830) 555-2005", "address_line1": "613 Highland Dr", "city": "Marble Falls", "state": "TX", "postal_code": "78654", "prospect_stage": "contacted", "estimated_value": 450.00, "lead_source": "Facebook", "lead_notes": "Inspection request before home sale"},
+    {"first_name": "Jack", "last_name": "O'Leary", "email": "jack.oleary@example.com", "phone": "(512) 555-2006", "address_line1": "8621 Grandview Dr", "city": "Leander", "state": "TX", "postal_code": "78641", "prospect_stage": "qualified", "estimated_value": 2800.00, "lead_source": "Google", "lead_notes": "ATU maintenance contract inquiry"},
+    {"first_name": "James", "last_name": "Collins", "email": "james.collins@example.com", "phone": "(512) 555-2007", "address_line1": "716 Cutlass", "city": "Lakeway", "state": "TX", "postal_code": "78734", "prospect_stage": "quoted", "estimated_value": 6500.00, "lead_source": "Referral", "lead_notes": "Quarterly service contract for lakefront property"},
+    {"first_name": "Kimberly", "last_name": "McDonald", "email": "kimberly.mcdonald@example.com", "phone": "(512) 555-2008", "address_line1": "128 Firebird St", "city": "Lakeway", "state": "TX", "postal_code": "78734", "prospect_stage": "new_lead", "estimated_value": 375.00, "lead_source": "Yelp", "lead_notes": "Residential pump out request"},
+    {"first_name": "Daniel", "last_name": "Yannitell", "email": "daniel.yannitell@example.com", "phone": "(512) 555-2009", "address_line1": "4001 Outpost Trce", "city": "Leander", "state": "TX", "postal_code": "78641", "prospect_stage": "negotiation", "estimated_value": 24000.00, "lead_source": "Website", "lead_notes": "Multi-unit property - annual contract negotiation", "customer_type": "commercial"},
+    {"first_name": "Patrick", "last_name": "Wendland", "email": "patrick.wendland@example.com", "phone": "(512) 555-2010", "address_line1": "915 Porpoise St", "city": "Lakeway", "state": "TX", "postal_code": "78734", "prospect_stage": "contacted", "estimated_value": 1200.00, "lead_source": "Door-to-door", "lead_notes": "Inspection + pump out combo requested"},
+]
+
+
+@router.post("/seed/central-texas")
+async def seed_central_texas_data(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Seed Central Texas demo data (technicians, customers, prospects)."""
+    import uuid
+    from sqlalchemy import text
+
+    results = {
+        "technicians": {"created": 0, "skipped": 0},
+        "customers": {"created": 0, "skipped": 0},
+        "prospects": {"created": 0, "skipped": 0},
+    }
+
+    try:
+        # Seed Technicians
+        for tech in SEED_TECHNICIANS:
+            result = await db.execute(
+                text("SELECT id FROM technicians WHERE employee_id = :emp_id"),
+                {"emp_id": tech["employee_id"]}
+            )
+            if result.fetchone():
+                results["technicians"]["skipped"] += 1
+                continue
+
+            tech_id = str(uuid.uuid4())
+            await db.execute(
+                text("""
+                    INSERT INTO technicians (
+                        id, first_name, last_name, email, phone, employee_id,
+                        skills, assigned_vehicle, vehicle_capacity_gallons,
+                        hourly_rate, home_city, home_state, is_active, created_at
+                    ) VALUES (
+                        :id, :first_name, :last_name, :email, :phone, :employee_id,
+                        :skills, :assigned_vehicle, :vehicle_capacity_gallons,
+                        :hourly_rate, :home_city, 'TX', true, NOW()
+                    )
+                """),
+                {**tech, "id": tech_id, "skills": tech["skills"]}
+            )
+            results["technicians"]["created"] += 1
+
+        # Seed Customers
+        for cust in SEED_CUSTOMERS:
+            result = await db.execute(
+                text("SELECT id FROM customers WHERE email = :email"),
+                {"email": cust["email"]}
+            )
+            if result.fetchone():
+                results["customers"]["skipped"] += 1
+                continue
+
+            await db.execute(
+                text("""
+                    INSERT INTO customers (
+                        first_name, last_name, email, phone,
+                        address_line1, city, state, postal_code,
+                        customer_type, tank_size_gallons, system_type,
+                        is_active, created_at
+                    ) VALUES (
+                        :first_name, :last_name, :email, :phone,
+                        :address_line1, :city, :state, :postal_code,
+                        :customer_type, :tank_size_gallons, :system_type,
+                        true, NOW()
+                    )
+                """),
+                cust
+            )
+            results["customers"]["created"] += 1
+
+        # Seed Prospects
+        for prospect in SEED_PROSPECTS:
+            result = await db.execute(
+                text("SELECT id FROM customers WHERE email = :email"),
+                {"email": prospect["email"]}
+            )
+            if result.fetchone():
+                results["prospects"]["skipped"] += 1
+                continue
+
+            await db.execute(
+                text("""
+                    INSERT INTO customers (
+                        first_name, last_name, email, phone,
+                        address_line1, city, state, postal_code,
+                        prospect_stage, estimated_value, lead_source, lead_notes,
+                        customer_type, is_active, created_at
+                    ) VALUES (
+                        :first_name, :last_name, :email, :phone,
+                        :address_line1, :city, :state, :postal_code,
+                        :prospect_stage, :estimated_value, :lead_source, :lead_notes,
+                        :customer_type, true, NOW()
+                    )
+                """),
+                {**prospect, "customer_type": prospect.get("customer_type", "residential")}
+            )
+            results["prospects"]["created"] += 1
+
+        await db.commit()
+
+        return {
+            "success": True,
+            "message": "Central Texas data seeded successfully",
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Error seeding Central Texas data: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error: {str(e)}"
+        )
