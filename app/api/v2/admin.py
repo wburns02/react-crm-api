@@ -899,3 +899,211 @@ async def seed_central_texas_data(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error: {str(e)}"
         )
+
+
+# ============ Database Migration Endpoints ============
+
+@router.get("/migrations/status")
+async def get_migration_status(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get current alembic migration status."""
+    from sqlalchemy import text
+
+    try:
+        result = await db.execute(text("SELECT version_num FROM alembic_version"))
+        row = result.fetchone()
+        current_version = row[0] if row else None
+
+        # List expected migrations
+        expected_migrations = [
+            "000_create_base_tables",
+            "001_add_technicians_and_invoices",
+            "002_add_payments_quotes_sms_consent",
+            "003_add_activities",
+            "004_add_tickets_equipment_inventory",
+            "005_add_all_phase_tables",
+            "006_fix_call_logs_schema",
+            "007_add_call_dispositions",
+            "008_add_compliance_tables",
+            "009_add_contracts_tables",
+            "010_add_job_costs_table",
+            "011_add_oauth_tables",
+            "012_add_customer_success_platform",
+            "013_fix_journey_schema",
+            "014_seed_journey_steps",
+            "015_make_test_user_admin",
+            "016_add_role_views_tables",
+            "017_add_journey_status_column",
+            "018_cs_platform_tables",
+            "019_fix_dropped_columns",
+            "020_survey_enhancements",
+            "021_add_smart_segments",
+            "022_add_call_intelligence_columns",
+            "023_add_septic_permit_tables",
+        ]
+
+        return {
+            "current_version": current_version,
+            "expected_latest": expected_migrations[-1] if expected_migrations else None,
+            "needs_upgrade": current_version != expected_migrations[-1] if current_version else True,
+            "expected_migrations": expected_migrations
+        }
+    except Exception as e:
+        logger.error(f"Error checking migration status: {e}")
+        return {
+            "current_version": None,
+            "error": str(e)
+        }
+
+
+@router.post("/migrations/run")
+async def run_migrations(
+    current_user: CurrentUser,
+):
+    """Run pending alembic migrations. This is a blocking operation."""
+    import subprocess
+    import os
+
+    try:
+        # Get the project root directory (where alembic.ini is)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+        # Run alembic upgrade head
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=120  # 2 minute timeout
+        )
+
+        success = result.returncode == 0
+
+        return {
+            "success": success,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "return_code": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Migration timed out after 120 seconds"
+        }
+    except Exception as e:
+        logger.error(f"Error running migrations: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@router.post("/migrations/create-missing-tables")
+async def create_missing_tables(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Create missing role_views and user_role_sessions tables manually."""
+    from sqlalchemy import text
+
+    results = {
+        "role_views": {"created": False, "error": None},
+        "user_role_sessions": {"created": False, "error": None},
+        "seed_roles": {"success": False, "error": None}
+    }
+
+    try:
+        # Check if role_views exists
+        check = await db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'role_views'
+            )
+        """))
+        role_views_exists = check.scalar()
+
+        if not role_views_exists:
+            # Create role_views table
+            await db.execute(text("""
+                CREATE TABLE role_views (
+                    id SERIAL PRIMARY KEY,
+                    role_key VARCHAR(50) NOT NULL UNIQUE,
+                    display_name VARCHAR(100) NOT NULL,
+                    description VARCHAR(500),
+                    icon VARCHAR(10),
+                    color VARCHAR(20),
+                    visible_modules JSONB DEFAULT '[]'::jsonb,
+                    default_route VARCHAR(100) DEFAULT '/',
+                    dashboard_widgets JSONB DEFAULT '[]'::jsonb,
+                    quick_actions JSONB DEFAULT '[]'::jsonb,
+                    features JSONB DEFAULT '{}'::jsonb,
+                    is_active BOOLEAN DEFAULT true,
+                    sort_order INTEGER DEFAULT 0,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ
+                )
+            """))
+            await db.execute(text("CREATE INDEX ix_role_views_role_key ON role_views (role_key)"))
+            results["role_views"]["created"] = True
+            logger.info("Created role_views table")
+        else:
+            results["role_views"]["error"] = "Table already exists"
+
+        # Check if user_role_sessions exists
+        check = await db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'user_role_sessions'
+            )
+        """))
+        sessions_exists = check.scalar()
+
+        if not sessions_exists:
+            # Create user_role_sessions table
+            await db.execute(text("""
+                CREATE TABLE user_role_sessions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES api_users(id) ON DELETE CASCADE,
+                    current_role_key VARCHAR(50) NOT NULL REFERENCES role_views(role_key) ON DELETE CASCADE,
+                    switched_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+            await db.execute(text("CREATE INDEX ix_user_role_sessions_user_id ON user_role_sessions (user_id)"))
+            results["user_role_sessions"]["created"] = True
+            logger.info("Created user_role_sessions table")
+        else:
+            results["user_role_sessions"]["error"] = "Table already exists"
+
+        # Seed default roles if role_views was just created or is empty
+        if results["role_views"]["created"]:
+            await db.execute(text("""
+                INSERT INTO role_views (role_key, display_name, description, icon, color, sort_order, visible_modules, default_route, dashboard_widgets, quick_actions, features, is_active)
+                VALUES
+                ('admin', 'Administrator', 'Full system access with all features and settings', '👑', 'purple', 1, '["*"]', '/', '["revenue_chart", "work_orders_summary", "customer_health", "team_performance"]', '["create_work_order", "add_customer", "view_reports", "manage_users"]', '{"can_manage_users": true, "can_view_reports": true, "can_manage_settings": true}', true),
+                ('executive', 'Executive', 'High-level KPIs, financial metrics, and business intelligence', '📊', 'blue', 2, '["dashboard", "reports", "analytics", "customer-success"]', '/', '["revenue_kpi", "customer_growth", "profitability", "forecasts"]', '["view_reports", "export_data", "schedule_review"]', '{"can_view_reports": true, "can_export_data": true}', true),
+                ('manager', 'Operations Manager', 'Day-to-day operations, team management, and scheduling oversight', '📋', 'green', 3, '["dashboard", "schedule", "work-orders", "technicians", "customers", "reports"]', '/schedule', '["today_schedule", "team_availability", "pending_work_orders", "customer_issues"]', '["create_work_order", "assign_technician", "view_schedule", "contact_customer"]', '{"can_assign_work": true, "can_view_reports": true, "can_manage_schedule": true}', true),
+                ('technician', 'Field Technician', 'Mobile-optimized view for field work and service completion', '🔧', 'orange', 4, '["my-schedule", "work-orders", "customers", "equipment"]', '/my-schedule', '["my_jobs_today", "next_appointment", "route_map", "time_tracker"]', '["start_job", "complete_job", "add_notes", "call_customer"]', '{"can_update_work_orders": true, "can_capture_photos": true, "can_collect_signatures": true}', true),
+                ('phone_agent', 'Phone Agent', 'Customer service focus with quick access to customer info and scheduling', '📞', 'cyan', 5, '["customers", "work-orders", "schedule", "communications"]', '/customers', '["incoming_calls", "customer_search", "recent_interactions", "quick_schedule"]', '["search_customer", "create_work_order", "schedule_appointment", "send_sms"]', '{"can_create_work_orders": true, "can_schedule": true, "can_communicate": true}', true),
+                ('dispatcher', 'Dispatcher', 'Schedule management, route optimization, and real-time tracking', '🗺️', 'indigo', 6, '["schedule", "schedule-map", "work-orders", "technicians", "fleet"]', '/schedule-map', '["live_map", "unassigned_jobs", "technician_status", "route_efficiency"]', '["assign_job", "optimize_routes", "contact_technician", "reschedule"]', '{"can_assign_work": true, "can_manage_schedule": true, "can_track_fleet": true}', true),
+                ('billing', 'Billing Specialist', 'Invoicing, payments, and financial operations', '💰', 'emerald', 7, '["invoices", "payments", "customers", "reports"]', '/invoices', '["outstanding_invoices", "payments_today", "aging_report", "collection_queue"]', '["create_invoice", "record_payment", "send_reminder", "generate_statement"]', '{"can_manage_invoices": true, "can_process_payments": true, "can_view_financial_reports": true}', true)
+                ON CONFLICT (role_key) DO NOTHING
+            """))
+            results["seed_roles"]["success"] = True
+            logger.info("Seeded default roles")
+
+        await db.commit()
+
+        return {
+            "success": True,
+            "results": results
+        }
+
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error creating tables: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error: {str(e)}"
+        )
