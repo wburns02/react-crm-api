@@ -135,6 +135,30 @@ async def list_payroll_periods(
     }
 
 
+@router.get("/periods/{period_id}")
+async def get_payroll_period(
+    period_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a single payroll period by ID."""
+    try:
+        result = await db.execute(
+            select(PayrollPeriod).where(PayrollPeriod.id == period_id)
+        )
+        period = result.scalar_one_or_none()
+
+        if not period:
+            raise HTTPException(status_code=404, detail="Payroll period not found")
+
+        return _format_period(period)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching payroll period {period_id}: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch payroll period")
+
+
 @router.get("/current")
 async def get_current_period(
     db: DbSession,
