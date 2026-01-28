@@ -120,6 +120,12 @@ class QuoteResponse(QuoteBase):
     """Schema for quote response."""
     id: int
     quote_number: Optional[str] = None
+    # Customer details (populated from JOIN with customers table)
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_address: Optional[str] = None
+    # Signature fields
     signature_data: Optional[str] = None
     signed_at: Optional[datetime] = None
     signed_by: Optional[str] = None

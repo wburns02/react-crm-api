@@ -3,12 +3,14 @@ Quotes API - Manage customer quotes and estimates.
 """
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime
 import uuid
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.quote import Quote
+from app.models.customer import Customer
 from app.schemas.quote import (
     QuoteCreate,
     QuoteUpdate,
@@ -24,6 +26,74 @@ def generate_quote_number() -> str:
     timestamp = datetime.utcnow().strftime("%Y%m%d")
     unique_id = str(uuid.uuid4())[:8].upper()
     return f"Q-{timestamp}-{unique_id}"
+
+
+def build_customer_address(customer: Customer) -> str:
+    """Build a formatted address string from customer fields."""
+    parts = []
+    if customer.address_line1:
+        parts.append(customer.address_line1)
+    if customer.city:
+        city_state = customer.city
+        if customer.state:
+            city_state += f", {customer.state}"
+        if customer.postal_code:
+            city_state += f" {customer.postal_code}"
+        parts.append(city_state)
+    return ", ".join(parts) if parts else None
+
+
+async def enrich_quote_with_customer(quote: Quote, db: DbSession) -> dict:
+    """Enrich a quote with customer details."""
+    # Fetch customer data
+    customer_result = await db.execute(
+        select(Customer).where(Customer.id == quote.customer_id)
+    )
+    customer = customer_result.scalar_one_or_none()
+
+    # Build response dict from quote
+    quote_dict = {
+        "id": quote.id,
+        "quote_number": quote.quote_number,
+        "customer_id": quote.customer_id,
+        "title": quote.title,
+        "description": quote.description,
+        "line_items": quote.line_items or [],
+        "subtotal": quote.subtotal,
+        "tax_rate": quote.tax_rate,
+        "tax": quote.tax,
+        "discount": quote.discount,
+        "total": quote.total,
+        "status": quote.status,
+        "valid_until": quote.valid_until,
+        "notes": quote.notes,
+        "terms": quote.terms,
+        "signature_data": quote.signature_data,
+        "signed_at": quote.signed_at,
+        "signed_by": quote.signed_by,
+        "approval_status": quote.approval_status,
+        "approved_by": quote.approved_by,
+        "approved_at": quote.approved_at,
+        "converted_to_work_order_id": quote.converted_to_work_order_id,
+        "converted_at": quote.converted_at,
+        "created_at": quote.created_at,
+        "updated_at": quote.updated_at,
+        "sent_at": quote.sent_at,
+    }
+
+    # Add customer details if found
+    if customer:
+        quote_dict["customer_name"] = f"{customer.first_name or ''} {customer.last_name or ''}".strip() or None
+        quote_dict["customer_email"] = customer.email
+        quote_dict["customer_phone"] = customer.phone
+        quote_dict["customer_address"] = build_customer_address(customer)
+    else:
+        quote_dict["customer_name"] = None
+        quote_dict["customer_email"] = None
+        quote_dict["customer_phone"] = None
+        quote_dict["customer_address"] = None
+
+    return quote_dict
 
 
 @router.get("/", response_model=QuoteListResponse)
@@ -73,7 +143,7 @@ async def get_quote(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get a single quote by ID."""
+    """Get a single quote by ID with customer details."""
     result = await db.execute(select(Quote).where(Quote.id == quote_id))
     quote = result.scalar_one_or_none()
 
@@ -83,7 +153,8 @@ async def get_quote(
             detail="Quote not found",
         )
 
-    return quote
+    # Enrich with customer data
+    return await enrich_quote_with_customer(quote, db)
 
 
 @router.post("/", response_model=QuoteResponse, status_code=status.HTTP_201_CREATED)

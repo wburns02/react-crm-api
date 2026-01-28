@@ -9,7 +9,9 @@ from typing import Optional
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.quote import Quote
+from app.models.customer import Customer
 from app.schemas.quote import QuoteListResponse, QuoteResponse
+from app.api.v2.quotes import enrich_quote_with_customer
 
 router = APIRouter()
 
@@ -47,8 +49,14 @@ async def list_estimates(
     result = await db.execute(query)
     quotes = result.scalars().all()
 
+    # Enrich each quote with customer data
+    enriched_quotes = []
+    for quote in quotes:
+        enriched = await enrich_quote_with_customer(quote, db)
+        enriched_quotes.append(enriched)
+
     return QuoteListResponse(
-        items=quotes,
+        items=enriched_quotes,
         total=total,
         page=page,
         page_size=page_size,
@@ -61,7 +69,7 @@ async def get_estimate(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get a single estimate/quote by ID."""
+    """Get a single estimate/quote by ID with customer details."""
     result = await db.execute(
         select(Quote).where(Quote.id == estimate_id)
     )
@@ -73,4 +81,5 @@ async def get_estimate(
             detail="Estimate not found",
         )
 
-    return quote
+    # Enrich with customer data
+    return await enrich_quote_with_customer(quote, db)
