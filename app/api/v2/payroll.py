@@ -262,8 +262,9 @@ async def approve_payroll(
     period.approved_at = datetime.utcnow()
 
     await db.commit()
+    await db.refresh(period)
 
-    return {"status": "approved"}
+    return _format_period(period)
 
 
 @router.post("/{period_id}/export")
