@@ -778,6 +778,83 @@ async def create_core_tables():
                 metadata JSONB,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
+        """,
+        "payroll_periods": """
+            CREATE TABLE IF NOT EXISTS payroll_periods (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                start_date DATE NOT NULL,
+                end_date DATE NOT NULL,
+                period_type VARCHAR(20) DEFAULT 'biweekly',
+                status VARCHAR(20) DEFAULT 'open',
+                total_regular_hours FLOAT DEFAULT 0.0,
+                total_overtime_hours FLOAT DEFAULT 0.0,
+                total_gross_pay FLOAT DEFAULT 0.0,
+                total_commissions FLOAT DEFAULT 0.0,
+                technician_count INTEGER DEFAULT 0,
+                approved_by VARCHAR(100),
+                approved_at TIMESTAMP WITH TIME ZONE,
+                processed_at TIMESTAMP WITH TIME ZONE,
+                export_file_url VARCHAR(500),
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE
+            )
+        """,
+        "time_entries": """
+            CREATE TABLE IF NOT EXISTS time_entries (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                technician_id VARCHAR(36) NOT NULL,
+                work_order_id VARCHAR(36),
+                payroll_period_id UUID,
+                entry_date DATE NOT NULL,
+                clock_in TIMESTAMP WITH TIME ZONE NOT NULL,
+                clock_out TIMESTAMP WITH TIME ZONE,
+                regular_hours FLOAT DEFAULT 0.0,
+                overtime_hours FLOAT DEFAULT 0.0,
+                break_minutes INTEGER DEFAULT 0,
+                clock_in_lat FLOAT,
+                clock_in_lon FLOAT,
+                clock_out_lat FLOAT,
+                clock_out_lon FLOAT,
+                entry_type VARCHAR(20) DEFAULT 'work',
+                status VARCHAR(20) DEFAULT 'pending',
+                approved_by VARCHAR(100),
+                approved_at TIMESTAMP WITH TIME ZONE,
+                notes TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """,
+        "commissions": """
+            CREATE TABLE IF NOT EXISTS commissions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                technician_id VARCHAR(36) NOT NULL,
+                work_order_id VARCHAR(36),
+                invoice_id VARCHAR(36),
+                payroll_period_id UUID,
+                commission_type VARCHAR(50) NOT NULL,
+                base_amount FLOAT NOT NULL,
+                rate FLOAT NOT NULL,
+                rate_type VARCHAR(20) DEFAULT 'percent',
+                commission_amount FLOAT NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending',
+                description TEXT,
+                earned_date DATE NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """,
+        "technician_pay_rates": """
+            CREATE TABLE IF NOT EXISTS technician_pay_rates (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                technician_id VARCHAR(36) NOT NULL,
+                hourly_rate FLOAT NOT NULL,
+                overtime_multiplier FLOAT DEFAULT 1.5,
+                job_commission_rate FLOAT DEFAULT 0.0,
+                upsell_commission_rate FLOAT DEFAULT 0.0,
+                weekly_overtime_threshold FLOAT DEFAULT 40.0,
+                effective_date DATE NOT NULL,
+                end_date DATE,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
         """
     }
 
@@ -791,7 +868,7 @@ async def create_core_tables():
             existing_tables = {row[0] for row in result.fetchall()}
 
             # Create tables in order (respecting foreign key dependencies)
-            table_order = ["customers", "technicians", "work_orders", "invoices", "payments", "quotes", "messages", "activities"]
+            table_order = ["customers", "technicians", "work_orders", "invoices", "payments", "quotes", "messages", "activities", "payroll_periods", "time_entries", "commissions", "technician_pay_rates"]
 
             for table_name in table_order:
                 if table_name in existing_tables:
