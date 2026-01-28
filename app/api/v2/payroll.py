@@ -37,11 +37,16 @@ class TimeEntryCreate(BaseModel):
 
 
 class PayRateUpdate(BaseModel):
+    technician_id: Optional[str] = None
     hourly_rate: float
+    overtime_rate: Optional[float] = None  # Frontend sends overtime_rate
     overtime_multiplier: float = 1.5
+    commission_rate: Optional[float] = None  # Frontend sends commission_rate (0-1)
     job_commission_rate: float = 0.0
     upsell_commission_rate: float = 0.0
     weekly_overtime_threshold: float = 40.0
+    effective_date: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 # Helper functions
@@ -825,6 +830,120 @@ async def list_pay_rates(
             for r in rates
         ]
     }
+
+
+@router.post("/pay-rates")
+async def create_pay_rate(
+    request: PayRateUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Create a new pay rate."""
+    if not request.technician_id:
+        raise HTTPException(status_code=400, detail="technician_id is required")
+
+    # Deactivate existing rate for this technician
+    existing_result = await db.execute(
+        select(TechnicianPayRate).where(
+            TechnicianPayRate.technician_id == request.technician_id,
+            TechnicianPayRate.is_active == True,
+        )
+    )
+    existing = existing_result.scalar_one_or_none()
+
+    if existing:
+        existing.is_active = False
+        existing.end_date = date.today()
+
+    # Create new rate
+    rate = TechnicianPayRate(
+        technician_id=request.technician_id,
+        hourly_rate=request.hourly_rate,
+        overtime_multiplier=(request.overtime_rate / request.hourly_rate) if request.hourly_rate and request.overtime_rate else 1.5,
+        job_commission_rate=request.commission_rate or 0,
+        upsell_commission_rate=0,
+        weekly_overtime_threshold=40,
+        effective_date=date.today(),
+        is_active=True,
+    )
+
+    db.add(rate)
+    await db.commit()
+    await db.refresh(rate)
+
+    return {
+        "id": str(rate.id),
+        "technician_id": rate.technician_id,
+        "hourly_rate": rate.hourly_rate,
+        "overtime_rate": rate.hourly_rate * (rate.overtime_multiplier or 1.5),
+        "commission_rate": rate.job_commission_rate or 0,
+        "effective_date": rate.effective_date.isoformat(),
+        "is_active": rate.is_active,
+    }
+
+
+@router.patch("/pay-rates/{rate_id}")
+async def update_pay_rate(
+    rate_id: str,
+    request: PayRateUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update an existing pay rate."""
+    result = await db.execute(
+        select(TechnicianPayRate).where(TechnicianPayRate.id == rate_id)
+    )
+    rate = result.scalar_one_or_none()
+
+    if not rate:
+        raise HTTPException(status_code=404, detail="Pay rate not found")
+
+    # Update fields if provided
+    if request.hourly_rate is not None:
+        rate.hourly_rate = request.hourly_rate
+    if request.overtime_rate is not None and request.hourly_rate:
+        rate.overtime_multiplier = request.overtime_rate / request.hourly_rate
+    if request.commission_rate is not None:
+        rate.job_commission_rate = request.commission_rate
+    if request.is_active is not None:
+        rate.is_active = request.is_active
+        if not request.is_active:
+            rate.end_date = date.today()
+
+    await db.commit()
+    await db.refresh(rate)
+
+    return {
+        "id": str(rate.id),
+        "technician_id": rate.technician_id,
+        "hourly_rate": rate.hourly_rate,
+        "overtime_rate": rate.hourly_rate * (rate.overtime_multiplier or 1.5),
+        "commission_rate": rate.job_commission_rate or 0,
+        "effective_date": rate.effective_date.isoformat(),
+        "is_active": rate.is_active,
+    }
+
+
+@router.delete("/pay-rates/{rate_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pay_rate(
+    rate_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Delete a pay rate (soft delete - deactivates it)."""
+    result = await db.execute(
+        select(TechnicianPayRate).where(TechnicianPayRate.id == rate_id)
+    )
+    rate = result.scalar_one_or_none()
+
+    if not rate:
+        raise HTTPException(status_code=404, detail="Pay rate not found")
+
+    # Soft delete - mark as inactive
+    rate.is_active = False
+    rate.end_date = date.today()
+
+    await db.commit()
 
 
 # Stats
