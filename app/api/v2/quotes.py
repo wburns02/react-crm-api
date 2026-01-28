@@ -23,7 +23,7 @@ from app.schemas.quote import (
 try:
     from weasyprint import HTML
     WEASYPRINT_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError):
     WEASYPRINT_AVAILABLE = False
 
 router = APIRouter()
