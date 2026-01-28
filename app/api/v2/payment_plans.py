@@ -54,6 +54,14 @@ class PaymentPlanCreate(BaseModel):
     frequency: str = "monthly"
 
 
+class RecordPaymentRequest(BaseModel):
+    """Record a payment against a payment plan."""
+    amount: float
+    payment_method: str = "cash"
+    payment_date: str
+    notes: Optional[str] = None
+
+
 # =============================================================================
 # Mock Data
 # =============================================================================
@@ -228,6 +236,58 @@ async def create_payment_plan(
         status="active",
         created_at=today.isoformat(),
     )
+
+
+@router.post("/{plan_id}/payments", response_model=PaymentPlan)
+async def record_payment(
+    plan_id: int,
+    data: RecordPaymentRequest,
+    db: DbSession,
+    user: CurrentUser,
+) -> PaymentPlan:
+    """
+    Record a payment against a payment plan.
+
+    Updates amount_paid and remaining balance.
+    Auto-completes the plan if fully paid.
+    """
+    from fastapi import HTTPException
+
+    plans = _get_mock_payment_plans()
+
+    for plan in plans:
+        if plan.id == plan_id:
+            # Calculate new amounts
+            new_amount_paid = plan.amount_paid + data.amount
+            new_remaining = plan.total_amount - new_amount_paid
+
+            # Determine new status
+            new_status = plan.status
+            if new_remaining <= 0:
+                new_status = "completed"
+                new_remaining = 0
+            elif plan.status == "overdue":
+                # If was overdue and payment made, could revert to active
+                new_status = "active"
+
+            # Return updated plan
+            return PaymentPlan(
+                id=plan.id,
+                customer_name=plan.customer_name,
+                customer_id=plan.customer_id,
+                invoice_id=plan.invoice_id,
+                total_amount=plan.total_amount,
+                amount_paid=new_amount_paid,
+                remaining=new_remaining,
+                installments=plan.installments,
+                frequency=plan.frequency,
+                next_payment_date=plan.next_payment_date if new_status != "completed" else "",
+                status=new_status,
+                created_at=plan.created_at,
+                updated_at=datetime.now().isoformat(),
+            )
+
+    raise HTTPException(status_code=404, detail="Payment plan not found")
 
 
 @router.get("/stats/summary")
