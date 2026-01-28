@@ -818,162 +818,171 @@ async def seed_demo_data(
     """
     import random
     import uuid
+    import traceback
     from sqlalchemy import text
 
-    # Texas locations for demo
-    TEXAS_LOCATIONS = [
-        {"name": "Austin Downtown", "lat": 30.2672, "lng": -97.7431},
-        {"name": "Round Rock", "lat": 30.5083, "lng": -97.6789},
-        {"name": "Georgetown", "lat": 30.6327, "lng": -97.6773},
-        {"name": "Pflugerville", "lat": 30.4393, "lng": -97.6200},
-        {"name": "Cedar Park", "lat": 30.5052, "lng": -97.8203},
-        {"name": "Lakeway", "lat": 30.3632, "lng": -97.9795},
-        {"name": "Dripping Springs", "lat": 30.1902, "lng": -98.0867},
-        {"name": "Kyle", "lat": 29.9891, "lng": -97.8772},
-        {"name": "Buda", "lat": 30.0852, "lng": -97.8403},
-        {"name": "San Marcos", "lat": 29.8833, "lng": -97.9414},
-    ]
+    try:
+        # Texas locations for demo
+        TEXAS_LOCATIONS = [
+            {"name": "Austin Downtown", "lat": 30.2672, "lng": -97.7431},
+            {"name": "Round Rock", "lat": 30.5083, "lng": -97.6789},
+            {"name": "Georgetown", "lat": 30.6327, "lng": -97.6773},
+            {"name": "Pflugerville", "lat": 30.4393, "lng": -97.6200},
+            {"name": "Cedar Park", "lat": 30.5052, "lng": -97.8203},
+            {"name": "Lakeway", "lat": 30.3632, "lng": -97.9795},
+            {"name": "Dripping Springs", "lat": 30.1902, "lng": -98.0867},
+            {"name": "Kyle", "lat": 29.9891, "lng": -97.8772},
+            {"name": "Buda", "lat": 30.0852, "lng": -97.8403},
+            {"name": "San Marcos", "lat": 29.8833, "lng": -97.9414},
+        ]
 
-    STATUSES = ["available", "en_route", "on_site", "break"]
+        STATUSES = ["available", "en_route", "on_site", "break"]
 
-    # Get active technicians using raw SQL
-    result = await db.execute(
-        text("SELECT id, first_name, last_name FROM technicians WHERE is_active = true")
-    )
-    technicians = result.fetchall()
-
-    if not technicians:
-        return {"success": False, "message": "No active technicians found"}
-
-    now = datetime.utcnow()
-    created_locations = 0
-    updated_locations = 0
-
-    # Create/update locations for each technician
-    for i, tech in enumerate(technicians):
-        tech_id, first_name, last_name = tech
-        location = TEXAS_LOCATIONS[i % len(TEXAS_LOCATIONS)]
-
-        # Add randomness to position
-        lat = location["lat"] + random.uniform(-0.005, 0.005)
-        lng = location["lng"] + random.uniform(-0.005, 0.005)
-        status = random.choice(STATUSES)
-        battery = random.randint(40, 100)
-        speed = 0 if status in ("on_site", "break") else random.uniform(0, 45)
-        heading = random.uniform(0, 360)
-
-        # Check if location exists
-        existing_result = await db.execute(
-            text("SELECT id FROM technician_locations WHERE technician_id = :tech_id"),
-            {"tech_id": tech_id}
+        # Get active technicians using raw SQL
+        result = await db.execute(
+            text("SELECT id, first_name, last_name FROM technicians WHERE is_active = true")
         )
-        existing = existing_result.fetchone()
+        technicians = result.fetchall()
 
-        if existing:
-            await db.execute(
-                text("""
-                    UPDATE technician_locations SET
-                        latitude = :lat, longitude = :lng, accuracy = :accuracy,
-                        speed = :speed, heading = :heading, is_online = true,
-                        battery_level = :battery, captured_at = :captured_at,
-                        received_at = :received_at, current_status = :status
-                    WHERE technician_id = :tech_id
-                """),
-                {
-                    "tech_id": tech_id, "lat": lat, "lng": lng,
-                    "accuracy": random.uniform(5, 25), "speed": speed,
-                    "heading": heading, "battery": battery,
-                    "captured_at": now, "received_at": now, "status": status
-                }
+        if not technicians:
+            return {"success": False, "message": "No active technicians found"}
+
+        now = datetime.utcnow()
+        created_locations = 0
+        updated_locations = 0
+
+        # Create/update locations for each technician
+        for i, tech in enumerate(technicians):
+            tech_id, first_name, last_name = tech
+            location = TEXAS_LOCATIONS[i % len(TEXAS_LOCATIONS)]
+
+            # Add randomness to position
+            lat = location["lat"] + random.uniform(-0.005, 0.005)
+            lng = location["lng"] + random.uniform(-0.005, 0.005)
+            status = random.choice(STATUSES)
+            battery = random.randint(40, 100)
+            speed = 0 if status in ("on_site", "break") else random.uniform(0, 45)
+            heading = random.uniform(0, 360)
+
+            # Check if location exists
+            existing_result = await db.execute(
+                text("SELECT id FROM technician_locations WHERE technician_id = :tech_id"),
+                {"tech_id": tech_id}
             )
-            updated_locations += 1
-        else:
-            await db.execute(
-                text("""
-                    INSERT INTO technician_locations (
-                        technician_id, latitude, longitude, accuracy,
-                        speed, heading, is_online, battery_level,
-                        captured_at, received_at, current_status
-                    ) VALUES (
-                        :tech_id, :lat, :lng, :accuracy,
-                        :speed, :heading, true, :battery,
-                        :captured_at, :received_at, :status
-                    )
-                """),
-                {
-                    "tech_id": tech_id, "lat": lat, "lng": lng,
-                    "accuracy": random.uniform(5, 25), "speed": speed,
-                    "heading": heading, "battery": battery,
-                    "captured_at": now, "received_at": now, "status": status
-                }
-            )
-            created_locations += 1
+            existing = existing_result.fetchone()
 
-    # Check for today's work orders
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
-
-    count_result = await db.execute(
-        text("""
-            SELECT COUNT(*) FROM work_orders
-            WHERE scheduled_date >= :today_start
-              AND scheduled_date < :today_end
-              AND status != 'completed'
-        """),
-        {"today_start": today_start, "today_end": today_end}
-    )
-    todays_orders = count_result.scalar() or 0
-
-    created_orders = 0
-    if todays_orders == 0:
-        # Get customers
-        customers_result = await db.execute(
-            text("SELECT id, first_name, last_name FROM customers WHERE is_active = true LIMIT 5")
-        )
-        customers = customers_result.fetchall()
-
-        if customers and technicians:
-            for i, customer in enumerate(customers[:min(5, len(technicians))]):
-                cust_id, cust_first, cust_last = customer
-                tech = technicians[i % len(technicians)]
-                tech_id, tech_first, tech_last = tech
-                scheduled_time = today_start + timedelta(hours=8 + random.randint(0, 8))
-
+            if existing:
                 await db.execute(
                     text("""
-                        INSERT INTO work_orders (
-                            id, customer_id, technician_id, assigned_technician,
-                            job_type, status, scheduled_date, notes,
-                            created_at, updated_at
+                        UPDATE technician_locations SET
+                            latitude = :lat, longitude = :lng, accuracy = :accuracy,
+                            speed = :speed, heading = :heading, is_online = true,
+                            battery_level = :battery, captured_at = :captured_at,
+                            received_at = :received_at, current_status = :status
+                        WHERE technician_id = :tech_id
+                    """),
+                    {
+                        "tech_id": tech_id, "lat": lat, "lng": lng,
+                        "accuracy": random.uniform(5, 25), "speed": speed,
+                        "heading": heading, "battery": battery,
+                        "captured_at": now, "received_at": now, "status": status
+                    }
+                )
+                updated_locations += 1
+            else:
+                await db.execute(
+                    text("""
+                        INSERT INTO technician_locations (
+                            technician_id, latitude, longitude, accuracy,
+                            speed, heading, is_online, battery_level,
+                            captured_at, received_at, current_status
                         ) VALUES (
-                            :id, :customer_id, :tech_id, :tech_name,
-                            :job_type, :status, :scheduled_date, :notes,
-                            :created_at, :updated_at
+                            :tech_id, :lat, :lng, :accuracy,
+                            :speed, :heading, true, :battery,
+                            :captured_at, :received_at, :status
                         )
                     """),
                     {
-                        "id": str(uuid.uuid4()),
-                        "customer_id": cust_id,
-                        "tech_id": tech_id,
-                        "tech_name": f"{tech_first} {tech_last}",
-                        "job_type": random.choice(["pumping", "inspection", "maintenance"]),
-                        "status": random.choice(["scheduled", "in_progress"]),
-                        "scheduled_date": scheduled_time,
-                        "notes": "[GPS DEMO] Test work order for GPS tracking demo",
-                        "created_at": now,
-                        "updated_at": now
+                        "tech_id": tech_id, "lat": lat, "lng": lng,
+                        "accuracy": random.uniform(5, 25), "speed": speed,
+                        "heading": heading, "battery": battery,
+                        "captured_at": now, "received_at": now, "status": status
                     }
                 )
-                created_orders += 1
+                created_locations += 1
 
-    await db.commit()
+        # Check for today's work orders
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
 
-    return {
-        "success": True,
-        "technicians_found": len(technicians),
-        "locations_created": created_locations,
-        "locations_updated": updated_locations,
-        "existing_orders_today": todays_orders,
-        "work_orders_created": created_orders,
-        "message": f"Seeded {created_locations + updated_locations} technician locations and {created_orders} work orders"
-    }
+        count_result = await db.execute(
+            text("""
+                SELECT COUNT(*) FROM work_orders
+                WHERE scheduled_date >= :today_start
+                  AND scheduled_date < :today_end
+                  AND status != 'completed'
+            """),
+            {"today_start": today_start, "today_end": today_end}
+        )
+        todays_orders = count_result.scalar() or 0
+
+        created_orders = 0
+        if todays_orders == 0:
+            # Get customers
+            customers_result = await db.execute(
+                text("SELECT id, first_name, last_name FROM customers WHERE is_active = true LIMIT 5")
+            )
+            customers = customers_result.fetchall()
+
+            if customers and technicians:
+                for i, customer in enumerate(customers[:min(5, len(technicians))]):
+                    cust_id, cust_first, cust_last = customer
+                    tech = technicians[i % len(technicians)]
+                    tech_id, tech_first, tech_last = tech
+                    scheduled_time = today_start + timedelta(hours=8 + random.randint(0, 8))
+
+                    await db.execute(
+                        text("""
+                            INSERT INTO work_orders (
+                                id, customer_id, technician_id, assigned_technician,
+                                job_type, status, scheduled_date, notes,
+                                created_at, updated_at
+                            ) VALUES (
+                                :id, :customer_id, :tech_id, :tech_name,
+                                :job_type, :status, :scheduled_date, :notes,
+                                :created_at, :updated_at
+                            )
+                        """),
+                        {
+                            "id": str(uuid.uuid4()),
+                            "customer_id": cust_id,
+                            "tech_id": tech_id,
+                            "tech_name": f"{tech_first} {tech_last}",
+                            "job_type": random.choice(["pumping", "inspection", "maintenance"]),
+                            "status": random.choice(["scheduled", "in_progress"]),
+                            "scheduled_date": scheduled_time,
+                            "notes": "[GPS DEMO] Test work order for GPS tracking demo",
+                            "created_at": now,
+                            "updated_at": now
+                        }
+                    )
+                    created_orders += 1
+
+        await db.commit()
+
+        return {
+            "success": True,
+            "technicians_found": len(technicians),
+            "locations_created": created_locations,
+            "locations_updated": updated_locations,
+            "existing_orders_today": todays_orders,
+            "work_orders_created": created_orders,
+            "message": f"Seeded {created_locations + updated_locations} technician locations and {created_orders} work orders"
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
