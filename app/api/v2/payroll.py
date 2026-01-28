@@ -504,6 +504,12 @@ class CreatePeriodRequest(BaseModel):
     period_type: str = "biweekly"
 
 
+class UpdatePeriodRequest(BaseModel):
+    """Request to update a payroll period."""
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
 @router.post("/periods")
 async def create_payroll_period(
     request: CreatePeriodRequest,
@@ -554,6 +560,57 @@ async def create_payroll_period(
             detail=f"Failed to create payroll period: {type(e).__name__}"
         )
 
+    return _format_period(period)
+
+
+@router.patch("/periods/{period_id}")
+async def update_payroll_period(
+    period_id: str,
+    request: UpdatePeriodRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update a payroll period (only while in draft/open status)."""
+    result = await db.execute(
+        select(PayrollPeriod).where(PayrollPeriod.id == period_id)
+    )
+    period = result.scalar_one_or_none()
+
+    if not period:
+        raise HTTPException(status_code=404, detail="Payroll period not found")
+
+    if period.status != "open":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot edit period in '{period.status}' status"
+        )
+
+    new_start = request.start_date or period.start_date
+    new_end = request.end_date or period.end_date
+
+    if new_end <= new_start:
+        raise HTTPException(status_code=400, detail="End date must be after start date")
+
+    # Check for overlaps (excluding current period)
+    overlap_result = await db.execute(
+        select(PayrollPeriod).where(
+            and_(
+                PayrollPeriod.id != period_id,
+                PayrollPeriod.start_date <= new_end,
+                PayrollPeriod.end_date >= new_start,
+            )
+        )
+    )
+    if overlap_result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Period overlaps with existing period")
+
+    if request.start_date is not None:
+        period.start_date = request.start_date
+    if request.end_date is not None:
+        period.end_date = request.end_date
+
+    await db.commit()
+    await db.refresh(period)
     return _format_period(period)
 
 
@@ -897,3 +954,385 @@ async def get_payroll_period(
         },
         "by_technician": by_technician,
     }
+
+
+# Commission Dashboard Endpoints
+
+@router.get("/commissions/stats")
+async def get_commission_stats(
+    db: DbSession,
+    current_user: CurrentUser,
+    period_id: Optional[str] = None,
+):
+    """Get commission statistics for dashboard KPI cards."""
+    try:
+        today = date.today()
+        # Default to current month if no period specified
+        month_start = today.replace(day=1)
+        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+        # Base query for current period
+        query = select(Commission)
+        if period_id:
+            query = query.where(Commission.payroll_period_id == period_id)
+        else:
+            query = query.where(
+                Commission.earned_date >= month_start,
+                Commission.earned_date <= month_end,
+            )
+
+        result = await db.execute(query)
+        commissions = result.scalars().all()
+
+        # Calculate stats
+        total = sum(c.commission_amount or 0 for c in commissions)
+        pending = [c for c in commissions if c.status == "pending"]
+        approved = [c for c in commissions if c.status == "approved"]
+        paid = [c for c in commissions if c.status == "paid"]
+
+        pending_amount = sum(c.commission_amount or 0 for c in pending)
+        approved_amount = sum(c.commission_amount or 0 for c in approved)
+        paid_amount = sum(c.commission_amount or 0 for c in paid)
+
+        total_jobs = len(commissions)
+        avg_per_job = total / total_jobs if total_jobs > 0 else 0
+
+        # Previous period comparison (last month)
+        prev_start = (month_start - timedelta(days=1)).replace(day=1)
+        prev_end = month_start - timedelta(days=1)
+        prev_result = await db.execute(
+            select(Commission).where(
+                Commission.earned_date >= prev_start,
+                Commission.earned_date <= prev_end,
+            )
+        )
+        prev_commissions = prev_result.scalars().all()
+        prev_total = sum(c.commission_amount or 0 for c in prev_commissions)
+        prev_jobs = len(prev_commissions)
+        prev_avg = prev_total / prev_jobs if prev_jobs > 0 else 0
+
+        total_change = ((total - prev_total) / prev_total * 100) if prev_total > 0 else 0
+        avg_change = ((avg_per_job - prev_avg) / prev_avg * 100) if prev_avg > 0 else 0
+
+        return {
+            "total_commissions": total,
+            "pending_count": len(pending),
+            "pending_amount": pending_amount,
+            "approved_count": len(approved),
+            "approved_amount": approved_amount,
+            "paid_count": len(paid),
+            "paid_amount": paid_amount,
+            "average_per_job": round(avg_per_job, 2),
+            "total_jobs": total_jobs,
+            "comparison_to_last_period": {
+                "total_change_pct": round(total_change, 1),
+                "average_change_pct": round(avg_change, 1),
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error fetching commission stats: {type(e).__name__}: {str(e)}")
+        return {
+            "total_commissions": 0,
+            "pending_count": 0,
+            "pending_amount": 0,
+            "approved_count": 0,
+            "approved_amount": 0,
+            "paid_count": 0,
+            "paid_amount": 0,
+            "average_per_job": 0,
+            "total_jobs": 0,
+            "comparison_to_last_period": {"total_change_pct": 0, "average_change_pct": 0},
+        }
+
+
+@router.get("/commissions/leaderboard")
+async def get_commission_leaderboard(
+    db: DbSession,
+    current_user: CurrentUser,
+    period_id: Optional[str] = None,
+):
+    """Get commission leaderboard - top earners ranked by total commission."""
+    try:
+        today = date.today()
+        month_start = today.replace(day=1)
+        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+        # Get commissions for current period
+        query = select(Commission)
+        if period_id:
+            query = query.where(Commission.payroll_period_id == period_id)
+        else:
+            query = query.where(
+                Commission.earned_date >= month_start,
+                Commission.earned_date <= month_end,
+            )
+
+        result = await db.execute(query)
+        commissions = result.scalars().all()
+
+        # Previous period for trend comparison
+        prev_start = (month_start - timedelta(days=1)).replace(day=1)
+        prev_end = month_start - timedelta(days=1)
+        prev_result = await db.execute(
+            select(Commission).where(
+                Commission.earned_date >= prev_start,
+                Commission.earned_date <= prev_end,
+            )
+        )
+        prev_commissions = prev_result.scalars().all()
+
+        # Group by technician
+        by_tech = {}
+        for c in commissions:
+            tech_id = c.technician_id
+            if tech_id not in by_tech:
+                by_tech[tech_id] = {
+                    "total_earned": 0,
+                    "jobs_completed": 0,
+                    "rates": [],
+                }
+            by_tech[tech_id]["total_earned"] += c.commission_amount or 0
+            by_tech[tech_id]["jobs_completed"] += 1
+            if c.rate:
+                by_tech[tech_id]["rates"].append(c.rate)
+
+        # Previous period by tech
+        prev_by_tech = {}
+        for c in prev_commissions:
+            tech_id = c.technician_id
+            if tech_id not in prev_by_tech:
+                prev_by_tech[tech_id] = {"total_earned": 0}
+            prev_by_tech[tech_id]["total_earned"] += c.commission_amount or 0
+
+        # Get technician names
+        tech_ids = list(by_tech.keys())
+        if tech_ids:
+            tech_result = await db.execute(
+                select(Technician).where(Technician.id.in_(tech_ids))
+            )
+            technicians = {str(t.id): t for t in tech_result.scalars().all()}
+        else:
+            technicians = {}
+
+        # Build leaderboard entries
+        entries = []
+        for tech_id, data in by_tech.items():
+            tech = technicians.get(tech_id)
+            avg_rate = sum(data["rates"]) / len(data["rates"]) if data["rates"] else 0
+            avg_commission = data["total_earned"] / data["jobs_completed"] if data["jobs_completed"] > 0 else 0
+
+            prev_total = prev_by_tech.get(tech_id, {}).get("total_earned", 0)
+            trend_pct = ((data["total_earned"] - prev_total) / prev_total * 100) if prev_total > 0 else 0
+            trend = "up" if trend_pct > 5 else ("down" if trend_pct < -5 else "neutral")
+
+            entries.append({
+                "technician_id": tech_id,
+                "technician_name": f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{tech_id}",
+                "total_earned": round(data["total_earned"], 2),
+                "jobs_completed": data["jobs_completed"],
+                "average_commission": round(avg_commission, 2),
+                "commission_rate": round(avg_rate, 4),
+                "trend": trend,
+                "trend_percentage": round(abs(trend_pct), 1),
+                "rank_change": 0,  # Would need historical data to calculate
+            })
+
+        # Sort by total earned and assign ranks
+        entries.sort(key=lambda x: x["total_earned"], reverse=True)
+        for i, entry in enumerate(entries):
+            entry["rank"] = i + 1
+
+        return {"entries": entries[:10]}  # Top 10
+    except Exception as e:
+        logger.error(f"Error fetching leaderboard: {type(e).__name__}: {str(e)}")
+        return {"entries": []}
+
+
+@router.get("/commissions/insights")
+async def get_commission_insights(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get AI-generated commission insights."""
+    try:
+        today = date.today()
+        month_start = today.replace(day=1)
+
+        # Get current month commissions
+        result = await db.execute(
+            select(Commission).where(
+                Commission.earned_date >= month_start,
+                Commission.earned_date <= today,
+            )
+        )
+        commissions = result.scalars().all()
+
+        pending = [c for c in commissions if c.status == "pending"]
+        total = sum(c.commission_amount or 0 for c in commissions)
+
+        insights = []
+
+        # Insight 1: Pending commissions alert
+        if len(pending) > 0:
+            pending_amount = sum(c.commission_amount or 0 for c in pending)
+            old_pending = [c for c in pending if (today - c.earned_date).days > 5]
+            if len(old_pending) > 0:
+                insights.append({
+                    "id": "pending_old",
+                    "type": "alert",
+                    "severity": "warning",
+                    "title": f"{len(old_pending)} commissions pending > 5 days",
+                    "description": f"${sum(c.commission_amount or 0 for c in old_pending):,.2f} in commissions may need management review",
+                    "action": {"label": "Review Now", "callback_type": "view_pending"},
+                })
+            else:
+                insights.append({
+                    "id": "pending_normal",
+                    "type": "info",
+                    "severity": "info",
+                    "title": f"{len(pending)} commissions awaiting approval",
+                    "description": f"${pending_amount:,.2f} total pending",
+                    "metric": {"label": "Pending", "value": f"${pending_amount:,.0f}"},
+                })
+
+        # Insight 2: Top performer
+        by_tech = {}
+        for c in commissions:
+            tech_id = c.technician_id
+            if tech_id not in by_tech:
+                by_tech[tech_id] = 0
+            by_tech[tech_id] += c.commission_amount or 0
+
+        if by_tech:
+            top_tech = max(by_tech.items(), key=lambda x: x[1])
+            tech_result = await db.execute(
+                select(Technician).where(Technician.id == top_tech[0])
+            )
+            tech = tech_result.scalar_one_or_none()
+            tech_name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{top_tech[0]}"
+
+            insights.append({
+                "id": "top_performer",
+                "type": "trend",
+                "severity": "success",
+                "title": f"{tech_name} is leading this month",
+                "description": "Top earner for current period",
+                "metric": {"label": "Total Earned", "value": f"${top_tech[1]:,.0f}"},
+            })
+
+        # Insight 3: Month progress
+        days_passed = (today - month_start).days + 1
+        days_in_month = ((month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1) - month_start).days + 1
+        progress_pct = round(days_passed / days_in_month * 100)
+
+        if total > 0:
+            projected = total / days_passed * days_in_month
+            insights.append({
+                "id": "projection",
+                "type": "opportunity",
+                "severity": "info",
+                "title": f"On track for ${projected:,.0f} this month",
+                "description": f"{progress_pct}% of month complete",
+                "metric": {"label": "Projected", "value": f"${projected:,.0f}", "change": f"{progress_pct}% complete"},
+            })
+
+        return {"insights": insights}
+    except Exception as e:
+        logger.error(f"Error generating insights: {type(e).__name__}: {str(e)}")
+        return {"insights": []}
+
+
+class BulkMarkPaidRequest(BaseModel):
+    commission_ids: List[str]
+
+
+@router.post("/commissions/bulk-mark-paid")
+async def bulk_mark_paid_commissions(
+    request: BulkMarkPaidRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Bulk mark commissions as paid."""
+    paid = 0
+    for comm_id in request.commission_ids:
+        result = await db.execute(
+            select(Commission).where(Commission.id == comm_id)
+        )
+        comm = result.scalar_one_or_none()
+        if comm and comm.status == "approved":
+            comm.status = "paid"
+            paid += 1
+
+    await db.commit()
+    return {"paid": paid}
+
+
+@router.get("/commissions/export")
+async def export_commissions(
+    db: DbSession,
+    current_user: CurrentUser,
+    status_filter: Optional[str] = Query(None, alias="status"),
+    technician_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """Export commissions to CSV."""
+    from fastapi.responses import StreamingResponse
+    import csv
+    import io
+
+    try:
+        query = select(Commission)
+
+        if status_filter and status_filter != "all":
+            query = query.where(Commission.status == status_filter)
+        if technician_id:
+            query = query.where(Commission.technician_id == technician_id)
+        if date_from:
+            query = query.where(Commission.earned_date >= date.fromisoformat(date_from))
+        if date_to:
+            query = query.where(Commission.earned_date <= date.fromisoformat(date_to))
+
+        query = query.order_by(Commission.earned_date.desc())
+        result = await db.execute(query)
+        commissions = result.scalars().all()
+
+        # Get technician names
+        tech_ids = list(set(c.technician_id for c in commissions))
+        if tech_ids:
+            tech_result = await db.execute(
+                select(Technician).where(Technician.id.in_(tech_ids))
+            )
+            technicians = {str(t.id): f"{t.first_name} {t.last_name}" for t in tech_result.scalars().all()}
+        else:
+            technicians = {}
+
+        # Build CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "Date", "Technician", "Work Order", "Type", "Job Total",
+            "Rate", "Commission Amount", "Status"
+        ])
+
+        for c in commissions:
+            writer.writerow([
+                c.earned_date.isoformat(),
+                technicians.get(c.technician_id, c.technician_id),
+                c.work_order_id or "",
+                c.commission_type or "job_completion",
+                f"${c.base_amount:.2f}" if c.base_amount else "",
+                f"{(c.rate or 0) * 100:.0f}%",
+                f"${c.commission_amount:.2f}" if c.commission_amount else "",
+                c.status,
+            ])
+
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=commissions-{date.today().isoformat()}.csv"},
+        )
+    except Exception as e:
+        logger.error(f"Error exporting commissions: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to export commissions")
