@@ -822,6 +822,28 @@ async def seed_demo_data(
     from sqlalchemy import text
 
     try:
+        # First, ensure the technician_locations table exists
+        # Note: technicians.id is VARCHAR(36) in the existing schema
+        await db.execute(text("""
+            CREATE TABLE IF NOT EXISTS technician_locations (
+                id SERIAL PRIMARY KEY,
+                technician_id VARCHAR(36) NOT NULL UNIQUE,
+                latitude DOUBLE PRECISION NOT NULL,
+                longitude DOUBLE PRECISION NOT NULL,
+                accuracy DOUBLE PRECISION,
+                altitude DOUBLE PRECISION,
+                speed DOUBLE PRECISION,
+                heading DOUBLE PRECISION,
+                is_online BOOLEAN DEFAULT TRUE,
+                battery_level INTEGER,
+                captured_at TIMESTAMP NOT NULL,
+                received_at TIMESTAMP DEFAULT NOW(),
+                current_work_order_id VARCHAR(36),
+                current_status VARCHAR(50) DEFAULT 'available'
+            )
+        """))
+        await db.commit()
+
         # Texas locations for demo
         TEXAS_LOCATIONS = [
             {"name": "Austin Downtown", "lat": 30.2672, "lng": -97.7431},
