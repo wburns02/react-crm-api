@@ -745,6 +745,30 @@ class BulkApproveCommissionsRequest(BaseModel):
     commission_ids: List[str]
 
 
+class CommissionCreate(BaseModel):
+    """Request to create a new commission."""
+    technician_id: str
+    work_order_id: Optional[str] = None
+    invoice_id: Optional[str] = None
+    commission_type: str = "job_completion"  # job_completion, upsell, referral, bonus
+    base_amount: float = Field(ge=0)  # Job total or amount commission is based on
+    rate: float = Field(ge=0, le=1)  # Commission rate as decimal (0.05 = 5%)
+    rate_type: str = "percent"  # percent or fixed
+    commission_amount: Optional[float] = None  # If not provided, calculated from base_amount * rate
+    earned_date: Optional[date] = None  # Defaults to today
+    description: Optional[str] = None
+
+
+class CommissionUpdate(BaseModel):
+    """Request to update an existing commission."""
+    status: Optional[str] = None  # pending, approved, paid
+    base_amount: Optional[float] = Field(None, ge=0)
+    rate: Optional[float] = Field(None, ge=0, le=1)
+    commission_amount: Optional[float] = Field(None, ge=0)
+    description: Optional[str] = None
+    commission_type: Optional[str] = None
+
+
 @router.post("/time-entries/bulk-approve")
 async def bulk_approve_time_entries(
     request: BulkApproveTimeEntriesRequest,
@@ -766,6 +790,178 @@ async def bulk_approve_time_entries(
 
     await db.commit()
     return {"approved": approved}
+
+
+@router.post("/commissions")
+async def create_commission(
+    request: CommissionCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Create a new commission entry."""
+    try:
+        # Calculate commission amount if not provided
+        commission_amount = request.commission_amount
+        if commission_amount is None:
+            if request.rate_type == "percent":
+                commission_amount = request.base_amount * request.rate
+            else:  # fixed
+                commission_amount = request.rate
+
+        # Default earned_date to today if not provided
+        earned_date = request.earned_date or date.today()
+
+        # Validate technician exists (optional, could be ID from external system)
+        tech_result = await db.execute(
+            select(Technician).where(Technician.id == request.technician_id)
+        )
+        technician = tech_result.scalar_one_or_none()
+
+        commission = Commission(
+            technician_id=request.technician_id,
+            work_order_id=request.work_order_id,
+            invoice_id=request.invoice_id,
+            commission_type=request.commission_type,
+            base_amount=request.base_amount,
+            rate=request.rate,
+            rate_type=request.rate_type,
+            commission_amount=commission_amount,
+            status="pending",
+            description=request.description,
+            earned_date=earned_date,
+        )
+
+        db.add(commission)
+        await db.commit()
+        await db.refresh(commission)
+
+        return {
+            "id": str(commission.id),
+            "technician_id": commission.technician_id,
+            "technician_name": f"{technician.first_name} {technician.last_name}" if technician else None,
+            "work_order_id": commission.work_order_id,
+            "invoice_id": commission.invoice_id,
+            "commission_type": commission.commission_type,
+            "base_amount": commission.base_amount,
+            "rate": commission.rate,
+            "rate_type": commission.rate_type,
+            "commission_amount": commission.commission_amount,
+            "status": commission.status,
+            "description": commission.description,
+            "earned_date": commission.earned_date.isoformat(),
+            "created_at": commission.created_at.isoformat() if commission.created_at else None,
+        }
+    except Exception as e:
+        logger.error(f"Error creating commission: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create commission: {str(e)}")
+
+
+@router.patch("/commissions/{commission_id}")
+async def update_commission(
+    commission_id: str,
+    request: CommissionUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update an existing commission."""
+    try:
+        result = await db.execute(
+            select(Commission).where(Commission.id == commission_id)
+        )
+        commission = result.scalar_one_or_none()
+
+        if not commission:
+            raise HTTPException(status_code=404, detail="Commission not found")
+
+        # Update fields if provided
+        if request.status is not None:
+            # Validate status transition
+            valid_statuses = ["pending", "approved", "paid"]
+            if request.status not in valid_statuses:
+                raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+            commission.status = request.status
+
+        if request.base_amount is not None:
+            commission.base_amount = request.base_amount
+            # Recalculate commission amount if rate exists
+            if commission.rate and commission.rate_type == "percent":
+                commission.commission_amount = request.base_amount * commission.rate
+
+        if request.rate is not None:
+            commission.rate = request.rate
+            # Recalculate commission amount
+            if commission.base_amount and commission.rate_type == "percent":
+                commission.commission_amount = commission.base_amount * request.rate
+
+        if request.commission_amount is not None:
+            commission.commission_amount = request.commission_amount
+
+        if request.description is not None:
+            commission.description = request.description
+
+        if request.commission_type is not None:
+            commission.commission_type = request.commission_type
+
+        await db.commit()
+        await db.refresh(commission)
+
+        # Get technician name
+        tech_result = await db.execute(
+            select(Technician).where(Technician.id == commission.technician_id)
+        )
+        technician = tech_result.scalar_one_or_none()
+
+        return {
+            "id": str(commission.id),
+            "technician_id": commission.technician_id,
+            "technician_name": f"{technician.first_name} {technician.last_name}" if technician else None,
+            "work_order_id": commission.work_order_id,
+            "invoice_id": commission.invoice_id,
+            "commission_type": commission.commission_type,
+            "base_amount": commission.base_amount,
+            "rate": commission.rate,
+            "rate_type": commission.rate_type,
+            "commission_amount": commission.commission_amount,
+            "status": commission.status,
+            "description": commission.description,
+            "earned_date": commission.earned_date.isoformat() if commission.earned_date else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating commission: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update commission: {str(e)}")
+
+
+@router.delete("/commissions/{commission_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_commission(
+    commission_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Delete a commission (only if pending)."""
+    try:
+        result = await db.execute(
+            select(Commission).where(Commission.id == commission_id)
+        )
+        commission = result.scalar_one_or_none()
+
+        if not commission:
+            raise HTTPException(status_code=404, detail="Commission not found")
+
+        if commission.status != "pending":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete commission in '{commission.status}' status. Only pending commissions can be deleted."
+            )
+
+        await db.delete(commission)
+        await db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting commission: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete commission: {str(e)}")
 
 
 @router.post("/commissions/bulk-approve")
