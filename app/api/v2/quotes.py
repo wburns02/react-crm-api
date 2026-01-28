@@ -2,6 +2,7 @@
 Quotes API - Manage customer quotes and estimates.
 """
 from fastapi import APIRouter, HTTPException, status, Query
+from fastapi.responses import Response
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import Optional
@@ -17,6 +18,13 @@ from app.schemas.quote import (
     QuoteResponse,
     QuoteListResponse,
 )
+
+# PDF Generation imports
+try:
+    from weasyprint import HTML
+    WEASYPRINT_AVAILABLE = True
+except ImportError:
+    WEASYPRINT_AVAILABLE = False
 
 router = APIRouter()
 
@@ -306,3 +314,324 @@ async def delete_quote(
 
     await db.delete(quote)
     await db.commit()
+
+
+def generate_quote_pdf_html(quote_data: dict) -> str:
+    """Generate HTML template for quote PDF."""
+    # Format dates
+    created_date = ""
+    if quote_data.get("created_at"):
+        try:
+            if isinstance(quote_data["created_at"], str):
+                created_date = quote_data["created_at"][:10]
+            else:
+                created_date = quote_data["created_at"].strftime("%B %d, %Y")
+        except:
+            created_date = str(quote_data["created_at"])[:10]
+
+    valid_until = ""
+    if quote_data.get("valid_until"):
+        try:
+            if isinstance(quote_data["valid_until"], str):
+                valid_until = quote_data["valid_until"][:10]
+            else:
+                valid_until = quote_data["valid_until"].strftime("%B %d, %Y")
+        except:
+            valid_until = str(quote_data["valid_until"])[:10]
+
+    # Generate line items rows
+    line_items_html = ""
+    for item in quote_data.get("line_items", []):
+        service = item.get("service", item.get("description", ""))
+        description = item.get("description", "")
+        qty = item.get("quantity", 1)
+        rate = float(item.get("rate", 0))
+        amount = float(item.get("amount", qty * rate))
+        line_items_html += f"""
+        <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{service}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">{qty}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${rate:,.2f}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${amount:,.2f}</td>
+        </tr>
+        """
+
+    # Format totals
+    subtotal = float(quote_data.get("subtotal", 0) or 0)
+    tax = float(quote_data.get("tax", 0) or 0)
+    tax_rate = float(quote_data.get("tax_rate", 0) or 0)
+    total = float(quote_data.get("total", 0) or 0)
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page {{
+                size: letter;
+                margin: 0.75in;
+            }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                color: #1f2937;
+                line-height: 1.5;
+                font-size: 14px;
+            }}
+            .header {{
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 40px;
+                border-bottom: 3px solid #4f46e5;
+                padding-bottom: 20px;
+            }}
+            .company-name {{
+                font-size: 28px;
+                font-weight: bold;
+                color: #4f46e5;
+                margin-bottom: 5px;
+            }}
+            .company-info {{
+                color: #6b7280;
+                font-size: 12px;
+            }}
+            .estimate-title {{
+                text-align: right;
+            }}
+            .estimate-title h1 {{
+                font-size: 32px;
+                color: #1f2937;
+                margin: 0;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+            }}
+            .estimate-number {{
+                font-size: 16px;
+                color: #4f46e5;
+                font-weight: 600;
+                margin-top: 5px;
+            }}
+            .info-section {{
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 30px;
+            }}
+            .info-box {{
+                width: 48%;
+            }}
+            .info-box h3 {{
+                font-size: 12px;
+                text-transform: uppercase;
+                color: #6b7280;
+                margin-bottom: 10px;
+                letter-spacing: 1px;
+            }}
+            .info-box p {{
+                margin: 3px 0;
+            }}
+            .customer-name {{
+                font-size: 16px;
+                font-weight: 600;
+                color: #1f2937;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 30px;
+            }}
+            th {{
+                background-color: #4f46e5;
+                color: white;
+                padding: 12px;
+                text-align: left;
+                font-weight: 600;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }}
+            th:nth-child(2), th:nth-child(3), th:nth-child(4) {{
+                text-align: center;
+            }}
+            th:last-child {{
+                text-align: right;
+            }}
+            .totals {{
+                margin-left: auto;
+                width: 300px;
+            }}
+            .totals-row {{
+                display: flex;
+                justify-content: space-between;
+                padding: 8px 0;
+                border-bottom: 1px solid #e5e7eb;
+            }}
+            .totals-row.total {{
+                border-bottom: none;
+                border-top: 2px solid #4f46e5;
+                margin-top: 10px;
+                padding-top: 15px;
+                font-size: 18px;
+                font-weight: bold;
+                color: #4f46e5;
+            }}
+            .notes-section {{
+                margin-top: 40px;
+                padding: 20px;
+                background-color: #f9fafb;
+                border-radius: 8px;
+            }}
+            .notes-section h3 {{
+                font-size: 14px;
+                font-weight: 600;
+                margin-bottom: 10px;
+                color: #374151;
+            }}
+            .notes-section p {{
+                margin: 0;
+                color: #6b7280;
+            }}
+            .footer {{
+                margin-top: 50px;
+                text-align: center;
+                color: #9ca3af;
+                font-size: 12px;
+                border-top: 1px solid #e5e7eb;
+                padding-top: 20px;
+            }}
+            .status-badge {{
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+                text-transform: uppercase;
+                background-color: #dbeafe;
+                color: #1d4ed8;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div>
+                <div class="company-name">Mac Septic Services</div>
+                <div class="company-info">
+                    Professional Septic Solutions<br>
+                    Texas Licensed & Insured
+                </div>
+            </div>
+            <div class="estimate-title">
+                <h1>Estimate</h1>
+                <div class="estimate-number">{quote_data.get("quote_number", f"EST-{quote_data.get('id', '')}")}</div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <div class="info-box">
+                <h3>Bill To</h3>
+                <p class="customer-name">{quote_data.get("customer_name", "Customer")}</p>
+                <p>{quote_data.get("customer_address", "") or ""}</p>
+                <p>{quote_data.get("customer_email", "") or ""}</p>
+                <p>{quote_data.get("customer_phone", "") or ""}</p>
+            </div>
+            <div class="info-box" style="text-align: right;">
+                <h3>Estimate Details</h3>
+                <p><strong>Date:</strong> {created_date}</p>
+                <p><strong>Valid Until:</strong> {valid_until or "N/A"}</p>
+                <p><strong>Status:</strong> <span class="status-badge">{quote_data.get("status", "draft").upper()}</span></p>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Qty</th>
+                    <th>Rate</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {line_items_html if line_items_html else '<tr><td colspan="4" style="padding: 20px; text-align: center; color: #9ca3af;">No line items</td></tr>'}
+            </tbody>
+        </table>
+
+        <div class="totals">
+            <div class="totals-row">
+                <span>Subtotal</span>
+                <span>${subtotal:,.2f}</span>
+            </div>
+            <div class="totals-row">
+                <span>Tax ({tax_rate}%)</span>
+                <span>${tax:,.2f}</span>
+            </div>
+            <div class="totals-row total">
+                <span>Total</span>
+                <span>${total:,.2f}</span>
+            </div>
+        </div>
+
+        {"<div class='notes-section'><h3>Notes</h3><p>" + (quote_data.get("notes") or "") + "</p></div>" if quote_data.get("notes") else ""}
+
+        {"<div class='notes-section'><h3>Terms & Conditions</h3><p>" + (quote_data.get("terms") or "") + "</p></div>" if quote_data.get("terms") else ""}
+
+        <div class="footer">
+            <p>Thank you for considering Mac Septic Services!</p>
+            <p>Questions? Contact us at support@macseptic.com</p>
+        </div>
+    </body>
+    </html>
+    """
+    return html
+
+
+@router.get("/{quote_id}/pdf")
+async def generate_quote_pdf(
+    quote_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Generate and download PDF for a quote."""
+    if not WEASYPRINT_AVAILABLE:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="PDF generation is not available. WeasyPrint not installed.",
+        )
+
+    # Get quote
+    result = await db.execute(select(Quote).where(Quote.id == quote_id))
+    quote = result.scalar_one_or_none()
+
+    if not quote:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quote not found",
+        )
+
+    # Enrich with customer data
+    quote_data = await enrich_quote_with_customer(quote, db)
+
+    # Generate HTML
+    html_content = generate_quote_pdf_html(quote_data)
+
+    # Convert to PDF
+    try:
+        pdf_bytes = HTML(string=html_content).write_pdf()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate PDF: {str(e)}",
+        )
+
+    # Generate filename
+    quote_number = quote_data.get("quote_number", f"EST-{quote_id}")
+    filename = f"Estimate_{quote_number}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type": "application/pdf",
+        }
+    )
