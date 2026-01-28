@@ -468,6 +468,46 @@ async def fix_invoices_table():
     return results
 
 
+@app.post("/health/db/fix-activities")
+async def fix_activities_table():
+    """Recreate activities table with correct UUID type and schema."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"actions": [], "errors": []}
+
+    try:
+        async with async_session_maker() as session:
+            # Drop old activities table and recreate with UUID id
+            try:
+                await session.execute(text("DROP TABLE IF EXISTS activities CASCADE"))
+                await session.execute(text("""
+                    CREATE TABLE activities (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        customer_id INTEGER NOT NULL,
+                        activity_type VARCHAR(20) NOT NULL,
+                        description TEXT NOT NULL,
+                        activity_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                        created_by VARCHAR(100),
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                        updated_at TIMESTAMP WITH TIME ZONE
+                    )
+                """))
+                await session.execute(text("CREATE INDEX IF NOT EXISTS idx_activities_customer_id ON activities(customer_id)"))
+                await session.execute(text("CREATE INDEX IF NOT EXISTS idx_activities_activity_type ON activities(activity_type)"))
+                await session.execute(text("CREATE INDEX IF NOT EXISTS idx_activities_activity_date ON activities(activity_date DESC)"))
+                results["actions"].append("activities table: recreated with UUID id")
+            except Exception as e:
+                results["errors"].append(f"activities table: {str(e)}")
+
+            await session.commit()
+
+    except Exception as e:
+        results["errors"].append(f"General error: {str(e)}")
+
+    return results
+
+
 @app.post("/health/db/fix-schema")
 async def fix_table_schema():
     """Add missing columns to existing tables."""
