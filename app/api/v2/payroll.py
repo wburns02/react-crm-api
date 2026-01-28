@@ -38,9 +38,11 @@ class TimeEntryCreate(BaseModel):
 
 class PayRateUpdate(BaseModel):
     technician_id: Optional[str] = None
-    hourly_rate: float
+    pay_type: str = "hourly"  # 'hourly' or 'salary'
+    hourly_rate: Optional[float] = None  # Nullable for salary employees
     overtime_rate: Optional[float] = None  # Frontend sends overtime_rate
     overtime_multiplier: float = 1.5
+    salary_amount: Optional[float] = None  # Annual salary for salary employees
     commission_rate: Optional[float] = None  # Frontend sends commission_rate (0-1)
     job_commission_rate: float = 0.0
     upsell_commission_rate: float = 0.0
@@ -575,7 +577,7 @@ async def update_payroll_period(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Update a payroll period (only while in draft/open status)."""
+    """Update a payroll period."""
     result = await db.execute(
         select(PayrollPeriod).where(PayrollPeriod.id == period_id)
     )
@@ -583,12 +585,6 @@ async def update_payroll_period(
 
     if not period:
         raise HTTPException(status_code=404, detail="Payroll period not found")
-
-    if period.status != "open":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot edit period in '{period.status}' status"
-        )
 
     new_start = request.start_date or period.start_date
     new_end = request.end_date or period.end_date
