@@ -105,26 +105,34 @@ async def create_activity(
     current_user: CurrentUser,
 ):
     """Create a new activity."""
-    data = activity_data.model_dump()
+    try:
+        data = activity_data.model_dump()
 
-    # Convert customer_id from string to int
-    data["customer_id"] = int(data["customer_id"])
+        # Convert customer_id from string to int
+        data["customer_id"] = int(data["customer_id"])
 
-    # Convert string dates
-    if data.get("activity_date"):
-        try:
-            data["activity_date"] = datetime.fromisoformat(data["activity_date"].replace("Z", "+00:00"))
-        except ValueError:
-            pass  # Keep as-is if parsing fails
+        # Convert string dates
+        if data.get("activity_date"):
+            try:
+                data["activity_date"] = datetime.fromisoformat(data["activity_date"].replace("Z", "+00:00"))
+            except ValueError:
+                pass  # Keep as-is if parsing fails
 
-    # Set created_by to current user
-    data["created_by"] = current_user.email
+        # Set created_by to current user
+        data["created_by"] = current_user.email
 
-    activity = Activity(**data)
-    db.add(activity)
-    await db.commit()
-    await db.refresh(activity)
-    return activity_to_response(activity)
+        activity = Activity(**data)
+        db.add(activity)
+        await db.commit()
+        await db.refresh(activity)
+        return activity_to_response(activity)
+    except Exception as e:
+        import traceback
+        logger.error(f"Error creating activity: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create activity: {str(e)}",
+        )
 
 
 @router.patch("/{activity_id}", response_model=ActivityResponse)
