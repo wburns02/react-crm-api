@@ -239,7 +239,7 @@ async def calculate_payroll(
     }
 
 
-@router.post("/{period_id}/approve")
+@router.post("/periods/{period_id}/approve")
 async def approve_payroll(
     period_id: str,
     db: DbSession,
