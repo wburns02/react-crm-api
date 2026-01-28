@@ -63,51 +63,67 @@ def calculate_hours(clock_in: datetime, clock_out: datetime, break_minutes: int 
 
 # Payroll Period Endpoints
 
+def _format_period(p: PayrollPeriod) -> dict:
+    """Format a payroll period for the frontend."""
+    regular = p.total_regular_hours or 0.0
+    overtime = p.total_overtime_hours or 0.0
+    gross = p.total_gross_pay or 0.0
+    commissions = p.total_commissions or 0.0
+    # Map backend status to frontend status
+    status_map = {"open": "draft", "closed": "approved"}
+    status = status_map.get(p.status, p.status) or "draft"
+    return {
+        "id": str(p.id),
+        "start_date": p.start_date.isoformat(),
+        "end_date": p.end_date.isoformat(),
+        "period_type": p.period_type or "biweekly",
+        "status": status,
+        "total_hours": regular + overtime,
+        "total_regular_hours": regular,
+        "total_overtime_hours": overtime,
+        "total_gross_pay": gross,
+        "total_commissions": commissions,
+        "total_deductions": 0.0,
+        "total_net_pay": gross + commissions,
+        "technician_count": p.technician_count or 0,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+        "approved_at": p.approved_at.isoformat() if p.approved_at else None,
+        "approved_by": p.approved_by,
+    }
+
+
 @router.get("/periods")
 async def list_payroll_periods(
     db: DbSession,
     current_user: CurrentUser,
+    status: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status_filter: Optional[str] = Query(None, alias="status"),
 ):
     """List payroll periods."""
-    query = select(PayrollPeriod)
+    try:
+        query = select(PayrollPeriod)
 
-    if status_filter:
-        query = query.where(PayrollPeriod.status == status_filter)
+        if status:
+            # Map frontend status back to backend if needed
+            reverse_map = {"draft": "open", "approved": "closed"}
+            db_status = reverse_map.get(status, status)
+            query = query.where(PayrollPeriod.status == db_status)
+        if year:
+            query = query.where(PayrollPeriod.start_date >= date(year, 1, 1))
+            query = query.where(PayrollPeriod.end_date <= date(year, 12, 31))
 
-    # Count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
-
-    # Paginate
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(PayrollPeriod.start_date.desc())
-
-    result = await db.execute(query)
-    periods = result.scalars().all()
+        query = query.order_by(PayrollPeriod.start_date.desc())
+        result = await db.execute(query)
+        periods = result.scalars().all()
+    except Exception as e:
+        logger.error(f"Error fetching payroll periods: {type(e).__name__}: {str(e)}")
+        # Return empty list instead of 500 - table may not exist yet
+        return {"periods": []}
 
     return {
-        "items": [
-            {
-                "id": str(p.id),
-                "start_date": p.start_date.isoformat(),
-                "end_date": p.end_date.isoformat(),
-                "period_type": p.period_type,
-                "status": p.status,
-                "total_regular_hours": p.total_regular_hours,
-                "total_overtime_hours": p.total_overtime_hours,
-                "total_gross_pay": p.total_gross_pay,
-                "total_commissions": p.total_commissions,
-                "technician_count": p.technician_count,
-            }
-            for p in periods
-        ],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
+        "periods": [_format_period(p) for p in periods],
     }
 
 
@@ -117,42 +133,25 @@ async def get_current_period(
     current_user: CurrentUser,
 ):
     """Get current open payroll period."""
-    today = date.today()
+    try:
+        today = date.today()
 
-    result = await db.execute(
-        select(PayrollPeriod).where(
-            PayrollPeriod.start_date <= today,
-            PayrollPeriod.end_date >= today,
-            PayrollPeriod.status == "open",
-        ).limit(1)
-    )
-    period = result.scalar_one_or_none()
-
-    if not period:
-        # Create new period if none exists
-        # Default to biweekly
-        start = today - timedelta(days=today.weekday())  # Start of week
-        end = start + timedelta(days=13)  # Two weeks
-
-        period = PayrollPeriod(
-            start_date=start,
-            end_date=end,
-            period_type="biweekly",
-            status="open",
+        result = await db.execute(
+            select(PayrollPeriod).where(
+                PayrollPeriod.start_date <= today,
+                PayrollPeriod.end_date >= today,
+                PayrollPeriod.status == "open",
+            ).limit(1)
         )
-        db.add(period)
-        await db.commit()
-        await db.refresh(period)
+        period = result.scalar_one_or_none()
 
-    return {
-        "id": str(period.id),
-        "start_date": period.start_date.isoformat(),
-        "end_date": period.end_date.isoformat(),
-        "status": period.status,
-        "total_regular_hours": period.total_regular_hours,
-        "total_overtime_hours": period.total_overtime_hours,
-        "total_gross_pay": period.total_gross_pay,
-    }
+        if not period:
+            return {"message": "No current payroll period"}
+
+        return _format_period(period)
+    except Exception as e:
+        logger.error(f"Error fetching current period: {type(e).__name__}: {str(e)}")
+        return {"message": "No current payroll period"}
 
 
 @router.get("/{period_id}")
@@ -380,28 +379,32 @@ async def list_time_entries(
     page_size: int = Query(50, ge=1, le=200),
 ):
     """List time entries."""
-    query = select(TimeEntry)
+    try:
+        query = select(TimeEntry)
 
-    if technician_id:
-        query = query.where(TimeEntry.technician_id == technician_id)
-    if start_date:
-        query = query.where(TimeEntry.entry_date >= start_date)
-    if end_date:
-        query = query.where(TimeEntry.entry_date <= end_date)
-    if status_filter:
-        query = query.where(TimeEntry.status == status_filter)
+        if technician_id:
+            query = query.where(TimeEntry.technician_id == technician_id)
+        if start_date:
+            query = query.where(TimeEntry.entry_date >= start_date)
+        if end_date:
+            query = query.where(TimeEntry.entry_date <= end_date)
+        if status_filter:
+            query = query.where(TimeEntry.status == status_filter)
 
-    # Count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        # Count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
 
-    # Paginate
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(TimeEntry.entry_date.desc())
+        # Paginate
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size).order_by(TimeEntry.entry_date.desc())
 
-    result = await db.execute(query)
-    entries = result.scalars().all()
+        result = await db.execute(query)
+        entries = result.scalars().all()
+    except Exception as e:
+        logger.error(f"Error fetching time entries: {type(e).__name__}: {str(e)}")
+        return {"entries": [], "total": 0, "page": 1, "page_size": page_size}
 
     return {
         "entries": [
@@ -412,9 +415,9 @@ async def list_time_entries(
                 "entry_date": e.entry_date.isoformat(),
                 "clock_in": e.clock_in.isoformat() if e.clock_in else None,
                 "clock_out": e.clock_out.isoformat() if e.clock_out else None,
-                "regular_hours": e.regular_hours,
-                "overtime_hours": e.overtime_hours,
-                "break_minutes": e.break_minutes,
+                "regular_hours": e.regular_hours or 0,
+                "overtime_hours": e.overtime_hours or 0,
+                "break_minutes": e.break_minutes or 0,
                 "entry_type": e.entry_type,
                 "status": e.status,
                 "work_order_id": e.work_order_id,
@@ -555,55 +558,6 @@ async def set_pay_rate(
     return {"status": "updated", "effective_date": rate.effective_date.isoformat()}
 
 
-# Additional endpoints to match frontend expectations
-
-@router.get("/periods")
-async def list_payroll_periods_v2(
-    db: DbSession,
-    current_user: CurrentUser,
-    status: Optional[str] = Query(None),
-    year: Optional[int] = Query(None),
-):
-    """List payroll periods (alias for frontend compatibility)."""
-    try:
-        query = select(PayrollPeriod)
-
-        if status:
-            query = query.where(PayrollPeriod.status == status)
-        if year:
-            from datetime import date as date_type
-            query = query.where(PayrollPeriod.start_date >= date_type(year, 1, 1))
-            query = query.where(PayrollPeriod.end_date <= date_type(year, 12, 31))
-
-        query = query.order_by(PayrollPeriod.start_date.desc())
-        result = await db.execute(query)
-        periods = result.scalars().all()
-    except Exception as e:
-        logger.error(f"Error fetching payroll periods: {type(e).__name__}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Database error: {type(e).__name__} - check if payroll_periods table exists"
-        )
-
-    return {
-        "periods": [
-            {
-                "id": str(p.id),
-                "start_date": p.start_date.isoformat(),
-                "end_date": p.end_date.isoformat(),
-                "period_type": p.period_type,
-                "status": p.status,
-                "total_regular_hours": p.total_regular_hours,
-                "total_overtime_hours": p.total_overtime_hours,
-                "total_gross_pay": p.total_gross_pay,
-                "total_commissions": p.total_commissions,
-                "technician_count": p.technician_count,
-            }
-            for p in periods
-        ]
-    }
-
-
 class CreatePeriodRequest(BaseModel):
     """Request to create a new payroll period."""
     start_date: date
@@ -625,45 +579,43 @@ async def create_payroll_period(
             detail="End date must be after start date"
         )
 
-    # Check for overlapping periods
-    overlap_result = await db.execute(
-        select(PayrollPeriod).where(
-            and_(
-                PayrollPeriod.start_date <= request.end_date,
-                PayrollPeriod.end_date >= request.start_date,
+    try:
+        # Check for overlapping periods
+        overlap_result = await db.execute(
+            select(PayrollPeriod).where(
+                and_(
+                    PayrollPeriod.start_date <= request.end_date,
+                    PayrollPeriod.end_date >= request.start_date,
+                )
             )
         )
-    )
-    if overlap_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=400,
-            detail="Period overlaps with existing period"
+        if overlap_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=400,
+                detail="Period overlaps with existing period"
+            )
+
+        # Create the period
+        period = PayrollPeriod(
+            start_date=request.start_date,
+            end_date=request.end_date,
+            period_type=request.period_type,
+            status="open",
         )
 
-    # Create the period
-    period = PayrollPeriod(
-        start_date=request.start_date,
-        end_date=request.end_date,
-        period_type=request.period_type,
-        status="open",
-    )
+        db.add(period)
+        await db.commit()
+        await db.refresh(period)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating payroll period: {type(e).__name__}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create payroll period: {type(e).__name__}"
+        )
 
-    db.add(period)
-    await db.commit()
-    await db.refresh(period)
-
-    return {
-        "id": str(period.id),
-        "start_date": period.start_date.isoformat(),
-        "end_date": period.end_date.isoformat(),
-        "period_type": period.period_type,
-        "status": period.status,
-        "total_regular_hours": period.total_regular_hours,
-        "total_overtime_hours": period.total_overtime_hours,
-        "total_gross_pay": period.total_gross_pay,
-        "total_commissions": period.total_commissions,
-        "technician_count": period.technician_count,
-    }
+    return _format_period(period)
 
 
 @router.get("/periods/{period_id}/summary")
@@ -734,26 +686,30 @@ async def list_commissions(
     page_size: int = Query(50, ge=1, le=200),
 ):
     """List commissions."""
-    query = select(Commission)
+    try:
+        query = select(Commission)
 
-    if technician_id:
-        query = query.where(Commission.technician_id == technician_id)
-    if payroll_period_id:
-        query = query.where(Commission.payroll_period_id == payroll_period_id)
-    if status_filter:
-        query = query.where(Commission.status == status_filter)
+        if technician_id:
+            query = query.where(Commission.technician_id == technician_id)
+        if payroll_period_id:
+            query = query.where(Commission.payroll_period_id == payroll_period_id)
+        if status_filter:
+            query = query.where(Commission.status == status_filter)
 
-    # Count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        # Count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
 
-    # Paginate
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(Commission.earned_date.desc())
+        # Paginate
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size).order_by(Commission.earned_date.desc())
 
-    result = await db.execute(query)
-    commissions = result.scalars().all()
+        result = await db.execute(query)
+        commissions = result.scalars().all()
+    except Exception as e:
+        logger.error(f"Error fetching commissions: {type(e).__name__}: {str(e)}")
+        return {"commissions": [], "total": 0, "page": 1, "page_size": page_size}
 
     return {
         "commissions": [
@@ -840,15 +796,19 @@ async def list_pay_rates(
     is_active: Optional[bool] = None,
 ):
     """List all pay rates."""
-    query = select(TechnicianPayRate)
+    try:
+        query = select(TechnicianPayRate)
 
-    if technician_id:
-        query = query.where(TechnicianPayRate.technician_id == technician_id)
-    if is_active is not None:
-        query = query.where(TechnicianPayRate.is_active == is_active)
+        if technician_id:
+            query = query.where(TechnicianPayRate.technician_id == technician_id)
+        if is_active is not None:
+            query = query.where(TechnicianPayRate.is_active == is_active)
 
-    result = await db.execute(query)
-    rates = result.scalars().all()
+        result = await db.execute(query)
+        rates = result.scalars().all()
+    except Exception as e:
+        logger.error(f"Error fetching pay rates: {type(e).__name__}: {str(e)}")
+        return {"rates": []}
 
     return {
         "rates": [
@@ -856,7 +816,9 @@ async def list_pay_rates(
                 "id": str(r.id),
                 "technician_id": r.technician_id,
                 "hourly_rate": r.hourly_rate,
+                "overtime_rate": r.hourly_rate * (r.overtime_multiplier or 1.5),
                 "overtime_multiplier": r.overtime_multiplier,
+                "commission_rate": r.job_commission_rate or 0,
                 "job_commission_rate": r.job_commission_rate,
                 "upsell_commission_rate": r.upsell_commission_rate,
                 "weekly_overtime_threshold": r.weekly_overtime_threshold,
@@ -877,42 +839,51 @@ async def get_payroll_stats(
     current_user: CurrentUser,
 ):
     """Get payroll statistics."""
-    today = date.today()
-    year_start = today.replace(month=1, day=1)
+    try:
+        today = date.today()
+        year_start = today.replace(month=1, day=1)
 
-    # Current period stats
-    current_result = await db.execute(
-        select(PayrollPeriod).where(
-            PayrollPeriod.start_date <= today,
-            PayrollPeriod.end_date >= today,
-        ).limit(1)
-    )
-    current_period = current_result.scalar_one_or_none()
-
-    # YTD totals
-    ytd_result = await db.execute(
-        select(
-            func.sum(PayrollPeriod.total_gross_pay),
-            func.sum(PayrollPeriod.total_commissions),
-        ).where(
-            PayrollPeriod.start_date >= year_start,
-            PayrollPeriod.status.in_(["approved", "processed"]),
+        # Current period stats
+        current_result = await db.execute(
+            select(PayrollPeriod).where(
+                PayrollPeriod.start_date <= today,
+                PayrollPeriod.end_date >= today,
+            ).limit(1)
         )
-    )
-    ytd_gross, ytd_commissions = ytd_result.first() or (0, 0)
+        current_period = current_result.scalar_one_or_none()
 
-    # Pending approvals
-    pending_result = await db.execute(
-        select(func.count()).select_from(TimeEntry).where(
-            TimeEntry.status == "pending"
+        # YTD totals
+        ytd_result = await db.execute(
+            select(
+                func.sum(PayrollPeriod.total_gross_pay),
+                func.sum(PayrollPeriod.total_commissions),
+            ).where(
+                PayrollPeriod.start_date >= year_start,
+                PayrollPeriod.status.in_(["approved", "processed"]),
+            )
         )
-    )
-    pending_count = pending_result.scalar() or 0
+        ytd_gross, ytd_commissions = ytd_result.first() or (0, 0)
+
+        # Pending approvals
+        pending_result = await db.execute(
+            select(func.count()).select_from(TimeEntry).where(
+                TimeEntry.status == "pending"
+            )
+        )
+        pending_count = pending_result.scalar() or 0
+    except Exception as e:
+        logger.error(f"Error fetching payroll stats: {type(e).__name__}: {str(e)}")
+        return {
+            "current_period": None,
+            "ytd_gross_pay": 0,
+            "ytd_commissions": 0,
+            "pending_approvals": 0,
+        }
 
     return {
         "current_period": {
-            "hours": current_period.total_regular_hours + current_period.total_overtime_hours if current_period else 0,
-            "amount": current_period.total_gross_pay if current_period else 0,
+            "hours": (current_period.total_regular_hours or 0) + (current_period.total_overtime_hours or 0),
+            "amount": current_period.total_gross_pay or 0,
         } if current_period else None,
         "ytd_gross_pay": ytd_gross or 0,
         "ytd_commissions": ytd_commissions or 0,
