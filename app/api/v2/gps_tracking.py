@@ -801,3 +801,141 @@ async def get_technician_config(
         history_retention_days=config.history_retention_days,
         updated_at=config.updated_at
     )
+
+
+# ==================== Demo Data Seeding ====================
+
+@router.post("/seed-demo-data")
+async def seed_demo_data(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Seed demo GPS data for testing the tracking page.
+    Creates technician locations and work orders for today.
+    Requires authentication.
+    """
+    import random
+    import uuid
+    from app.models.technician import Technician
+    from app.models.customer import Customer
+    from app.models.work_order import WorkOrder
+    from app.models.gps_tracking import TechnicianLocation
+
+    # Texas locations for demo
+    TEXAS_LOCATIONS = [
+        {"name": "Austin Downtown", "lat": 30.2672, "lng": -97.7431},
+        {"name": "Round Rock", "lat": 30.5083, "lng": -97.6789},
+        {"name": "Georgetown", "lat": 30.6327, "lng": -97.6773},
+        {"name": "Pflugerville", "lat": 30.4393, "lng": -97.6200},
+        {"name": "Cedar Park", "lat": 30.5052, "lng": -97.8203},
+        {"name": "Lakeway", "lat": 30.3632, "lng": -97.9795},
+        {"name": "Dripping Springs", "lat": 30.1902, "lng": -98.0867},
+        {"name": "Kyle", "lat": 29.9891, "lng": -97.8772},
+        {"name": "Buda", "lat": 30.0852, "lng": -97.8403},
+        {"name": "San Marcos", "lat": 29.8833, "lng": -97.9414},
+    ]
+
+    STATUSES = ["available", "en_route", "on_site", "break"]
+
+    # Get active technicians
+    technicians = db.query(Technician).filter(Technician.is_active == True).all()
+    if not technicians:
+        return {"success": False, "message": "No active technicians found"}
+
+    now = datetime.utcnow()
+    created_locations = 0
+    updated_locations = 0
+
+    # Create/update locations for each technician
+    for i, tech in enumerate(technicians):
+        location = TEXAS_LOCATIONS[i % len(TEXAS_LOCATIONS)]
+
+        # Add randomness to position
+        lat = location["lat"] + random.uniform(-0.005, 0.005)
+        lng = location["lng"] + random.uniform(-0.005, 0.005)
+        status = random.choice(STATUSES)
+        battery = random.randint(40, 100)
+        speed = 0 if status in ("on_site", "break") else random.uniform(0, 45)
+        heading = random.uniform(0, 360)
+
+        # Check if exists
+        existing = db.query(TechnicianLocation).filter(
+            TechnicianLocation.technician_id == tech.id
+        ).first()
+
+        if existing:
+            existing.latitude = lat
+            existing.longitude = lng
+            existing.accuracy = random.uniform(5, 25)
+            existing.speed = speed
+            existing.heading = heading
+            existing.is_online = True
+            existing.battery_level = battery
+            existing.captured_at = now
+            existing.received_at = now
+            existing.current_status = status
+            updated_locations += 1
+        else:
+            new_location = TechnicianLocation(
+                technician_id=tech.id,
+                latitude=lat,
+                longitude=lng,
+                accuracy=random.uniform(5, 25),
+                speed=speed,
+                heading=heading,
+                is_online=True,
+                battery_level=battery,
+                captured_at=now,
+                received_at=now,
+                current_status=status
+            )
+            db.add(new_location)
+            created_locations += 1
+
+    # Check for today's work orders
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+
+    todays_orders = db.query(WorkOrder).filter(
+        WorkOrder.scheduled_date >= today_start,
+        WorkOrder.scheduled_date < today_end,
+        WorkOrder.status != "completed"
+    ).count()
+
+    created_orders = 0
+    if todays_orders == 0:
+        # Create demo work orders
+        customers = db.query(Customer).filter(Customer.is_active == True).limit(5).all()
+
+        if customers and technicians:
+            for i, customer in enumerate(customers[:min(5, len(technicians))]):
+                tech = technicians[i % len(technicians)]
+                scheduled_time = today_start + timedelta(hours=8 + random.randint(0, 8))
+
+                wo = WorkOrder(
+                    id=str(uuid.uuid4()),
+                    customer_id=customer.id,
+                    technician_id=tech.id,
+                    assigned_technician=f"{tech.first_name} {tech.last_name}",
+                    job_type=random.choice(["pumping", "inspection", "maintenance"]),
+                    status=random.choice(["scheduled", "in_progress"]),
+                    scheduled_date=scheduled_time,
+                    notes="[GPS DEMO] Test work order for GPS tracking demo",
+                    created_at=now,
+                    updated_at=now
+                )
+                db.add(wo)
+                created_orders += 1
+
+    db.commit()
+
+    return {
+        "success": True,
+        "technicians_found": len(technicians),
+        "locations_created": created_locations,
+        "locations_updated": updated_locations,
+        "existing_orders_today": todays_orders,
+        "work_orders_created": created_orders,
+        "message": f"Seeded {created_locations + updated_locations} technician locations and {created_orders} work orders"
+    }
