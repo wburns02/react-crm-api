@@ -26,6 +26,7 @@ from app.api.v2 import (
     notifications,
     calls,
     call_dispositions,
+    dump_sites,
     # Phase 1: AI Infrastructure
     ai,
     ai_jobs,
@@ -131,6 +132,7 @@ api_router.include_router(ringcentral.router, prefix="/ringcentral", tags=["ring
 api_router.include_router(twilio.router, prefix="/twilio", tags=["twilio"])
 api_router.include_router(sms_consent.router, prefix="/sms-consent", tags=["sms-consent"])
 api_router.include_router(payroll.router, prefix="/payroll", tags=["payroll"])
+api_router.include_router(dump_sites.router, prefix="/dump-sites", tags=["dump-sites"])
 api_router.include_router(activities.router, prefix="/activities", tags=["activities"])
 api_router.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
 api_router.include_router(equipment.router, prefix="/equipment", tags=["equipment"])

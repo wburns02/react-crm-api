@@ -18,6 +18,7 @@ from app.api.deps import DbSession, CurrentUser
 from app.models.payroll import PayrollPeriod, TimeEntry, Commission, TechnicianPayRate
 from app.models.technician import Technician
 from app.models.work_order import WorkOrder
+from app.models.dump_site import DumpSite
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -724,6 +725,13 @@ async def list_commissions(
                 "status": c.status,
                 "description": c.description,
                 "earned_date": c.earned_date.isoformat(),
+                # Auto-calc fields
+                "job_type": c.job_type,
+                "gallons_pumped": c.gallons_pumped,
+                "dump_site_id": str(c.dump_site_id) if c.dump_site_id else None,
+                "dump_fee_per_gallon": c.dump_fee_per_gallon,
+                "dump_fee_amount": c.dump_fee_amount,
+                "commissionable_amount": c.commissionable_amount,
             }
             for c in commissions
         ],
@@ -753,6 +761,246 @@ class CommissionCreate(BaseModel):
     commission_amount: Optional[float] = None  # If not provided, calculated from base_amount * rate
     earned_date: Optional[date] = None  # Defaults to today
     description: Optional[str] = None
+    # New fields for auto-calculation
+    dump_site_id: Optional[str] = None
+    job_type: Optional[str] = None
+    gallons_pumped: Optional[int] = None
+    dump_fee_per_gallon: Optional[float] = None
+    dump_fee_amount: Optional[float] = None
+    commissionable_amount: Optional[float] = None
+
+
+# Commission rate configuration by job type
+COMMISSION_RATES = {
+    "pumping": {"rate": 0.20, "apply_dump_fee": True},
+    "grease_trap": {"rate": 0.20, "apply_dump_fee": True},
+    "inspection": {"rate": 0.15, "apply_dump_fee": False},
+    "repair": {"rate": 0.15, "apply_dump_fee": False},
+    "installation": {"rate": 0.10, "apply_dump_fee": False},
+    "emergency": {"rate": 0.20, "apply_dump_fee": False},
+    "maintenance": {"rate": 0.15, "apply_dump_fee": False},
+    "camera_inspection": {"rate": 0.15, "apply_dump_fee": False},
+}
+
+
+class CommissionCalculateRequest(BaseModel):
+    """Request for commission auto-calculation."""
+    work_order_id: str
+    dump_site_id: Optional[str] = None  # Required for pumping/grease_trap jobs
+
+
+class CommissionCalculateResponse(BaseModel):
+    """Response with calculated commission details."""
+    work_order_id: str
+    technician_id: str
+    technician_name: Optional[str] = None
+    job_type: str
+    job_total: float
+    gallons: Optional[int] = None
+    dump_site_id: Optional[str] = None
+    dump_site_name: Optional[str] = None
+    dump_fee_per_gallon: Optional[float] = None
+    dump_fee_total: Optional[float] = None
+    commissionable_amount: float
+    commission_rate: float
+    commission_amount: float
+    breakdown: dict
+
+
+@router.get("/work-orders-for-commission")
+async def get_work_orders_for_commission(
+    db: DbSession,
+    current_user: CurrentUser,
+    technician_id: Optional[str] = None,
+    job_type: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=100),
+):
+    """Get completed work orders that don't have commissions yet."""
+    try:
+        # Get work order IDs that already have commissions
+        existing_commissions = await db.execute(
+            select(Commission.work_order_id).where(Commission.work_order_id.isnot(None))
+        )
+        commissioned_wo_ids = {row[0] for row in existing_commissions.fetchall()}
+
+        # Query completed work orders
+        query = select(WorkOrder).where(
+            WorkOrder.status == "completed",
+            WorkOrder.total_amount.isnot(None),
+            WorkOrder.total_amount > 0,
+        )
+
+        if technician_id:
+            query = query.where(WorkOrder.technician_id == technician_id)
+        if job_type:
+            query = query.where(WorkOrder.job_type == job_type)
+
+        query = query.order_by(WorkOrder.scheduled_date.desc()).limit(limit * 2)  # Fetch extra to filter
+
+        result = await db.execute(query)
+        work_orders = result.scalars().all()
+
+        # Filter out work orders that already have commissions
+        available_wos = [wo for wo in work_orders if wo.id not in commissioned_wo_ids][:limit]
+
+        # Get technician names
+        tech_ids = list(set(wo.technician_id for wo in available_wos if wo.technician_id))
+        technicians = {}
+        if tech_ids:
+            tech_result = await db.execute(
+                select(Technician).where(Technician.id.in_(tech_ids))
+            )
+            technicians = {str(t.id): f"{t.first_name} {t.last_name}" for t in tech_result.scalars().all()}
+
+        return {
+            "work_orders": [
+                {
+                    "id": wo.id,
+                    "job_type": wo.job_type.name if hasattr(wo.job_type, 'name') else str(wo.job_type),
+                    "total_amount": float(wo.total_amount) if wo.total_amount else 0,
+                    "estimated_gallons": wo.estimated_gallons,
+                    "technician_id": wo.technician_id,
+                    "technician_name": technicians.get(wo.technician_id, None),
+                    "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
+                    "service_address": f"{wo.service_address_line1 or ''}, {wo.service_city or ''}, {wo.service_state or ''}".strip(", "),
+                    "commission_rate": COMMISSION_RATES.get(
+                        wo.job_type.name if hasattr(wo.job_type, 'name') else str(wo.job_type),
+                        {"rate": 0.15}
+                    )["rate"],
+                    "requires_dump_site": COMMISSION_RATES.get(
+                        wo.job_type.name if hasattr(wo.job_type, 'name') else str(wo.job_type),
+                        {"apply_dump_fee": False}
+                    )["apply_dump_fee"],
+                }
+                for wo in available_wos
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error fetching work orders for commission: {type(e).__name__}: {str(e)}")
+        return {"work_orders": []}
+
+
+@router.post("/commissions/calculate")
+async def calculate_commission(
+    request: CommissionCalculateRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Calculate commission for a work order with dump fee deduction if applicable."""
+    try:
+        # Get work order
+        wo_result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == request.work_order_id)
+        )
+        work_order = wo_result.scalar_one_or_none()
+
+        if not work_order:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        if work_order.status != "completed":
+            raise HTTPException(status_code=400, detail="Work order must be completed to calculate commission")
+
+        # Get job type as string
+        job_type = work_order.job_type.name if hasattr(work_order.job_type, 'name') else str(work_order.job_type)
+        job_total = float(work_order.total_amount) if work_order.total_amount else 0
+        gallons = work_order.estimated_gallons
+
+        # Get commission rate config
+        rate_config = COMMISSION_RATES.get(job_type, {"rate": 0.15, "apply_dump_fee": False})
+        commission_rate = rate_config["rate"]
+        apply_dump_fee = rate_config["apply_dump_fee"]
+
+        # Get technician name
+        technician_name = None
+        if work_order.technician_id:
+            tech_result = await db.execute(
+                select(Technician).where(Technician.id == work_order.technician_id)
+            )
+            tech = tech_result.scalar_one_or_none()
+            if tech:
+                technician_name = f"{tech.first_name} {tech.last_name}"
+
+        # Calculate dump fee if applicable
+        dump_site_name = None
+        dump_fee_per_gallon = None
+        dump_fee_total = None
+        commissionable_amount = job_total
+
+        if apply_dump_fee:
+            if not request.dump_site_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Dump site is required for {job_type} jobs to calculate commission"
+                )
+
+            if not gallons:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Work order must have estimated gallons to calculate dump fee"
+                )
+
+            # Get dump site
+            dump_result = await db.execute(
+                select(DumpSite).where(DumpSite.id == request.dump_site_id)
+            )
+            dump_site = dump_result.scalar_one_or_none()
+
+            if not dump_site:
+                raise HTTPException(status_code=404, detail="Dump site not found")
+
+            dump_site_name = dump_site.name
+            dump_fee_per_gallon = dump_site.fee_per_gallon
+            dump_fee_total = gallons * dump_fee_per_gallon
+            commissionable_amount = job_total - dump_fee_total
+
+        # Calculate commission
+        commission_amount = commissionable_amount * commission_rate
+
+        # Build breakdown
+        if apply_dump_fee and dump_fee_total:
+            breakdown = {
+                "formula": "(job_total - dump_fee) × rate",
+                "calculation": f"({job_total:.2f} - {dump_fee_total:.2f}) × {commission_rate:.0%} = {commission_amount:.2f}",
+                "steps": [
+                    f"Job Total: ${job_total:.2f}",
+                    f"Gallons: {gallons:,}",
+                    f"Dump Fee: {gallons:,} × ${dump_fee_per_gallon:.4f} = ${dump_fee_total:.2f}",
+                    f"Commissionable: ${job_total:.2f} - ${dump_fee_total:.2f} = ${commissionable_amount:.2f}",
+                    f"Commission: ${commissionable_amount:.2f} × {commission_rate:.0%} = ${commission_amount:.2f}",
+                ],
+            }
+        else:
+            breakdown = {
+                "formula": "job_total × rate",
+                "calculation": f"{job_total:.2f} × {commission_rate:.0%} = {commission_amount:.2f}",
+                "steps": [
+                    f"Job Total: ${job_total:.2f}",
+                    f"Commission Rate: {commission_rate:.0%}",
+                    f"Commission: ${job_total:.2f} × {commission_rate:.0%} = ${commission_amount:.2f}",
+                ],
+            }
+
+        return {
+            "work_order_id": request.work_order_id,
+            "technician_id": work_order.technician_id,
+            "technician_name": technician_name,
+            "job_type": job_type,
+            "job_total": job_total,
+            "gallons": gallons,
+            "dump_site_id": request.dump_site_id,
+            "dump_site_name": dump_site_name,
+            "dump_fee_per_gallon": dump_fee_per_gallon,
+            "dump_fee_total": dump_fee_total,
+            "commissionable_amount": round(commissionable_amount, 2),
+            "commission_rate": commission_rate,
+            "commission_amount": round(commission_amount, 2),
+            "breakdown": breakdown,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error calculating commission: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to calculate commission: {str(e)}")
 
 
 class CommissionUpdate(BaseModel):
@@ -825,6 +1073,13 @@ async def create_commission(
             status="pending",
             description=request.description,
             earned_date=earned_date,
+            # New auto-calc fields
+            dump_site_id=request.dump_site_id,
+            job_type=request.job_type,
+            gallons_pumped=request.gallons_pumped,
+            dump_fee_per_gallon=request.dump_fee_per_gallon,
+            dump_fee_amount=request.dump_fee_amount,
+            commissionable_amount=request.commissionable_amount,
         )
 
         db.add(commission)
@@ -846,6 +1101,13 @@ async def create_commission(
             "description": commission.description,
             "earned_date": commission.earned_date.isoformat(),
             "created_at": commission.created_at.isoformat() if commission.created_at else None,
+            # Auto-calc fields
+            "job_type": commission.job_type,
+            "gallons_pumped": commission.gallons_pumped,
+            "dump_site_id": str(commission.dump_site_id) if commission.dump_site_id else None,
+            "dump_fee_per_gallon": commission.dump_fee_per_gallon,
+            "dump_fee_amount": commission.dump_fee_amount,
+            "commissionable_amount": commission.commissionable_amount,
         }
     except Exception as e:
         logger.error(f"Error creating commission: {type(e).__name__}: {str(e)}")

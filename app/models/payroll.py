@@ -98,11 +98,21 @@ class Commission(Base):
     invoice_id = Column(String(36), nullable=True)
     payroll_period_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
+    # Dump site reference (for pumping jobs)
+    dump_site_id = Column(UUID(as_uuid=True), nullable=True)
+
     # Commission details
     commission_type = Column(String(50), nullable=False)  # job_completion, upsell, referral
-    base_amount = Column(Float, nullable=False)  # Amount commission is calculated on
+    base_amount = Column(Float, nullable=False)  # Amount commission is calculated on (job total)
     rate = Column(Float, nullable=False)  # Percentage or fixed amount
     rate_type = Column(String(20), default="percent")  # percent, fixed
+
+    # Job details for auto-calculation
+    job_type = Column(String(50), nullable=True)  # pumping, repair, inspection, etc.
+    gallons_pumped = Column(Integer, nullable=True)  # For pumping jobs
+    dump_fee_per_gallon = Column(Float, nullable=True)  # Rate at time of commission
+    dump_fee_amount = Column(Float, nullable=True)  # gallons × rate
+    commissionable_amount = Column(Float, nullable=True)  # base_amount - dump_fee_amount
 
     # Calculated amount
     commission_amount = Column(Float, nullable=False)
@@ -127,11 +137,17 @@ class TechnicianPayRate(Base):
 
     technician_id = Column(String(36), nullable=False, index=True)  # Not unique - techs can have multiple rate records
 
-    # Hourly rates
-    hourly_rate = Column(Float, nullable=False)
+    # Pay type: hourly or salary
+    pay_type = Column(String(20), default="hourly")  # 'hourly' or 'salary'
+
+    # Hourly rates (used when pay_type='hourly')
+    hourly_rate = Column(Float, nullable=True)  # Nullable for salary employees
     overtime_multiplier = Column(Float, default=1.5)
 
-    # Commission rates
+    # Salary (used when pay_type='salary')
+    salary_amount = Column(Float, nullable=True)  # Annual salary in dollars
+
+    # Commission rates (apply to both hourly and salary)
     job_commission_rate = Column(Float, default=0.0)  # % of job value
     upsell_commission_rate = Column(Float, default=0.0)
 
