@@ -154,68 +154,6 @@ async def get_current_period(
         return {"message": "No current payroll period"}
 
 
-@router.get("/{period_id}")
-async def get_payroll_period(
-    period_id: str,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Get payroll period with detail."""
-    result = await db.execute(
-        select(PayrollPeriod).where(PayrollPeriod.id == period_id)
-    )
-    period = result.scalar_one_or_none()
-
-    if not period:
-        raise HTTPException(status_code=404, detail="Payroll period not found")
-
-    # Get time entries for period
-    entries_result = await db.execute(
-        select(TimeEntry).where(TimeEntry.payroll_period_id == period_id)
-    )
-    entries = entries_result.scalars().all()
-
-    # Get commissions for period
-    comm_result = await db.execute(
-        select(Commission).where(Commission.payroll_period_id == period_id)
-    )
-    commissions = comm_result.scalars().all()
-
-    # Group by technician
-    by_technician = {}
-    for entry in entries:
-        tech_id = entry.technician_id
-        if tech_id not in by_technician:
-            by_technician[tech_id] = {
-                "regular_hours": 0,
-                "overtime_hours": 0,
-                "entries": [],
-            }
-        by_technician[tech_id]["regular_hours"] += entry.regular_hours or 0
-        by_technician[tech_id]["overtime_hours"] += entry.overtime_hours or 0
-        by_technician[tech_id]["entries"].append({
-            "id": str(entry.id),
-            "date": entry.entry_date.isoformat(),
-            "regular_hours": entry.regular_hours,
-            "overtime_hours": entry.overtime_hours,
-            "status": entry.status,
-        })
-
-    return {
-        "id": str(period.id),
-        "start_date": period.start_date.isoformat(),
-        "end_date": period.end_date.isoformat(),
-        "status": period.status,
-        "totals": {
-            "regular_hours": period.total_regular_hours,
-            "overtime_hours": period.total_overtime_hours,
-            "gross_pay": period.total_gross_pay,
-            "commissions": period.total_commissions,
-        },
-        "by_technician": by_technician,
-    }
-
-
 @router.post("/{period_id}/calculate")
 async def calculate_payroll(
     period_id: str,
@@ -888,4 +826,73 @@ async def get_payroll_stats(
         "ytd_gross_pay": ytd_gross or 0,
         "ytd_commissions": ytd_commissions or 0,
         "pending_approvals": pending_count,
+    }
+
+
+# Period detail - MUST be after all fixed-path GET routes to avoid catching
+# /time-entries, /commissions, /pay-rates, /stats as period_id
+
+@router.get("/{period_id}")
+async def get_payroll_period(
+    period_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get payroll period with detail."""
+    try:
+        result = await db.execute(
+            select(PayrollPeriod).where(PayrollPeriod.id == period_id)
+        )
+        period = result.scalar_one_or_none()
+    except Exception as e:
+        logger.error(f"Error fetching period {period_id}: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=404, detail="Payroll period not found")
+
+    if not period:
+        raise HTTPException(status_code=404, detail="Payroll period not found")
+
+    # Get time entries for period
+    entries_result = await db.execute(
+        select(TimeEntry).where(TimeEntry.payroll_period_id == period_id)
+    )
+    entries = entries_result.scalars().all()
+
+    # Get commissions for period
+    comm_result = await db.execute(
+        select(Commission).where(Commission.payroll_period_id == period_id)
+    )
+    commissions = comm_result.scalars().all()
+
+    # Group by technician
+    by_technician = {}
+    for entry in entries:
+        tech_id = entry.technician_id
+        if tech_id not in by_technician:
+            by_technician[tech_id] = {
+                "regular_hours": 0,
+                "overtime_hours": 0,
+                "entries": [],
+            }
+        by_technician[tech_id]["regular_hours"] += entry.regular_hours or 0
+        by_technician[tech_id]["overtime_hours"] += entry.overtime_hours or 0
+        by_technician[tech_id]["entries"].append({
+            "id": str(entry.id),
+            "date": entry.entry_date.isoformat(),
+            "regular_hours": entry.regular_hours,
+            "overtime_hours": entry.overtime_hours,
+            "status": entry.status,
+        })
+
+    return {
+        "id": str(period.id),
+        "start_date": period.start_date.isoformat(),
+        "end_date": period.end_date.isoformat(),
+        "status": period.status,
+        "totals": {
+            "regular_hours": period.total_regular_hours,
+            "overtime_hours": period.total_overtime_hours,
+            "gross_pay": period.total_gross_pay,
+            "commissions": period.total_commissions,
+        },
+        "by_technician": by_technician,
     }
