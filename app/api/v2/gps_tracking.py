@@ -817,6 +817,7 @@ async def seed_demo_data(
     """
     import random
     import uuid
+    from sqlalchemy import select, func, and_
     from app.models.technician import Technician
     from app.models.customer import Customer
     from app.models.work_order import WorkOrder
@@ -838,8 +839,12 @@ async def seed_demo_data(
 
     STATUSES = ["available", "en_route", "on_site", "break"]
 
-    # Get active technicians
-    technicians = db.query(Technician).filter(Technician.is_active == True).all()
+    # Get active technicians using async query
+    result = await db.execute(
+        select(Technician).where(Technician.is_active == True)
+    )
+    technicians = result.scalars().all()
+
     if not technicians:
         return {"success": False, "message": "No active technicians found"}
 
@@ -859,10 +864,11 @@ async def seed_demo_data(
         speed = 0 if status in ("on_site", "break") else random.uniform(0, 45)
         heading = random.uniform(0, 360)
 
-        # Check if exists
-        existing = db.query(TechnicianLocation).filter(
-            TechnicianLocation.technician_id == tech.id
-        ).first()
+        # Check if exists using async query
+        existing_result = await db.execute(
+            select(TechnicianLocation).where(TechnicianLocation.technician_id == tech.id)
+        )
+        existing = existing_result.scalar_one_or_none()
 
         if existing:
             existing.latitude = lat
@@ -897,16 +903,24 @@ async def seed_demo_data(
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
 
-    todays_orders = db.query(WorkOrder).filter(
-        WorkOrder.scheduled_date >= today_start,
-        WorkOrder.scheduled_date < today_end,
-        WorkOrder.status != "completed"
-    ).count()
+    count_result = await db.execute(
+        select(func.count()).select_from(WorkOrder).where(
+            and_(
+                WorkOrder.scheduled_date >= today_start,
+                WorkOrder.scheduled_date < today_end,
+                WorkOrder.status != "completed"
+            )
+        )
+    )
+    todays_orders = count_result.scalar() or 0
 
     created_orders = 0
     if todays_orders == 0:
-        # Create demo work orders
-        customers = db.query(Customer).filter(Customer.is_active == True).limit(5).all()
+        # Get customers using async query
+        customers_result = await db.execute(
+            select(Customer).where(Customer.is_active == True).limit(5)
+        )
+        customers = customers_result.scalars().all()
 
         if customers and technicians:
             for i, customer in enumerate(customers[:min(5, len(technicians))]):
@@ -928,7 +942,7 @@ async def seed_demo_data(
                 db.add(wo)
                 created_orders += 1
 
-    db.commit()
+    await db.commit()
 
     return {
         "success": True,
