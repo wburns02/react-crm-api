@@ -504,7 +504,7 @@ async def get_geofence_events(
 
 # ==================== Dispatch Map ====================
 
-@router.get("/dispatch-map", response_model=DispatchMapData)
+@router.get("/dispatch-map")
 async def get_dispatch_map_data(
     include_completed: bool = Query(False, description="Include completed work orders"),
     db: Session = Depends(get_db),
@@ -512,115 +512,128 @@ async def get_dispatch_map_data(
 ):
     """
     Get all data needed for the dispatch map.
-    Includes technician locations, work orders, and geofences.
     Uses raw SQL for async compatibility.
     """
     from sqlalchemy import text
+    import traceback
 
-    technicians = []
-    work_orders = []
+    try:
+        technicians = []
+        work_orders = []
 
-    # Get technician locations with names
-    loc_result = await db.execute(text("""
-        SELECT
-            tl.technician_id, t.first_name, t.last_name,
-            tl.latitude, tl.longitude, tl.accuracy, tl.speed, tl.heading,
-            tl.is_online, tl.battery_level, tl.captured_at, tl.received_at,
-            tl.current_work_order_id, tl.current_status
-        FROM technician_locations tl
-        JOIN technicians t ON tl.technician_id = t.id
-    """))
-    locations = loc_result.fetchall()
+        # Get technician locations with names
+        loc_result = await db.execute(text("""
+            SELECT
+                tl.technician_id, t.first_name, t.last_name,
+                tl.latitude, tl.longitude, tl.accuracy, tl.speed, tl.heading,
+                tl.is_online, tl.battery_level, tl.captured_at, tl.received_at,
+                tl.current_work_order_id, tl.current_status
+            FROM technician_locations tl
+            JOIN technicians t ON tl.technician_id = t.id
+        """))
+        locations = loc_result.fetchall()
 
-    for loc in locations:
-        tech_id, first_name, last_name, lat, lng, accuracy, speed, heading, \
-            is_online, battery, captured_at, received_at, wo_id, status = loc
+        for loc in locations:
+            tech_id, first_name, last_name, lat, lng, accuracy, speed, heading, \
+                is_online, battery, captured_at, received_at, wo_id, status = loc
 
-        # Calculate minutes since update
-        if captured_at:
-            minutes_since = int((datetime.utcnow() - captured_at).total_seconds() / 60)
+            # Calculate minutes since update
+            if captured_at:
+                minutes_since = int((datetime.utcnow() - captured_at).total_seconds() / 60)
+            else:
+                minutes_since = 999
+
+            is_stale = minutes_since > 5
+
+            technicians.append({
+                "id": tech_id,
+                "name": f"{first_name} {last_name}",
+                "latitude": lat,
+                "longitude": lng,
+                "status": status or "available",
+                "current_work_order_id": wo_id,
+                "current_job_address": None,
+                "battery_level": battery,
+                "speed": speed,
+                "last_updated": captured_at.isoformat() if captured_at else None,
+                "is_stale": is_stale
+            })
+
+        # Get work orders for today
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+
+        status_filter = "" if include_completed else "AND wo.status != 'completed'"
+
+        wo_result = await db.execute(text(f"""
+            SELECT
+                wo.id, wo.customer_id, wo.technician_id, wo.assigned_technician,
+                wo.job_type, wo.status, wo.scheduled_date,
+                c.first_name, c.last_name, c.address_line1, c.city, c.state,
+                COALESCE(c.latitude, 32.0) as lat, COALESCE(c.longitude, -96.0) as lng,
+                t.first_name as tech_first, t.last_name as tech_last
+            FROM work_orders wo
+            JOIN customers c ON wo.customer_id = c.id
+            LEFT JOIN technicians t ON wo.technician_id = t.id
+            WHERE wo.scheduled_date >= :today_start
+              AND wo.scheduled_date < :today_end
+              {status_filter}
+            ORDER BY wo.scheduled_date
+        """), {"today_start": today_start, "today_end": today_end})
+        work_orders_db = wo_result.fetchall()
+
+        for wo in work_orders_db:
+            wo_id, cust_id, tech_id, assigned_tech, job_type, status, sched_date, \
+                cust_first, cust_last, addr, city, state, lat, lng, tech_first, tech_last = wo
+
+            tech_name = f"{tech_first} {tech_last}" if tech_first else assigned_tech
+            address = f"{addr}, {city}, {state}" if addr else "No address"
+
+            work_orders.append({
+                "id": wo_id,
+                "customer_name": f"{cust_first} {cust_last}",
+                "address": address,
+                "latitude": float(lat),
+                "longitude": float(lng),
+                "status": status,
+                "scheduled_time": sched_date.isoformat() if sched_date else None,
+                "assigned_technician_id": tech_id,
+                "assigned_technician_name": tech_name,
+                "service_type": job_type or "Service",
+                "priority": "normal"
+            })
+
+        # Calculate map center
+        all_points = [(t["latitude"], t["longitude"]) for t in technicians] + [(w["latitude"], w["longitude"]) for w in work_orders]
+        if all_points:
+            center_lat = sum(p[0] for p in all_points) / len(all_points)
+            center_lng = sum(p[1] for p in all_points) / len(all_points)
         else:
-            minutes_since = 999
+            center_lat = 30.27
+            center_lng = -97.74
 
-        is_stale = minutes_since > 5
+        return {
+            "technicians": technicians,
+            "work_orders": work_orders,
+            "geofences": [],
+            "center_latitude": center_lat,
+            "center_longitude": center_lng,
+            "zoom_level": 10,
+            "last_refresh": datetime.utcnow().isoformat()
+        }
 
-        technicians.append(DispatchMapTechnician(
-            id=tech_id,
-            name=f"{first_name} {last_name}",
-            latitude=lat,
-            longitude=lng,
-            status=status or "available",
-            current_work_order_id=wo_id,
-            current_job_address=None,  # Simplified - would need another query
-            battery_level=battery,
-            speed=speed,
-            last_updated=captured_at,
-            is_stale=is_stale
-        ))
-
-    # Get work orders for today
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
-
-    status_filter = "" if include_completed else "AND wo.status != 'completed'"
-
-    wo_result = await db.execute(text(f"""
-        SELECT
-            wo.id, wo.customer_id, wo.technician_id, wo.assigned_technician,
-            wo.job_type, wo.status, wo.scheduled_date,
-            c.first_name, c.last_name, c.address_line1, c.city, c.state,
-            COALESCE(c.latitude, 32.0) as lat, COALESCE(c.longitude, -96.0) as lng,
-            t.first_name as tech_first, t.last_name as tech_last
-        FROM work_orders wo
-        JOIN customers c ON wo.customer_id = c.id
-        LEFT JOIN technicians t ON wo.technician_id = t.id
-        WHERE wo.scheduled_date >= :today_start
-          AND wo.scheduled_date < :today_end
-          {status_filter}
-        ORDER BY wo.scheduled_date
-    """), {"today_start": today_start, "today_end": today_end})
-    work_orders_db = wo_result.fetchall()
-
-    for wo in work_orders_db:
-        wo_id, cust_id, tech_id, assigned_tech, job_type, status, sched_date, \
-            cust_first, cust_last, addr, city, state, lat, lng, tech_first, tech_last = wo
-
-        tech_name = f"{tech_first} {tech_last}" if tech_first else assigned_tech
-        address = f"{addr}, {city}, {state}" if addr else "No address"
-
-        work_orders.append(DispatchMapWorkOrder(
-            id=wo_id,
-            customer_name=f"{cust_first} {cust_last}",
-            address=address,
-            latitude=float(lat),
-            longitude=float(lng),
-            status=status,
-            scheduled_time=sched_date,
-            assigned_technician_id=tech_id,
-            assigned_technician_name=tech_name,
-            service_type=job_type or "Service",
-            priority="normal"
-        ))
-
-    # Calculate map center (average of all points)
-    all_points = [(t.latitude, t.longitude) for t in technicians] + [(w.latitude, w.longitude) for w in work_orders]
-    if all_points:
-        center_lat = sum(p[0] for p in all_points) / len(all_points)
-        center_lng = sum(p[1] for p in all_points) / len(all_points)
-    else:
-        # Default to Texas
-        center_lat = 30.27
-        center_lng = -97.74
-
-    return DispatchMapData(
-        technicians=technicians,
-        work_orders=work_orders,
-        geofences=[],  # Simplified - geofences not critical for demo
-        center_latitude=center_lat,
-        center_longitude=center_lng,
-        zoom_level=10,
-        last_refresh=datetime.utcnow()
-    )
+    except Exception as e:
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "technicians": [],
+            "work_orders": [],
+            "geofences": [],
+            "center_latitude": 30.27,
+            "center_longitude": -97.74,
+            "zoom_level": 10,
+            "last_refresh": datetime.utcnow().isoformat()
+        }
 
 
 # ==================== GPS Configuration ====================
