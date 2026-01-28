@@ -1008,9 +1008,11 @@ async def list_pay_rates(
             {
                 "id": str(r.id),
                 "technician_id": r.technician_id,
+                "pay_type": r.pay_type or "hourly",
                 "hourly_rate": r.hourly_rate,
-                "overtime_rate": r.hourly_rate * (r.overtime_multiplier or 1.5),
+                "overtime_rate": (r.hourly_rate or 0) * (r.overtime_multiplier or 1.5),
                 "overtime_multiplier": r.overtime_multiplier,
+                "salary_amount": r.salary_amount,
                 "commission_rate": r.job_commission_rate or 0,
                 "job_commission_rate": r.job_commission_rate,
                 "upsell_commission_rate": r.upsell_commission_rate,
@@ -1050,8 +1052,10 @@ async def create_pay_rate(
     # Create new rate
     rate = TechnicianPayRate(
         technician_id=request.technician_id,
+        pay_type=request.pay_type or "hourly",
         hourly_rate=request.hourly_rate,
         overtime_multiplier=(request.overtime_rate / request.hourly_rate) if request.hourly_rate and request.overtime_rate else 1.5,
+        salary_amount=request.salary_amount,
         job_commission_rate=request.commission_rate or 0,
         upsell_commission_rate=0,
         weekly_overtime_threshold=40,
@@ -1066,8 +1070,10 @@ async def create_pay_rate(
     return {
         "id": str(rate.id),
         "technician_id": rate.technician_id,
+        "pay_type": rate.pay_type or "hourly",
         "hourly_rate": rate.hourly_rate,
-        "overtime_rate": rate.hourly_rate * (rate.overtime_multiplier or 1.5),
+        "overtime_rate": (rate.hourly_rate or 0) * (rate.overtime_multiplier or 1.5),
+        "salary_amount": rate.salary_amount,
         "commission_rate": rate.job_commission_rate or 0,
         "effective_date": rate.effective_date.isoformat(),
         "is_active": rate.is_active,
@@ -1091,10 +1097,14 @@ async def update_pay_rate(
         raise HTTPException(status_code=404, detail="Pay rate not found")
 
     # Update fields if provided
+    if request.pay_type is not None:
+        rate.pay_type = request.pay_type
     if request.hourly_rate is not None:
         rate.hourly_rate = request.hourly_rate
     if request.overtime_rate is not None and request.hourly_rate:
         rate.overtime_multiplier = request.overtime_rate / request.hourly_rate
+    if request.salary_amount is not None:
+        rate.salary_amount = request.salary_amount
     if request.commission_rate is not None:
         rate.job_commission_rate = request.commission_rate
     if request.is_active is not None:
@@ -1108,8 +1118,10 @@ async def update_pay_rate(
     return {
         "id": str(rate.id),
         "technician_id": rate.technician_id,
+        "pay_type": rate.pay_type or "hourly",
         "hourly_rate": rate.hourly_rate,
-        "overtime_rate": rate.hourly_rate * (rate.overtime_multiplier or 1.5),
+        "overtime_rate": (rate.hourly_rate or 0) * (rate.overtime_multiplier or 1.5),
+        "salary_amount": rate.salary_amount,
         "commission_rate": rate.job_commission_rate or 0,
         "effective_date": rate.effective_date.isoformat(),
         "is_active": rate.is_active,
