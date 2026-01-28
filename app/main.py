@@ -478,6 +478,11 @@ async def fix_table_schema():
 
     # Columns to add to each table (column_name, type)
     missing_columns = {
+        "activities": [
+            ("created_by", "VARCHAR(100)"),
+            ("activity_date", "TIMESTAMP WITH TIME ZONE"),
+            ("updated_at", "TIMESTAMP WITH TIME ZONE"),
+        ],
         "customers": [
             ("lead_notes", "TEXT"),
             ("prospect_stage", "VARCHAR(50)"),
