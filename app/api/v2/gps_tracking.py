@@ -814,14 +814,11 @@ async def seed_demo_data(
     Seed demo GPS data for testing the tracking page.
     Creates technician locations and work orders for today.
     Requires authentication.
+    Uses raw SQL for async compatibility.
     """
     import random
     import uuid
-    from sqlalchemy import select, func, and_
-    from app.models.technician import Technician
-    from app.models.customer import Customer
-    from app.models.work_order import WorkOrder
-    from app.models.gps_tracking import TechnicianLocation
+    from sqlalchemy import text
 
     # Texas locations for demo
     TEXAS_LOCATIONS = [
@@ -839,11 +836,11 @@ async def seed_demo_data(
 
     STATUSES = ["available", "en_route", "on_site", "break"]
 
-    # Get active technicians using async query
+    # Get active technicians using raw SQL
     result = await db.execute(
-        select(Technician).where(Technician.is_active == True)
+        text("SELECT id, first_name, last_name FROM technicians WHERE is_active = true")
     )
-    technicians = result.scalars().all()
+    technicians = result.fetchall()
 
     if not technicians:
         return {"success": False, "message": "No active technicians found"}
@@ -854,6 +851,7 @@ async def seed_demo_data(
 
     # Create/update locations for each technician
     for i, tech in enumerate(technicians):
+        tech_id, first_name, last_name = tech
         location = TEXAS_LOCATIONS[i % len(TEXAS_LOCATIONS)]
 
         # Add randomness to position
@@ -864,39 +862,51 @@ async def seed_demo_data(
         speed = 0 if status in ("on_site", "break") else random.uniform(0, 45)
         heading = random.uniform(0, 360)
 
-        # Check if exists using async query
+        # Check if location exists
         existing_result = await db.execute(
-            select(TechnicianLocation).where(TechnicianLocation.technician_id == tech.id)
+            text("SELECT id FROM technician_locations WHERE technician_id = :tech_id"),
+            {"tech_id": tech_id}
         )
-        existing = existing_result.scalar_one_or_none()
+        existing = existing_result.fetchone()
 
         if existing:
-            existing.latitude = lat
-            existing.longitude = lng
-            existing.accuracy = random.uniform(5, 25)
-            existing.speed = speed
-            existing.heading = heading
-            existing.is_online = True
-            existing.battery_level = battery
-            existing.captured_at = now
-            existing.received_at = now
-            existing.current_status = status
+            await db.execute(
+                text("""
+                    UPDATE technician_locations SET
+                        latitude = :lat, longitude = :lng, accuracy = :accuracy,
+                        speed = :speed, heading = :heading, is_online = true,
+                        battery_level = :battery, captured_at = :captured_at,
+                        received_at = :received_at, current_status = :status
+                    WHERE technician_id = :tech_id
+                """),
+                {
+                    "tech_id": tech_id, "lat": lat, "lng": lng,
+                    "accuracy": random.uniform(5, 25), "speed": speed,
+                    "heading": heading, "battery": battery,
+                    "captured_at": now, "received_at": now, "status": status
+                }
+            )
             updated_locations += 1
         else:
-            new_location = TechnicianLocation(
-                technician_id=tech.id,
-                latitude=lat,
-                longitude=lng,
-                accuracy=random.uniform(5, 25),
-                speed=speed,
-                heading=heading,
-                is_online=True,
-                battery_level=battery,
-                captured_at=now,
-                received_at=now,
-                current_status=status
+            await db.execute(
+                text("""
+                    INSERT INTO technician_locations (
+                        technician_id, latitude, longitude, accuracy,
+                        speed, heading, is_online, battery_level,
+                        captured_at, received_at, current_status
+                    ) VALUES (
+                        :tech_id, :lat, :lng, :accuracy,
+                        :speed, :heading, true, :battery,
+                        :captured_at, :received_at, :status
+                    )
+                """),
+                {
+                    "tech_id": tech_id, "lat": lat, "lng": lng,
+                    "accuracy": random.uniform(5, 25), "speed": speed,
+                    "heading": heading, "battery": battery,
+                    "captured_at": now, "received_at": now, "status": status
+                }
             )
-            db.add(new_location)
             created_locations += 1
 
     # Check for today's work orders
@@ -904,42 +914,56 @@ async def seed_demo_data(
     today_end = today_start + timedelta(days=1)
 
     count_result = await db.execute(
-        select(func.count()).select_from(WorkOrder).where(
-            and_(
-                WorkOrder.scheduled_date >= today_start,
-                WorkOrder.scheduled_date < today_end,
-                WorkOrder.status != "completed"
-            )
-        )
+        text("""
+            SELECT COUNT(*) FROM work_orders
+            WHERE scheduled_date >= :today_start
+              AND scheduled_date < :today_end
+              AND status != 'completed'
+        """),
+        {"today_start": today_start, "today_end": today_end}
     )
     todays_orders = count_result.scalar() or 0
 
     created_orders = 0
     if todays_orders == 0:
-        # Get customers using async query
+        # Get customers
         customers_result = await db.execute(
-            select(Customer).where(Customer.is_active == True).limit(5)
+            text("SELECT id, first_name, last_name FROM customers WHERE is_active = true LIMIT 5")
         )
-        customers = customers_result.scalars().all()
+        customers = customers_result.fetchall()
 
         if customers and technicians:
             for i, customer in enumerate(customers[:min(5, len(technicians))]):
+                cust_id, cust_first, cust_last = customer
                 tech = technicians[i % len(technicians)]
+                tech_id, tech_first, tech_last = tech
                 scheduled_time = today_start + timedelta(hours=8 + random.randint(0, 8))
 
-                wo = WorkOrder(
-                    id=str(uuid.uuid4()),
-                    customer_id=customer.id,
-                    technician_id=tech.id,
-                    assigned_technician=f"{tech.first_name} {tech.last_name}",
-                    job_type=random.choice(["pumping", "inspection", "maintenance"]),
-                    status=random.choice(["scheduled", "in_progress"]),
-                    scheduled_date=scheduled_time,
-                    notes="[GPS DEMO] Test work order for GPS tracking demo",
-                    created_at=now,
-                    updated_at=now
+                await db.execute(
+                    text("""
+                        INSERT INTO work_orders (
+                            id, customer_id, technician_id, assigned_technician,
+                            job_type, status, scheduled_date, notes,
+                            created_at, updated_at
+                        ) VALUES (
+                            :id, :customer_id, :tech_id, :tech_name,
+                            :job_type, :status, :scheduled_date, :notes,
+                            :created_at, :updated_at
+                        )
+                    """),
+                    {
+                        "id": str(uuid.uuid4()),
+                        "customer_id": cust_id,
+                        "tech_id": tech_id,
+                        "tech_name": f"{tech_first} {tech_last}",
+                        "job_type": random.choice(["pumping", "inspection", "maintenance"]),
+                        "status": random.choice(["scheduled", "in_progress"]),
+                        "scheduled_date": scheduled_time,
+                        "notes": "[GPS DEMO] Test work order for GPS tracking demo",
+                        "created_at": now,
+                        "updated_at": now
+                    }
                 )
-                db.add(wo)
                 created_orders += 1
 
     await db.commit()
