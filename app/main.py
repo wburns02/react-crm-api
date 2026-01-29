@@ -381,7 +381,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.3",  # Work Orders API also returns real customer names
+        "version": "2.7.4",  # Job costing calculation endpoints
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
