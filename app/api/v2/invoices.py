@@ -7,6 +7,7 @@ import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.invoice import Invoice, InvoiceStatus
+from app.models.customer import Customer
 from app.schemas.invoice import (
     InvoiceCreate,
     InvoiceUpdate,
@@ -39,11 +40,47 @@ def customer_id_to_uuid(customer_id: int) -> uuid.UUID:
     return uuid.uuid5(CUSTOMER_UUID_NAMESPACE, str(customer_id))
 
 
-def invoice_to_response(invoice: Invoice) -> dict:
+async def find_customer_by_invoice_uuid(db, invoice_customer_id: uuid.UUID) -> Optional[Customer]:
+    """Find the Customer whose ID generates the given UUID.
+
+    Since invoice.customer_id is a UUID derived from customer.id (integer),
+    we need to find the customer by computing UUIDs and matching.
+
+    Args:
+        db: Database session
+        invoice_customer_id: The UUID stored in invoice.customer_id
+
+    Returns:
+        Customer instance if found, None otherwise
+    """
+    if not invoice_customer_id:
+        return None
+
+    try:
+        # Get all customers (this could be optimized with caching or a mapping table)
+        result = await db.execute(select(Customer))
+        customers = result.scalars().all()
+
+        # Find the customer whose UUID matches
+        for customer in customers:
+            if customer.id and customer_id_to_uuid(customer.id) == invoice_customer_id:
+                return customer
+
+        return None
+    except Exception as e:
+        logger.warning(f"Error finding customer for invoice UUID: {e}")
+        return None
+
+
+def invoice_to_response(invoice: Invoice, customer: Optional[Customer] = None) -> dict:
     """Convert Invoice model to response dict.
 
     Frontend expects subtotal, tax, total, tax_rate fields.
     We calculate these from line_items or use amount as total.
+
+    Args:
+        invoice: The Invoice model instance
+        customer: Optional Customer model instance for enrichment
     """
     line_items = invoice.line_items or []
 
@@ -62,12 +99,25 @@ def invoice_to_response(invoice: Invoice) -> dict:
     # Estimate tax_rate
     tax_rate = (tax / subtotal * 100) if subtotal > 0 else 0
 
+    # Build customer data if available
+    customer_name = None
+    customer_data = None
+    if customer:
+        customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip() or None
+        customer_data = {
+            "id": customer.id,
+            "first_name": customer.first_name,
+            "last_name": customer.last_name,
+            "email": customer.email,
+            "phone": customer.phone,
+        }
+
     return {
         "id": str(invoice.id),
         "invoice_number": invoice.invoice_number,
         "customer_id": str(invoice.customer_id) if invoice.customer_id else None,
-        "customer_name": None,  # Would need to join to get this
-        "customer": None,
+        "customer_name": customer_name,
+        "customer": customer_data,
         "work_order_id": str(invoice.work_order_id) if invoice.work_order_id else None,
         "status": invoice.status or "draft",
         "line_items": line_items,
@@ -146,7 +196,7 @@ async def get_invoice(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get a single invoice by ID."""
+    """Get a single invoice by ID with customer data."""
     try:
         result = await db.execute(
             select(Invoice).where(Invoice.id == uuid.UUID(invoice_id))
@@ -159,7 +209,12 @@ async def get_invoice(
                 detail="Invoice not found",
             )
 
-        return invoice_to_response(invoice)
+        # Fetch customer data to enrich response
+        customer = None
+        if invoice.customer_id:
+            customer = await find_customer_by_invoice_uuid(db, invoice.customer_id)
+
+        return invoice_to_response(invoice, customer)
     except HTTPException:
         raise
     except Exception as e:
