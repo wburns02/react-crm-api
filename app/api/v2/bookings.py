@@ -9,7 +9,7 @@ from datetime import datetime, time
 from decimal import Decimal
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, text
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.booking import Booking
@@ -45,6 +45,75 @@ TIME_SLOTS = {
     "any": (time(8, 0), time(17, 0)),
 }
 
+# Track if table has been verified this session
+_table_verified = False
+
+
+async def ensure_bookings_table(db: DbSession) -> None:
+    """Create bookings table if it doesn't exist (fallback for missed migrations)."""
+    global _table_verified
+    if _table_verified:
+        return
+
+    try:
+        # Check if table exists
+        result = await db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'bookings'
+            )
+        """))
+        exists = result.scalar()
+
+        if not exists:
+            logger.warning("Bookings table not found - creating via fallback SQL")
+            await db.execute(text("""
+                CREATE TABLE IF NOT EXISTS bookings (
+                    id VARCHAR(36) PRIMARY KEY,
+                    customer_id INTEGER REFERENCES customers(id),
+                    customer_first_name VARCHAR(100) NOT NULL,
+                    customer_last_name VARCHAR(100) NOT NULL,
+                    customer_email VARCHAR(255),
+                    customer_phone VARCHAR(20) NOT NULL,
+                    service_address TEXT,
+                    service_type VARCHAR(50) NOT NULL DEFAULT 'pumping',
+                    scheduled_date DATE NOT NULL,
+                    time_window_start TIME,
+                    time_window_end TIME,
+                    time_slot VARCHAR(20),
+                    base_price NUMERIC(10, 2) NOT NULL,
+                    included_gallons INTEGER NOT NULL DEFAULT 1750,
+                    overage_rate NUMERIC(10, 4) NOT NULL DEFAULT 0.45,
+                    actual_gallons INTEGER,
+                    overage_gallons INTEGER,
+                    overage_amount NUMERIC(10, 2),
+                    final_amount NUMERIC(10, 2),
+                    clover_charge_id VARCHAR(100),
+                    preauth_amount NUMERIC(10, 2),
+                    payment_status VARCHAR(20) DEFAULT 'pending',
+                    captured_at TIMESTAMP WITH TIME ZONE,
+                    is_test BOOLEAN NOT NULL DEFAULT false,
+                    status VARCHAR(20) DEFAULT 'confirmed',
+                    overage_acknowledged BOOLEAN NOT NULL DEFAULT false,
+                    sms_consent BOOLEAN NOT NULL DEFAULT false,
+                    customer_notes TEXT,
+                    internal_notes TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE
+                )
+            """))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS ix_bookings_scheduled_date ON bookings(scheduled_date)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS ix_bookings_customer_phone ON bookings(customer_phone)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS ix_bookings_payment_status ON bookings(payment_status)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS ix_bookings_status ON bookings(status)"))
+            await db.commit()
+            logger.info("Bookings table created successfully via fallback")
+
+        _table_verified = True
+    except Exception as e:
+        logger.error(f"Failed to ensure bookings table: {e}")
+        # Don't raise - let the actual operation fail with a more specific error
+
 
 @router.get("/pricing", response_model=PricingInfo)
 async def get_pricing(
@@ -73,6 +142,9 @@ async def create_booking(
 
     Set test_mode=true to simulate payment without calling Clover.
     """
+    # Ensure bookings table exists (fallback for missed migrations)
+    await ensure_bookings_table(db)
+
     # Get pricing for service type
     if booking_data.service_type != "pumping":
         raise HTTPException(status_code=400, detail="Only pumping service is available for direct booking")
