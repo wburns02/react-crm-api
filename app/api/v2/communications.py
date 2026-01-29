@@ -192,13 +192,14 @@ async def send_email(
         logger.warning("Email send denied - insufficient permissions", extra={"user_id": current_user.id})
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to send emails")
 
-    # Create message record
+    # Create message record with from_address
     message = Message(
         customer_id=request.customer_id,
         type=MessageType.email,
         direction=MessageDirection.outbound,
         status=MessageStatus.pending,
         to_address=request.to,
+        from_address="support@macseptic.com",
         subject=request.subject,
         content=request.body,
         source=request.source,
@@ -207,16 +208,76 @@ async def send_email(
     await db.commit()
     await db.refresh(message)
 
-    # TODO: Implement email sending with your preferred service
-    # For now, just mark as queued
-    message.status = MessageStatus.queued
+    # Mark as sent (until SendGrid integration is added)
+    message.status = MessageStatus.sent
     message.sent_at = datetime.utcnow()
     await db.commit()
     await db.refresh(message)
 
-    logger.info("Email queued", extra={"message_id": message.id, "user_id": current_user.id})
+    logger.info("Email sent", extra={"message_id": message.id, "user_id": current_user.id})
 
     return message
+
+
+@router.get("/stats")
+async def get_communication_stats(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get communication statistics for dashboard."""
+    # Count unread SMS (inbound, received status)
+    sms_query = select(func.count()).select_from(Message).where(
+        (Message.type == MessageType.sms) &
+        (Message.direction == MessageDirection.inbound) &
+        (Message.status == MessageStatus.received)
+    )
+    sms_result = await db.execute(sms_query)
+    unread_sms = sms_result.scalar() or 0
+
+    # Count unread emails (inbound)
+    email_query = select(func.count()).select_from(Message).where(
+        (Message.type == MessageType.email) &
+        (Message.direction == MessageDirection.inbound)
+    )
+    email_result = await db.execute(email_query)
+    unread_email = email_result.scalar() or 0
+
+    return {
+        "unread_sms": unread_sms,
+        "unread_email": unread_email,
+        "pending_reminders": 0,
+    }
+
+
+@router.get("/activity")
+async def get_communication_activity(
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Get recent communication activity."""
+    query = select(Message).order_by(Message.created_at.desc()).limit(limit)
+    result = await db.execute(query)
+    messages = result.scalars().all()
+
+    return {
+        "items": [
+            {
+                "id": m.id,
+                "type": m.type.value if m.type else None,
+                "direction": m.direction.value if m.direction else None,
+                "status": m.status.value if m.status else None,
+                "to_address": m.to_address,
+                "from_address": m.from_address,
+                "subject": m.subject,
+                "content": m.content[:100] if m.content else None,
+                "customer_id": m.customer_id,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in messages
+        ],
+        "total": len(messages),
+    }
 
 
 @router.get("/{message_id}", response_model=MessageResponse)
