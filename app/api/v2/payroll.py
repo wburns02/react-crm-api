@@ -372,6 +372,13 @@ async def list_time_entries(
 
         result = await db.execute(query)
         entries = result.scalars().all()
+
+        # Resolve technician names
+        tech_ids = list(set(e.technician_id for e in entries if e.technician_id))
+        technicians = {}
+        if tech_ids:
+            tech_result = await db.execute(select(Technician).where(Technician.id.in_(tech_ids)))
+            technicians = {str(t.id): f"{t.first_name} {t.last_name}" for t in tech_result.scalars().all()}
     except Exception as e:
         logger.error(f"Error fetching time entries: {type(e).__name__}: {str(e)}")
         return {"entries": [], "total": 0, "page": 1, "page_size": page_size}
@@ -381,6 +388,7 @@ async def list_time_entries(
             {
                 "id": str(e.id),
                 "technician_id": e.technician_id,
+                "technician_name": technicians.get(e.technician_id, "Unknown Technician"),
                 "date": e.entry_date.isoformat(),
                 "entry_date": e.entry_date.isoformat(),
                 "clock_in": e.clock_in.isoformat() if e.clock_in else None,
@@ -427,7 +435,30 @@ async def create_time_entry(
     await db.commit()
     await db.refresh(entry)
 
-    return {"id": str(entry.id), "hours": hours}
+    # Resolve technician name
+    tech_name = "Unknown Technician"
+    if entry.technician_id:
+        tech_result = await db.execute(select(Technician).where(Technician.id == entry.technician_id))
+        tech = tech_result.scalar_one_or_none()
+        if tech:
+            tech_name = f"{tech.first_name} {tech.last_name}"
+
+    return {
+        "id": str(entry.id),
+        "technician_id": entry.technician_id,
+        "technician_name": tech_name,
+        "date": entry.entry_date.isoformat(),
+        "entry_date": entry.entry_date.isoformat(),
+        "clock_in": entry.clock_in.isoformat() if entry.clock_in else None,
+        "clock_out": entry.clock_out.isoformat() if entry.clock_out else None,
+        "regular_hours": entry.regular_hours or 0,
+        "overtime_hours": entry.overtime_hours or 0,
+        "break_minutes": entry.break_minutes or 0,
+        "entry_type": entry.entry_type,
+        "status": entry.status,
+        "work_order_id": entry.work_order_id,
+        "notes": entry.notes,
+    }
 
 
 class TimeEntryUpdate(BaseModel):
@@ -489,11 +520,20 @@ async def update_time_entry(
     await db.commit()
     await db.refresh(entry)
 
+    # Resolve technician name
+    tech_name = "Unknown Technician"
+    if entry.technician_id:
+        tech_result = await db.execute(select(Technician).where(Technician.id == entry.technician_id))
+        tech = tech_result.scalar_one_or_none()
+        if tech:
+            tech_name = f"{tech.first_name} {tech.last_name}"
+
     logger.info(f"Updated time entry {entry_id} by {current_user.email}")
 
     return {
         "id": str(entry.id),
         "technician_id": entry.technician_id,
+        "technician_name": tech_name,
         "date": entry.entry_date.isoformat(),
         "clock_in": entry.clock_in.isoformat() if entry.clock_in else None,
         "clock_out": entry.clock_out.isoformat() if entry.clock_out else None,
