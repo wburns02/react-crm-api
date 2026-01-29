@@ -176,8 +176,21 @@ async def list_invoices(
         result = await db.execute(query)
         invoices = result.scalars().all()
 
+        # Build customer UUID lookup map for efficient enrichment
+        customer_result = await db.execute(select(Customer))
+        customers = customer_result.scalars().all()
+        customer_uuid_map = {
+            customer_id_to_uuid(c.id): c for c in customers if c.id
+        }
+
+        # Enrich invoices with customer data
+        items = []
+        for inv in invoices:
+            customer = customer_uuid_map.get(inv.customer_id) if inv.customer_id else None
+            items.append(invoice_to_response(inv, customer))
+
         return {
-            "items": [invoice_to_response(inv) for inv in invoices],
+            "items": items,
             "total": total,
             "page": page,
             "page_size": page_size,
