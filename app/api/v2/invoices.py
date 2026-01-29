@@ -104,10 +104,11 @@ def invoice_to_response(invoice: Invoice, customer: Optional[Customer] = None) -
     customer_data = None
     if customer:
         customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip() or None
+        # CustomerSummary schema expects: id as str, first_name/last_name as required str
         customer_data = {
-            "id": customer.id,
-            "first_name": customer.first_name,
-            "last_name": customer.last_name,
+            "id": str(customer.id),  # Convert int to string for schema
+            "first_name": customer.first_name or "",  # Required, default to empty
+            "last_name": customer.last_name or "",  # Required, default to empty
             "email": customer.email,
             "phone": customer.phone,
         }
