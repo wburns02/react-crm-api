@@ -10,7 +10,7 @@ Create Date: 2026-01-29
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy import inspect
+from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision = '031_fix_pay_rates_columns'
@@ -19,38 +19,48 @@ branch_labels = None
 depends_on = None
 
 
-def column_exists(table_name, column_name):
-    """Check if a column exists in a table."""
-    bind = op.get_bind()
-    insp = inspect(bind)
-    columns = [c['name'] for c in insp.get_columns(table_name)]
-    return column_name in columns
+def column_exists(conn, table_name, column_name):
+    """Check if a column exists in a table using raw SQL."""
+    result = conn.execute(text(
+        """SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = :table_name AND column_name = :column_name
+        )"""
+    ), {"table_name": table_name, "column_name": column_name})
+    return result.scalar()
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+
     # Add pay_type column if missing
-    if not column_exists('technician_pay_rates', 'pay_type'):
+    if not column_exists(conn, 'technician_pay_rates', 'pay_type'):
         op.add_column('technician_pay_rates', sa.Column('pay_type', sa.String(20), server_default='hourly', nullable=False))
         print("Added pay_type column to technician_pay_rates")
     else:
         print("pay_type column already exists")
 
     # Add salary_amount column if missing
-    if not column_exists('technician_pay_rates', 'salary_amount'):
+    if not column_exists(conn, 'technician_pay_rates', 'salary_amount'):
         op.add_column('technician_pay_rates', sa.Column('salary_amount', sa.Float(), nullable=True))
         print("Added salary_amount column to technician_pay_rates")
     else:
         print("salary_amount column already exists")
 
     # Make hourly_rate nullable (for salary employees)
-    # Note: This is idempotent - if already nullable, this is a no-op
-    try:
+    # Check if it's already nullable
+    result = conn.execute(text(
+        """SELECT is_nullable FROM information_schema.columns
+           WHERE table_name = 'technician_pay_rates' AND column_name = 'hourly_rate'"""
+    ))
+    row = result.fetchone()
+    if row and row[0] == 'NO':
         op.alter_column('technician_pay_rates', 'hourly_rate',
                         existing_type=sa.Float(),
                         nullable=True)
         print("Made hourly_rate nullable")
-    except Exception as e:
-        print(f"Note: hourly_rate alter column: {e}")
+    else:
+        print("hourly_rate is already nullable")
 
 
 def downgrade() -> None:
