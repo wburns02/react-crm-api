@@ -115,6 +115,17 @@ async def ensure_bookings_table(db: DbSession) -> None:
             await db.commit()
             logger.info("Bookings table created successfully via fallback")
 
+        # Ensure work_order_id column exists (added later)
+        try:
+            await db.execute(
+                text("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS work_order_id VARCHAR(36) REFERENCES work_orders(id)")
+            )
+            await db.commit()
+            logger.info("Added work_order_id column to bookings table")
+        except Exception as col_err:
+            await db.rollback()  # Column might already exist or FK constraint issue
+            logger.debug(f"work_order_id column check: {col_err}")
+
         _table_verified = True
     except Exception as e:
         logger.error(f"Failed to ensure bookings table: {e}")
