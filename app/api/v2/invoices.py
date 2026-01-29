@@ -187,6 +187,8 @@ async def list_invoices(
     status_filter: Optional[str] = Query(None, alias="status"),
     customer_id: Optional[str] = None,
     search: Optional[str] = Query(None, description="Search invoice number, customer name, email, phone, address"),
+    date_from: Optional[str] = Query(None, description="Filter invoices from this date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Filter invoices until this date (YYYY-MM-DD)"),
 ):
     """List invoices with pagination, filtering, and search."""
     try:
@@ -227,6 +229,21 @@ async def list_invoices(
                 else:
                     # No customer matches, only search invoice number
                     query = query.where(invoice_number_filter)
+
+        # Apply date range filters (filter by due_date)
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, "%Y-%m-%d").date()
+                query = query.where(Invoice.due_date >= from_date)
+            except ValueError:
+                pass  # Invalid date format, skip filter
+
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, "%Y-%m-%d").date()
+                query = query.where(Invoice.due_date <= to_date)
+            except ValueError:
+                pass  # Invalid date format, skip filter
 
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
