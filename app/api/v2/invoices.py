@@ -148,7 +148,7 @@ async def list_invoices(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status: Optional[str] = None,
+    status_filter: Optional[str] = Query(None, alias="status"),
     customer_id: Optional[str] = None,
 ):
     """List invoices with pagination and filtering."""
@@ -157,8 +157,8 @@ async def list_invoices(
         query = select(Invoice)
 
         # Apply filters
-        if status:
-            query = query.where(Invoice.status == status)
+        if status_filter:
+            query = query.where(Invoice.status == status_filter)
 
         if customer_id:
             query = query.where(Invoice.customer_id == uuid.UUID(customer_id))
