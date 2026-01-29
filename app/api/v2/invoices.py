@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from typing import Optional
 from datetime import datetime, date
 import uuid
@@ -70,6 +70,41 @@ async def find_customer_by_invoice_uuid(db, invoice_customer_id: uuid.UUID) -> O
     except Exception as e:
         logger.warning(f"Error finding customer for invoice UUID: {e}")
         return None
+
+
+async def build_customer_uuid_map(db, invoice_customer_ids: set) -> dict:
+    """Build a mapping of invoice customer UUIDs to Customer objects.
+
+    This is O(n) for customers, but only called ONCE per request instead of
+    once per invoice. Much more efficient for list operations.
+
+    Args:
+        db: Database session
+        invoice_customer_ids: Set of customer UUIDs from invoices
+
+    Returns:
+        Dict mapping invoice customer UUID to Customer instance
+    """
+    if not invoice_customer_ids:
+        return {}
+
+    try:
+        # Fetch all customers in one query
+        result = await db.execute(select(Customer))
+        customers = result.scalars().all()
+
+        # Build map: invoice_uuid -> customer
+        uuid_map = {}
+        for customer in customers:
+            if customer.id:
+                customer_uuid = customer_id_to_uuid(customer.id)
+                if customer_uuid in invoice_customer_ids:
+                    uuid_map[customer_uuid] = customer
+
+        return uuid_map
+    except Exception as e:
+        logger.warning(f"Error building customer UUID map: {e}")
+        return {}
 
 
 def invoice_to_response(invoice: Invoice, customer: Optional[Customer] = None) -> dict:
@@ -151,18 +186,54 @@ async def list_invoices(
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = Query(None, alias="status"),
     customer_id: Optional[str] = None,
+    search: Optional[str] = Query(None, description="Search invoice number, customer name, email, phone, address"),
 ):
-    """List invoices with pagination and filtering."""
+    """List invoices with pagination, filtering, and search."""
     try:
         # Base query
         query = select(Invoice)
 
-        # Apply filters
+        # Apply status filter
         if status_filter:
             query = query.where(Invoice.status == status_filter)
 
         if customer_id:
             query = query.where(Invoice.customer_id == uuid.UUID(customer_id))
+
+        # Handle search - requires finding matching customer UUIDs first
+        if search:
+            search_term = search.strip()
+            if search_term:
+                # 1. Find customers matching the search term
+                customer_query = select(Customer.id).where(
+                    or_(
+                        Customer.first_name.ilike(f"%{search_term}%"),
+                        Customer.last_name.ilike(f"%{search_term}%"),
+                        Customer.phone.ilike(f"%{search_term}%"),
+                        Customer.email.ilike(f"%{search_term}%"),
+                        Customer.address_line1.ilike(f"%{search_term}%"),
+                    )
+                )
+                customer_result = await db.execute(customer_query)
+                matching_customer_ids = [row[0] for row in customer_result.fetchall()]
+
+                # Convert matching customer IDs to UUIDs
+                matching_customer_uuids = [
+                    customer_id_to_uuid(cid) for cid in matching_customer_ids
+                ]
+
+                # Apply search filter: invoice_number OR matching customer
+                invoice_number_filter = Invoice.invoice_number.ilike(f"%{search_term}%")
+                if matching_customer_uuids:
+                    query = query.where(
+                        or_(
+                            invoice_number_filter,
+                            Invoice.customer_id.in_(matching_customer_uuids)
+                        )
+                    )
+                else:
+                    # No customer matches, only search invoice number
+                    query = query.where(invoice_number_filter)
 
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
@@ -177,10 +248,18 @@ async def list_invoices(
         result = await db.execute(query)
         invoices = result.scalars().all()
 
-        # Note: Customer enrichment removed from list view for performance
-        # Customer data is fetched in detail view (GET /{invoice_id})
+        # Build customer UUID map for efficient enrichment (ONE query for all invoices)
+        invoice_customer_ids = {inv.customer_id for inv in invoices if inv.customer_id}
+        customer_map = await build_customer_uuid_map(db, invoice_customer_ids)
+
+        # Build response items with customer enrichment
+        items = []
+        for inv in invoices:
+            customer = customer_map.get(inv.customer_id) if inv.customer_id else None
+            items.append(invoice_to_response(inv, customer))
+
         return {
-            "items": [invoice_to_response(inv) for inv in invoices],
+            "items": items,
             "total": total,
             "page": page,
             "page_size": page_size,
