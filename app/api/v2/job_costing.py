@@ -18,6 +18,9 @@ import uuid
 from app.api.deps import DbSession, CurrentUser
 from app.models.job_cost import JobCost
 from app.models.work_order import WorkOrder
+from app.models.payroll import TechnicianPayRate, Commission
+from app.models.dump_site import DumpSite
+from app.models.technician import Technician
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -509,4 +512,316 @@ async def get_cost_reports_summary(
         }
     except Exception as e:
         logger.error(f"Error getting cost reports: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========================
+# Calculation Endpoints
+# ========================
+
+
+@router.get("/calculate/labor")
+async def calculate_labor_cost(
+    db: DbSession,
+    current_user: CurrentUser,
+    technician_id: str = Query(..., description="Technician ID"),
+    hours: float = Query(..., ge=0, description="Hours worked"),
+):
+    """Calculate labor cost using technician's current pay rate."""
+    try:
+        # Get technician's active pay rate
+        result = await db.execute(
+            select(TechnicianPayRate)
+            .where(
+                TechnicianPayRate.technician_id == technician_id,
+                TechnicianPayRate.is_active == True
+            )
+            .order_by(TechnicianPayRate.effective_date.desc())
+            .limit(1)
+        )
+        pay_rate = result.scalar_one_or_none()
+
+        # Get technician name
+        tech_result = await db.execute(
+            select(Technician).where(Technician.id == technician_id)
+        )
+        technician = tech_result.scalar_one_or_none()
+        tech_name = technician.name if technician else "Unknown"
+
+        if not pay_rate:
+            # Return default calculation if no pay rate configured
+            default_rate = 25.0  # Default hourly rate
+            return {
+                "technician_id": technician_id,
+                "technician_name": tech_name,
+                "hours": hours,
+                "pay_type": "hourly",
+                "hourly_rate": default_rate,
+                "regular_hours": min(hours, 8),
+                "overtime_hours": max(0, hours - 8),
+                "regular_cost": min(hours, 8) * default_rate,
+                "overtime_cost": max(0, hours - 8) * default_rate * 1.5,
+                "total_labor_cost": min(hours, 8) * default_rate + max(0, hours - 8) * default_rate * 1.5,
+                "commission_rate": 0,
+                "source": "default"
+            }
+
+        # Calculate based on pay type
+        if pay_rate.pay_type == "salary":
+            # Convert annual salary to hourly equivalent
+            # Assume 260 working days, 8 hours/day = 2080 hours/year
+            hourly_equivalent = (pay_rate.salary_amount or 52000) / 2080
+            total_cost = hours * hourly_equivalent
+
+            return {
+                "technician_id": technician_id,
+                "technician_name": tech_name,
+                "hours": hours,
+                "pay_type": "salary",
+                "annual_salary": pay_rate.salary_amount,
+                "hourly_equivalent": round(hourly_equivalent, 2),
+                "regular_hours": hours,
+                "overtime_hours": 0,
+                "regular_cost": round(total_cost, 2),
+                "overtime_cost": 0,
+                "total_labor_cost": round(total_cost, 2),
+                "commission_rate": pay_rate.job_commission_rate or 0,
+                "source": "pay_rate"
+            }
+        else:
+            # Hourly calculation with overtime
+            hourly_rate = pay_rate.hourly_rate or 25.0
+            overtime_multiplier = pay_rate.overtime_multiplier or 1.5
+
+            # For single-day calculation, assume overtime after 8 hours
+            regular_hours = min(hours, 8)
+            overtime_hours = max(0, hours - 8)
+
+            regular_cost = regular_hours * hourly_rate
+            overtime_cost = overtime_hours * hourly_rate * overtime_multiplier
+
+            return {
+                "technician_id": technician_id,
+                "technician_name": tech_name,
+                "hours": hours,
+                "pay_type": "hourly",
+                "hourly_rate": hourly_rate,
+                "overtime_multiplier": overtime_multiplier,
+                "regular_hours": regular_hours,
+                "overtime_hours": overtime_hours,
+                "regular_cost": round(regular_cost, 2),
+                "overtime_cost": round(overtime_cost, 2),
+                "total_labor_cost": round(regular_cost + overtime_cost, 2),
+                "commission_rate": pay_rate.job_commission_rate or 0,
+                "source": "pay_rate"
+            }
+
+    except Exception as e:
+        logger.error(f"Error calculating labor cost: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/calculate/dump-fee")
+async def calculate_dump_fee(
+    db: DbSession,
+    current_user: CurrentUser,
+    dump_site_id: str = Query(..., description="Dump site ID"),
+    gallons: int = Query(..., ge=0, description="Gallons to dump"),
+):
+    """Calculate dump fee for given gallons at specific site."""
+    try:
+        result = await db.execute(
+            select(DumpSite).where(DumpSite.id == dump_site_id)
+        )
+        dump_site = result.scalar_one_or_none()
+
+        if not dump_site:
+            raise HTTPException(status_code=404, detail="Dump site not found")
+
+        fee_per_gallon = dump_site.fee_per_gallon
+        total_fee = gallons * fee_per_gallon
+
+        return {
+            "dump_site_id": str(dump_site.id),
+            "dump_site_name": dump_site.name,
+            "state": dump_site.address_state,
+            "gallons": gallons,
+            "fee_per_gallon": fee_per_gallon,
+            "total_dump_fee": round(total_fee, 2)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error calculating dump fee: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/calculate/commission")
+async def calculate_commission(
+    db: DbSession,
+    current_user: CurrentUser,
+    technician_id: str = Query(..., description="Technician ID"),
+    job_total: float = Query(..., ge=0, description="Total job revenue"),
+    dump_fee: float = Query(0, ge=0, description="Dump fee to deduct"),
+):
+    """Calculate commission for technician on a job."""
+    try:
+        # Get technician's commission rate
+        result = await db.execute(
+            select(TechnicianPayRate)
+            .where(
+                TechnicianPayRate.technician_id == technician_id,
+                TechnicianPayRate.is_active == True
+            )
+            .order_by(TechnicianPayRate.effective_date.desc())
+            .limit(1)
+        )
+        pay_rate = result.scalar_one_or_none()
+
+        # Get technician name
+        tech_result = await db.execute(
+            select(Technician).where(Technician.id == technician_id)
+        )
+        technician = tech_result.scalar_one_or_none()
+        tech_name = technician.name if technician else "Unknown"
+
+        # Default commission rate if no pay rate configured
+        commission_rate = 0.0
+        if pay_rate:
+            commission_rate = pay_rate.job_commission_rate or 0.0
+
+        # Calculate commissionable amount (job total minus dump fee)
+        commissionable_amount = job_total - dump_fee
+
+        # Calculate commission
+        commission_amount = commissionable_amount * (commission_rate / 100)
+
+        return {
+            "technician_id": technician_id,
+            "technician_name": tech_name,
+            "job_total": job_total,
+            "dump_fee": dump_fee,
+            "commissionable_amount": round(commissionable_amount, 2),
+            "commission_rate_percent": commission_rate,
+            "commission_amount": round(commission_amount, 2),
+            "net_to_company": round(job_total - commission_amount, 2)
+        }
+
+    except Exception as e:
+        logger.error(f"Error calculating commission: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/technicians/pay-rates")
+async def list_technician_pay_rates(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List all technicians with their current pay rates."""
+    try:
+        # Get all active technicians
+        tech_result = await db.execute(
+            select(Technician).where(Technician.is_active == True)
+        )
+        technicians = tech_result.scalars().all()
+
+        result = []
+        for tech in technicians:
+            # Get pay rate for this technician
+            rate_result = await db.execute(
+                select(TechnicianPayRate)
+                .where(
+                    TechnicianPayRate.technician_id == tech.id,
+                    TechnicianPayRate.is_active == True
+                )
+                .order_by(TechnicianPayRate.effective_date.desc())
+                .limit(1)
+            )
+            pay_rate = rate_result.scalar_one_or_none()
+
+            result.append({
+                "technician_id": tech.id,
+                "name": tech.name,
+                "pay_type": pay_rate.pay_type if pay_rate else "hourly",
+                "hourly_rate": pay_rate.hourly_rate if pay_rate else None,
+                "salary_amount": pay_rate.salary_amount if pay_rate else None,
+                "commission_rate": pay_rate.job_commission_rate if pay_rate else 0,
+                "has_pay_rate": pay_rate is not None
+            })
+
+        return {"technicians": result, "total": len(result)}
+
+    except Exception as e:
+        logger.error(f"Error listing technician pay rates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dump-sites/list")
+async def list_dump_sites_for_costing(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List active dump sites for job costing selection."""
+    try:
+        result = await db.execute(
+            select(DumpSite)
+            .where(DumpSite.is_active == True)
+            .order_by(DumpSite.address_state, DumpSite.name)
+        )
+        sites = result.scalars().all()
+
+        return {
+            "sites": [
+                {
+                    "id": str(site.id),
+                    "name": site.name,
+                    "city": site.address_city,
+                    "state": site.address_state,
+                    "fee_per_gallon": site.fee_per_gallon
+                }
+                for site in sites
+            ],
+            "total": len(sites)
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing dump sites: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/work-orders/recent")
+async def list_recent_work_orders(
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = Query(20, ge=1, le=100),
+):
+    """List recent work orders for job costing selection."""
+    try:
+        result = await db.execute(
+            select(WorkOrder)
+            .order_by(WorkOrder.created_at.desc())
+            .limit(limit)
+        )
+        work_orders = result.scalars().all()
+
+        return {
+            "work_orders": [
+                {
+                    "id": wo.id,
+                    "customer_id": wo.customer_id,
+                    "job_type": getattr(wo, "job_type", None),
+                    "status": getattr(wo, "status", None),
+                    "total_amount": float(wo.total_amount) if hasattr(wo, "total_amount") and wo.total_amount else 0,
+                    "scheduled_start": wo.scheduled_start.isoformat() if hasattr(wo, "scheduled_start") and wo.scheduled_start else None,
+                    "technician_id": getattr(wo, "technician_id", None),
+                    "created_at": wo.created_at.isoformat() if wo.created_at else None
+                }
+                for wo in work_orders
+            ],
+            "total": len(work_orders)
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing recent work orders: {e}")
         raise HTTPException(status_code=500, detail=str(e))
