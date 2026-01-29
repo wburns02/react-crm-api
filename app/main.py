@@ -244,7 +244,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.1",  # Fixed deployment
+        "version": "2.7.2",  # Schedule API returns real customer names
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",

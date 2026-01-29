@@ -39,12 +39,24 @@ class UnscheduledResponse(BaseModel):
     total: int
 
 
-def work_order_to_schedule(wo: WorkOrder) -> dict:
-    """Convert WorkOrder to schedule format."""
+def work_order_to_schedule(wo: WorkOrder, customer: Optional[Customer] = None) -> dict:
+    """Convert WorkOrder to schedule format with customer name.
+
+    Args:
+        wo: The work order to convert
+        customer: Optional customer object from JOIN (for real customer name)
+    """
+    # Build customer name from customer object if provided
+    customer_name = None
+    if customer:
+        first = customer.first_name or ""
+        last = customer.last_name or ""
+        customer_name = f"{first} {last}".strip() or None
+
     return {
         "id": str(wo.id),
         "customer_id": str(wo.customer_id),
-        "customer_name": None,
+        "customer_name": customer_name,
         "job_type": wo.job_type or "pumping",
         "status": wo.status or "draft",
         "priority": wo.priority or "normal",
@@ -110,9 +122,11 @@ async def get_unscheduled_work_orders(
     current_user: CurrentUser,
     page_size: int = Query(100, ge=1, le=500),
 ):
-    """Get unscheduled work orders (draft without date)."""
+    """Get unscheduled work orders (draft without date) with customer names."""
+    # LEFT JOIN with Customer table to get real customer names
     query = (
-        select(WorkOrder)
+        select(WorkOrder, Customer)
+        .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
         .where(
             and_(
                 WorkOrder.status == "draft",
@@ -127,11 +141,11 @@ async def get_unscheduled_work_orders(
     )
 
     result = await db.execute(query)
-    work_orders = result.scalars().all()
+    rows = result.all()
 
     return UnscheduledResponse(
-        items=[work_order_to_schedule(wo) for wo in work_orders],
-        total=len(work_orders),
+        items=[work_order_to_schedule(wo, customer) for wo, customer in rows],
+        total=len(rows),
     )
 
 
@@ -141,15 +155,21 @@ async def get_schedule_by_date(
     current_user: CurrentUser,
     date: str = Query(..., description="Date in YYYY-MM-DD format"),
 ):
-    """Get all work orders scheduled for a specific date."""
-    query = select(WorkOrder).where(func.date(WorkOrder.scheduled_date) == date).order_by(WorkOrder.time_window_start)
+    """Get all work orders scheduled for a specific date with customer names."""
+    # LEFT JOIN with Customer table to get real customer names
+    query = (
+        select(WorkOrder, Customer)
+        .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        .where(func.date(WorkOrder.scheduled_date) == date)
+        .order_by(WorkOrder.time_window_start)
+    )
 
     result = await db.execute(query)
-    work_orders = result.scalars().all()
+    rows = result.all()
 
     return UnscheduledResponse(
-        items=[work_order_to_schedule(wo) for wo in work_orders],
-        total=len(work_orders),
+        items=[work_order_to_schedule(wo, customer) for wo, customer in rows],
+        total=len(rows),
     )
 
 
@@ -161,8 +181,13 @@ async def get_schedule_by_technician(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ):
-    """Get work orders assigned to a specific technician."""
-    query = select(WorkOrder).where(WorkOrder.assigned_technician == technician_name)
+    """Get work orders assigned to a specific technician with customer names."""
+    # LEFT JOIN with Customer table to get real customer names
+    query = (
+        select(WorkOrder, Customer)
+        .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        .where(WorkOrder.assigned_technician == technician_name)
+    )
 
     if date_from:
         query = query.where(func.date(WorkOrder.scheduled_date) >= date_from)
@@ -172,12 +197,12 @@ async def get_schedule_by_technician(
     query = query.order_by(WorkOrder.scheduled_date, WorkOrder.time_window_start)
 
     result = await db.execute(query)
-    work_orders = result.scalars().all()
+    rows = result.all()
 
     return {
         "technician": technician_name,
-        "items": [work_order_to_schedule(wo) for wo in work_orders],
-        "total": len(work_orders),
+        "items": [work_order_to_schedule(wo, customer) for wo, customer in rows],
+        "total": len(rows),
     }
 
 
@@ -187,12 +212,14 @@ async def get_week_view(
     current_user: CurrentUser,
     start_date: str = Query(..., description="Start date (Monday) in YYYY-MM-DD format"),
 ):
-    """Get all work orders for a week, grouped by date."""
+    """Get all work orders for a week, grouped by date, with customer names."""
     start = datetime.strptime(start_date, "%Y-%m-%d").date()
     end = start + timedelta(days=6)
 
+    # LEFT JOIN with Customer table to get real customer names
     query = (
-        select(WorkOrder)
+        select(WorkOrder, Customer)
+        .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
         .where(
             and_(
                 func.date(WorkOrder.scheduled_date) >= start,
@@ -203,14 +230,14 @@ async def get_week_view(
     )
 
     result = await db.execute(query)
-    work_orders = result.scalars().all()
+    rows = result.all()
 
     by_date: dict[str, list[dict]] = {}
     for i in range(7):
         day = (start + timedelta(days=i)).isoformat()
         by_date[day] = []
 
-    for wo in work_orders:
+    for wo, customer in rows:
         if wo.scheduled_date:
             day_str = (
                 wo.scheduled_date.isoformat()
@@ -218,11 +245,11 @@ async def get_week_view(
                 else str(wo.scheduled_date)[:10]
             )
             if day_str in by_date:
-                by_date[day_str].append(work_order_to_schedule(wo))
+                by_date[day_str].append(work_order_to_schedule(wo, customer))
 
     return {
         "start_date": start_date,
         "end_date": end.isoformat(),
         "days": by_date,
-        "total": len(work_orders),
+        "total": len(rows),
     }
