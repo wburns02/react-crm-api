@@ -6,7 +6,7 @@ This is a PUBLIC endpoint - no authentication required.
 """
 import logging
 from fastapi import APIRouter, Query, HTTPException
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from typing import Optional, List
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
@@ -123,14 +123,20 @@ async def get_availability_slots(
         parsed_end = max_end
 
     # Get scheduled work orders in date range
-    active_statuses = ["scheduled", "confirmed", "enroute", "on_site", "in_progress"]
-
     try:
+        # Use or_ with explicit comparisons for ENUM compatibility
+        status_filter = or_(
+            WorkOrder.status == "scheduled",
+            WorkOrder.status == "confirmed",
+            WorkOrder.status == "enroute",
+            WorkOrder.status == "on_site",
+            WorkOrder.status == "in_progress"
+        )
         query = select(WorkOrder).where(
             and_(
                 WorkOrder.scheduled_date >= parsed_start,
                 WorkOrder.scheduled_date <= parsed_end,
-                WorkOrder.status.in_(active_statuses)
+                status_filter
             )
         )
 
