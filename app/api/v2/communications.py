@@ -22,6 +22,7 @@ from app.schemas.message import (
     MessageListResponse,
 )
 from app.services.twilio_service import TwilioService
+from app.services.email_service import EmailService
 from app.security.rate_limiter import rate_limit_sms
 from app.security.rbac import require_permission, Permission, has_permission
 
@@ -44,6 +45,15 @@ async def get_twilio_debug_config():
         "phone_number": settings.TWILIO_PHONE_NUMBER,
         "sms_from_number": settings.TWILIO_SMS_FROM_NUMBER,
     }
+
+
+@router.get("/email/status")
+async def get_email_service_status(
+    current_user: CurrentUser,
+):
+    """Get email service (SendGrid) configuration status."""
+    email_service = EmailService()
+    return email_service.get_status()
 
 
 @router.get("/history", response_model=MessageListResponse)
@@ -182,7 +192,7 @@ async def send_email(
     current_user: CurrentUser,
 ):
     """
-    Send an email (placeholder - implement with your email service).
+    Send an email via SendGrid.
 
     SECURITY:
     - Requires SEND_EMAIL permission
@@ -192,6 +202,8 @@ async def send_email(
         logger.warning("Email send denied - insufficient permissions", extra={"user_id": current_user.id})
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to send emails")
 
+    email_service = EmailService()
+
     # Create message record with from_address
     message = Message(
         customer_id=request.customer_id,
@@ -199,7 +211,7 @@ async def send_email(
         direction=MessageDirection.outbound,
         status=MessageStatus.pending,
         to_address=request.to,
-        from_address="support@macseptic.com",
+        from_address=email_service.from_address,
         subject=request.subject,
         content=request.body,
         source=request.source,
@@ -208,13 +220,52 @@ async def send_email(
     await db.commit()
     await db.refresh(message)
 
-    # Mark as sent (until SendGrid integration is added)
-    message.status = MessageStatus.sent
-    message.sent_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(message)
+    # Send via SendGrid
+    try:
+        email_response = await email_service.send_email(
+            to=request.to,
+            subject=request.subject,
+            body=request.body,
+            html_body=getattr(request, 'html_body', None),
+        )
 
-    logger.info("Email sent", extra={"message_id": message.id, "user_id": current_user.id})
+        if email_response.get("success"):
+            # Update message with success
+            message.twilio_sid = email_response.get("message_id")  # Reuse for SendGrid ID
+            message.status = MessageStatus.sent
+            message.sent_at = datetime.utcnow()
+            await db.commit()
+            await db.refresh(message)
+
+            logger.info("Email sent successfully", extra={"message_id": message.id, "user_id": current_user.id})
+        else:
+            # SendGrid returned an error
+            message.status = MessageStatus.failed
+            message.error_message = email_response.get("error", "Unknown error")
+            await db.commit()
+            await db.refresh(message)
+
+            logger.error("Email send failed", extra={"message_id": message.id, "error": email_response.get("error")})
+
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to send email: {email_response.get('error')}",
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        message.status = MessageStatus.failed
+        message.error_message = str(e)
+        await db.commit()
+        await db.refresh(message)
+
+        logger.error("Email send failed", extra={"message_id": message.id, "error_type": type(e).__name__})
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send email. Please try again later.",
+        )
 
     return message
 
