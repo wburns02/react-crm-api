@@ -84,15 +84,15 @@ class MessageResponse(BaseModel):
     type: MessageType
     direction: MessageDirection
     status: MessageStatus
-    to_address: str
+    to_address: Optional[str] = None
     from_address: Optional[str] = None
     subject: Optional[str] = None
-    content: str
+    content: Optional[str] = None
     twilio_sid: Optional[str] = None
-    source: str
+    source: Optional[str] = None
     sent_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
     class Config:
