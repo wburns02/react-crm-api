@@ -78,8 +78,8 @@ class SegmentBase(BaseModel):
 
     # Settings
     is_active: bool = True
-    auto_update: bool = True
-    update_frequency_hours: int = Field(24, ge=1, le=168)
+    auto_refresh: bool = True
+    refresh_interval_hours: int = Field(24, ge=1, le=168)
 
     # Actions on entry/exit
     on_entry_playbook_id: Optional[int] = None
@@ -123,8 +123,8 @@ class SegmentUpdate(BaseModel):
     rules: Optional[SegmentRuleSet] = None
     priority: Optional[int] = None
     is_active: Optional[bool] = None
-    auto_update: Optional[bool] = None
-    update_frequency_hours: Optional[int] = Field(None, ge=1, le=168)
+    auto_refresh: Optional[bool] = None
+    refresh_interval_hours: Optional[int] = Field(None, ge=1, le=168)
     on_entry_playbook_id: Optional[int] = None
     on_entry_journey_id: Optional[int] = None
     on_exit_playbook_id: Optional[int] = None
