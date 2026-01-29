@@ -189,7 +189,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.6.6",  # Fixed invoice creation ENUM case mismatch
+        "version": "2.7.0",  # Added dump_sites table support
         "environment": settings.ENVIRONMENT,
         "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "technician_performance", "call_intelligence"],
     }
@@ -900,6 +900,26 @@ async def create_core_tables():
                 is_active BOOLEAN DEFAULT TRUE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
+        """,
+        "dump_sites": """
+            CREATE TABLE IF NOT EXISTS dump_sites (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                name VARCHAR(255) NOT NULL,
+                address_line1 VARCHAR(255),
+                address_city VARCHAR(100),
+                address_state VARCHAR(2) NOT NULL,
+                address_postal_code VARCHAR(20),
+                latitude FLOAT,
+                longitude FLOAT,
+                fee_per_gallon FLOAT NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                notes TEXT,
+                contact_name VARCHAR(100),
+                contact_phone VARCHAR(20),
+                hours_of_operation VARCHAR(255),
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE
+            )
         """
     }
 
@@ -913,7 +933,7 @@ async def create_core_tables():
             existing_tables = {row[0] for row in result.fetchall()}
 
             # Create tables in order (respecting foreign key dependencies)
-            table_order = ["customers", "technicians", "work_orders", "invoices", "payments", "quotes", "messages", "activities", "payroll_periods", "time_entries", "commissions", "technician_pay_rates"]
+            table_order = ["customers", "technicians", "work_orders", "invoices", "payments", "quotes", "messages", "activities", "payroll_periods", "time_entries", "commissions", "technician_pay_rates", "dump_sites"]
 
             for table_name in table_order:
                 if table_name in existing_tables:

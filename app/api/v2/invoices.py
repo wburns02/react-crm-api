@@ -176,31 +176,8 @@ async def list_invoices(
         result = await db.execute(query)
         invoices = result.scalars().all()
 
-        # Build customer UUID lookup map for enrichment (with fallback on error)
-        customer_uuid_map = {}
-        try:
-            customer_result = await db.execute(select(Customer))
-            customers = customer_result.scalars().all()
-            for c in customers:
-                if c.id:
-                    try:
-                        cust_uuid = customer_id_to_uuid(c.id)
-                        customer_uuid_map[cust_uuid] = c
-                    except Exception as uuid_err:
-                        logger.warning(f"Could not convert customer {c.id} to UUID: {uuid_err}")
-        except Exception as cust_err:
-            logger.warning(f"Could not load customers for enrichment: {cust_err}")
-
-        # Enrich invoices with customer data
-        items = []
-        for inv in invoices:
-            customer = None
-            if inv.customer_id and customer_uuid_map:
-                customer = customer_uuid_map.get(inv.customer_id)
-            items.append(invoice_to_response(inv, customer))
-
         return {
-            "items": items,
+            "items": [invoice_to_response(inv) for inv in invoices],
             "total": total,
             "page": page,
             "page_size": page_size,
