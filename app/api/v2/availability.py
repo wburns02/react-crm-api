@@ -74,12 +74,6 @@ def windows_overlap(start1: str, end1: str, start2: str, end2: str) -> bool:
     return s1 < e2 and s2 < e1
 
 
-@router.get("/test")
-async def test_endpoint():
-    """Simple test endpoint to verify routing works."""
-    return {"status": "ok", "message": "Availability API is working"}
-
-
 @router.get("/slots", response_model=AvailabilityResponse)
 async def get_availability_slots(
     db: DbSession,
