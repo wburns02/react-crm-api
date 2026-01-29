@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '030_fix_pay_rates_unique_constraint'
-down_revision = '029_create_bookings_table'
+down_revision = '029_create_bookings'
 branch_labels = None
 depends_on = None
 
