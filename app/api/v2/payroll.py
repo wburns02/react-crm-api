@@ -1463,53 +1463,64 @@ async def create_pay_rate(
     current_user: CurrentUser,
 ):
     """Create a new pay rate."""
-    if not request.technician_id:
-        raise HTTPException(status_code=400, detail="technician_id is required")
+    try:
+        if not request.technician_id:
+            raise HTTPException(status_code=400, detail="technician_id is required")
 
-    # Deactivate existing rate for this technician
-    existing_result = await db.execute(
-        select(TechnicianPayRate).where(
-            TechnicianPayRate.technician_id == request.technician_id,
-            TechnicianPayRate.is_active == True,
+        logger.info(f"Creating pay rate for technician {request.technician_id}: {request}")
+
+        # Deactivate existing rate for this technician
+        existing_result = await db.execute(
+            select(TechnicianPayRate).where(
+                TechnicianPayRate.technician_id == request.technician_id,
+                TechnicianPayRate.is_active == True,
+            )
         )
-    )
-    existing = existing_result.scalar_one_or_none()
+        existing = existing_result.scalar_one_or_none()
 
-    if existing:
-        existing.is_active = False
-        existing.end_date = date.today()
+        if existing:
+            logger.info(f"Deactivating existing rate {existing.id}")
+            existing.is_active = False
+            existing.end_date = date.today()
 
-    # Create new rate
-    rate = TechnicianPayRate(
-        technician_id=request.technician_id,
-        pay_type=request.pay_type or "hourly",
-        hourly_rate=request.hourly_rate,
-        overtime_multiplier=(request.overtime_rate / request.hourly_rate)
-        if request.hourly_rate and request.overtime_rate
-        else 1.5,
-        salary_amount=request.salary_amount,
-        job_commission_rate=request.commission_rate or 0,
-        upsell_commission_rate=0,
-        weekly_overtime_threshold=40,
-        effective_date=date.today(),
-        is_active=True,
-    )
+        # Create new rate
+        rate = TechnicianPayRate(
+            technician_id=request.technician_id,
+            pay_type=request.pay_type or "hourly",
+            hourly_rate=request.hourly_rate,
+            overtime_multiplier=(request.overtime_rate / request.hourly_rate)
+            if request.hourly_rate and request.overtime_rate
+            else 1.5,
+            salary_amount=request.salary_amount,
+            job_commission_rate=request.commission_rate or 0,
+            upsell_commission_rate=0,
+            weekly_overtime_threshold=40,
+            effective_date=date.today(),
+            is_active=True,
+        )
 
-    db.add(rate)
-    await db.commit()
-    await db.refresh(rate)
+        db.add(rate)
+        await db.commit()
+        await db.refresh(rate)
 
-    return {
-        "id": str(rate.id),
-        "technician_id": rate.technician_id,
-        "pay_type": rate.pay_type or "hourly",
-        "hourly_rate": rate.hourly_rate,
-        "overtime_rate": (rate.hourly_rate or 0) * (rate.overtime_multiplier or 1.5),
-        "salary_amount": rate.salary_amount,
-        "commission_rate": rate.job_commission_rate or 0,
-        "effective_date": rate.effective_date.isoformat(),
-        "is_active": rate.is_active,
-    }
+        logger.info(f"Created pay rate {rate.id} for technician {request.technician_id}")
+
+        return {
+            "id": str(rate.id),
+            "technician_id": rate.technician_id,
+            "pay_type": rate.pay_type or "hourly",
+            "hourly_rate": rate.hourly_rate,
+            "overtime_rate": (rate.hourly_rate or 0) * (rate.overtime_multiplier or 1.5),
+            "salary_amount": rate.salary_amount,
+            "commission_rate": rate.job_commission_rate or 0,
+            "effective_date": rate.effective_date.isoformat(),
+            "is_active": rate.is_active,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating pay rate: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create pay rate: {type(e).__name__}: {str(e)}")
 
 
 @router.patch("/pay-rates/{rate_id}")
