@@ -8,7 +8,7 @@ Features:
 - Export for payroll systems (NACHA, CSV)
 """
 from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, delete
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timedelta
@@ -640,6 +640,44 @@ async def update_payroll_period(
     return _format_period(period)
 
 
+@router.delete("/periods/{period_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_payroll_period(
+    period_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Delete a payroll period. Only draft/open periods can be deleted."""
+    try:
+        result = await db.execute(
+            select(PayrollPeriod).where(PayrollPeriod.id == period_id)
+        )
+        period = result.scalar_one_or_none()
+
+        if not period:
+            raise HTTPException(status_code=404, detail="Payroll period not found")
+
+        # Only allow deletion of draft/open periods
+        if period.status not in ("open", "draft"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete period with status '{period.status}'. Only draft periods can be deleted."
+            )
+
+        # Delete associated time entries and commissions first (cascade)
+        await db.execute(delete(TimeEntry).where(TimeEntry.payroll_period_id == period_id))
+        await db.execute(delete(Commission).where(Commission.payroll_period_id == period_id))
+
+        await db.delete(period)
+        await db.commit()
+
+        logger.info(f"Deleted payroll period {period_id} by {current_user.email}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting payroll period: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete payroll period: {str(e)}")
+
+
 @router.get("/periods/{period_id}/summary")
 async def get_period_summary(
     period_id: str,
@@ -1058,6 +1096,39 @@ async def bulk_approve_time_entries(
 
     await db.commit()
     return {"approved": approved}
+
+
+@router.delete("/time-entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_time_entry(
+    entry_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Delete a time entry. Only pending entries can be deleted."""
+    try:
+        result = await db.execute(
+            select(TimeEntry).where(TimeEntry.id == entry_id)
+        )
+        entry = result.scalar_one_or_none()
+
+        if not entry:
+            raise HTTPException(status_code=404, detail="Time entry not found")
+
+        if entry.status != "pending":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete entry with status '{entry.status}'. Only pending entries can be deleted."
+            )
+
+        await db.delete(entry)
+        await db.commit()
+
+        logger.info(f"Deleted time entry {entry_id} by {current_user.email}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting time entry: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete time entry: {str(e)}")
 
 
 @router.post("/commissions")
