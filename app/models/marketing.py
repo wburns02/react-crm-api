@@ -100,25 +100,59 @@ class WorkflowEnrollment(Base):
 
 
 class EmailTemplate(Base):
-    """Email template for campaigns."""
+    """Email template for campaigns and CRM communications.
+
+    Supports merge fields for personalization:
+    - {{customer_name}}, {{scheduled_date}}, {{invoice_number}}, etc.
+    """
 
     __tablename__ = "email_templates"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
     name = Column(String(255), nullable=False)
-    subject = Column(String(255), nullable=False)
-    body_html = Column(Text, nullable=False)
-    body_text = Column(Text, nullable=True)
+    subject = Column(String(255), nullable=False)  # subject_template with merge fields
+    body_html = Column(Text, nullable=False)  # body_html_template with merge fields
+    body_text = Column(Text, nullable=True)  # body_text_template with merge fields
 
     # Personalization variables (JSON for SQLite test compatibility)
-    variables = Column(JSON, nullable=True)  # ["first_name", "company", ...]
+    variables = Column(JSON, nullable=True)  # ["customer_name", "scheduled_date", ...]
 
-    # Category
-    category = Column(String(50), nullable=True)
+    # Category: scheduling, billing, service, marketing, general
+    category = Column(String(50), nullable=True, index=True)
 
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_by = Column(Integer, nullable=True)  # User ID who created template
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    def render_subject(self, context: dict) -> str:
+        """Render subject template with context variables."""
+        result = self.subject or ""
+        for key, value in context.items():
+            result = result.replace(f"{{{{{key}}}}}", str(value) if value else "")
+        return result
+
+    def render_body_html(self, context: dict) -> str:
+        """Render HTML body template with context variables."""
+        result = self.body_html or ""
+        for key, value in context.items():
+            result = result.replace(f"{{{{{key}}}}}", str(value) if value else "")
+        return result
+
+    def render_body_text(self, context: dict) -> str:
+        """Render plain text body template with context variables."""
+        import re
+        if not self.body_text:
+            # Strip HTML tags as fallback
+            text = re.sub(r'<[^>]+>', '', self.body_html or "")
+            text = text.replace('&nbsp;', ' ')
+        else:
+            text = self.body_text
+
+        for key, value in context.items():
+            text = text.replace(f"{{{{{key}}}}}", str(value) if value else "")
+        return text
 
 
 class SMSTemplate(Base):

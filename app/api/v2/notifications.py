@@ -3,13 +3,18 @@
 Provides endpoints for fetching and managing user notifications.
 """
 
-from fastapi import APIRouter, Query, Body
-from typing import Optional, List
+from fastapi import APIRouter, Query, HTTPException
+from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
+from uuid import UUID
 import uuid
 
+from sqlalchemy import select, func, and_, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.deps import CurrentUser, DbSession
+from app.models.notification import Notification
 from app.services.websocket_manager import manager
 
 router = APIRouter()
@@ -40,11 +45,38 @@ async def list_notifications(
     unread_only: bool = False,
 ):
     """List notifications for the current user."""
-    # TODO: Implement with database table
-    # For now return empty list to prevent 404
+    query = select(Notification).where(Notification.user_id == current_user.id)
+
+    if unread_only:
+        query = query.where(Notification.read == False)
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Get paginated results
+    query = query.order_by(Notification.created_at.desc()).offset(offset).limit(limit)
+    result = await db.execute(query)
+    notifications = result.scalars().all()
+
+    items = [
+        {
+            "id": str(n.id),
+            "type": n.type,
+            "title": n.title,
+            "message": n.message,
+            "read": n.read,
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+            "link": n.link,
+            "metadata": n.metadata,
+        }
+        for n in notifications
+    ]
+
     return {
-        "items": [],
-        "total": 0,
+        "items": items,
+        "total": total,
         "limit": limit,
         "offset": offset,
     }
@@ -56,9 +88,24 @@ async def get_notification_stats(
     db: DbSession,
 ):
     """Get notification statistics for the current user."""
-    # TODO: Implement with database table
-    # For now return zeros to prevent 404
-    return NotificationStats(total=0, unread=0)
+    # Total count
+    total_result = await db.execute(
+        select(func.count()).where(Notification.user_id == current_user.id)
+    )
+    total = total_result.scalar() or 0
+
+    # Unread count
+    unread_result = await db.execute(
+        select(func.count()).where(
+            and_(
+                Notification.user_id == current_user.id,
+                Notification.read == False
+            )
+        )
+    )
+    unread = unread_result.scalar() or 0
+
+    return NotificationStats(total=total, unread=unread)
 
 
 @router.post("/{notification_id}/read")
@@ -68,6 +115,29 @@ async def mark_notification_read(
     db: DbSession,
 ):
     """Mark a notification as read."""
+    try:
+        notif_uuid = UUID(notification_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid notification ID format")
+
+    result = await db.execute(
+        select(Notification).where(
+            and_(
+                Notification.id == notif_uuid,
+                Notification.user_id == current_user.id
+            )
+        )
+    )
+    notification = result.scalar_one_or_none()
+
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    notification.read = True
+    notification.read_at = datetime.utcnow()
+
+    await db.commit()
+
     return {"success": True, "notification_id": notification_id}
 
 
@@ -77,7 +147,27 @@ async def mark_all_notifications_read(
     db: DbSession,
 ):
     """Mark all notifications as read."""
-    return {"success": True, "count": 0}
+    now = datetime.utcnow()
+
+    result = await db.execute(
+        update(Notification)
+        .where(
+            and_(
+                Notification.user_id == current_user.id,
+                Notification.read == False
+            )
+        )
+        .values(read=True, read_at=now)
+        .returning(Notification.id)
+    )
+
+    # Count how many were updated
+    updated_ids = result.fetchall()
+    count = len(updated_ids)
+
+    await db.commit()
+
+    return {"success": True, "count": count}
 
 
 class NotificationCreate(BaseModel):
@@ -107,18 +197,35 @@ async def create_notification(
     - If target_role is set, all users with that role receive it
     - If neither is set, broadcasts to all connected users
     """
-    notification_id = str(uuid.uuid4())
     now = datetime.utcnow()
 
-    notification = {
-        "id": notification_id,
-        "type": notification_data.type,
-        "title": notification_data.title,
-        "message": notification_data.message,
-        "read": False,
-        "created_at": now.isoformat(),
-        "link": notification_data.link,
-        "metadata": notification_data.metadata,
+    # Determine target user(s)
+    target_user_id = notification_data.target_user_id
+
+    # Create notification in database
+    notification = Notification(
+        user_id=target_user_id or current_user.id,  # Default to sender if no target
+        type=notification_data.type,
+        title=notification_data.title,
+        message=notification_data.message,
+        link=notification_data.link,
+        metadata=notification_data.metadata,
+        source="user",
+    )
+
+    db.add(notification)
+    await db.commit()
+    await db.refresh(notification)
+
+    notification_dict = {
+        "id": str(notification.id),
+        "type": notification.type,
+        "title": notification.title,
+        "message": notification.message,
+        "read": notification.read,
+        "created_at": notification.created_at.isoformat() if notification.created_at else now.isoformat(),
+        "link": notification.link,
+        "metadata": notification.metadata,
     }
 
     # Broadcast via WebSocket based on targeting
@@ -128,7 +235,7 @@ async def create_notification(
             notification_data.target_user_id,
             {
                 "type": "notification.created",
-                "data": notification,
+                "data": notification_dict,
                 "timestamp": now.isoformat(),
             },
         )
@@ -138,7 +245,7 @@ async def create_notification(
             notification_data.target_role,
             {
                 "type": "notification.created",
-                "data": notification,
+                "data": notification_dict,
                 "timestamp": now.isoformat(),
             },
         )
@@ -146,10 +253,41 @@ async def create_notification(
         # Broadcast to all connected users
         await manager.broadcast_event(
             event_type="notification.created",
-            data=notification,
+            data=notification_dict,
         )
 
     return {
         "success": True,
-        "notification": notification,
+        "notification": notification_dict,
     }
+
+
+@router.delete("/{notification_id}")
+async def delete_notification(
+    notification_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """Delete a notification."""
+    try:
+        notif_uuid = UUID(notification_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid notification ID format")
+
+    result = await db.execute(
+        select(Notification).where(
+            and_(
+                Notification.id == notif_uuid,
+                Notification.user_id == current_user.id
+            )
+        )
+    )
+    notification = result.scalar_one_or_none()
+
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    await db.delete(notification)
+    await db.commit()
+
+    return {"success": True, "notification_id": notification_id}

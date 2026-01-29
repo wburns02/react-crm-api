@@ -18,7 +18,10 @@ from app.schemas.quote import (
     QuoteUpdate,
     QuoteResponse,
     QuoteListResponse,
+    QuoteConvertRequest,
+    QuoteConvertResponse,
 )
+from app.models.work_order import WorkOrder
 
 # PDF Generation imports
 try:
@@ -299,13 +302,21 @@ async def decline_quote(
     return quote
 
 
-@router.post("/{quote_id}/convert", response_model=QuoteResponse)
+@router.post("/{quote_id}/convert", response_model=QuoteConvertResponse)
 async def convert_quote_to_work_order(
     quote_id: int,
+    convert_data: QuoteConvertRequest,
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Convert an accepted quote to a work order."""
+    """
+    Convert an accepted quote to a work order.
+
+    Creates a new WorkOrder with the quote's customer, total amount,
+    and service address. The quote is marked as 'converted' and linked
+    to the new work order.
+    """
+    # Fetch the quote
     result = await db.execute(select(Quote).where(Quote.id == quote_id))
     quote = result.scalar_one_or_none()
 
@@ -321,14 +332,90 @@ async def convert_quote_to_work_order(
             detail="Only sent or accepted quotes can be converted",
         )
 
-    # TODO: Create work order from quote
-    # For now, just mark as converted
+    if quote.converted_to_work_order_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Quote already converted to work order {quote.converted_to_work_order_id}",
+        )
+
+    # Fetch customer for service address
+    customer_result = await db.execute(
+        select(Customer).where(Customer.id == quote.customer_id)
+    )
+    customer = customer_result.scalar_one_or_none()
+
+    if not customer:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Customer not found for this quote",
+        )
+
+    # Generate UUID for work order (WorkOrder.id is String(36))
+    work_order_id = str(uuid.uuid4())
+    now = datetime.utcnow()
+
+    # Build notes from quote title/description
+    notes_parts = []
+    if quote.title:
+        notes_parts.append(f"From Quote: {quote.title}")
+    if quote.description:
+        notes_parts.append(quote.description)
+    if convert_data.notes:
+        notes_parts.append(convert_data.notes)
+
+    # Include line items summary in notes
+    if quote.line_items:
+        line_items_summary = "\n\nQuote Line Items:"
+        for item in quote.line_items:
+            service = item.get("service", item.get("description", "Item"))
+            qty = item.get("quantity", 1)
+            amount = item.get("amount", 0)
+            line_items_summary += f"\n- {service} (x{qty}): ${amount:.2f}"
+        notes_parts.append(line_items_summary)
+
+    combined_notes = "\n\n".join(notes_parts) if notes_parts else None
+
+    # Create the WorkOrder
+    work_order = WorkOrder(
+        id=work_order_id,
+        customer_id=quote.customer_id,
+        technician_id=convert_data.technician_id,
+        job_type=convert_data.job_type,
+        priority=convert_data.priority,
+        status="draft",
+        scheduled_date=convert_data.scheduled_date,
+        service_address_line1=customer.address_line1,
+        service_address_line2=customer.address_line2,
+        service_city=customer.city,
+        service_state=customer.state,
+        service_postal_code=customer.postal_code,
+        service_latitude=customer.latitude if hasattr(customer, 'latitude') else None,
+        service_longitude=customer.longitude if hasattr(customer, 'longitude') else None,
+        notes=combined_notes,
+        total_amount=quote.total,
+        created_at=now,
+        updated_at=now,
+    )
+
+    db.add(work_order)
+
+    # Update the quote
     quote.status = "converted"
-    quote.converted_at = datetime.utcnow()
+    quote.converted_at = now
+    quote.converted_to_work_order_id = work_order_id
 
     await db.commit()
     await db.refresh(quote)
-    return quote
+    await db.refresh(work_order)
+
+    # Enrich quote with customer data for response
+    quote_response = await enrich_quote_with_customer(quote, db)
+
+    return QuoteConvertResponse(
+        quote=QuoteResponse(**quote_response),
+        work_order_id=work_order_id,
+        message=f"Successfully created work order {work_order_id} from quote {quote.quote_number}",
+    )
 
 
 @router.delete("/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)

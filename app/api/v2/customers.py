@@ -10,11 +10,18 @@ from app.schemas.customer import (
     CustomerResponse,
     CustomerListResponse,
 )
+from app.schemas.errors import LIST_ERROR_RESPONSES, CRUD_ERROR_RESPONSES
 
 router = APIRouter()
 
 
-@router.get("/", response_model=CustomerListResponse)
+@router.get(
+    "/",
+    response_model=CustomerListResponse,
+    responses=LIST_ERROR_RESPONSES,
+    summary="List customers",
+    description="Returns a paginated list of customers with optional filtering by search term, type, stage, and status.",
+)
 async def list_customers(
     db: DbSession,
     current_user: CurrentUser,
@@ -69,7 +76,13 @@ async def list_customers(
     )
 
 
-@router.get("/{customer_id}", response_model=CustomerResponse)
+@router.get(
+    "/{customer_id}",
+    response_model=CustomerResponse,
+    responses=CRUD_ERROR_RESPONSES,
+    summary="Get customer by ID",
+    description="Returns a single customer record with all details including contact information and service history.",
+)
 async def get_customer(
     customer_id: str,
     db: DbSession,

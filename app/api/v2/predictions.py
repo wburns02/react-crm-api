@@ -17,6 +17,11 @@ import logging
 from app.api.deps import DbSession, CurrentUser
 from app.models.prediction import LeadScore, ChurnPrediction, RevenueForecast, DealHealth
 from app.models.customer import Customer
+from app.services.ml_scoring import (
+    calculate_lead_scores_batch,
+    calculate_customer_lead_score,
+    get_lead_scoring_summary,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -80,19 +85,45 @@ async def get_lead_score(
     customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
+    calculate_if_missing: bool = Query(True, description="Calculate score on-demand if not exists"),
 ):
-    """Get lead score for a customer."""
+    """Get lead score for a customer. Optionally calculates on-demand if missing."""
     result = await db.execute(select(LeadScore).where(LeadScore.customer_id == int(customer_id)))
     score = result.scalar_one_or_none()
 
     if not score:
-        # Return default score if not yet calculated
-        return {
-            "customer_id": customer_id,
-            "score": None,
-            "score_label": "unknown",
-            "message": "Lead score not yet calculated",
-        }
+        if calculate_if_missing:
+            # Calculate on-demand
+            customer_result = await db.execute(
+                select(Customer).where(Customer.id == int(customer_id))
+            )
+            customer = customer_result.scalar_one_or_none()
+
+            if not customer:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Customer not found",
+                )
+
+            # Calculate score
+            score_data = await calculate_customer_lead_score(db, customer)
+
+            return {
+                "customer_id": customer_id,
+                "score": score_data["score"],
+                "score_label": score_data["score_label"],
+                "confidence": score_data["confidence"],
+                "factors": score_data["factors"],
+                "scored_at": datetime.utcnow().isoformat(),
+                "calculated_on_demand": True,
+            }
+        else:
+            return {
+                "customer_id": customer_id,
+                "score": None,
+                "score_label": "unknown",
+                "message": "Lead score not yet calculated",
+            }
 
     return {
         "customer_id": customer_id,
@@ -104,24 +135,73 @@ async def get_lead_score(
     }
 
 
+class LeadScoreRequest(BaseModel):
+    customer_ids: Optional[List[str]] = Field(None, description="List of customer IDs to score. If empty, scores all active customers.")
+
+
 @router.post("/lead-scores/calculate")
 async def calculate_lead_scores(
-    customer_ids: Optional[List[str]] = None,
+    request: Optional[LeadScoreRequest] = None,
     db: DbSession = None,
     current_user: CurrentUser = None,
 ):
-    """Calculate/recalculate lead scores.
-
-    If no customer_ids provided, calculates for all prospects.
     """
-    # TODO: Implement actual ML model scoring
-    # For now, return placeholder
+    Calculate/recalculate lead scores using rule-based scoring.
 
-    return {
-        "status": "queued",
-        "message": "Lead scoring job queued. Results will be available shortly.",
-        "customers_to_score": len(customer_ids) if customer_ids else "all",
-    }
+    If no customer_ids provided, calculates for all active customers.
+
+    Scoring factors:
+    - Recent activity (< 7 days: +20, < 30 days: +10)
+    - Open quotes: +15+
+    - Previous work orders: +10+
+    - Property size (tank size): +5-15
+    - Customer type (commercial premium): +10-15
+    - Lead source quality: varies
+    - Engagement signals: +5-10
+
+    Labels: hot (75+), warm (50-74), cold (<50)
+    """
+    customer_ids = None
+    if request and request.customer_ids:
+        customer_ids = [int(cid) for cid in request.customer_ids]
+
+    try:
+        results = await calculate_lead_scores_batch(db, customer_ids)
+
+        return {
+            "status": "completed",
+            "message": f"Successfully scored {results['calculated']} customers",
+            "results": {
+                "calculated": results["calculated"],
+                "hot_leads": results["hot_leads"],
+                "warm_leads": results["warm_leads"],
+                "cold_leads": results["cold_leads"],
+                "errors": results["errors"],
+            },
+        }
+    except Exception as e:
+        logger.error(f"Lead scoring failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lead scoring failed: {str(e)}",
+        )
+
+
+@router.get("/lead-scores/summary")
+async def get_lead_scores_summary(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get summary statistics for lead scoring."""
+    try:
+        summary = await get_lead_scoring_summary(db)
+        return summary
+    except Exception as e:
+        logger.error(f"Failed to get scoring summary: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve scoring summary",
+        )
 
 
 # Churn Prediction Endpoints

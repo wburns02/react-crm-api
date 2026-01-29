@@ -19,6 +19,8 @@ from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
 from app.models.technician import Technician
 from app.models.customer import Customer
+from app.models.gps_tracking import TechnicianLocation
+from app.services.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -33,7 +35,12 @@ class LocationUpdate(BaseModel):
     longitude: float
     heading: Optional[float] = None
     speed: Optional[float] = None
+    accuracy: Optional[float] = None
+    altitude: Optional[float] = None
+    battery_level: Optional[int] = None
     timestamp: Optional[datetime] = None
+    current_status: Optional[str] = None  # available, en_route, on_site, break
+    current_work_order_id: Optional[str] = None
 
 
 class RouteOptimizeRequest(BaseModel):
@@ -334,14 +341,87 @@ async def update_technician_location(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Update technician's current location (from GPS)."""
-    # TODO: Store in a separate real-time location table
-    # For now, just acknowledge
+    """
+    Update technician's current location (from GPS).
+
+    Persists the location to the database and broadcasts via WebSocket
+    for real-time map updates.
+    """
+    now = datetime.utcnow()
+    captured_at = request.timestamp or now
+
+    # Check if location record exists for this technician
+    result = await db.execute(
+        select(TechnicianLocation).where(
+            TechnicianLocation.technician_id == request.technician_id
+        )
+    )
+    existing_location = result.scalar_one_or_none()
+
+    if existing_location:
+        # Update existing location
+        existing_location.latitude = request.latitude
+        existing_location.longitude = request.longitude
+        existing_location.accuracy = request.accuracy
+        existing_location.altitude = request.altitude
+        existing_location.speed = request.speed
+        existing_location.heading = request.heading
+        existing_location.battery_level = request.battery_level
+        existing_location.captured_at = captured_at
+        existing_location.received_at = now
+        existing_location.is_online = True
+        if request.current_status:
+            existing_location.current_status = request.current_status
+        if request.current_work_order_id:
+            existing_location.current_work_order_id = request.current_work_order_id
+    else:
+        # Create new location record
+        new_location = TechnicianLocation(
+            technician_id=request.technician_id,
+            latitude=request.latitude,
+            longitude=request.longitude,
+            accuracy=request.accuracy,
+            altitude=request.altitude,
+            speed=request.speed,
+            heading=request.heading,
+            battery_level=request.battery_level,
+            captured_at=captured_at,
+            received_at=now,
+            is_online=True,
+            current_status=request.current_status or "available",
+            current_work_order_id=request.current_work_order_id,
+        )
+        db.add(new_location)
+
+    await db.commit()
+
+    # Broadcast location update via WebSocket
+    location_data = {
+        "technician_id": request.technician_id,
+        "latitude": request.latitude,
+        "longitude": request.longitude,
+        "heading": request.heading,
+        "speed": request.speed,
+        "status": request.current_status or "available",
+        "timestamp": captured_at.isoformat(),
+    }
+
+    try:
+        await manager.broadcast_event(
+            event_type="technician.location_updated",
+            data=location_data,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to broadcast location update: {e}")
 
     return {
-        "status": "received",
+        "status": "saved",
         "technician_id": request.technician_id,
-        "timestamp": request.timestamp or datetime.utcnow(),
+        "timestamp": captured_at.isoformat(),
+        "location": {
+            "latitude": request.latitude,
+            "longitude": request.longitude,
+        },
     }
 
 

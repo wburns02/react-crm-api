@@ -90,6 +90,12 @@ from app.models.septic_permit import (
 # Book & Pay Bookings
 from app.models.booking import Booking
 
+# Service Intervals (Recurring Services)
+from app.models.service_interval import ServiceInterval, CustomerServiceSchedule, ServiceReminder
+
+# Notifications
+from app.models.notification import Notification
+
 __all__ = [
     # Core models
     "Customer",
@@ -186,4 +192,10 @@ __all__ = [
     "PermitImportBatch",
     # Book & Pay Bookings
     "Booking",
+    # Service Intervals (Recurring Services)
+    "ServiceInterval",
+    "CustomerServiceSchedule",
+    "ServiceReminder",
+    # Notifications
+    "Notification",
 ]

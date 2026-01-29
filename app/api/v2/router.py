@@ -93,6 +93,8 @@ from app.api.v2 import (
     local_ai,
     # National Septic OCR Permit System
     permits,
+    # Email Templates
+    email_templates,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -253,8 +255,15 @@ api_router.include_router(local_ai.router, prefix="/local-ai", tags=["local-ai"]
 # National Septic OCR Permit System
 api_router.include_router(permits.router, prefix="/permits", tags=["permits"])
 
+# Email Templates
+api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
+
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
 
 # Public Bookings API (Book & Pay - Supports Test Mode)
 api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"])
+
+# Observability: Prometheus Metrics
+from app.api.v2.endpoints.metrics import router as metrics_router
+api_router.include_router(metrics_router, prefix="/metrics", tags=["metrics"])

@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     TWILIO_API_KEY_SECRET: str | None = None
     TWILIO_TWIML_APP_SID: str | None = None
 
+    # Email (SendGrid)
+    SENDGRID_API_KEY: str | None = None
+    EMAIL_FROM_ADDRESS: str = "noreply@macseptic.com"
+    EMAIL_FROM_NAME: str = "Mac Septic Services"
+
     # RingCentral
     RINGCENTRAL_CLIENT_ID: str | None = None
     RINGCENTRAL_CLIENT_SECRET: str | None = None
@@ -97,6 +102,17 @@ class Settings(BaseSettings):
     RATE_LIMIT_SMS_PER_MINUTE: int = 10
     RATE_LIMIT_SMS_PER_HOUR: int = 100
     RATE_LIMIT_SMS_PER_DESTINATION_HOUR: int = 5
+
+    # Error Tracking
+    SENTRY_DSN: str | None = None
+    VERSION: str = "2.7.3"
+
+    # Redis Cache (optional)
+    REDIS_URL: str | None = None
+
+    # OpenTelemetry (optional)
+    OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
+    OTEL_SERVICE_NAME: str = "react-crm-api"
 
     @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":

@@ -12,6 +12,15 @@ from app.models.user import User
 # Import all models to ensure they're registered with Base.metadata
 import app.models  # noqa: F401
 
+# Import test factories
+from tests.factories import (
+    UserFactory,
+    CustomerFactory,
+    WorkOrderFactory,
+    TechnicianFactory,
+    InvoiceFactory,
+)
+
 # Test database URL (SQLite for testing)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 
@@ -103,3 +112,34 @@ async def admin_client(client: AsyncClient, admin_user: User):
     token = create_access_token(data={"sub": str(admin_user.id), "email": admin_user.email})
     client.headers["Authorization"] = f"Bearer {token}"
     return client
+
+
+# Factory fixtures for easy test data generation
+@pytest.fixture
+def user_factory():
+    """Factory for generating user test data."""
+    return UserFactory
+
+
+@pytest.fixture
+def customer_factory():
+    """Factory for generating customer test data."""
+    return CustomerFactory
+
+
+@pytest.fixture
+def work_order_factory():
+    """Factory for generating work order test data."""
+    return WorkOrderFactory
+
+
+@pytest.fixture
+def technician_factory():
+    """Factory for generating technician test data."""
+    return TechnicianFactory
+
+
+@pytest.fixture
+def invoice_factory():
+    """Factory for generating invoice test data."""
+    return InvoiceFactory
