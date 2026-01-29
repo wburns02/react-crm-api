@@ -390,7 +390,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.6",  # Fix email/communications routing + better error handling
+        "version": "2.7.7",  # Email templates API + communications fixes
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
