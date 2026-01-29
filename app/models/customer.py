@@ -76,6 +76,7 @@ class Customer(Base):
     # Relationships
     work_orders = relationship("WorkOrder", back_populates="customer")
     messages = relationship("Message", back_populates="customer")
+    bookings = relationship("Booking", back_populates="customer", foreign_keys="Booking.customer_id")
 
     def __repr__(self):
         return f"<Customer {self.first_name} {self.last_name}>"

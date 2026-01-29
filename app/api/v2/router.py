@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from app.api.v2 import (
     auth,
     availability,
+    bookings,
     customers,
     work_orders,
     communications,
@@ -253,3 +254,6 @@ api_router.include_router(permits.router, prefix="/permits", tags=["permits"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
+
+# Public Bookings API (Book & Pay - Supports Test Mode)
+api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"])

@@ -74,6 +74,9 @@ from app.models.septic_permit import (
     SepticPermit, PermitVersion, PermitDuplicate, PermitImportBatch
 )
 
+# Book & Pay Bookings
+from app.models.booking import Booking
+
 __all__ = [
     # Core models
     "Customer",
@@ -168,4 +171,6 @@ __all__ = [
     "PermitVersion",
     "PermitDuplicate",
     "PermitImportBatch",
+    # Book & Pay Bookings
+    "Booking",
 ]
