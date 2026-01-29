@@ -24,6 +24,7 @@ class DumpSiteBase(BaseModel):
     notes: Optional[str] = None
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    hours_of_operation: Optional[str] = None
 
 
 class DumpSiteCreate(DumpSiteBase):
@@ -43,6 +44,7 @@ class DumpSiteUpdate(BaseModel):
     notes: Optional[str] = None
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    hours_of_operation: Optional[str] = None
 
 
 @router.get("/")
@@ -82,6 +84,7 @@ async def list_dump_sites(
                 "notes": site.notes,
                 "contact_name": site.contact_name,
                 "contact_phone": site.contact_phone,
+                "hours_of_operation": site.hours_of_operation,
                 "created_at": site.created_at.isoformat() if site.created_at else None,
                 "updated_at": site.updated_at.isoformat() if site.updated_at else None,
             }
@@ -121,6 +124,7 @@ async def get_dump_site(
         "notes": site.notes,
         "contact_name": site.contact_name,
         "contact_phone": site.contact_phone,
+        "hours_of_operation": site.hours_of_operation,
         "created_at": site.created_at.isoformat() if site.created_at else None,
         "updated_at": site.updated_at.isoformat() if site.updated_at else None,
     }
@@ -161,6 +165,7 @@ async def create_dump_site(
         notes=request.notes,
         contact_name=request.contact_name,
         contact_phone=request.contact_phone,
+        hours_of_operation=request.hours_of_operation,
     )
 
     db.add(site)
