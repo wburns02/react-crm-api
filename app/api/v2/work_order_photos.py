@@ -27,27 +27,34 @@ async def list_work_order_photos(
     current_user: CurrentUser,
 ):
     """Get all photos for a work order."""
-    # Verify work order exists
-    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
-    work_order = wo_result.scalar_one_or_none()
+    try:
+        # Verify work order exists
+        wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+        work_order = wo_result.scalar_one_or_none()
 
-    if not work_order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Work order not found",
+        if not work_order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Work order not found",
+            )
+
+        # Get photos
+        query = (
+            select(WorkOrderPhoto)
+            .where(WorkOrderPhoto.work_order_id == work_order_id)
+            .order_by(WorkOrderPhoto.created_at.desc())
         )
 
-    # Get photos
-    query = (
-        select(WorkOrderPhoto)
-        .where(WorkOrderPhoto.work_order_id == work_order_id)
-        .order_by(WorkOrderPhoto.created_at.desc())
-    )
+        result = await db.execute(query)
+        photos = result.scalars().all()
 
-    result = await db.execute(query)
-    photos = result.scalars().all()
-
-    return [WorkOrderPhotoResponse.from_model(photo) for photo in photos]
+        return [WorkOrderPhotoResponse.from_model(photo) for photo in photos]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching photos for work order {work_order_id}: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 @router.post("/{work_order_id}/photos", response_model=WorkOrderPhotoResponse, status_code=status.HTTP_201_CREATED)
