@@ -381,7 +381,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.4",  # Job costing calculation endpoints
+        "version": "2.7.5",  # Email CRM integration fixes
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
