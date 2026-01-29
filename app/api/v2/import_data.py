@@ -111,7 +111,7 @@ async def validate_import_file(
     except UnicodeDecodeError:
         try:
             content_str = content.decode("latin-1")
-        except:
+        except Exception:
             raise HTTPException(
                 status_code=400,
                 detail="Could not decode file. Please ensure it's a valid CSV file with UTF-8 encoding."
@@ -150,7 +150,7 @@ async def import_csv_file(
     except UnicodeDecodeError:
         try:
             content_str = content.decode("latin-1")
-        except:
+        except Exception:
             raise HTTPException(
                 status_code=400,
                 detail="Could not decode file. Please ensure it's a valid CSV file with UTF-8 encoding."

@@ -284,7 +284,7 @@ async def run_database_migrations():
             try:
                 result = await session.execute(text("SELECT version_num FROM alembic_version"))
                 results["current_version"] = result.scalar_one_or_none()
-            except:
+            except Exception:
                 results["current_version"] = None
 
             # Delete alembic_version to reset state
@@ -329,7 +329,7 @@ async def create_admin_user():
     from app.database import async_session_maker
     import bcrypt
 
-    password = "admin123"  # Simple password without special chars
+    password = "admin123"  # nosec B105 - Test password for development only
     hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
     try:

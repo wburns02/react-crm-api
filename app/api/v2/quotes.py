@@ -326,7 +326,7 @@ def generate_quote_pdf_html(quote_data: dict) -> str:
                 created_date = quote_data["created_at"][:10]
             else:
                 created_date = quote_data["created_at"].strftime("%B %d, %Y")
-        except:
+        except Exception:
             created_date = str(quote_data["created_at"])[:10]
 
     valid_until = ""
@@ -336,7 +336,7 @@ def generate_quote_pdf_html(quote_data: dict) -> str:
                 valid_until = quote_data["valid_until"][:10]
             else:
                 valid_until = quote_data["valid_until"].strftime("%B %d, %Y")
-        except:
+        except Exception:
             valid_until = str(quote_data["valid_until"])[:10]
 
     # Generate line items rows

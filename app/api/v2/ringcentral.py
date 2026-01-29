@@ -432,7 +432,7 @@ async def analyze_single_call(call_id: int):
             try:
                 call.transcription_status = "failed"
                 await db.commit()
-            except:
+            except Exception:
                 pass
 
 

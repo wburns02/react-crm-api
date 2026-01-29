@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     LEGACY_DATABASE_URL: str | None = None
 
     # Auth - SECURITY: Must be set via environment in production
-    SECRET_KEY: str = "development-secret-key-change-in-production"
+    SECRET_KEY: str = "development-secret-key-change-in-production"  # nosec B105 - Default for dev, overridden in production via env var
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 

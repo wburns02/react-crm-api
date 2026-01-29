@@ -66,7 +66,7 @@ def windows_overlap(start1: str, end1: str, start2: str, end2: str) -> bool:
             h = int(parts[0])
             m = int(parts[1]) if len(parts) > 1 else 0
             return h * 60 + m
-        except:
+        except Exception:
             return 0
 
     s1, e1 = to_minutes(start1), to_minutes(end1)
