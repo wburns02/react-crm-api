@@ -247,7 +247,7 @@ async def accept_quote(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Mark a quote as accepted."""
+    """Mark a quote as accepted by customer."""
     result = await db.execute(select(Quote).where(Quote.id == quote_id))
     quote = result.scalar_one_or_none()
 
@@ -257,7 +257,42 @@ async def accept_quote(
             detail="Quote not found",
         )
 
+    if quote.status not in ["sent", "draft"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot accept quote with status '{quote.status}'. Must be 'sent' or 'draft'.",
+        )
+
     quote.status = "accepted"
+
+    await db.commit()
+    await db.refresh(quote)
+    return quote
+
+
+@router.post("/{quote_id}/decline", response_model=QuoteResponse)
+async def decline_quote(
+    quote_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Mark a quote as declined by customer."""
+    result = await db.execute(select(Quote).where(Quote.id == quote_id))
+    quote = result.scalar_one_or_none()
+
+    if not quote:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quote not found",
+        )
+
+    if quote.status not in ["sent", "draft"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot decline quote with status '{quote.status}'. Must be 'sent' or 'draft'.",
+        )
+
+    quote.status = "declined"
 
     await db.commit()
     await db.refresh(quote)
