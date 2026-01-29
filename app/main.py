@@ -11,11 +11,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import logging
 import traceback
 
 from app.api.v2.router import api_router
+from app.exceptions import CRMException, create_exception_handlers
+from app.core.sentry import init_sentry
+from app.middleware.correlation import CorrelationIdMiddleware
+from app.middleware.metrics import MetricsMiddleware
 from app.api.public.router import public_router
 from app.webhooks.twilio import twilio_router
 from app.config import settings
@@ -143,6 +149,56 @@ class ProxyHeadersMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+async def ensure_work_order_photos_table():
+    """Ensure work_order_photos table exists.
+
+    Creates the table if it doesn't exist. This is a runtime fix for
+    the migration that may have failed silently.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    async with async_session_maker() as session:
+        try:
+            # Check if table exists
+            result = await session.execute(text(
+                """SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_name = 'work_order_photos'
+                )"""
+            ))
+            table_exists = result.scalar()
+
+            if not table_exists:
+                logger.info("Creating missing work_order_photos table...")
+                await session.execute(text("""
+                    CREATE TABLE work_order_photos (
+                        id VARCHAR(36) PRIMARY KEY,
+                        work_order_id VARCHAR(36) NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+                        photo_type VARCHAR(50) NOT NULL,
+                        data TEXT NOT NULL,
+                        thumbnail TEXT,
+                        timestamp TIMESTAMPTZ NOT NULL,
+                        device_info VARCHAR(255),
+                        gps_lat FLOAT,
+                        gps_lng FLOAT,
+                        gps_accuracy FLOAT,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ
+                    )
+                """))
+                await session.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_work_order_photos_work_order_id ON work_order_photos(work_order_id)"
+                ))
+                await session.commit()
+                logger.info("Created work_order_photos table successfully")
+            else:
+                logger.debug("work_order_photos table already exists")
+
+        except Exception as e:
+            logger.warning(f"Could not ensure work_order_photos table: {type(e).__name__}: {e}")
+
+
 async def ensure_pay_rate_columns():
     """Ensure technician_pay_rates table has required columns.
 
@@ -212,6 +268,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting React CRM API...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
+
+    # Initialize Sentry for error tracking
+    init_sentry()
     # SECURITY: Don't log full database URL, just prefix
     if settings.DATABASE_URL:
         logger.info(f"Database URL prefix: {settings.DATABASE_URL[:30]}...")
@@ -221,6 +280,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure pay_rate columns exist (fix for migration 025 not running)
         await ensure_pay_rate_columns()
+
+        # Ensure work_order_photos table exists (fix for migration 032 not running)
+        await ensure_work_order_photos_table()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
@@ -257,6 +319,14 @@ app = FastAPI(
 # This ensures redirects use HTTPS when behind Railway's edge proxy
 app.add_middleware(ProxyHeadersMiddleware)
 
+# Correlation ID middleware for distributed tracing
+# Extracts/generates X-Correlation-ID and X-Request-ID for request tracking
+app.add_middleware(CorrelationIdMiddleware)
+
+# Metrics middleware for Prometheus monitoring
+# Automatically tracks request counts and latency
+app.add_middleware(MetricsMiddleware)
+
 # CORS middleware
 # SECURITY: Restrict origins to known frontend URLs
 allowed_origins = [
@@ -281,6 +351,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Correlation-ID", "X-Request-ID"],  # Allow frontend to read correlation headers
 )
 
 # Include routers
@@ -1147,32 +1218,12 @@ if __name__ == "__main__":
     )
 
 
-# Global exception handler to ensure CORS headers on 500 errors
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Handle all unhandled exceptions with proper CORS headers."""
-    logger.error(f"Unhandled exception: {type(exc).__name__}: {str(exc)}")
-    # Always log traceback for debugging production issues
-    logger.error(traceback.format_exc())
+# RFC 7807 Exception Handlers
+# Create handlers with CORS support
+_exception_handlers = create_exception_handlers(allowed_origins)
 
-    origin = request.headers.get("origin", "")
-
-    # Preserve HTTPException details instead of masking them
-    if isinstance(exc, HTTPException):
-        status_code = exc.status_code
-        detail = exc.detail
-    else:
-        status_code = 500
-        detail = "Internal server error"
-
-    response = JSONResponse(
-        status_code=status_code,
-        content={"detail": detail},
-    )
-
-    if origin in allowed_origins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Vary"] = "Origin"
-
-    return response
+# Register exception handlers
+app.add_exception_handler(CRMException, _exception_handlers["crm"])
+app.add_exception_handler(StarletteHTTPException, _exception_handlers["http"])
+app.add_exception_handler(RequestValidationError, _exception_handlers["validation"])
+app.add_exception_handler(Exception, _exception_handlers["generic"])
