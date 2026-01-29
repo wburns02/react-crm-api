@@ -920,6 +920,19 @@ COMMISSION_RATES = {
 }
 
 
+@router.get("/commission-rates")
+async def get_commission_rates(
+    current_user: CurrentUser,
+):
+    """Get current commission rate configuration by job type."""
+    return {
+        "rates": [
+            {"job_type": job_type, "rate": config["rate"], "apply_dump_fee": config["apply_dump_fee"]}
+            for job_type, config in COMMISSION_RATES.items()
+        ]
+    }
+
+
 class CommissionCalculateRequest(BaseModel):
     """Request for commission auto-calculation."""
     work_order_id: str
@@ -1088,23 +1101,39 @@ async def calculate_commission(
             dump_site_name = dump_site.name
             dump_fee_per_gallon = dump_site.fee_per_gallon
             dump_fee_total = gallons * dump_fee_per_gallon
-            commissionable_amount = job_total - dump_fee_total
+
+            # Handle edge case: dump fee exceeds job total
+            if dump_fee_total >= job_total:
+                commissionable_amount = 0
+            else:
+                commissionable_amount = job_total - dump_fee_total
 
         # Calculate commission
         commission_amount = commissionable_amount * commission_rate
 
         # Build breakdown
+        warning = None
         if apply_dump_fee and dump_fee_total:
+            steps = [
+                f"Job Total: ${job_total:.2f}",
+                f"Gallons: {gallons:,}",
+                f"Dump Fee: {gallons:,} × ${dump_fee_per_gallon:.4f} = ${dump_fee_total:.2f}",
+            ]
+
+            # Handle edge case: dump fee exceeds job total
+            if dump_fee_total >= job_total:
+                steps.append(f"⚠️ Dump Fee (${dump_fee_total:.2f}) exceeds Job Total (${job_total:.2f})")
+                steps.append("Commissionable: $0.00 (dump fees exceed job total)")
+                steps.append("Commission: $0.00")
+                warning = "Dump fees exceed job total - no commission earned"
+            else:
+                steps.append(f"Commissionable: ${job_total:.2f} - ${dump_fee_total:.2f} = ${commissionable_amount:.2f}")
+                steps.append(f"Commission: ${commissionable_amount:.2f} × {commission_rate:.0%} = ${commission_amount:.2f}")
+
             breakdown = {
                 "formula": "(job_total - dump_fee) × rate",
                 "calculation": f"({job_total:.2f} - {dump_fee_total:.2f}) × {commission_rate:.0%} = {commission_amount:.2f}",
-                "steps": [
-                    f"Job Total: ${job_total:.2f}",
-                    f"Gallons: {gallons:,}",
-                    f"Dump Fee: {gallons:,} × ${dump_fee_per_gallon:.4f} = ${dump_fee_total:.2f}",
-                    f"Commissionable: ${job_total:.2f} - ${dump_fee_total:.2f} = ${commissionable_amount:.2f}",
-                    f"Commission: ${commissionable_amount:.2f} × {commission_rate:.0%} = ${commission_amount:.2f}",
-                ],
+                "steps": steps,
             }
         else:
             breakdown = {
@@ -1132,6 +1161,7 @@ async def calculate_commission(
             "commission_rate": commission_rate,
             "commission_amount": round(commission_amount, 2),
             "breakdown": breakdown,
+            "warning": warning,
         }
     except HTTPException:
         raise
@@ -1214,6 +1244,14 @@ async def create_commission(
 ):
     """Create a new commission entry."""
     try:
+        # Validate dump site is provided for pumping and grease trap jobs
+        if request.job_type in ["pumping", "grease_trap"]:
+            if not request.dump_site_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Dump site is required for pumping and grease trap jobs"
+                )
+
         # Calculate commission amount if not provided
         commission_amount = request.commission_amount
         if commission_amount is None:
