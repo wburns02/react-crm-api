@@ -17,6 +17,7 @@ class Booking(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    work_order_id = Column(String(36), ForeignKey("work_orders.id"), nullable=True)
 
     # Customer info (for non-registered customers)
     customer_first_name = Column(String(100), nullable=False)

@@ -14,6 +14,7 @@ from sqlalchemy import select, and_, text
 from app.api.deps import DbSession, CurrentUser
 from app.models.booking import Booking
 from app.models.customer import Customer
+from app.models.work_order import WorkOrder
 from app.schemas.booking import (
     BookingCreate,
     BookingResponse,
@@ -74,6 +75,7 @@ async def ensure_bookings_table(db: DbSession) -> None:
                 CREATE TABLE IF NOT EXISTS bookings (
                     id VARCHAR(36) PRIMARY KEY,
                     customer_id INTEGER REFERENCES customers(id),
+                    work_order_id VARCHAR(36) REFERENCES work_orders(id),
                     customer_first_name VARCHAR(100) NOT NULL,
                     customer_last_name VARCHAR(100) NOT NULL,
                     customer_email VARCHAR(255),
@@ -188,8 +190,30 @@ async def create_booking(
     if not payment_result.success:
         raise HTTPException(status_code=402, detail=f"Payment authorization failed: {payment_result.error_message}")
 
+    # Find or create customer by phone number
+    customer_result = await db.execute(
+        select(Customer).where(Customer.phone == booking_data.phone)
+    )
+    customer = customer_result.scalar_one_or_none()
+
+    if not customer:
+        # Create new customer from booking info
+        customer = Customer(
+            first_name=booking_data.first_name,
+            last_name=booking_data.last_name,
+            phone=booking_data.phone,
+            email=booking_data.email,
+            address_line1=booking_data.service_address,
+            lead_source="online_booking",
+            is_active=True,
+        )
+        db.add(customer)
+        await db.flush()  # Get customer.id without full commit
+        logger.info(f"Created new customer {customer.id} for booking")
+
     # Create booking record
     booking = Booking(
+        customer_id=customer.id,
         customer_first_name=booking_data.first_name,
         customer_last_name=booking_data.last_name,
         customer_email=booking_data.email,
@@ -214,12 +238,38 @@ async def create_booking(
     )
 
     db.add(booking)
+    await db.flush()  # Get booking.id
+
+    # Create work order for the schedule
+    import uuid
+    is_emergency = "ASAP" in (booking_data.notes or "").upper()
+    work_order = WorkOrder(
+        id=str(uuid.uuid4()),
+        customer_id=customer.id,
+        job_type="pumping",
+        status="scheduled",
+        priority="emergency" if is_emergency else "normal",
+        scheduled_date=booking_data.scheduled_date,
+        time_window_start=time_start,
+        time_window_end=time_end,
+        estimated_duration_hours=2.0,
+        service_address_line1=booking_data.service_address,
+        notes=f"Online Booking #{booking.id[:8]}\n{booking_data.notes or ''}".strip(),
+        estimated_gallons=1750,
+    )
+    db.add(work_order)
+    await db.flush()
+
+    # Link booking to work order
+    booking.work_order_id = work_order.id
+
     await db.commit()
     await db.refresh(booking)
 
     logger.info(
         f"Booking created: {booking.id} for {booking.customer_first_name} {booking.customer_last_name} "
-        f"on {booking.scheduled_date} ({'TEST' if booking.is_test else 'LIVE'})"
+        f"on {booking.scheduled_date} ({'TEST' if booking.is_test else 'LIVE'}) "
+        f"with work order {work_order.id}"
     )
 
     return BookingResponse.model_validate(booking)
