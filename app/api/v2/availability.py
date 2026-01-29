@@ -118,8 +118,8 @@ async def get_availability_slots(
 
     query = select(WorkOrder).where(
         and_(
-            func.date(WorkOrder.scheduled_date) >= parsed_start,
-            func.date(WorkOrder.scheduled_date) <= parsed_end,
+            WorkOrder.scheduled_date >= parsed_start,
+            WorkOrder.scheduled_date <= parsed_end,
             WorkOrder.status.in_(active_statuses)
         )
     )
