@@ -431,6 +431,81 @@ async def create_time_entry(
     return {"id": str(entry.id), "hours": hours}
 
 
+class TimeEntryUpdate(BaseModel):
+    """Request to update a time entry."""
+    clock_in: Optional[datetime] = None
+    clock_out: Optional[datetime] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None  # pending, approved, rejected
+    regular_hours: Optional[float] = None
+    overtime_hours: Optional[float] = None
+
+
+@router.patch("/time-entries/{entry_id}")
+async def update_time_entry(
+    entry_id: str,
+    request: TimeEntryUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update a time entry."""
+    result = await db.execute(
+        select(TimeEntry).where(TimeEntry.id == entry_id)
+    )
+    entry = result.scalar_one_or_none()
+
+    if not entry:
+        raise HTTPException(status_code=404, detail="Time entry not found")
+
+    # Update fields if provided
+    if request.clock_in is not None:
+        entry.clock_in = request.clock_in
+    if request.clock_out is not None:
+        entry.clock_out = request.clock_out
+    if request.notes is not None:
+        entry.notes = request.notes
+
+    # Recalculate hours if clock times changed
+    if request.clock_in is not None or request.clock_out is not None:
+        if entry.clock_in and entry.clock_out:
+            hours = calculate_hours(entry.clock_in, entry.clock_out, entry.break_minutes or 0)
+            entry.regular_hours = hours["regular"]
+            entry.overtime_hours = hours["overtime"]
+
+    # Allow manual override of hours
+    if request.regular_hours is not None:
+        entry.regular_hours = request.regular_hours
+    if request.overtime_hours is not None:
+        entry.overtime_hours = request.overtime_hours
+
+    # Handle status changes
+    if request.status is not None:
+        valid_statuses = ["pending", "approved", "rejected"]
+        if request.status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+        entry.status = request.status
+        if request.status == "approved":
+            entry.approved_by = current_user.email
+            entry.approved_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(entry)
+
+    logger.info(f"Updated time entry {entry_id} by {current_user.email}")
+
+    return {
+        "id": str(entry.id),
+        "technician_id": entry.technician_id,
+        "date": entry.entry_date.isoformat(),
+        "clock_in": entry.clock_in.isoformat() if entry.clock_in else None,
+        "clock_out": entry.clock_out.isoformat() if entry.clock_out else None,
+        "regular_hours": entry.regular_hours or 0,
+        "overtime_hours": entry.overtime_hours or 0,
+        "status": entry.status,
+        "notes": entry.notes,
+    }
+
+
 @router.patch("/time-entries/{entry_id}/approve")
 async def approve_time_entry(
     entry_id: str,
