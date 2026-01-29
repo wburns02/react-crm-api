@@ -6,7 +6,7 @@ This is a PUBLIC endpoint - no authentication required.
 """
 import logging
 from fastapi import APIRouter, Query, HTTPException
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_
 from typing import Optional, List
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
@@ -124,19 +124,11 @@ async def get_availability_slots(
 
     # Get scheduled work orders in date range
     try:
-        # Use or_ with explicit comparisons for ENUM compatibility
-        status_filter = or_(
-            WorkOrder.status == "scheduled",
-            WorkOrder.status == "confirmed",
-            WorkOrder.status == "enroute",
-            WorkOrder.status == "on_site",
-            WorkOrder.status == "in_progress"
-        )
+        # Query work orders in date range (filter status in Python to avoid ENUM issues)
         query = select(WorkOrder).where(
             and_(
                 WorkOrder.scheduled_date >= parsed_start,
                 WorkOrder.scheduled_date <= parsed_end,
-                status_filter
             )
         )
 
@@ -144,7 +136,11 @@ async def get_availability_slots(
             query = query.where(WorkOrder.job_type == service_type)
 
         result = await db.execute(query)
-        work_orders = result.scalars().all()
+        all_work_orders = result.scalars().all()
+
+        # Filter by status in Python (avoid PostgreSQL ENUM comparison issues with asyncpg)
+        active_statuses = {"scheduled", "confirmed", "enroute", "on_site", "in_progress"}
+        work_orders = [wo for wo in all_work_orders if wo.status in active_statuses]
     except Exception as e:
         logger.error(f"Database query error: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
