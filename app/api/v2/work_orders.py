@@ -8,6 +8,7 @@ import traceback
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
+from app.models.customer import Customer
 from app.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
@@ -22,6 +23,60 @@ router = APIRouter()
 
 # PostgreSQL ENUM fields that need explicit type casting
 ENUM_FIELDS = {"status", "job_type", "priority"}
+
+
+def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -> dict:
+    """Convert WorkOrder to dict with customer_name populated from Customer JOIN."""
+    customer_name = None
+    if customer:
+        first = customer.first_name or ""
+        last = customer.last_name or ""
+        customer_name = f"{first} {last}".strip() or None
+
+    return {
+        "id": wo.id,
+        "customer_id": wo.customer_id,
+        "customer_name": customer_name,
+        "technician_id": wo.technician_id,
+        "job_type": str(wo.job_type) if wo.job_type else None,
+        "status": str(wo.status) if wo.status else "draft",
+        "priority": str(wo.priority) if wo.priority else "normal",
+        "scheduled_date": wo.scheduled_date,
+        "time_window_start": wo.time_window_start,
+        "time_window_end": wo.time_window_end,
+        "estimated_duration_hours": wo.estimated_duration_hours,
+        "service_address_line1": wo.service_address_line1,
+        "service_address_line2": wo.service_address_line2,
+        "service_city": wo.service_city,
+        "service_state": wo.service_state,
+        "service_postal_code": wo.service_postal_code,
+        "service_latitude": wo.service_latitude,
+        "service_longitude": wo.service_longitude,
+        "estimated_gallons": wo.estimated_gallons,
+        "notes": wo.notes,
+        "internal_notes": wo.internal_notes,
+        "is_recurring": wo.is_recurring,
+        "recurrence_frequency": wo.recurrence_frequency,
+        "next_recurrence_date": wo.next_recurrence_date,
+        "checklist": wo.checklist,
+        "assigned_vehicle": wo.assigned_vehicle,
+        "assigned_technician": wo.assigned_technician,
+        "total_amount": wo.total_amount,
+        "created_at": wo.created_at,
+        "updated_at": wo.updated_at,
+        "actual_start_time": wo.actual_start_time,
+        "actual_end_time": wo.actual_end_time,
+        "travel_start_time": wo.travel_start_time,
+        "travel_end_time": wo.travel_end_time,
+        "break_minutes": wo.break_minutes,
+        "total_labor_minutes": wo.total_labor_minutes,
+        "total_travel_minutes": wo.total_travel_minutes,
+        "is_clocked_in": wo.is_clocked_in,
+        "clock_in_gps_lat": wo.clock_in_gps_lat,
+        "clock_in_gps_lon": wo.clock_in_gps_lon,
+        "clock_out_gps_lat": wo.clock_out_gps_lat,
+        "clock_out_gps_lon": wo.clock_out_gps_lon,
+    }
 
 
 @router.get("", response_model=WorkOrderListResponse)
@@ -40,10 +95,13 @@ async def list_work_orders(
     scheduled_date_from: Optional[datetime] = None,
     scheduled_date_to: Optional[datetime] = None,
 ):
-    """List work orders with pagination and filtering."""
+    """List work orders with pagination, filtering, and real customer names."""
     try:
-        # Base query
-        query = select(WorkOrder)
+        # Base query with LEFT JOIN to Customer for real customer names
+        query = (
+            select(WorkOrder, Customer)
+            .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        )
 
         # Apply filters
         if customer_id:
@@ -103,12 +161,15 @@ async def list_work_orders(
         offset = (page - 1) * page_size
         query = query.offset(offset).limit(page_size).order_by(WorkOrder.created_at.desc())
 
-        # Execute query
+        # Execute query - returns tuples of (WorkOrder, Customer)
         result = await db.execute(query)
-        work_orders = result.scalars().all()
+        rows = result.all()
+
+        # Convert to dicts with customer_name populated
+        items = [work_order_with_customer_name(wo, customer) for wo, customer in rows]
 
         return WorkOrderListResponse(
-            items=work_orders,
+            items=items,
             total=total,
             page=page,
             page_size=page_size,
@@ -125,17 +186,24 @@ async def get_work_order(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get a single work order by ID."""
-    result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
-    work_order = result.scalar_one_or_none()
+    """Get a single work order by ID with customer name."""
+    # JOIN with Customer to get real customer name
+    query = (
+        select(WorkOrder, Customer)
+        .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        .where(WorkOrder.id == work_order_id)
+    )
+    result = await db.execute(query)
+    row = result.first()
 
-    if not work_order:
+    if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Work order not found",
         )
 
-    return work_order
+    work_order, customer = row
+    return work_order_with_customer_name(work_order, customer)
 
 
 @router.post("", response_model=WorkOrderResponse, status_code=status.HTTP_201_CREATED)

@@ -105,6 +105,7 @@ class WorkOrderResponse(WorkOrderBase):
     """Schema for work order response."""
 
     id: str  # Flask uses VARCHAR(36) UUID
+    customer_name: Optional[str] = None  # Populated from Customer JOIN
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
