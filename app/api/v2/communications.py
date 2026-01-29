@@ -204,6 +204,15 @@ async def send_email(
 
     email_service = EmailService()
 
+    # Check if email service is configured
+    if not email_service.is_configured:
+        status_info = email_service.get_status()
+        logger.error("Email service not configured", extra={"status": status_info})
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Email service not available: {status_info.get('message', 'Not configured')}"
+        )
+
     # Create message record with from_address
     message = Message(
         customer_id=request.customer_id,
@@ -331,7 +340,7 @@ async def get_communication_activity(
     }
 
 
-@router.get("/{message_id}", response_model=MessageResponse)
+@router.get("/message/{message_id}", response_model=MessageResponse)
 async def get_message(
     message_id: int,
     db: DbSession,

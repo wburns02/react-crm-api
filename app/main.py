@@ -27,6 +27,7 @@ from app.webhooks.twilio import twilio_router
 from app.config import settings
 from app.database import init_db
 from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
+from app.tasks.reminder_scheduler import start_reminder_scheduler, stop_reminder_scheduler
 
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
@@ -295,11 +296,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start RingCentral auto-sync: {e}")
 
+    # Start service reminder scheduler
+    try:
+        start_reminder_scheduler()
+        logger.info("Service reminder scheduler started")
+    except Exception as e:
+        logger.warning(f"Failed to start reminder scheduler: {e}")
+
     yield
 
     # Shutdown
     logger.info("Shutting down React CRM API...")
     stop_auto_sync()
+    stop_reminder_scheduler()
 
 
 # SECURITY: Conditionally enable docs based on settings
@@ -381,7 +390,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.5",  # Email CRM integration fixes
+        "version": "2.7.6",  # Fix email/communications routing + better error handling
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
