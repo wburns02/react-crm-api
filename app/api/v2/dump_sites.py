@@ -1,11 +1,14 @@
 """Dump Sites API endpoints for waste disposal location management."""
 from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select
+from sqlalchemy import select, text
 from typing import Optional
 from pydantic import BaseModel
+import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.dump_site import DumpSite
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -55,43 +58,62 @@ async def list_dump_sites(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List all dump sites with optional filtering."""
-    query = select(DumpSite)
+    try:
+        # First check if table exists
+        check_result = await db.execute(text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'dump_sites')"
+        ))
+        table_exists = check_result.scalar()
+        if not table_exists:
+            logger.error("dump_sites table does not exist!")
+            return {"sites": [], "total": 0, "error": "Table does not exist - migrations may not have run"}
+    except Exception as e:
+        logger.error(f"Error checking table existence: {e}")
 
-    if state:
-        query = query.where(DumpSite.address_state == state.upper())
+    try:
+        query = select(DumpSite)
 
-    if is_active is not None:
-        query = query.where(DumpSite.is_active == is_active)
+        if state:
+            query = query.where(DumpSite.address_state == state.upper())
 
-    query = query.order_by(DumpSite.address_state, DumpSite.name)
+        if is_active is not None:
+            query = query.where(DumpSite.is_active == is_active)
 
-    result = await db.execute(query)
-    sites = result.scalars().all()
+        query = query.order_by(DumpSite.address_state, DumpSite.name)
 
-    return {
-        "sites": [
-            {
-                "id": str(site.id),
-                "name": site.name,
-                "address_line1": site.address_line1,
-                "address_city": site.address_city,
-                "address_state": site.address_state,
-                "address_postal_code": site.address_postal_code,
-                "latitude": site.latitude,
-                "longitude": site.longitude,
-                "fee_per_gallon": site.fee_per_gallon,
-                "is_active": site.is_active,
-                "notes": site.notes,
-                "contact_name": site.contact_name,
-                "contact_phone": site.contact_phone,
-                "hours_of_operation": site.hours_of_operation,
-                "created_at": site.created_at.isoformat() if site.created_at else None,
-                "updated_at": site.updated_at.isoformat() if site.updated_at else None,
-            }
-            for site in sites
-        ],
-        "total": len(sites),
-    }
+        result = await db.execute(query)
+        sites = result.scalars().all()
+
+        return {
+            "sites": [
+                {
+                    "id": str(site.id),
+                    "name": site.name,
+                    "address_line1": site.address_line1,
+                    "address_city": site.address_city,
+                    "address_state": site.address_state,
+                    "address_postal_code": site.address_postal_code,
+                    "latitude": site.latitude,
+                    "longitude": site.longitude,
+                    "fee_per_gallon": site.fee_per_gallon,
+                    "is_active": site.is_active,
+                    "notes": site.notes,
+                    "contact_name": site.contact_name,
+                    "contact_phone": site.contact_phone,
+                    "hours_of_operation": getattr(site, 'hours_of_operation', None),
+                    "created_at": site.created_at.isoformat() if site.created_at else None,
+                    "updated_at": site.updated_at.isoformat() if site.updated_at else None,
+                }
+                for site in sites
+            ],
+            "total": len(sites),
+        }
+    except Exception as e:
+        logger.error(f"Error listing dump sites: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {type(e).__name__}: {str(e)}"
+        )
 
 
 @router.get("/{site_id}")
