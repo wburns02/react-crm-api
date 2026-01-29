@@ -58,7 +58,10 @@ def windows_overlap(start1: str, end1: str, start2: str, end2: str) -> bool:
         if not time_str:
             return 0
         try:
-            h, m = map(int, time_str.split(":"))
+            # Handle both "HH:MM" and "HH:MM:SS" formats
+            parts = time_str.split(":")
+            h = int(parts[0])
+            m = int(parts[1]) if len(parts) > 1 else 0
             return h * 60 + m
         except:
             return 0
@@ -134,9 +137,12 @@ async def get_availability_slots(
             date_str = wo.scheduled_date.isoformat() if hasattr(wo.scheduled_date, 'isoformat') else str(wo.scheduled_date)[:10]
             if date_str not in busy_by_date:
                 busy_by_date[date_str] = []
+            # Format time as HH:MM (truncate seconds if present)
+            start_time = wo.time_window_start.strftime("%H:%M") if wo.time_window_start else BUSINESS_START
+            end_time = wo.time_window_end.strftime("%H:%M") if wo.time_window_end else BUSINESS_END
             busy_by_date[date_str].append({
-                "start": str(wo.time_window_start) if wo.time_window_start else BUSINESS_START,
-                "end": str(wo.time_window_end) if wo.time_window_end else BUSINESS_END,
+                "start": start_time,
+                "end": end_time,
             })
 
     # Calculate availability for each day
