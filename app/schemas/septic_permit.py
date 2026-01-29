@@ -24,8 +24,10 @@ ChangeSource = Literal["scraper", "manual", "merge", "api"]
 
 # ===== REFERENCE DATA SCHEMAS =====
 
+
 class StateBase(BaseModel):
     """State reference data."""
+
     code: str = Field(..., max_length=2, description="2-letter state code")
     name: str = Field(..., max_length=100)
     fips_code: Optional[str] = None
@@ -34,6 +36,7 @@ class StateBase(BaseModel):
 
 class StateResponse(StateBase):
     """State with ID."""
+
     id: int
 
     class Config:
@@ -42,6 +45,7 @@ class StateResponse(StateBase):
 
 class CountyBase(BaseModel):
     """County reference data."""
+
     name: str = Field(..., max_length=100)
     normalized_name: Optional[str] = None
     fips_code: Optional[str] = None
@@ -50,6 +54,7 @@ class CountyBase(BaseModel):
 
 class CountyResponse(CountyBase):
     """County with ID and state info."""
+
     id: int
     state_id: int
     state_code: Optional[str] = None
@@ -60,6 +65,7 @@ class CountyResponse(CountyBase):
 
 class SystemTypeBase(BaseModel):
     """Septic system type."""
+
     code: str = Field(..., max_length=50)
     name: str = Field(..., max_length=200)
     category: Optional[str] = None
@@ -68,6 +74,7 @@ class SystemTypeBase(BaseModel):
 
 class SystemTypeResponse(SystemTypeBase):
     """System type with ID."""
+
     id: int
 
     class Config:
@@ -76,6 +83,7 @@ class SystemTypeResponse(SystemTypeBase):
 
 class SourcePortalBase(BaseModel):
     """Data source portal."""
+
     code: str = Field(..., max_length=100)
     name: str = Field(..., max_length=200)
     platform: Optional[str] = None
@@ -84,6 +92,7 @@ class SourcePortalBase(BaseModel):
 
 class SourcePortalResponse(SourcePortalBase):
     """Source portal with stats."""
+
     id: int
     state_id: Optional[int] = None
     is_active: bool = True
@@ -96,8 +105,10 @@ class SourcePortalResponse(SourcePortalBase):
 
 # ===== PERMIT SCHEMAS =====
 
+
 class PermitBase(BaseModel):
     """Base permit fields (for creation/update)."""
+
     # Identification
     permit_number: Optional[str] = Field(None, max_length=100)
     state_code: str = Field(..., max_length=2, description="2-letter state code")
@@ -144,11 +155,13 @@ class PermitBase(BaseModel):
 
 class PermitCreate(PermitBase):
     """Create a new permit (from scraper ingestion)."""
+
     scraped_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class PermitUpdate(BaseModel):
     """Update an existing permit."""
+
     permit_number: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
@@ -173,6 +186,7 @@ class PermitUpdate(BaseModel):
 
 class PermitResponse(BaseModel):
     """Full permit response with all fields."""
+
     id: UUID
     permit_number: Optional[str] = None
 
@@ -236,6 +250,7 @@ class PermitResponse(BaseModel):
 
 class PermitSummary(BaseModel):
     """Compact permit summary for list views."""
+
     id: UUID
     permit_number: Optional[str] = None
     address: Optional[str] = None
@@ -253,11 +268,12 @@ class PermitSummary(BaseModel):
 
 # ===== SEARCH SCHEMAS =====
 
+
 class PermitSearchRequest(BaseModel):
     """Search parameters for permit search."""
+
     # Text search
-    query: Optional[str] = Field(None, min_length=2, max_length=500,
-                                  description="Search query for hybrid search")
+    query: Optional[str] = Field(None, min_length=2, max_length=500, description="Search query for hybrid search")
 
     # Filters
     state_codes: Optional[List[str]] = Field(None, description="Filter by state codes")
@@ -292,12 +308,14 @@ class PermitSearchRequest(BaseModel):
 
 class SearchHighlight(BaseModel):
     """Search result highlighting."""
+
     field: str
     fragments: List[str]
 
 
 class PermitSearchResult(BaseModel):
     """Single search result with score and highlighting."""
+
     permit: PermitSummary
     score: float = Field(..., description="Combined relevance score")
     keyword_score: Optional[float] = None
@@ -307,6 +325,7 @@ class PermitSearchResult(BaseModel):
 
 class PermitSearchResponse(BaseModel):
     """Paginated search results."""
+
     results: List[PermitSearchResult] = []
     total: int = 0
     page: int = 1
@@ -323,14 +342,17 @@ class PermitSearchResponse(BaseModel):
 
 # ===== BATCH INGESTION SCHEMAS =====
 
+
 class BatchIngestionRequest(BaseModel):
     """Request to ingest a batch of permits."""
+
     source_portal_code: str = Field(..., max_length=100)
     permits: List[PermitCreate] = Field(..., max_items=10000)
 
 
 class BatchIngestionStats(BaseModel):
     """Statistics from batch ingestion."""
+
     batch_id: UUID
     source_portal_code: str
     total_records: int = 0
@@ -345,6 +367,7 @@ class BatchIngestionStats(BaseModel):
 
 class BatchIngestionResponse(BaseModel):
     """Response from batch ingestion."""
+
     status: ImportBatchStatus
     stats: BatchIngestionStats
     message: str = ""
@@ -352,8 +375,10 @@ class BatchIngestionResponse(BaseModel):
 
 # ===== DUPLICATE MANAGEMENT SCHEMAS =====
 
+
 class DuplicatePair(BaseModel):
     """A pair of potential duplicate permits."""
+
     id: UUID
     permit_1: PermitSummary
     permit_2: PermitSummary
@@ -366,6 +391,7 @@ class DuplicatePair(BaseModel):
 
 class DuplicateResolution(BaseModel):
     """Request to resolve a duplicate pair."""
+
     action: Literal["merge", "reject", "review"]
     canonical_id: Optional[UUID] = Field(None, description="ID of the record to keep when merging")
     notes: Optional[str] = None
@@ -373,6 +399,7 @@ class DuplicateResolution(BaseModel):
 
 class DuplicateResponse(BaseModel):
     """Response after resolving duplicate."""
+
     id: UUID
     status: DuplicateStatus
     canonical_id: Optional[UUID] = None
@@ -382,8 +409,10 @@ class DuplicateResponse(BaseModel):
 
 # ===== STATISTICS SCHEMAS =====
 
+
 class PermitStatsByState(BaseModel):
     """Permit counts by state."""
+
     state_code: str
     state_name: str
     total_permits: int
@@ -394,6 +423,7 @@ class PermitStatsByState(BaseModel):
 
 class PermitStatsByCounty(BaseModel):
     """Permit counts by county."""
+
     county_id: int
     county_name: str
     state_code: str
@@ -403,6 +433,7 @@ class PermitStatsByCounty(BaseModel):
 
 class PermitStatsByYear(BaseModel):
     """Permit counts by year."""
+
     year: int
     total_permits: int
     by_state: Optional[Dict[str, int]] = None
@@ -410,6 +441,7 @@ class PermitStatsByYear(BaseModel):
 
 class PermitStatsOverview(BaseModel):
     """Dashboard overview statistics."""
+
     total_permits: int = 0
     total_states: int = 0
     total_counties: int = 0
@@ -429,6 +461,7 @@ class PermitStatsOverview(BaseModel):
 
 class PermitStatsResponse(BaseModel):
     """Response for permit statistics endpoint."""
+
     overview: PermitStatsOverview
     by_state: List[PermitStatsByState] = []
     by_county: Optional[List[PermitStatsByCounty]] = None
@@ -439,8 +472,10 @@ class PermitStatsResponse(BaseModel):
 
 # ===== VERSION HISTORY SCHEMAS =====
 
+
 class PermitVersionResponse(BaseModel):
     """Version history entry for a permit."""
+
     id: UUID
     permit_id: UUID
     version: int
@@ -459,6 +494,7 @@ class PermitVersionResponse(BaseModel):
 
 class PermitHistoryResponse(BaseModel):
     """Full version history for a permit."""
+
     permit_id: UUID
     current_version: int
     versions: List[PermitVersionResponse] = []

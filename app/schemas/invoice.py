@@ -10,6 +10,7 @@ INVOICE_STATUSES = Literal["draft", "sent", "paid", "overdue", "void"]
 
 class LineItem(BaseModel):
     """Schema for invoice line item."""
+
     id: Optional[str] = None
     service: str = Field(..., min_length=1)
     description: Optional[str] = None
@@ -20,6 +21,7 @@ class LineItem(BaseModel):
 
 class CustomerSummary(BaseModel):
     """Minimal customer info for invoice response."""
+
     id: str
     first_name: str
     last_name: str
@@ -29,6 +31,7 @@ class CustomerSummary(BaseModel):
 
 class InvoiceBase(BaseModel):
     """Base invoice schema - customer_id is integer, work_order_id is UUID."""
+
     customer_id: int  # Integer FK to customers.id
     work_order_id: Optional[str] = None  # UUID as string
     status: Optional[str] = None  # Don't send default - let DB handle
@@ -38,6 +41,7 @@ class InvoiceBase(BaseModel):
 
 class InvoiceCreate(InvoiceBase):
     """Schema for creating an invoice."""
+
     invoice_number: Optional[str] = None
     issue_date: Optional[date] = None
     due_date: Optional[date] = None
@@ -47,6 +51,7 @@ class InvoiceCreate(InvoiceBase):
 
 class InvoiceUpdate(BaseModel):
     """Schema for updating an invoice (all fields optional)."""
+
     customer_id: Optional[int] = None
     work_order_id: Optional[str] = None
     status: Optional[str] = None
@@ -61,6 +66,7 @@ class InvoiceUpdate(BaseModel):
 
 class InvoiceResponse(BaseModel):
     """Schema for invoice response."""
+
     id: str  # UUID as string
     invoice_number: Optional[str] = None
     customer_id: str  # UUID derived from integer customer ID
@@ -101,6 +107,7 @@ class InvoiceResponse(BaseModel):
 
 class InvoiceListResponse(BaseModel):
     """Paginated invoice list response."""
+
     items: list[InvoiceResponse]
     total: int
     page: int

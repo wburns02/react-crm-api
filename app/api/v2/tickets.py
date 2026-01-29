@@ -1,4 +1,5 @@
 """Tickets API - Support/service ticket management."""
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, text
 from typing import Optional
@@ -93,6 +94,7 @@ async def list_tickets(
         }
     except Exception as e:
         import traceback
+
         logger.error(f"Error in list_tickets: {traceback.format_exc()}")
         return {"items": [], "total": 0, "page": page, "page_size": page_size, "error": str(e)}
 

@@ -1,6 +1,7 @@
 """
 Payments API - Track invoice and customer payments.
 """
+
 from fastapi import APIRouter, HTTPException, status as http_status, Query
 from sqlalchemy import select, func
 from typing import Optional
@@ -73,7 +74,7 @@ async def list_payments(
         logger.error(f"Error listing payments: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {type(e).__name__}: {str(e)}"
+            detail=f"Database error: {type(e).__name__}: {str(e)}",
         )
 
 

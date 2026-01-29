@@ -5,10 +5,7 @@ Records all customer interactions for 360-degree visibility
 and sentiment analysis.
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, Enum as SQLEnum, JSON
-)
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -24,6 +21,7 @@ class Touchpoint(Base):
     - Support interactions
     - Feedback/surveys
     """
+
     __tablename__ = "cs_touchpoints"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -33,31 +31,60 @@ class Touchpoint(Base):
     touchpoint_type = Column(
         SQLEnum(
             # Communication
-            'email_sent', 'email_opened', 'email_clicked', 'email_replied',
-            'call_outbound', 'call_inbound', 'call_missed', 'voicemail',
-            'meeting_scheduled', 'meeting_held', 'meeting_cancelled', 'meeting_no_show',
-            'sms_sent', 'sms_received',
-            'chat_session', 'video_call',
+            "email_sent",
+            "email_opened",
+            "email_clicked",
+            "email_replied",
+            "call_outbound",
+            "call_inbound",
+            "call_missed",
+            "voicemail",
+            "meeting_scheduled",
+            "meeting_held",
+            "meeting_cancelled",
+            "meeting_no_show",
+            "sms_sent",
+            "sms_received",
+            "chat_session",
+            "video_call",
             # Product
-            'product_login', 'feature_usage', 'feature_adoption',
-            'webinar_registered', 'webinar_attended', 'training_completed',
+            "product_login",
+            "feature_usage",
+            "feature_adoption",
+            "webinar_registered",
+            "webinar_attended",
+            "training_completed",
             # Support
-            'support_ticket_opened', 'support_ticket_resolved', 'support_escalation',
+            "support_ticket_opened",
+            "support_ticket_resolved",
+            "support_escalation",
             # Feedback
-            'nps_response', 'csat_response', 'survey_response', 'review_posted',
+            "nps_response",
+            "csat_response",
+            "survey_response",
+            "review_posted",
             # Business
-            'qbr_held', 'renewal_discussion', 'expansion_discussion',
-            'contract_signed', 'invoice_paid', 'payment_issue',
+            "qbr_held",
+            "renewal_discussion",
+            "expansion_discussion",
+            "contract_signed",
+            "invoice_paid",
+            "payment_issue",
             # Internal
-            'internal_note', 'health_alert', 'risk_flag',
+            "internal_note",
+            "health_alert",
+            "risk_flag",
             # Other
-            'in_app_message_sent', 'in_app_message_clicked',
-            'document_shared', 'document_viewed',
-            'event_attended', 'referral_made',
-            'custom',
-            name='cs_touchpoint_type_enum'
+            "in_app_message_sent",
+            "in_app_message_clicked",
+            "document_shared",
+            "document_viewed",
+            "event_attended",
+            "referral_made",
+            "custom",
+            name="cs_touchpoint_type_enum",
         ),
-        nullable=False
+        nullable=False,
     )
 
     # Details
@@ -66,14 +93,21 @@ class Touchpoint(Base):
     description = Column(Text)
 
     # Direction and channel
-    direction = Column(
-        SQLEnum('inbound', 'outbound', 'internal', name='cs_touchpoint_direction_enum')
-    )
+    direction = Column(SQLEnum("inbound", "outbound", "internal", name="cs_touchpoint_direction_enum"))
     channel = Column(
         SQLEnum(
-            'email', 'phone', 'video', 'in_app', 'in_person',
-            'chat', 'sms', 'social', 'webinar', 'event', 'other',
-            name='cs_touchpoint_channel_enum'
+            "email",
+            "phone",
+            "video",
+            "in_app",
+            "in_person",
+            "chat",
+            "sms",
+            "social",
+            "webinar",
+            "event",
+            "other",
+            name="cs_touchpoint_channel_enum",
         )
     )
 
@@ -92,7 +126,7 @@ class Touchpoint(Base):
     # Sentiment analysis (AI-powered)
     sentiment_score = Column(Float)  # -1.0 to 1.0
     sentiment_label = Column(
-        SQLEnum('very_negative', 'negative', 'neutral', 'positive', 'very_positive', name='cs_sentiment_enum')
+        SQLEnum("very_negative", "negative", "neutral", "positive", "very_positive", name="cs_sentiment_enum")
     )
     sentiment_confidence = Column(Float)
 

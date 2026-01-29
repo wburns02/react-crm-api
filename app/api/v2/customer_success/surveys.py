@@ -20,19 +20,32 @@ import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
-from app.models.customer_success import (
-    Survey, SurveyQuestion, SurveyResponse, SurveyAnswer
-)
+from app.models.customer_success import Survey, SurveyQuestion, SurveyResponse, SurveyAnswer
 from app.models.customer_success.survey import SurveyAnalysis, SurveyAction
 from app.schemas.customer_success.survey import (
-    SurveyCreate, SurveyUpdate, SurveyResponse as SurveyResponseSchema,
-    SurveyListResponse, SurveyQuestionCreate, SurveyQuestionUpdate, SurveyQuestionResponse,
-    SurveySubmissionCreate, SurveySubmissionResponse, SurveyResponseListResponse,
-    SurveyAnalytics, NPSBreakdown,
+    SurveyCreate,
+    SurveyUpdate,
+    SurveyResponse as SurveyResponseSchema,
+    SurveyListResponse,
+    SurveyQuestionCreate,
+    SurveyQuestionUpdate,
+    SurveyQuestionResponse,
+    SurveySubmissionCreate,
+    SurveySubmissionResponse,
+    SurveyResponseListResponse,
+    SurveyAnalytics,
+    NPSBreakdown,
     # 2025-2026 Enhancement schemas
-    DetractorQueueResponse, DetractorItem, SurveyTrendResponse, TrendDataPoint,
-    SurveyAnalysisCreate, SurveyAnalysisResponse,
-    SurveyActionCreate, SurveyActionUpdate, SurveyActionResponse, SurveyActionListResponse,
+    DetractorQueueResponse,
+    DetractorItem,
+    SurveyTrendResponse,
+    TrendDataPoint,
+    SurveyAnalysisCreate,
+    SurveyAnalysisResponse,
+    SurveyActionCreate,
+    SurveyActionUpdate,
+    SurveyActionResponse,
+    SurveyActionListResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,6 +53,7 @@ router = APIRouter()
 
 
 # Survey CRUD
+
 
 @router.get("/", response_model=SurveyListResponse)
 async def list_surveys(
@@ -83,8 +97,7 @@ async def list_surveys(
     except Exception as e:
         logger.error(f"Error listing surveys: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing surveys: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing surveys: {str(e)}"
         )
 
 
@@ -95,11 +108,7 @@ async def get_survey(
     current_user: CurrentUser,
 ):
     """Get a specific survey with questions."""
-    result = await db.execute(
-        select(Survey)
-        .options(selectinload(Survey.questions))
-        .where(Survey.id == survey_id)
-    )
+    result = await db.execute(select(Survey).options(selectinload(Survey.questions)).where(Survey.id == survey_id))
     survey = result.scalar_one_or_none()
 
     if not survey:
@@ -140,11 +149,7 @@ async def create_survey(
     await db.refresh(survey)
 
     # Load questions
-    result = await db.execute(
-        select(Survey)
-        .options(selectinload(Survey.questions))
-        .where(Survey.id == survey.id)
-    )
+    result = await db.execute(select(Survey).options(selectinload(Survey.questions)).where(Survey.id == survey.id))
     return result.scalar_one()
 
 
@@ -156,9 +161,7 @@ async def update_survey(
     current_user: CurrentUser,
 ):
     """Update a survey."""
-    result = await db.execute(
-        select(Survey).where(Survey.id == survey_id)
-    )
+    result = await db.execute(select(Survey).where(Survey.id == survey_id))
     survey = result.scalar_one_or_none()
 
     if not survey:
@@ -180,11 +183,7 @@ async def update_survey(
     await db.commit()
 
     # Load questions
-    result = await db.execute(
-        select(Survey)
-        .options(selectinload(Survey.questions))
-        .where(Survey.id == survey.id)
-    )
+    result = await db.execute(select(Survey).options(selectinload(Survey.questions)).where(Survey.id == survey.id))
     return result.scalar_one()
 
 
@@ -195,9 +194,7 @@ async def delete_survey(
     current_user: CurrentUser,
 ):
     """Delete a survey."""
-    result = await db.execute(
-        select(Survey).where(Survey.id == survey_id)
-    )
+    result = await db.execute(select(Survey).where(Survey.id == survey_id))
     survey = result.scalar_one_or_none()
 
     if not survey:
@@ -219,6 +216,7 @@ async def delete_survey(
 
 # Survey Questions
 
+
 @router.post("/{survey_id}/questions", response_model=SurveyQuestionResponse, status_code=status.HTTP_201_CREATED)
 async def create_question(
     survey_id: int,
@@ -228,9 +226,7 @@ async def create_question(
 ):
     """Add a question to a survey."""
     # Check survey exists
-    survey_result = await db.execute(
-        select(Survey).where(Survey.id == survey_id)
-    )
+    survey_result = await db.execute(select(Survey).where(Survey.id == survey_id))
     if not survey_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -307,6 +303,7 @@ async def delete_question(
 
 # Survey Responses (from customers)
 
+
 @router.get("/{survey_id}/responses", response_model=SurveyResponseListResponse)
 async def list_survey_responses(
     survey_id: int,
@@ -377,9 +374,7 @@ async def submit_survey_response(
 ):
     """Submit a survey response from a customer."""
     # Verify survey exists and is active
-    survey_result = await db.execute(
-        select(Survey).where(Survey.id == survey_id)
-    )
+    survey_result = await db.execute(select(Survey).where(Survey.id == survey_id))
     survey = survey_result.scalar_one_or_none()
 
     if not survey:
@@ -486,6 +481,7 @@ async def submit_survey_response(
 
 # Survey Analytics
 
+
 @router.get("/{survey_id}/analytics", response_model=SurveyAnalytics)
 async def get_survey_analytics(
     survey_id: int,
@@ -495,9 +491,7 @@ async def get_survey_analytics(
     """Get analytics for a survey."""
     # Verify survey exists
     survey_result = await db.execute(
-        select(Survey)
-        .options(selectinload(Survey.questions))
-        .where(Survey.id == survey_id)
+        select(Survey).options(selectinload(Survey.questions)).where(Survey.id == survey_id)
     )
     survey = survey_result.scalar_one_or_none()
 
@@ -557,16 +551,17 @@ async def get_survey_analytics(
             select(
                 func.count(SurveyAnswer.id).label("count"),
                 func.avg(SurveyAnswer.rating_value).label("avg_rating"),
-            )
-            .where(SurveyAnswer.question_id == question.id)
+            ).where(SurveyAnswer.question_id == question.id)
         )
         stats = answer_result.fetchone()
-        question_stats.append({
-            "question_id": question.id,
-            "question_text": question.text,
-            "response_count": stats.count if stats else 0,
-            "avg_rating": float(stats.avg_rating) if stats and stats.avg_rating else None,
-        })
+        question_stats.append(
+            {
+                "question_id": question.id,
+                "question_text": question.text,
+                "response_count": stats.count if stats else 0,
+                "avg_rating": float(stats.avg_rating) if stats and stats.avg_rating else None,
+            }
+        )
 
     return SurveyAnalytics(
         survey_id=survey_id,
@@ -581,6 +576,7 @@ async def get_survey_analytics(
 
 # Survey Actions
 
+
 @router.post("/{survey_id}/activate")
 async def activate_survey(
     survey_id: int,
@@ -588,9 +584,7 @@ async def activate_survey(
     current_user: CurrentUser,
 ):
     """Activate a survey."""
-    result = await db.execute(
-        select(Survey).where(Survey.id == survey_id)
-    )
+    result = await db.execute(select(Survey).where(Survey.id == survey_id))
     survey = result.scalar_one_or_none()
 
     if not survey:
@@ -619,9 +613,7 @@ async def pause_survey(
     current_user: CurrentUser,
 ):
     """Pause an active survey."""
-    result = await db.execute(
-        select(Survey).where(Survey.id == survey_id)
-    )
+    result = await db.execute(select(Survey).where(Survey.id == survey_id))
     survey = result.scalar_one_or_none()
 
     if not survey:
@@ -649,9 +641,7 @@ async def complete_survey(
     current_user: CurrentUser,
 ):
     """Mark a survey as completed."""
-    result = await db.execute(
-        select(Survey).where(Survey.id == survey_id)
-    )
+    result = await db.execute(select(Survey).where(Survey.id == survey_id))
     survey = result.scalar_one_or_none()
 
     if not survey:
@@ -668,6 +658,7 @@ async def complete_survey(
 
 
 # ============ 2025-2026 Enhancement Endpoints ============
+
 
 @router.get("/detractors", response_model=DetractorQueueResponse)
 async def get_detractors_queue(
@@ -710,11 +701,11 @@ async def get_detractors_queue(
         query = query.order_by(
             # Order by urgency: critical first, then by score (lower first)
             case(
-                (SurveyResponse.urgency_level == 'critical', 1),
-                (SurveyResponse.urgency_level == 'high', 2),
-                (SurveyResponse.urgency_level == 'medium', 3),
-                (SurveyResponse.urgency_level == 'low', 4),
-                else_=5
+                (SurveyResponse.urgency_level == "critical", 1),
+                (SurveyResponse.urgency_level == "high", 2),
+                (SurveyResponse.urgency_level == "medium", 3),
+                (SurveyResponse.urgency_level == "low", 4),
+                else_=5,
             ),
             SurveyResponse.overall_score.asc(),
             SurveyResponse.created_at.desc(),
@@ -731,15 +722,11 @@ async def get_detractors_queue(
 
         for resp in responses:
             # Get survey name
-            survey_result = await db.execute(
-                select(Survey.name).where(Survey.id == resp.survey_id)
-            )
+            survey_result = await db.execute(select(Survey.name).where(Survey.id == resp.survey_id))
             survey_name = survey_result.scalar_one_or_none() or "Unknown Survey"
 
             # Get customer name
-            cust_result = await db.execute(
-                select(Customer.name).where(Customer.id == resp.customer_id)
-            )
+            cust_result = await db.execute(select(Customer.name).where(Customer.id == resp.customer_id))
             customer_name = cust_result.scalar_one_or_none() or "Unknown Customer"
 
             # Calculate days since response
@@ -764,9 +751,9 @@ async def get_detractors_queue(
             items.append(item)
 
             # Count by urgency
-            if resp.urgency_level == 'critical':
+            if resp.urgency_level == "critical":
                 critical_count += 1
-            elif resp.urgency_level == 'high':
+            elif resp.urgency_level == "high":
                 high_count += 1
 
             if not resp.action_taken:
@@ -782,8 +769,7 @@ async def get_detractors_queue(
     except Exception as e:
         logger.error(f"Error getting detractors queue: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting detractors queue: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error getting detractors queue: {str(e)}"
         )
 
 
@@ -896,18 +882,20 @@ async def get_survey_trends(
             total_promoters += data["promoters"]
             total_detractors += data["detractors"]
 
-            data_points.append(TrendDataPoint(
-                date=date_key,
-                responses_count=count,
-                avg_score=avg_score,
-                nps_score=nps_score,
-                promoters=data["promoters"],
-                passives=data["passives"],
-                detractors=data["detractors"],
-                sentiment_positive=data["positive"],
-                sentiment_neutral=data["neutral"],
-                sentiment_negative=data["negative"],
-            ))
+            data_points.append(
+                TrendDataPoint(
+                    date=date_key,
+                    responses_count=count,
+                    avg_score=avg_score,
+                    nps_score=nps_score,
+                    promoters=data["promoters"],
+                    passives=data["passives"],
+                    detractors=data["detractors"],
+                    sentiment_positive=data["positive"],
+                    sentiment_neutral=data["neutral"],
+                    sentiment_negative=data["negative"],
+                )
+            )
 
         # Calculate overall trends
         avg_nps = None
@@ -921,8 +909,8 @@ async def get_survey_trends(
         # Determine trend direction
         trend_direction = "stable"
         if len(data_points) >= 2:
-            first_half = data_points[:len(data_points)//2]
-            second_half = data_points[len(data_points)//2:]
+            first_half = data_points[: len(data_points) // 2]
+            second_half = data_points[len(data_points) // 2 :]
 
             first_avg = sum(dp.avg_score or 0 for dp in first_half) / len(first_half) if first_half else 0
             second_avg = sum(dp.avg_score or 0 for dp in second_half) / len(second_half) if second_half else 0
@@ -933,19 +921,19 @@ async def get_survey_trends(
                 trend_direction = "declining"
 
         # Get surveys included
-        surveys_query = select(Survey.id, Survey.name, func.count(SurveyResponse.id).label("responses")).join(
-            SurveyResponse
-        ).where(
-            SurveyResponse.created_at >= start_date
-        ).group_by(Survey.id, Survey.name)
+        surveys_query = (
+            select(Survey.id, Survey.name, func.count(SurveyResponse.id).label("responses"))
+            .join(SurveyResponse)
+            .where(SurveyResponse.created_at >= start_date)
+            .group_by(Survey.id, Survey.name)
+        )
 
         if survey_type:
             surveys_query = surveys_query.where(Survey.survey_type == survey_type)
 
         surveys_result = await db.execute(surveys_query)
         surveys_included = [
-            {"id": row.id, "name": row.name, "responses": row.responses}
-            for row in surveys_result.fetchall()
+            {"id": row.id, "name": row.name, "responses": row.responses} for row in surveys_result.fetchall()
         ]
 
         return SurveyTrendResponse(
@@ -963,8 +951,7 @@ async def get_survey_trends(
     except Exception as e:
         logger.error(f"Error getting survey trends: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting survey trends: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error getting survey trends: {str(e)}"
         )
 
 
@@ -984,9 +971,7 @@ async def trigger_survey_analysis(
     """
     try:
         # Verify survey exists
-        survey_result = await db.execute(
-            select(Survey).where(Survey.id == survey_id)
-        )
+        survey_result = await db.execute(select(Survey).where(Survey.id == survey_id))
         survey = survey_result.scalar_one_or_none()
 
         if not survey:
@@ -1001,7 +986,7 @@ async def trigger_survey_analysis(
                 select(SurveyAnalysis).where(
                     SurveyAnalysis.survey_id == survey_id,
                     SurveyAnalysis.response_id.is_(None),  # Survey-level analysis
-                    SurveyAnalysis.status.in_(['pending', 'processing', 'completed']),
+                    SurveyAnalysis.status.in_(["pending", "processing", "completed"]),
                 )
             )
             if existing.scalar_one_or_none():
@@ -1014,8 +999,8 @@ async def trigger_survey_analysis(
         analysis = SurveyAnalysis(
             survey_id=survey_id,
             response_id=None,  # Survey-level analysis
-            status='pending',
-            analysis_version='v1.0',
+            status="pending",
+            analysis_version="v1.0",
         )
         db.add(analysis)
         await db.commit()
@@ -1036,9 +1021,9 @@ async def trigger_survey_analysis(
         responses = responses_result.scalars().all()
 
         # Simple analysis (in production, this would use AI)
-        positive_count = sum(1 for r in responses if r.sentiment == 'positive')
-        neutral_count = sum(1 for r in responses if r.sentiment == 'neutral')
-        negative_count = sum(1 for r in responses if r.sentiment == 'negative')
+        positive_count = sum(1 for r in responses if r.sentiment == "positive")
+        neutral_count = sum(1 for r in responses if r.sentiment == "neutral")
+        negative_count = sum(1 for r in responses if r.sentiment == "negative")
         total = len(responses)
 
         sentiment_breakdown = {
@@ -1056,12 +1041,14 @@ async def trigger_survey_analysis(
         urgent_issues = []
         for r in responses:
             if r.overall_score and r.overall_score < 5:
-                urgent_issues.append({
-                    "text": r.feedback_text or "Low score without feedback",
-                    "customer_id": r.customer_id,
-                    "severity": "critical" if r.overall_score < 3 else "high",
-                    "response_id": r.id,
-                })
+                urgent_issues.append(
+                    {
+                        "text": r.feedback_text or "Low score without feedback",
+                        "customer_id": r.customer_id,
+                        "severity": "critical" if r.overall_score < 3 else "high",
+                        "response_id": r.id,
+                    }
+                )
 
         # Calculate churn risk
         detractor_count = sum(1 for r in responses if r.overall_score and r.overall_score < 7)
@@ -1075,7 +1062,7 @@ async def trigger_survey_analysis(
         analysis.urgency_score = min(churn_risk * 1.5, 100)  # Simple urgency calc
         analysis.key_themes = []  # Would be extracted by AI
         analysis.action_recommendations = []
-        analysis.status = 'completed'
+        analysis.status = "completed"
         analysis.analyzed_at = datetime.utcnow()
         analysis.executive_summary = (
             f"Analysis of {total} responses. "
@@ -1095,8 +1082,7 @@ async def trigger_survey_analysis(
     except Exception as e:
         logger.error(f"Error triggering survey analysis: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error triggering survey analysis: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error triggering survey analysis: {str(e)}"
         )
 
 
@@ -1115,9 +1101,7 @@ async def get_ai_insights(
     """
     try:
         # Verify survey exists
-        survey_result = await db.execute(
-            select(Survey).where(Survey.id == survey_id)
-        )
+        survey_result = await db.execute(select(Survey).where(Survey.id == survey_id))
         if not survey_result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1152,8 +1136,7 @@ async def get_ai_insights(
     except Exception as e:
         logger.error(f"Error getting AI insights: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting AI insights: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error getting AI insights: {str(e)}"
         )
 
 
@@ -1172,9 +1155,7 @@ async def create_survey_action(
     """
     try:
         # Verify survey exists
-        survey_result = await db.execute(
-            select(Survey).where(Survey.id == survey_id)
-        )
+        survey_result = await db.execute(select(Survey).where(Survey.id == survey_id))
         if not survey_result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1182,9 +1163,7 @@ async def create_survey_action(
             )
 
         # Verify customer exists
-        customer_result = await db.execute(
-            select(Customer).where(Customer.id == data.customer_id)
-        )
+        customer_result = await db.execute(select(Customer).where(Customer.id == data.customer_id))
         customer = customer_result.scalar_one_or_none()
         if not customer:
             raise HTTPException(
@@ -1206,16 +1185,14 @@ async def create_survey_action(
             ai_confidence=data.ai_confidence,
             assigned_to_user_id=data.assigned_to_user_id,
             created_by_user_id=current_user.id,
-            status='pending',
+            status="pending",
             due_date=data.due_date,
         )
         db.add(action)
 
         # If action is linked to a response, mark action taken on the response
         if data.response_id:
-            response_result = await db.execute(
-                select(SurveyResponse).where(SurveyResponse.id == data.response_id)
-            )
+            response_result = await db.execute(select(SurveyResponse).where(SurveyResponse.id == data.response_id))
             response = response_result.scalar_one_or_none()
             if response:
                 response.action_taken = True
@@ -1254,8 +1231,7 @@ async def create_survey_action(
     except Exception as e:
         logger.error(f"Error creating survey action: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating survey action: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating survey action: {str(e)}"
         )
 
 
@@ -1272,9 +1248,7 @@ async def list_survey_actions(
     """List actions for a survey."""
     try:
         # Verify survey exists
-        survey_result = await db.execute(
-            select(Survey).where(Survey.id == survey_id)
-        )
+        survey_result = await db.execute(select(Survey).where(Survey.id == survey_id))
         if not survey_result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1303,35 +1277,35 @@ async def list_survey_actions(
         # Build response items with customer names
         items = []
         for action in actions:
-            cust_result = await db.execute(
-                select(Customer.name).where(Customer.id == action.customer_id)
-            )
+            cust_result = await db.execute(select(Customer.name).where(Customer.id == action.customer_id))
             customer_name = cust_result.scalar_one_or_none() or "Unknown"
 
-            items.append(SurveyActionResponse(
-                id=action.id,
-                survey_id=action.survey_id,
-                response_id=action.response_id,
-                analysis_id=action.analysis_id,
-                customer_id=action.customer_id,
-                customer_name=customer_name,
-                action_type=action.action_type,
-                title=action.title,
-                description=action.description,
-                priority=action.priority,
-                source=action.source,
-                ai_confidence=action.ai_confidence,
-                assigned_to_user_id=action.assigned_to_user_id,
-                created_by_user_id=action.created_by_user_id,
-                status=action.status,
-                due_date=action.due_date,
-                completed_at=action.completed_at,
-                outcome=action.outcome,
-                linked_entity_type=action.linked_entity_type,
-                linked_entity_id=action.linked_entity_id,
-                created_at=action.created_at,
-                updated_at=action.updated_at,
-            ))
+            items.append(
+                SurveyActionResponse(
+                    id=action.id,
+                    survey_id=action.survey_id,
+                    response_id=action.response_id,
+                    analysis_id=action.analysis_id,
+                    customer_id=action.customer_id,
+                    customer_name=customer_name,
+                    action_type=action.action_type,
+                    title=action.title,
+                    description=action.description,
+                    priority=action.priority,
+                    source=action.source,
+                    ai_confidence=action.ai_confidence,
+                    assigned_to_user_id=action.assigned_to_user_id,
+                    created_by_user_id=action.created_by_user_id,
+                    status=action.status,
+                    due_date=action.due_date,
+                    completed_at=action.completed_at,
+                    outcome=action.outcome,
+                    linked_entity_type=action.linked_entity_type,
+                    linked_entity_id=action.linked_entity_id,
+                    created_at=action.created_at,
+                    updated_at=action.updated_at,
+                )
+            )
 
         return SurveyActionListResponse(
             items=items,
@@ -1345,8 +1319,7 @@ async def list_survey_actions(
     except Exception as e:
         logger.error(f"Error listing survey actions: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing survey actions: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing survey actions: {str(e)}"
         )
 
 
@@ -1376,11 +1349,11 @@ async def update_survey_action(
 
         update_data = data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
-            if field == 'priority' and value:
+            if field == "priority" and value:
                 setattr(action, field, value.value)
-            elif field == 'status' and value:
+            elif field == "status" and value:
                 setattr(action, field, value.value)
-                if value.value == 'completed':
+                if value.value == "completed":
                     action.completed_at = datetime.utcnow()
             else:
                 setattr(action, field, value)
@@ -1389,9 +1362,7 @@ async def update_survey_action(
         await db.refresh(action)
 
         # Get customer name
-        cust_result = await db.execute(
-            select(Customer.name).where(Customer.id == action.customer_id)
-        )
+        cust_result = await db.execute(select(Customer.name).where(Customer.id == action.customer_id))
         customer_name = cust_result.scalar_one_or_none() or "Unknown"
 
         return SurveyActionResponse(
@@ -1424,12 +1395,12 @@ async def update_survey_action(
     except Exception as e:
         logger.error(f"Error updating survey action: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating survey action: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating survey action: {str(e)}"
         )
 
 
 # ============ Survey Eligibility (Fatigue Prevention) ============
+
 
 @router.get("/customers/{customer_id}/survey-eligibility")
 async def check_survey_eligibility(
@@ -1454,9 +1425,7 @@ async def check_survey_eligibility(
 
     try:
         # Verify customer exists
-        customer_result = await db.execute(
-            select(Customer).where(Customer.id == customer_id)
-        )
+        customer_result = await db.execute(select(Customer).where(Customer.id == customer_id))
         customer = customer_result.scalar_one_or_none()
 
         if not customer:
@@ -1467,9 +1436,9 @@ async def check_survey_eligibility(
 
         # Determine customer status
         customer_status = "active"
-        if hasattr(customer, 'status') and customer.status:
+        if hasattr(customer, "status") and customer.status:
             customer_status = customer.status
-        elif hasattr(customer, 'is_churned') and customer.is_churned:
+        elif hasattr(customer, "is_churned") and customer.is_churned:
             customer_status = "churned"
 
         # Check if customer is churned
@@ -1484,7 +1453,7 @@ async def check_survey_eligibility(
 
         # Check if customer is new (created within last 14 days)
         is_new_customer = False
-        if hasattr(customer, 'created_at') and customer.created_at:
+        if hasattr(customer, "created_at") and customer.created_at:
             days_since_created = (datetime.utcnow() - customer.created_at).days
             if days_since_created < 14:
                 is_new_customer = True
@@ -1499,7 +1468,7 @@ async def check_survey_eligibility(
 
         # Check for opt-out preference (if stored on customer)
         opt_out = False
-        if hasattr(customer, 'survey_opt_out'):
+        if hasattr(customer, "survey_opt_out"):
             opt_out = customer.survey_opt_out or False
         if opt_out:
             return SurveyEligibilityResponse(
@@ -1526,15 +1495,15 @@ async def check_survey_eligibility(
         # Build recent surveys list
         recent_surveys = []
         for resp in recent_responses:
-            survey_result = await db.execute(
-                select(Survey.name).where(Survey.id == resp.survey_id)
-            )
+            survey_result = await db.execute(select(Survey.name).where(Survey.id == resp.survey_id))
             survey_name = survey_result.scalar_one_or_none() or "Unknown Survey"
-            recent_surveys.append({
-                "survey_id": resp.survey_id,
-                "name": survey_name,
-                "responded_at": resp.created_at.isoformat() if resp.created_at else None,
-            })
+            recent_surveys.append(
+                {
+                    "survey_id": resp.survey_id,
+                    "name": survey_name,
+                    "responded_at": resp.created_at.isoformat() if resp.created_at else None,
+                }
+            )
 
         # Check if max surveys per month exceeded
         surveys_this_month = len(recent_responses)
@@ -1586,6 +1555,5 @@ async def check_survey_eligibility(
     except Exception as e:
         logger.error(f"Error checking survey eligibility: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error checking survey eligibility: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error checking survey eligibility: {str(e)}"
         )

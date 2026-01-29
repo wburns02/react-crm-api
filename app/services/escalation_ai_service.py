@@ -33,9 +33,9 @@ logger = logging.getLogger(__name__)
 
 class UrgencyLevel(str, Enum):
     IMMEDIATE = "immediate"  # Call within 15 minutes
-    URGENT = "urgent"        # Call within 1 hour
-    HIGH = "high"            # Call within 4 hours
-    NORMAL = "normal"        # Call within 24 hours
+    URGENT = "urgent"  # Call within 1 hour
+    HIGH = "high"  # Call within 4 hours
+    NORMAL = "normal"  # Call within 24 hours
 
 
 class ActionType(str, Enum):
@@ -62,9 +62,10 @@ class SentimentEmoji(str, Enum):
 @dataclass
 class SentimentResult:
     """Result from sentiment analysis."""
+
     score: float  # -1 to 1 (negative to positive)
-    label: str    # "Very Frustrated", "Neutral", "Happy", etc.
-    emoji: str    # Visual indicator
+    label: str  # "Very Frustrated", "Neutral", "Happy", etc.
+    emoji: str  # Visual indicator
     confidence: float  # 0 to 1
     key_phrases: List[str]  # Detected emotional phrases
 
@@ -72,6 +73,7 @@ class SentimentResult:
 @dataclass
 class RecommendedAction:
     """AI-recommended action to take."""
+
     action_type: str
     urgency: str
     reason: str
@@ -82,6 +84,7 @@ class RecommendedAction:
 @dataclass
 class ScriptGuidance:
     """Exact words to say/write."""
+
     opening: str
     key_points: List[str]
     empathy_statements: List[str]
@@ -92,6 +95,7 @@ class ScriptGuidance:
 @dataclass
 class EscalationGuidance:
     """Complete AI guidance for an escalation - the 'WHAT DO I DO NOW?' answer."""
+
     summary: str
     sentiment: SentimentResult
     recommended_action: RecommendedAction
@@ -110,12 +114,42 @@ PLAYBOOKS = {
         "trigger_keywords": ["cancel", "leaving", "competitor", "done", "quit", "switch"],
         "success_rate": 0.87,
         "steps": [
-            {"order": 1, "action": "call", "description": "Call immediately - within 15 minutes", "script": "I understand your frustration, and I'm personally taking ownership of this."},
-            {"order": 2, "action": "listen", "description": "Let them fully express their frustration", "script": "Tell me everything that's happened. I want to understand."},
-            {"order": 3, "action": "acknowledge", "description": "Acknowledge without making excuses", "script": "You're right to be upset. This is not the experience you deserve."},
-            {"order": 4, "action": "resolve", "description": "Offer concrete resolution", "script": "Here's exactly what I'm going to do to fix this..."},
-            {"order": 5, "action": "goodwill", "description": "Add goodwill gesture", "script": "And as a thank you for your patience, I'd like to offer..."},
-            {"order": 6, "action": "follow_up", "description": "Schedule follow-up within 24h", "script": "I'll personally call you tomorrow to make sure everything is resolved."},
+            {
+                "order": 1,
+                "action": "call",
+                "description": "Call immediately - within 15 minutes",
+                "script": "I understand your frustration, and I'm personally taking ownership of this.",
+            },
+            {
+                "order": 2,
+                "action": "listen",
+                "description": "Let them fully express their frustration",
+                "script": "Tell me everything that's happened. I want to understand.",
+            },
+            {
+                "order": 3,
+                "action": "acknowledge",
+                "description": "Acknowledge without making excuses",
+                "script": "You're right to be upset. This is not the experience you deserve.",
+            },
+            {
+                "order": 4,
+                "action": "resolve",
+                "description": "Offer concrete resolution",
+                "script": "Here's exactly what I'm going to do to fix this...",
+            },
+            {
+                "order": 5,
+                "action": "goodwill",
+                "description": "Add goodwill gesture",
+                "script": "And as a thank you for your patience, I'd like to offer...",
+            },
+            {
+                "order": 6,
+                "action": "follow_up",
+                "description": "Schedule follow-up within 24h",
+                "script": "I'll personally call you tomorrow to make sure everything is resolved.",
+            },
         ],
     },
     "billing_dispute": {
@@ -123,11 +157,36 @@ PLAYBOOKS = {
         "trigger_keywords": ["overcharged", "billing", "invoice", "charged", "refund", "payment"],
         "success_rate": 0.92,
         "steps": [
-            {"order": 1, "action": "review", "description": "Review all charges in detail", "script": "Let me pull up your account and review every charge with you."},
-            {"order": 2, "action": "identify", "description": "Identify the discrepancy", "script": "I see the issue - let me explain exactly what happened."},
-            {"order": 3, "action": "resolve", "description": "Calculate correct amount/refund", "script": "You're owed $X, and I'm processing that credit right now."},
-            {"order": 4, "action": "confirm", "description": "Confirm resolution", "script": "You should see this reflected within 3-5 business days."},
-            {"order": 5, "action": "document", "description": "Send written confirmation", "script": "I'm sending you an email confirmation with all the details."},
+            {
+                "order": 1,
+                "action": "review",
+                "description": "Review all charges in detail",
+                "script": "Let me pull up your account and review every charge with you.",
+            },
+            {
+                "order": 2,
+                "action": "identify",
+                "description": "Identify the discrepancy",
+                "script": "I see the issue - let me explain exactly what happened.",
+            },
+            {
+                "order": 3,
+                "action": "resolve",
+                "description": "Calculate correct amount/refund",
+                "script": "You're owed $X, and I'm processing that credit right now.",
+            },
+            {
+                "order": 4,
+                "action": "confirm",
+                "description": "Confirm resolution",
+                "script": "You should see this reflected within 3-5 business days.",
+            },
+            {
+                "order": 5,
+                "action": "document",
+                "description": "Send written confirmation",
+                "script": "I'm sending you an email confirmation with all the details.",
+            },
         ],
     },
     "service_quality_complaint": {
@@ -135,11 +194,36 @@ PLAYBOOKS = {
         "trigger_keywords": ["poor service", "bad experience", "unprofessional", "rude", "late", "no-show"],
         "success_rate": 0.85,
         "steps": [
-            {"order": 1, "action": "acknowledge", "description": "Acknowledge the issue sincerely", "script": "I'm so sorry you experienced this. This is not who we are."},
-            {"order": 2, "action": "redo", "description": "Offer redo at no charge", "script": "I'd like to schedule a new service at no additional cost."},
-            {"order": 3, "action": "priority", "description": "Assign senior technician", "script": "I'm assigning our senior technician to handle this personally."},
-            {"order": 4, "action": "discount", "description": "Offer goodwill discount", "script": "And I'd like to offer 20% off your next service."},
-            {"order": 5, "action": "follow_up", "description": "Call same day after service", "script": "I'll call you right after to make sure everything went perfectly."},
+            {
+                "order": 1,
+                "action": "acknowledge",
+                "description": "Acknowledge the issue sincerely",
+                "script": "I'm so sorry you experienced this. This is not who we are.",
+            },
+            {
+                "order": 2,
+                "action": "redo",
+                "description": "Offer redo at no charge",
+                "script": "I'd like to schedule a new service at no additional cost.",
+            },
+            {
+                "order": 3,
+                "action": "priority",
+                "description": "Assign senior technician",
+                "script": "I'm assigning our senior technician to handle this personally.",
+            },
+            {
+                "order": 4,
+                "action": "discount",
+                "description": "Offer goodwill discount",
+                "script": "And I'd like to offer 20% off your next service.",
+            },
+            {
+                "order": 5,
+                "action": "follow_up",
+                "description": "Call same day after service",
+                "script": "I'll call you right after to make sure everything went perfectly.",
+            },
         ],
     },
     "missed_appointment": {
@@ -147,11 +231,36 @@ PLAYBOOKS = {
         "trigger_keywords": ["missed", "no show", "never came", "stood up", "waited"],
         "success_rate": 0.91,
         "steps": [
-            {"order": 1, "action": "apologize", "description": "Sincerely apologize", "script": "I am truly sorry we missed your appointment. That's completely unacceptable."},
-            {"order": 2, "action": "prioritize", "description": "Offer next available priority slot", "script": "I'm putting you at the top of tomorrow's schedule."},
-            {"order": 3, "action": "discount", "description": "Apply automatic discount", "script": "I'm applying a 25% discount for the inconvenience."},
-            {"order": 4, "action": "confirm", "description": "Double-confirm new appointment", "script": "You'll receive a confirmation text and call 1 hour before."},
-            {"order": 5, "action": "prevent", "description": "Add notes to prevent recurrence", "script": "I've flagged your account for VIP treatment."},
+            {
+                "order": 1,
+                "action": "apologize",
+                "description": "Sincerely apologize",
+                "script": "I am truly sorry we missed your appointment. That's completely unacceptable.",
+            },
+            {
+                "order": 2,
+                "action": "prioritize",
+                "description": "Offer next available priority slot",
+                "script": "I'm putting you at the top of tomorrow's schedule.",
+            },
+            {
+                "order": 3,
+                "action": "discount",
+                "description": "Apply automatic discount",
+                "script": "I'm applying a 25% discount for the inconvenience.",
+            },
+            {
+                "order": 4,
+                "action": "confirm",
+                "description": "Double-confirm new appointment",
+                "script": "You'll receive a confirmation text and call 1 hour before.",
+            },
+            {
+                "order": 5,
+                "action": "prevent",
+                "description": "Add notes to prevent recurrence",
+                "script": "I've flagged your account for VIP treatment.",
+            },
         ],
     },
     "executive_escalation": {
@@ -159,11 +268,36 @@ PLAYBOOKS = {
         "trigger_keywords": ["ceo", "manager", "supervisor", "owner", "executive", "lawyer", "attorney", "legal"],
         "success_rate": 0.78,
         "steps": [
-            {"order": 1, "action": "alert", "description": "Notify VP/Director within 15 min", "script": "I'm escalating this to our leadership team immediately."},
-            {"order": 2, "action": "prepare", "description": "Prepare comprehensive summary", "script": "Compiling full history and proposed resolution."},
-            {"order": 3, "action": "contact", "description": "Executive reaches out within 2h", "script": "Our [VP/Director] will personally call you within 2 hours."},
-            {"order": 4, "action": "resolve", "description": "Resolve with executive authority", "script": "We have full authority to make this right."},
-            {"order": 5, "action": "follow_up", "description": "Executive follow-up in 7 days", "script": "Our leadership will personally check in next week."},
+            {
+                "order": 1,
+                "action": "alert",
+                "description": "Notify VP/Director within 15 min",
+                "script": "I'm escalating this to our leadership team immediately.",
+            },
+            {
+                "order": 2,
+                "action": "prepare",
+                "description": "Prepare comprehensive summary",
+                "script": "Compiling full history and proposed resolution.",
+            },
+            {
+                "order": 3,
+                "action": "contact",
+                "description": "Executive reaches out within 2h",
+                "script": "Our [VP/Director] will personally call you within 2 hours.",
+            },
+            {
+                "order": 4,
+                "action": "resolve",
+                "description": "Resolve with executive authority",
+                "script": "We have full authority to make this right.",
+            },
+            {
+                "order": 5,
+                "action": "follow_up",
+                "description": "Executive follow-up in 7 days",
+                "script": "Our leadership will personally check in next week.",
+            },
         ],
     },
 }
@@ -195,18 +329,14 @@ class EscalationAIService:
         - What NOT to do
         """
         # Fetch escalation with related data
-        result = await db.execute(
-            select(Escalation).where(Escalation.id == escalation_id)
-        )
+        result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
         escalation = result.scalar_one_or_none()
 
         if not escalation:
             return {"error": "Escalation not found"}
 
         # Fetch customer data
-        customer_result = await db.execute(
-            select(Customer).where(Customer.id == escalation.customer_id)
-        )
+        customer_result = await db.execute(select(Customer).where(Customer.id == escalation.customer_id))
         customer = customer_result.scalar_one_or_none()
 
         # Fetch notes for sentiment context
@@ -272,14 +402,18 @@ class EscalationAIService:
                 "name": playbook.get("name") if playbook else None,
                 "success_rate": playbook.get("success_rate") if playbook else None,
                 "steps": playbook.get("steps", []) if playbook else [],
-            } if playbook else None,
+            }
+            if playbook
+            else None,
             "similar_cases": similar_cases,
             "priority_score": priority_score,
             "sla_status": self._get_sla_status(escalation),
             "customer_context": {
                 "name": customer.name if customer else "Unknown",
-                "tenure_days": (datetime.utcnow() - customer.created_at).days if customer and customer.created_at else 0,
-                "lifetime_value": getattr(customer, 'lifetime_value', None) or getattr(customer, 'revenue', None) or 0,
+                "tenure_days": (datetime.utcnow() - customer.created_at).days
+                if customer and customer.created_at
+                else 0,
+                "lifetime_value": getattr(customer, "lifetime_value", None) or getattr(customer, "revenue", None) or 0,
                 "past_escalations": 0,  # Would need to query
             },
         }
@@ -300,7 +434,7 @@ class EscalationAIService:
 
         if customer:
             parts.append(f"Customer: {customer.name}")
-            if hasattr(customer, 'created_at') and customer.created_at:
+            if hasattr(customer, "created_at") and customer.created_at:
                 tenure_days = (datetime.utcnow() - customer.created_at).days
                 parts.append(f"Customer tenure: {tenure_days} days")
 
@@ -398,10 +532,7 @@ class EscalationAIService:
         best_score = 0
 
         for playbook_id, playbook in PLAYBOOKS.items():
-            score = sum(
-                1 for keyword in playbook["trigger_keywords"]
-                if keyword in lower_context
-            )
+            score = sum(1 for keyword in playbook["trigger_keywords"] if keyword in lower_context)
             if score > best_score:
                 best_score = score
                 best_match = {"id": playbook_id, **playbook}
@@ -628,7 +759,8 @@ class EscalationAIService:
                 "outcome": "saved" if esc.customer_satisfaction and esc.customer_satisfaction >= 4 else "resolved",
                 "resolution_time_hours": (
                     (esc.resolved_at - esc.created_at).total_seconds() / 3600
-                    if esc.resolved_at and esc.created_at else None
+                    if esc.resolved_at and esc.created_at
+                    else None
                 ),
                 "resolution_summary": esc.resolution_summary[:100] if esc.resolution_summary else None,
             }
@@ -646,7 +778,7 @@ class EscalationAIService:
 
         # Calculate tenure if available
         tenure_info = ""
-        if customer and hasattr(customer, 'created_at') and customer.created_at:
+        if customer and hasattr(customer, "created_at") and customer.created_at:
             tenure_days = (datetime.utcnow() - customer.created_at).days
             if tenure_days > 365:
                 tenure_info = f" ({tenure_days // 365}+ year customer)"
@@ -766,38 +898,40 @@ class EscalationAIService:
         )
         for esc in sla_warning.scalars().all():
             minutes_left = int((esc.sla_deadline - now).total_seconds() / 60)
-            alerts.append({
-                "type": "sla_warning",
-                "severity": "critical",
-                "escalation_id": esc.id,
-                "title": esc.title,
-                "message": f"SLA breach in {minutes_left} minutes!",
-                "action": "call",
-            })
+            alerts.append(
+                {
+                    "type": "sla_warning",
+                    "severity": "critical",
+                    "escalation_id": esc.id,
+                    "title": esc.title,
+                    "message": f"SLA breach in {minutes_left} minutes!",
+                    "action": "call",
+                }
+            )
 
         # 2. Critical severity unassigned
         unassigned_critical = await db.execute(
-            select(Escalation)
-            .where(
+            select(Escalation).where(
                 Escalation.severity == "critical",
                 Escalation.status == "open",
                 Escalation.assigned_to_user_id.is_(None),
             )
         )
         for esc in unassigned_critical.scalars().all():
-            alerts.append({
-                "type": "unassigned_critical",
-                "severity": "critical",
-                "escalation_id": esc.id,
-                "title": esc.title,
-                "message": "Critical escalation needs owner!",
-                "action": "assign",
-            })
+            alerts.append(
+                {
+                    "type": "unassigned_critical",
+                    "severity": "critical",
+                    "escalation_id": esc.id,
+                    "title": esc.title,
+                    "message": "Critical escalation needs owner!",
+                    "action": "assign",
+                }
+            )
 
         # 3. No response for 2+ hours
         no_response = await db.execute(
-            select(Escalation)
-            .where(
+            select(Escalation).where(
                 Escalation.assigned_to_user_id == user_id,
                 Escalation.status == "open",
                 Escalation.first_response_at.is_(None),
@@ -806,14 +940,16 @@ class EscalationAIService:
         )
         for esc in no_response.scalars().all():
             hours_waiting = (now - esc.created_at).total_seconds() / 3600
-            alerts.append({
-                "type": "no_response",
-                "severity": "high",
-                "escalation_id": esc.id,
-                "title": esc.title,
-                "message": f"Customer waiting {hours_waiting:.1f}h for response",
-                "action": "respond",
-            })
+            alerts.append(
+                {
+                    "type": "no_response",
+                    "severity": "high",
+                    "escalation_id": esc.id,
+                    "title": esc.title,
+                    "message": f"Customer waiting {hours_waiting:.1f}h for response",
+                    "action": "respond",
+                }
+            )
 
         return sorted(alerts, key=lambda x: {"critical": 0, "high": 1, "medium": 2}.get(x["severity"], 3))
 
@@ -825,18 +961,14 @@ class EscalationAIService:
     ) -> Dict[str, Any]:
         """Generate a response for the escalation."""
         # Fetch escalation
-        result = await db.execute(
-            select(Escalation).where(Escalation.id == escalation_id)
-        )
+        result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
         escalation = result.scalar_one_or_none()
 
         if not escalation:
             return {"error": "Escalation not found"}
 
         # Fetch customer
-        customer_result = await db.execute(
-            select(Customer).where(Customer.id == escalation.customer_id)
-        )
+        customer_result = await db.execute(select(Customer).where(Customer.id == escalation.customer_id))
         customer = customer_result.scalar_one_or_none()
         customer_name = customer.name.split()[0] if customer and customer.name else "there"
 

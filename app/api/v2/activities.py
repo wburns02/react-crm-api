@@ -1,4 +1,5 @@
 """Activities API - Track customer interactions (calls, emails, notes, etc.)."""
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 from typing import Optional
@@ -75,6 +76,7 @@ async def list_activities(
         }
     except Exception as e:
         import traceback
+
         logger.error(f"Error in list_activities: {traceback.format_exc()}")
         return {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}
 
@@ -128,6 +130,7 @@ async def create_activity(
         return activity_to_response(activity)
     except Exception as e:
         import traceback
+
         logger.error(f"Error creating activity: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -158,9 +161,7 @@ async def update_activity(
     # Convert string dates
     if update_data.get("activity_date"):
         try:
-            update_data["activity_date"] = datetime.fromisoformat(
-                update_data["activity_date"].replace("Z", "+00:00")
-            )
+            update_data["activity_date"] = datetime.fromisoformat(update_data["activity_date"].replace("Z", "+00:00"))
         except ValueError:
             pass
 

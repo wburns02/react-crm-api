@@ -1,4 +1,5 @@
 """Inventory API - Parts, materials, and supplies management."""
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 from typing import Optional
@@ -82,10 +83,7 @@ async def list_inventory(
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.where(
-                (InventoryItem.sku.ilike(search_pattern)) |
-                (InventoryItem.name.ilike(search_pattern))
-            )
+            query = query.where((InventoryItem.sku.ilike(search_pattern)) | (InventoryItem.name.ilike(search_pattern)))
 
         # Get total count before reorder filter (need to apply it post-query for proper counting)
         if needs_reorder:
@@ -111,6 +109,7 @@ async def list_inventory(
         }
     except Exception as e:
         import traceback
+
         logger.error(f"Error in list_inventory: {traceback.format_exc()}")
         return {"items": [], "total": 0, "page": page, "page_size": page_size, "error": str(e)}
 
@@ -121,10 +120,11 @@ async def get_reorder_alerts(
     current_user: CurrentUser,
 ):
     """Get all items that need to be reordered."""
-    query = select(InventoryItem).where(
-        InventoryItem.quantity_on_hand <= InventoryItem.reorder_level,
-        InventoryItem.is_active == True
-    ).order_by(InventoryItem.category, InventoryItem.name)
+    query = (
+        select(InventoryItem)
+        .where(InventoryItem.quantity_on_hand <= InventoryItem.reorder_level, InventoryItem.is_active == True)
+        .order_by(InventoryItem.category, InventoryItem.name)
+    )
 
     result = await db.execute(query)
     items = result.scalars().all()
@@ -141,9 +141,7 @@ async def get_categories(
     current_user: CurrentUser,
 ):
     """Get list of unique categories."""
-    query = select(InventoryItem.category).where(
-        InventoryItem.category.isnot(None)
-    ).distinct()
+    query = select(InventoryItem.category).where(InventoryItem.category.isnot(None)).distinct()
 
     result = await db.execute(query)
     categories = [row[0] for row in result.fetchall() if row[0]]

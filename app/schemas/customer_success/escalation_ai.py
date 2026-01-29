@@ -31,8 +31,10 @@ class ActionType(str, Enum):
 
 # Sentiment schemas
 
+
 class SentimentResponse(BaseModel):
     """Customer sentiment analysis result."""
+
     score: float = Field(..., ge=-1, le=1, description="Sentiment score from -1 (negative) to 1 (positive)")
     label: str = Field(..., description="Human-readable sentiment label")
     emoji: str = Field(..., description="Visual emoji indicator")
@@ -42,8 +44,10 @@ class SentimentResponse(BaseModel):
 
 # Action schemas
 
+
 class RecommendedActionResponse(BaseModel):
     """AI-recommended action to take."""
+
     type: ActionType = Field(..., description="Type of action to take")
     urgency: UrgencyLevel = Field(..., description="How urgent the action is")
     urgency_minutes: int = Field(..., description="Minutes until action should be taken")
@@ -55,8 +59,10 @@ class RecommendedActionResponse(BaseModel):
 
 # Script schemas
 
+
 class ScriptResponse(BaseModel):
     """Script guidance with exact words to say."""
+
     opening: str = Field(..., description="How to open the conversation")
     key_points: List[str] = Field(default_factory=list, description="Key points to cover")
     empathy_statements: List[str] = Field(default_factory=list, description="Empathy statements to use")
@@ -66,8 +72,10 @@ class ScriptResponse(BaseModel):
 
 # Playbook schemas
 
+
 class PlaybookStepResponse(BaseModel):
     """Single step in a playbook."""
+
     order: int
     action: str
     description: str
@@ -76,6 +84,7 @@ class PlaybookStepResponse(BaseModel):
 
 class PlaybookResponse(BaseModel):
     """Playbook details."""
+
     id: Optional[str] = None
     name: Optional[str] = None
     success_rate: Optional[float] = None
@@ -84,8 +93,10 @@ class PlaybookResponse(BaseModel):
 
 # SLA schemas
 
+
 class SLAStatusResponse(BaseModel):
     """SLA status with visual indicators."""
+
     status: str = Field(..., description="on_track, warning, critical, or breached")
     color: str = Field(..., description="green, yellow, red, or gray")
     message: str = Field(..., description="Human-readable status message")
@@ -94,8 +105,10 @@ class SLAStatusResponse(BaseModel):
 
 # Customer context
 
+
 class CustomerContextResponse(BaseModel):
     """Customer context for the escalation."""
+
     name: str
     tenure_days: int = 0
     lifetime_value: Optional[float] = None
@@ -104,8 +117,10 @@ class CustomerContextResponse(BaseModel):
 
 # Similar case schemas
 
+
 class SimilarCaseResponse(BaseModel):
     """Similar past escalation for reference."""
+
     id: int
     title: str
     outcome: str
@@ -115,11 +130,13 @@ class SimilarCaseResponse(BaseModel):
 
 # Main guidance response
 
+
 class EscalationGuidanceResponse(BaseModel):
     """
     Complete AI guidance for an escalation.
     This is the 'WHAT DO I DO NOW?' answer.
     """
+
     escalation_id: int
     summary: str = Field(..., description="Brief situation summary")
     sentiment: SentimentResponse
@@ -135,6 +152,7 @@ class EscalationGuidanceResponse(BaseModel):
 
 # Alert schemas
 
+
 class AlertSeverity(str, Enum):
     CRITICAL = "critical"
     HIGH = "high"
@@ -144,6 +162,7 @@ class AlertSeverity(str, Enum):
 
 class ProactiveAlertResponse(BaseModel):
     """Proactive alert for escalation needing attention."""
+
     type: str = Field(..., description="Alert type: sla_warning, unassigned_critical, no_response, etc.")
     severity: AlertSeverity
     escalation_id: int
@@ -154,19 +173,23 @@ class ProactiveAlertResponse(BaseModel):
 
 class ProactiveAlertsListResponse(BaseModel):
     """List of proactive alerts."""
+
     alerts: List[ProactiveAlertResponse]
     total: int
 
 
 # Response generation schemas
 
+
 class GenerateResponseRequest(BaseModel):
     """Request to generate a response."""
+
     response_type: str = Field(default="email", description="Type of response: email, sms, chat")
 
 
 class GeneratedResponseResponse(BaseModel):
     """Generated response text."""
+
     escalation_id: int
     response_type: str
     generated_text: str
@@ -175,8 +198,10 @@ class GeneratedResponseResponse(BaseModel):
 
 # Playbook progress schemas
 
+
 class PlaybookProgressResponse(BaseModel):
     """Track progress through a playbook."""
+
     playbook_id: str
     playbook_name: str
     total_steps: int
@@ -187,8 +212,10 @@ class PlaybookProgressResponse(BaseModel):
 
 # Queue item for action queue
 
+
 class ActionQueueItem(BaseModel):
     """Single item in the action queue."""
+
     escalation_id: int
     customer_name: str
     title: str
@@ -205,6 +232,7 @@ class ActionQueueItem(BaseModel):
 
 class ActionQueueResponse(BaseModel):
     """Prioritized action queue."""
+
     items: List[ActionQueueItem]
     total: int
     critical_count: int

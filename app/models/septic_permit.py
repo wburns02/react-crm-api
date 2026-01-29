@@ -11,8 +11,20 @@ from datetime import datetime
 from typing import Optional, List
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Date, Float, Integer, SmallInteger,
-    String, Text, JSON, ForeignKey, Index, UniqueConstraint, CheckConstraint
+    Boolean,
+    Column,
+    DateTime,
+    Date,
+    Float,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    JSON,
+    ForeignKey,
+    Index,
+    UniqueConstraint,
+    CheckConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, TSVECTOR
 from sqlalchemy.orm import relationship
@@ -23,8 +35,10 @@ from app.database import Base
 
 # ===== REFERENCE TABLES =====
 
+
 class State(Base):
     """US State reference table."""
+
     __tablename__ = "states"
 
     id = Column(Integer, primary_key=True)
@@ -45,6 +59,7 @@ class State(Base):
 
 class County(Base):
     """County reference table for all US counties."""
+
     __tablename__ = "counties"
 
     id = Column(Integer, primary_key=True)
@@ -61,9 +76,9 @@ class County(Base):
     permits = relationship("SepticPermit", back_populates="county")
 
     __table_args__ = (
-        UniqueConstraint('state_id', 'normalized_name', name='uq_county_state_name'),
-        Index('idx_counties_state', 'state_id'),
-        Index('idx_counties_normalized_name', 'normalized_name'),
+        UniqueConstraint("state_id", "normalized_name", name="uq_county_state_name"),
+        Index("idx_counties_state", "state_id"),
+        Index("idx_counties_normalized_name", "normalized_name"),
     )
 
     def __repr__(self):
@@ -72,6 +87,7 @@ class County(Base):
 
 class SepticSystemType(Base):
     """Septic system type enumeration."""
+
     __tablename__ = "septic_system_types"
 
     id = Column(Integer, primary_key=True)
@@ -88,6 +104,7 @@ class SepticSystemType(Base):
 
 class SourcePortal(Base):
     """Data source portal tracking for scraped data."""
+
     __tablename__ = "source_portals"
 
     id = Column(Integer, primary_key=True)
@@ -109,6 +126,7 @@ class SourcePortal(Base):
 
 # ===== MAIN PERMIT TABLE =====
 
+
 class SepticPermit(Base):
     """
     Main septic permit records table (7M+ records).
@@ -120,6 +138,7 @@ class SepticPermit(Base):
     - Semantic search via embedding vector
     - Version tracking for updates
     """
+
     __tablename__ = "septic_permits"
 
     # Primary key
@@ -208,30 +227,27 @@ class SepticPermit(Base):
     __table_args__ = (
         # Primary deduplication: normalized address + county + state
         Index(
-            'idx_septic_permits_dedup_address',
-            'address_hash', 'county_id', 'state_id',
+            "idx_septic_permits_dedup_address",
+            "address_hash",
+            "county_id",
+            "state_id",
             unique=True,
-            postgresql_where=(
-                (Column('address_hash').isnot(None)) &
-                (Column('is_active') == True)
-            )
+            postgresql_where=((Column("address_hash").isnot(None)) & (Column("is_active") == True)),
         ),
         # Secondary deduplication: permit_number + state
         Index(
-            'idx_septic_permits_dedup_permit',
-            'permit_number', 'state_id',
+            "idx_septic_permits_dedup_permit",
+            "permit_number",
+            "state_id",
             unique=True,
-            postgresql_where=(
-                (Column('permit_number').isnot(None)) &
-                (Column('is_active') == True)
-            )
+            postgresql_where=((Column("permit_number").isnot(None)) & (Column("is_active") == True)),
         ),
         # Composite indexes for common queries
-        Index('idx_septic_permits_state_county', 'state_id', 'county_id'),
-        Index('idx_septic_permits_state_county_date', 'state_id', 'county_id', 'permit_date'),
-        Index('idx_septic_permits_scraped_at', 'scraped_at'),
+        Index("idx_septic_permits_state_county", "state_id", "county_id"),
+        Index("idx_septic_permits_state_county_date", "state_id", "county_id", "permit_date"),
+        Index("idx_septic_permits_scraped_at", "scraped_at"),
         # Full-text search index (GIN)
-        Index('idx_septic_permits_search_vector', 'search_vector', postgresql_using='gin'),
+        Index("idx_septic_permits_search_vector", "search_vector", postgresql_using="gin"),
     )
 
     def __repr__(self):
@@ -239,9 +255,7 @@ class SepticPermit(Base):
 
     @staticmethod
     def compute_address_hash(
-        normalized_address: Optional[str],
-        county_name: Optional[str],
-        state_code: Optional[str]
+        normalized_address: Optional[str], county_name: Optional[str], state_code: Optional[str]
     ) -> Optional[str]:
         """
         Compute SHA256 hash of normalized address + county + state.
@@ -250,13 +264,9 @@ class SepticPermit(Base):
         if not normalized_address:
             return None
 
-        components = [
-            normalized_address or '',
-            (county_name or '').upper(),
-            (state_code or '').upper()
-        ]
-        composite_key = '|'.join(components)
-        return hashlib.sha256(composite_key.encode('utf-8')).hexdigest()
+        components = [normalized_address or "", (county_name or "").upper(), (state_code or "").upper()]
+        composite_key = "|".join(components)
+        return hashlib.sha256(composite_key.encode("utf-8")).hexdigest()
 
     @staticmethod
     def compute_record_hash(data: dict) -> str:
@@ -264,26 +274,38 @@ class SepticPermit(Base):
         Compute SHA256 hash of full record for change detection.
         """
         import json
+
         # Exclude metadata fields
-        exclude_keys = {'id', 'created_at', 'updated_at', 'version', 'record_hash',
-                       'search_vector', 'embedding', 'embedding_updated_at'}
+        exclude_keys = {
+            "id",
+            "created_at",
+            "updated_at",
+            "version",
+            "record_hash",
+            "search_vector",
+            "embedding",
+            "embedding_updated_at",
+        }
         filtered_data = {k: v for k, v in data.items() if k not in exclude_keys}
         serialized = json.dumps(filtered_data, sort_keys=True, default=str)
-        return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 # ===== VERSION HISTORY TABLE =====
+
 
 class PermitVersion(Base):
     """
     Version history for permit records (audit trail).
     Created when records are updated with newer data from scrapers.
     """
+
     __tablename__ = "permit_versions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    permit_id = Column(UUID(as_uuid=True), ForeignKey("septic_permits.id", ondelete="CASCADE"),
-                       nullable=False, index=True)
+    permit_id = Column(
+        UUID(as_uuid=True), ForeignKey("septic_permits.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     version = Column(Integer, nullable=False)
 
     # Snapshot of record state at this version
@@ -306,9 +328,9 @@ class PermitVersion(Base):
     permit = relationship("SepticPermit", back_populates="versions")
 
     __table_args__ = (
-        UniqueConstraint('permit_id', 'version', name='uq_permit_version'),
-        Index('idx_permit_versions_permit', 'permit_id'),
-        Index('idx_permit_versions_created', 'created_at'),
+        UniqueConstraint("permit_id", "version", name="uq_permit_version"),
+        Index("idx_permit_versions_permit", "permit_id"),
+        Index("idx_permit_versions_created", "created_at"),
     )
 
     def __repr__(self):
@@ -317,19 +339,19 @@ class PermitVersion(Base):
 
 # ===== DUPLICATE TRACKING TABLE =====
 
+
 class PermitDuplicate(Base):
     """
     Track identified duplicate permit pairs for review and resolution.
     """
+
     __tablename__ = "permit_duplicates"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # The two permits being compared
-    permit_id_1 = Column(UUID(as_uuid=True), ForeignKey("septic_permits.id"),
-                         nullable=False, index=True)
-    permit_id_2 = Column(UUID(as_uuid=True), ForeignKey("septic_permits.id"),
-                         nullable=False, index=True)
+    permit_id_1 = Column(UUID(as_uuid=True), ForeignKey("septic_permits.id"), nullable=False, index=True)
+    permit_id_2 = Column(UUID(as_uuid=True), ForeignKey("septic_permits.id"), nullable=False, index=True)
 
     # Duplicate detection details
     detection_method = Column(String(50), nullable=False)  # 'address_hash', 'fuzzy_match', 'manual'
@@ -337,7 +359,7 @@ class PermitDuplicate(Base):
     matching_fields = Column(ARRAY(Text), nullable=True)  # Which fields matched
 
     # Resolution status
-    status = Column(String(20), default='pending', nullable=False)  # pending, merged, rejected, reviewed
+    status = Column(String(20), default="pending", nullable=False)  # pending, merged, rejected, reviewed
     canonical_id = Column(UUID(as_uuid=True), nullable=True)  # Which record is the "master"
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     resolved_by = Column(String(255), nullable=True)
@@ -347,11 +369,11 @@ class PermitDuplicate(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (
-        UniqueConstraint('permit_id_1', 'permit_id_2', name='uq_permit_duplicate_pair'),
-        CheckConstraint('permit_id_1 < permit_id_2', name='ck_permit_id_ordering'),
-        Index('idx_permit_duplicates_permit1', 'permit_id_1'),
-        Index('idx_permit_duplicates_permit2', 'permit_id_2'),
-        Index('idx_permit_duplicates_status', 'status'),
+        UniqueConstraint("permit_id_1", "permit_id_2", name="uq_permit_duplicate_pair"),
+        CheckConstraint("permit_id_1 < permit_id_2", name="ck_permit_id_ordering"),
+        Index("idx_permit_duplicates_permit1", "permit_id_1"),
+        Index("idx_permit_duplicates_permit2", "permit_id_2"),
+        Index("idx_permit_duplicates_status", "status"),
     )
 
     def __repr__(self):
@@ -360,10 +382,12 @@ class PermitDuplicate(Base):
 
 # ===== IMPORT BATCH TRACKING =====
 
+
 class PermitImportBatch(Base):
     """
     Track batch import operations from scrapers.
     """
+
     __tablename__ = "permit_import_batches"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -380,7 +404,7 @@ class PermitImportBatch(Base):
     errors = Column(Integer, default=0)
 
     # Processing info
-    status = Column(String(20), default='pending', nullable=False)  # pending, processing, completed, failed
+    status = Column(String(20), default="pending", nullable=False)  # pending, processing, completed, failed
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     processing_time_seconds = Column(Float, nullable=True)

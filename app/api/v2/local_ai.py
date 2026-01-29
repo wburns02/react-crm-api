@@ -18,18 +18,21 @@ router = APIRouter()
 
 class AnalysisRequest(BaseModel):
     """Request model for transcript analysis."""
+
     transcript: str
     call_metadata: Optional[dict] = None
 
 
 class TranscriptionRequest(BaseModel):
     """Request model for audio transcription."""
+
     audio_url: str
     language: str = "en"
 
 
 class DispositionRequest(BaseModel):
     """Request model for disposition suggestion."""
+
     transcript: str
     available_dispositions: List[str]
 
@@ -50,16 +53,12 @@ async def local_ai_health():
                 "ollama_url": settings.OLLAMA_BASE_URL,
                 "ollama_model": settings.OLLAMA_MODEL,
                 "whisper_url": settings.WHISPER_BASE_URL,
-                "whisper_model": settings.LOCAL_WHISPER_MODEL
-            }
+                "whisper_model": settings.LOCAL_WHISPER_MODEL,
+            },
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "use_local_ai": settings.USE_LOCAL_AI
-        }
+        return {"status": "unhealthy", "error": str(e), "use_local_ai": settings.USE_LOCAL_AI}
 
 
 @router.post("/analyze")
@@ -71,15 +70,11 @@ async def analyze_transcript(request: AnalysisRequest):
     disposition suggestion, and coaching insights.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     try:
         result = await local_ai_service.analyze_call_transcript(
-            transcript=request.transcript,
-            call_metadata=request.call_metadata
+            transcript=request.transcript, call_metadata=request.call_metadata
         )
         return result
     except LocalAIError as e:
@@ -97,16 +92,10 @@ async def transcribe_audio(request: TranscriptionRequest):
     Returns full transcript with segment-level timestamps.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     try:
-        result = await local_ai_service.transcribe_audio(
-            audio_url=request.audio_url,
-            language=request.language
-        )
+        result = await local_ai_service.transcribe_audio(audio_url=request.audio_url, language=request.language)
         return result
     except LocalAIError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -116,37 +105,26 @@ async def transcribe_audio(request: TranscriptionRequest):
 
 
 @router.post("/transcribe/upload")
-async def transcribe_audio_file(
-    file: UploadFile = File(...),
-    language: str = Form("en")
-):
+async def transcribe_audio_file(file: UploadFile = File(...), language: str = Form("en")):
     """
     Upload and transcribe an audio file using local Whisper on R730.
 
     Accepts audio files (WAV, MP3, WebM, M4A) and returns full transcript.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     # Validate file type
     valid_types = ["audio/wav", "audio/mpeg", "audio/mp3", "audio/webm", "audio/mp4", "audio/m4a", "audio/x-m4a"]
     if file.content_type and not any(t in file.content_type for t in valid_types):
-        raise HTTPException(
-            status_code=400,
-            detail=f"File must be an audio file. Got: {file.content_type}"
-        )
+        raise HTTPException(status_code=400, detail=f"File must be an audio file. Got: {file.content_type}")
 
     try:
         contents = await file.read()
         audio_base64 = base64.b64encode(contents).decode("utf-8")
 
         result = await local_ai_service.transcribe_audio_base64(
-            audio_base64=audio_base64,
-            language=language,
-            filename=file.filename
+            audio_base64=audio_base64, language=language, filename=file.filename
         )
         result["filename"] = file.filename
         result["file_size_bytes"] = len(contents)
@@ -166,15 +144,11 @@ async def suggest_disposition(request: DispositionRequest):
     Returns the suggested disposition from available options with confidence score.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     try:
         result = await local_ai_service.suggest_disposition(
-            transcript=request.transcript,
-            available_dispositions=request.available_dispositions
+            transcript=request.transcript, available_dispositions=request.available_dispositions
         )
         return result
     except LocalAIError as e:
@@ -190,10 +164,7 @@ async def summarize_call(transcript: str):
     Generate a brief summary of a call transcript.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     try:
         summary = await local_ai_service.generate_call_summary(transcript)
@@ -210,31 +181,21 @@ async def get_local_ai_config():
     """
     return {
         "use_local_ai": settings.USE_LOCAL_AI,
-        "ollama": {
-            "base_url": settings.OLLAMA_BASE_URL,
-            "model": settings.OLLAMA_MODEL
-        },
-        "whisper": {
-            "base_url": settings.WHISPER_BASE_URL,
-            "model": settings.LOCAL_WHISPER_MODEL
-        },
-        "vision": {
-            "model": settings.LLAVA_MODEL,
-            "capabilities": ["photo_analysis", "ocr", "document_extraction"]
-        },
-        "heavy_processing": {
-            "url": settings.HCTG_AI_URL,
-            "model": settings.HCTG_AI_MODEL
-        },
+        "ollama": {"base_url": settings.OLLAMA_BASE_URL, "model": settings.OLLAMA_MODEL},
+        "whisper": {"base_url": settings.WHISPER_BASE_URL, "model": settings.LOCAL_WHISPER_MODEL},
+        "vision": {"model": settings.LLAVA_MODEL, "capabilities": ["photo_analysis", "ocr", "document_extraction"]},
+        "heavy_processing": {"url": settings.HCTG_AI_URL, "model": settings.HCTG_AI_MODEL},
         "fallback_to_openai": not settings.USE_LOCAL_AI,
-        "openai_model": settings.GPT_ANALYSIS_MODEL if not settings.USE_LOCAL_AI else None
+        "openai_model": settings.GPT_ANALYSIS_MODEL if not settings.USE_LOCAL_AI else None,
     }
 
 
 # ===== VISION / OCR ENDPOINTS =====
 
+
 class ImageAnalysisRequest(BaseModel):
     """Request model for image analysis."""
+
     image_base64: str
     prompt: Optional[str] = None
     context: Optional[str] = None
@@ -242,12 +203,14 @@ class ImageAnalysisRequest(BaseModel):
 
 class WorkOrderPhotoRequest(BaseModel):
     """Request model for work order photo analysis."""
+
     image_base64: str
     work_order_type: str = "septic"
 
 
 class DocumentExtractionRequest(BaseModel):
     """Request model for document OCR extraction."""
+
     image_base64: str
     document_type: str = "service_record"
 
@@ -261,16 +224,11 @@ async def analyze_image(request: ImageAnalysisRequest):
     Ideal for work order photos, equipment inspection, etc.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     try:
         result = await local_ai_service.analyze_image(
-            image_base64=request.image_base64,
-            prompt=request.prompt,
-            context=request.context
+            image_base64=request.image_base64, prompt=request.prompt, context=request.context
         )
         return result
     except LocalAIError as e:
@@ -289,15 +247,11 @@ async def analyze_work_order_photo(request: WorkOrderPhotoRequest):
     and recommendations in a structured JSON format.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     try:
         result = await local_ai_service.analyze_work_order_photo(
-            image_base64=request.image_base64,
-            work_order_type=request.work_order_type
+            image_base64=request.image_base64, work_order_type=request.work_order_type
         )
         return result
     except LocalAIError as e:
@@ -308,20 +262,14 @@ async def analyze_work_order_photo(request: WorkOrderPhotoRequest):
 
 
 @router.post("/vision/upload-photo")
-async def upload_and_analyze_photo(
-    file: UploadFile = File(...),
-    work_order_type: str = Form("septic")
-):
+async def upload_and_analyze_photo(file: UploadFile = File(...), work_order_type: str = Form("septic")):
     """
     Upload a photo file and analyze it with LLaVA.
 
     Accepts image files (JPEG, PNG) and returns structured analysis.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     # Validate file type
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -333,8 +281,7 @@ async def upload_and_analyze_photo(
         image_base64 = base64.b64encode(contents).decode("utf-8")
 
         result = await local_ai_service.analyze_work_order_photo(
-            image_base64=image_base64,
-            work_order_type=work_order_type
+            image_base64=image_base64, work_order_type=work_order_type
         )
         result["filename"] = file.filename
         result["file_size_bytes"] = len(contents)
@@ -355,15 +302,11 @@ async def extract_document_data(request: DocumentExtractionRequest):
     Returns extracted text and structured data fields.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     try:
         result = await local_ai_service.extract_document_data(
-            image_base64=request.image_base64,
-            document_type=request.document_type
+            image_base64=request.image_base64, document_type=request.document_type
         )
         return result
     except LocalAIError as e:
@@ -374,37 +317,25 @@ async def extract_document_data(request: DocumentExtractionRequest):
 
 
 @router.post("/ocr/upload-document")
-async def upload_and_extract_document(
-    file: UploadFile = File(...),
-    document_type: str = Form("service_record")
-):
+async def upload_and_extract_document(file: UploadFile = File(...), document_type: str = Form("service_record")):
     """
     Upload a document (image or PDF page) and extract data.
 
     Returns raw text and structured fields (customer info, dates, amounts, etc.)
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     # Validate file type
     valid_types = ["image/jpeg", "image/png", "image/tiff", "application/pdf"]
     if file.content_type not in valid_types:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File must be an image or PDF. Got: {file.content_type}"
-        )
+        raise HTTPException(status_code=400, detail=f"File must be an image or PDF. Got: {file.content_type}")
 
     try:
         contents = await file.read()
         image_base64 = base64.b64encode(contents).decode("utf-8")
 
-        result = await local_ai_service.extract_document_data(
-            image_base64=image_base64,
-            document_type=document_type
-        )
+        result = await local_ai_service.extract_document_data(image_base64=image_base64, document_type=document_type)
         result["filename"] = file.filename
         result["file_size_bytes"] = len(contents)
         return result
@@ -417,8 +348,10 @@ async def upload_and_extract_document(
 
 # ===== HEAVY PROCESSING (HCTG-AI / 5090) =====
 
+
 class HeavyAnalysisRequest(BaseModel):
     """Request model for heavy AI analysis using qwen2.5:32b."""
+
     prompt: str
     context: Optional[str] = None
 
@@ -432,16 +365,10 @@ async def heavy_analysis(request: HeavyAnalysisRequest):
     Routes to the RTX 5090 server with 32B parameter model.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     try:
-        result = await local_ai_service.heavy_analysis(
-            prompt=request.prompt,
-            context=request.context
-        )
+        result = await local_ai_service.heavy_analysis(prompt=request.prompt, context=request.context)
         return result
     except LocalAIError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -452,8 +379,10 @@ async def heavy_analysis(request: HeavyAnalysisRequest):
 
 # ===== RAG / KNOWLEDGE BASE ENDPOINTS =====
 
+
 class RAGQueryRequest(BaseModel):
     """Request model for RAG knowledge query."""
+
     question: str
     context: Optional[str] = None
     collection: str = "septic_knowledge"
@@ -461,6 +390,7 @@ class RAGQueryRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     """Request model for AI chat."""
+
     message: str
     context: Optional[str] = None
 
@@ -474,16 +404,11 @@ async def rag_query(request: RAGQueryRequest):
     Returns answer with sources and confidence score.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     try:
         result = await local_ai_service.rag_query(
-            question=request.question,
-            context=request.context,
-            collection=request.collection
+            question=request.question, context=request.context, collection=request.collection
         )
         return result
     except LocalAIError as e:
@@ -501,16 +426,10 @@ async def ai_chat(request: ChatRequest):
     For simple conversational queries that don't need RAG.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     try:
-        result = await local_ai_service.chat(
-            message=request.message,
-            context=request.context
-        )
+        result = await local_ai_service.chat(message=request.message, context=request.context)
         return result
     except LocalAIError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -521,8 +440,10 @@ async def ai_chat(request: ChatRequest):
 
 # ===== BATCH OCR PROCESSING =====
 
+
 class BatchOCRRequest(BaseModel):
     """Request model for batch OCR processing."""
+
     documents: List[dict]  # List of {id, image_base64, filename}
     document_type: str = "service_record"
 
@@ -536,24 +457,17 @@ async def start_batch_ocr(request: BatchOCRRequest):
     Returns a job_id to track progress.
     """
     if not settings.USE_LOCAL_AI:
-        raise HTTPException(
-            status_code=400,
-            detail="Local AI is disabled. Set USE_LOCAL_AI=true in config."
-        )
+        raise HTTPException(status_code=400, detail="Local AI is disabled. Set USE_LOCAL_AI=true in config.")
 
     if not request.documents:
         raise HTTPException(status_code=400, detail="No documents provided")
 
     if len(request.documents) > 100:
-        raise HTTPException(
-            status_code=400,
-            detail="Maximum 100 documents per batch"
-        )
+        raise HTTPException(status_code=400, detail="Maximum 100 documents per batch")
 
     try:
         result = await local_ai_service.start_batch_ocr(
-            documents=request.documents,
-            document_type=request.document_type
+            documents=request.documents, document_type=request.document_type
         )
         return result
     except LocalAIError as e:

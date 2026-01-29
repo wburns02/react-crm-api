@@ -59,9 +59,7 @@ async def get_current_api_client(
     token_hash = hash_token(token)
 
     # Find the token in database
-    result = await db.execute(
-        select(APIToken).where(APIToken.token_hash == token_hash)
-    )
+    result = await db.execute(select(APIToken).where(APIToken.token_hash == token_hash))
     api_token = result.scalar_one_or_none()
 
     if not api_token:
@@ -83,9 +81,7 @@ async def get_current_api_client(
         raise credentials_exception
 
     # Get the client
-    result = await db.execute(
-        select(APIClient).where(APIClient.id == api_token.client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.id == api_token.client_id))
     client = result.scalar_one_or_none()
 
     if not client or not client.is_active:
@@ -111,7 +107,7 @@ async def get_current_api_client(
 
     logger.debug(
         f"API client authenticated: {client.name} ({client.client_id})",
-        extra={"client_id": client.client_id, "scopes": api_token.scopes}
+        extra={"client_id": client.client_id, "scopes": api_token.scopes},
     )
 
     return client
@@ -124,6 +120,7 @@ def require_scope(required_scope: str):
     Usage:
         @router.get("/resource", dependencies=[Depends(require_scope("read"))])
     """
+
     async def scope_checker(
         request: Request,
         client: Annotated[APIClient, Depends(get_current_api_client)],
@@ -141,7 +138,7 @@ def require_scope(required_scope: str):
             if parent_scope not in token_scopes:
                 logger.warning(
                     f"Scope {required_scope} denied for client {client.client_id}",
-                    extra={"client_id": client.client_id, "required": required_scope}
+                    extra={"client_id": client.client_id, "required": required_scope},
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,

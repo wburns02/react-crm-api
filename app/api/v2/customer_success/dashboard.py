@@ -10,10 +10,15 @@ from datetime import datetime, timedelta, date
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
 from app.models.customer_success import (
-    HealthScore, Segment, CustomerSegment,
-    Journey, JourneyEnrollment,
-    Playbook, PlaybookExecution,
-    CSTask, Touchpoint,
+    HealthScore,
+    Segment,
+    CustomerSegment,
+    Journey,
+    JourneyEnrollment,
+    Playbook,
+    PlaybookExecution,
+    CSTask,
+    Touchpoint,
 )
 from app.schemas.customer_success.health_score import HealthStatus
 from app.schemas.customer_success.journey import EnrollmentStatus
@@ -32,9 +37,7 @@ async def get_cs_overview(
     # Health Score Distribution
     health_counts = {}
     for status in HealthStatus:
-        count_result = await db.execute(
-            select(func.count()).where(HealthScore.health_status == status.value)
-        )
+        count_result = await db.execute(select(func.count()).where(HealthScore.health_status == status.value))
         health_counts[status.value] = count_result.scalar()
 
     # Average health score
@@ -55,9 +58,7 @@ async def get_cs_overview(
 
     # Open tasks
     open_tasks_result = await db.execute(
-        select(func.count()).where(
-            CSTask.status.in_([TaskStatus.PENDING.value, TaskStatus.IN_PROGRESS.value])
-        )
+        select(func.count()).where(CSTask.status.in_([TaskStatus.PENDING.value, TaskStatus.IN_PROGRESS.value]))
     )
     open_tasks = open_tasks_result.scalar()
 
@@ -73,21 +74,18 @@ async def get_cs_overview(
 
     # Recent touchpoints (last 7 days)
     week_ago = datetime.utcnow() - timedelta(days=7)
-    recent_touchpoints_result = await db.execute(
-        select(func.count()).where(Touchpoint.occurred_at >= week_ago)
-    )
+    recent_touchpoints_result = await db.execute(select(func.count()).where(Touchpoint.occurred_at >= week_ago))
     recent_touchpoints = recent_touchpoints_result.scalar()
 
     # Total segments
-    segments_result = await db.execute(
-        select(func.count()).where(Segment.is_active == True)
-    )
+    segments_result = await db.execute(select(func.count()).where(Segment.is_active == True))
     active_segments = segments_result.scalar()
 
     return {
         "health_distribution": health_counts,
         "avg_health_score": round(avg_health, 1),
-        "total_at_risk": health_counts.get(HealthStatus.AT_RISK.value, 0) + health_counts.get(HealthStatus.CRITICAL.value, 0),
+        "total_at_risk": health_counts.get(HealthStatus.AT_RISK.value, 0)
+        + health_counts.get(HealthStatus.CRITICAL.value, 0),
         "active_journey_enrollments": active_enrollments,
         "active_playbook_executions": active_playbooks,
         "open_tasks": open_tasks,
@@ -175,10 +173,7 @@ async def get_journey_performance(
 
     # Get active journeys with their stats
     result = await db.execute(
-        select(Journey)
-        .where(Journey.status == "active")
-        .order_by(Journey.total_enrolled.desc().nullslast())
-        .limit(10)
+        select(Journey).where(Journey.status == "active").order_by(Journey.total_enrolled.desc().nullslast()).limit(10)
     )
     journeys = result.scalars().all()
 
@@ -204,16 +199,18 @@ async def get_journey_performance(
         )
         goal_achieved = goal_achieved_result.scalar()
 
-        journey_stats.append({
-            "id": journey.id,
-            "name": journey.name,
-            "type": journey.journey_type,
-            "active_enrolled": journey.active_enrolled,
-            "total_enrolled": journey.total_enrolled,
-            "completed_in_period": completed,
-            "goals_achieved_in_period": goal_achieved,
-            "conversion_rate": journey.conversion_rate,
-        })
+        journey_stats.append(
+            {
+                "id": journey.id,
+                "name": journey.name,
+                "type": journey.journey_type,
+                "active_enrolled": journey.active_enrolled,
+                "total_enrolled": journey.total_enrolled,
+                "completed_in_period": completed,
+                "goals_achieved_in_period": goal_achieved,
+                "conversion_rate": journey.conversion_rate,
+            }
+        )
 
     return {
         "period_days": days,
@@ -260,16 +257,18 @@ async def get_playbook_performance(
         )
         completed = completed_result.scalar()
 
-        playbook_stats.append({
-            "id": playbook.id,
-            "name": playbook.name,
-            "category": playbook.category,
-            "times_triggered_total": playbook.times_triggered,
-            "triggered_in_period": triggered,
-            "completed_in_period": completed,
-            "success_rate": playbook.success_rate,
-            "avg_completion_days": playbook.avg_completion_days,
-        })
+        playbook_stats.append(
+            {
+                "id": playbook.id,
+                "name": playbook.name,
+                "category": playbook.category,
+                "times_triggered_total": playbook.times_triggered,
+                "triggered_in_period": triggered,
+                "completed_in_period": completed,
+                "success_rate": playbook.success_rate,
+                "avg_completion_days": playbook.avg_completion_days,
+            }
+        )
 
     return {
         "period_days": days,
@@ -284,10 +283,7 @@ async def get_segment_insights(
 ):
     """Get segment insights and distribution."""
     result = await db.execute(
-        select(Segment)
-        .where(Segment.is_active == True)
-        .order_by(Segment.customer_count.desc().nullslast())
-        .limit(20)
+        select(Segment).where(Segment.is_active == True).order_by(Segment.customer_count.desc().nullslast()).limit(20)
     )
     segments = result.scalars().all()
 
@@ -318,25 +314,24 @@ async def get_activity_feed(
     """Get recent customer success activity feed."""
     # Get recent touchpoints
     touchpoints_result = await db.execute(
-        select(Touchpoint)
-        .where(Touchpoint.is_internal == False)
-        .order_by(Touchpoint.occurred_at.desc())
-        .limit(limit)
+        select(Touchpoint).where(Touchpoint.is_internal == False).order_by(Touchpoint.occurred_at.desc()).limit(limit)
     )
     touchpoints = touchpoints_result.scalars().all()
 
     activities = []
     for t in touchpoints:
-        activities.append({
-            "type": "touchpoint",
-            "id": t.id,
-            "customer_id": t.customer_id,
-            "touchpoint_type": t.touchpoint_type,
-            "subject": t.subject,
-            "sentiment_label": t.sentiment_label,
-            "occurred_at": t.occurred_at.isoformat() if t.occurred_at else None,
-            "user_id": t.user_id,
-        })
+        activities.append(
+            {
+                "type": "touchpoint",
+                "id": t.id,
+                "customer_id": t.customer_id,
+                "touchpoint_type": t.touchpoint_type,
+                "subject": t.subject,
+                "sentiment_label": t.sentiment_label,
+                "occurred_at": t.occurred_at.isoformat() if t.occurred_at else None,
+                "user_id": t.user_id,
+            }
+        )
 
     return {"items": activities, "total": len(activities)}
 
@@ -411,12 +406,6 @@ async def get_csm_leaderboard(
 
     return {
         "period_days": days,
-        "by_tasks_completed": [
-            {"user_id": t[0], "completed_tasks": t[1]}
-            for t in tasks_data if t[0]
-        ],
-        "by_touchpoints": [
-            {"user_id": t[0], "touchpoints": t[1]}
-            for t in touchpoints_data if t[0]
-        ],
+        "by_tasks_completed": [{"user_id": t[0], "completed_tasks": t[1]} for t in tasks_data if t[0]],
+        "by_touchpoints": [{"user_id": t[0], "touchpoints": t[1]} for t in touchpoints_data if t[0]],
     }

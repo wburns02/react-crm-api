@@ -35,8 +35,10 @@ QBO_ENVIRONMENT = os.getenv("QBO_ENVIRONMENT", "sandbox")  # sandbox or producti
 # Pydantic Schemas
 # =============================================================================
 
+
 class QBOConnectionStatus(BaseModel):
     """QuickBooks connection status."""
+
     connected: bool
     company_name: Optional[str] = None
     company_id: Optional[str] = None
@@ -46,6 +48,7 @@ class QBOConnectionStatus(BaseModel):
 
 class QBOCustomerMapping(BaseModel):
     """Customer mapping between CRM and QuickBooks."""
+
     crm_customer_id: int
     qbo_customer_id: str
     display_name: str
@@ -55,6 +58,7 @@ class QBOCustomerMapping(BaseModel):
 
 class QBOInvoiceMapping(BaseModel):
     """Invoice mapping between CRM and QuickBooks."""
+
     crm_invoice_id: str
     qbo_invoice_id: str
     doc_number: str
@@ -65,6 +69,7 @@ class QBOInvoiceMapping(BaseModel):
 
 class QBOSyncResult(BaseModel):
     """Sync operation result."""
+
     entity_type: str
     synced: int
     created: int
@@ -75,6 +80,7 @@ class QBOSyncResult(BaseModel):
 
 class QBOAuthURL(BaseModel):
     """OAuth authorization URL."""
+
     auth_url: str
     state: str
 
@@ -82,6 +88,7 @@ class QBOAuthURL(BaseModel):
 # =============================================================================
 # Connection Endpoints
 # =============================================================================
+
 
 @router.get("/status")
 async def get_quickbooks_status(
@@ -91,13 +98,7 @@ async def get_quickbooks_status(
     """Get QuickBooks connection status."""
     # In production: check database for OAuth tokens
     # Mock response
-    return QBOConnectionStatus(
-        connected=False,
-        company_name=None,
-        company_id=None,
-        last_sync=None,
-        expires_at=None
-    )
+    return QBOConnectionStatus(connected=False, company_name=None, company_id=None, last_sync=None, expires_at=None)
 
 
 @router.get("/connect")
@@ -107,10 +108,7 @@ async def initiate_quickbooks_connection(
 ) -> QBOAuthURL:
     """Initiate QuickBooks OAuth flow."""
     if not QBO_CLIENT_ID:
-        raise HTTPException(
-            status_code=503,
-            detail="QuickBooks integration not configured"
-        )
+        raise HTTPException(status_code=503, detail="QuickBooks integration not configured")
 
     state = uuid4().hex
     # In production: store state in session/database for validation
@@ -143,11 +141,7 @@ async def quickbooks_oauth_callback(
     # 3. Store tokens in database
     # 4. Fetch company info
 
-    return {
-        "success": True,
-        "message": "QuickBooks connected successfully",
-        "company_id": realmId
-    }
+    return {"success": True, "message": "QuickBooks connected successfully", "company_id": realmId}
 
 
 @router.post("/disconnect")
@@ -167,15 +161,13 @@ async def refresh_quickbooks_token(
 ) -> dict:
     """Refresh QuickBooks access token."""
     # In production: use refresh token to get new access token
-    return {
-        "success": True,
-        "expires_at": (datetime.utcnow() + timedelta(hours=1)).isoformat()
-    }
+    return {"success": True, "expires_at": (datetime.utcnow() + timedelta(hours=1)).isoformat()}
 
 
 # =============================================================================
 # Customer Sync Endpoints
 # =============================================================================
+
 
 @router.get("/customers")
 async def get_customer_mappings(
@@ -192,14 +184,14 @@ async def get_customer_mappings(
             qbo_customer_id="123",
             display_name="John Smith",
             sync_status="synced",
-            last_synced=datetime.utcnow().isoformat()
+            last_synced=datetime.utcnow().isoformat(),
         ),
         QBOCustomerMapping(
             crm_customer_id=2,
             qbo_customer_id="124",
             display_name="Jane Doe",
             sync_status="synced",
-            last_synced=datetime.utcnow().isoformat()
+            last_synced=datetime.utcnow().isoformat(),
         ),
     ]
 
@@ -207,7 +199,7 @@ async def get_customer_mappings(
         "mappings": [m.model_dump() for m in mappings],
         "total": len(mappings),
         "page": page,
-        "page_size": page_size
+        "page_size": page_size,
     }
 
 
@@ -223,13 +215,7 @@ async def sync_customers_to_quickbooks(
     # 2. For each customer, create or update in QuickBooks
     # 3. Store mapping
 
-    return QBOSyncResult(
-        entity_type="customer",
-        synced=10,
-        created=3,
-        updated=7,
-        errors=0
-    )
+    return QBOSyncResult(entity_type="customer", synced=10, created=3, updated=7, errors=0)
 
 
 @router.post("/customers/import")
@@ -238,18 +224,13 @@ async def import_customers_from_quickbooks(
     current_user: CurrentUser,
 ) -> QBOSyncResult:
     """Import customers from QuickBooks to CRM."""
-    return QBOSyncResult(
-        entity_type="customer",
-        synced=15,
-        created=15,
-        updated=0,
-        errors=0
-    )
+    return QBOSyncResult(entity_type="customer", synced=15, created=15, updated=0, errors=0)
 
 
 # =============================================================================
 # Invoice Sync Endpoints
 # =============================================================================
+
 
 @router.get("/invoices")
 async def get_invoice_mappings(
@@ -266,7 +247,7 @@ async def get_invoice_mappings(
             doc_number="INV-1001",
             total_amount=1500.00,
             sync_status="synced",
-            last_synced=datetime.utcnow().isoformat()
+            last_synced=datetime.utcnow().isoformat(),
         ),
     ]
 
@@ -274,7 +255,7 @@ async def get_invoice_mappings(
         "mappings": [m.model_dump() for m in mappings],
         "total": len(mappings),
         "page": page,
-        "page_size": page_size
+        "page_size": page_size,
     }
 
 
@@ -285,13 +266,7 @@ async def sync_invoices_to_quickbooks(
     invoice_ids: Optional[list[str]] = None,
 ) -> QBOSyncResult:
     """Sync invoices to QuickBooks."""
-    return QBOSyncResult(
-        entity_type="invoice",
-        synced=5,
-        created=2,
-        updated=3,
-        errors=0
-    )
+    return QBOSyncResult(entity_type="invoice", synced=5, created=2, updated=3, errors=0)
 
 
 @router.post("/invoices/{invoice_id}/push")
@@ -308,13 +283,14 @@ async def push_invoice_to_quickbooks(
         "success": True,
         "crm_invoice_id": invoice_id,
         "qbo_invoice_id": qbo_invoice_id,
-        "doc_number": f"INV-{invoice_id[:8].upper()}"
+        "doc_number": f"INV-{invoice_id[:8].upper()}",
     }
 
 
 # =============================================================================
 # Payment Sync Endpoints
 # =============================================================================
+
 
 @router.post("/payments/sync")
 async def sync_payments_to_quickbooks(
@@ -323,13 +299,7 @@ async def sync_payments_to_quickbooks(
     payment_ids: Optional[list[str]] = None,
 ) -> QBOSyncResult:
     """Sync payments to QuickBooks."""
-    return QBOSyncResult(
-        entity_type="payment",
-        synced=3,
-        created=3,
-        updated=0,
-        errors=0
-    )
+    return QBOSyncResult(entity_type="payment", synced=3, created=3, updated=0, errors=0)
 
 
 @router.get("/payments/unsynced")
@@ -345,16 +315,17 @@ async def get_unsynced_payments(
                 "invoice_id": "inv-001",
                 "amount": 500.00,
                 "payment_date": datetime.utcnow().isoformat(),
-                "method": "card"
+                "method": "card",
             }
         ],
-        "count": 1
+        "count": 1,
     }
 
 
 # =============================================================================
 # Sync Settings & History
 # =============================================================================
+
 
 @router.get("/settings")
 async def get_sync_settings(
@@ -368,7 +339,7 @@ async def get_sync_settings(
         "auto_sync_payments": True,
         "sync_interval_minutes": 60,
         "default_income_account": "Services",
-        "default_payment_account": "Undeposited Funds"
+        "default_payment_account": "Undeposited Funds",
     }
 
 
@@ -401,7 +372,7 @@ async def get_sync_history(
             "records_affected": 5,
             "started_at": (datetime.utcnow() - timedelta(hours=1)).isoformat(),
             "completed_at": (datetime.utcnow() - timedelta(minutes=58)).isoformat(),
-            "initiated_by": current_user.email
+            "initiated_by": current_user.email,
         },
         {
             "id": "sync-002",
@@ -411,7 +382,7 @@ async def get_sync_history(
             "records_affected": 3,
             "started_at": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
             "completed_at": (datetime.utcnow() - timedelta(hours=2, minutes=-2)).isoformat(),
-            "initiated_by": "system"
+            "initiated_by": "system",
         },
     ]
 
@@ -422,6 +393,7 @@ async def get_sync_history(
 # Reports/Reconciliation
 # =============================================================================
 
+
 @router.get("/reconciliation")
 async def get_reconciliation_report(
     db: DbSession,
@@ -429,24 +401,8 @@ async def get_reconciliation_report(
 ) -> dict:
     """Get reconciliation report comparing CRM and QuickBooks data."""
     return {
-        "customers": {
-            "crm_count": 150,
-            "qbo_count": 148,
-            "matched": 145,
-            "unmatched_crm": 5,
-            "unmatched_qbo": 3
-        },
-        "invoices": {
-            "crm_total": 25000.00,
-            "qbo_total": 24800.00,
-            "difference": 200.00,
-            "pending_sync": 2
-        },
-        "payments": {
-            "crm_total": 22000.00,
-            "qbo_total": 22000.00,
-            "difference": 0.00,
-            "pending_sync": 0
-        },
-        "generated_at": datetime.utcnow().isoformat()
+        "customers": {"crm_count": 150, "qbo_count": 148, "matched": 145, "unmatched_crm": 5, "unmatched_qbo": 3},
+        "invoices": {"crm_total": 25000.00, "qbo_total": 24800.00, "difference": 200.00, "pending_sync": 2},
+        "payments": {"crm_total": 22000.00, "qbo_total": 22000.00, "difference": 0.00, "pending_sync": 0},
+        "generated_at": datetime.utcnow().isoformat(),
     }

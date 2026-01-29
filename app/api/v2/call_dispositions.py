@@ -1,4 +1,5 @@
 """Call Dispositions API - Analytics for call dispositions."""
+
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 from typing import Optional
@@ -30,9 +31,7 @@ async def get_disposition_analytics(
         # Get all calls with dispositions in date range
         result = await db.execute(
             select(CallLog).where(
-                CallLog.call_date >= date_from,
-                CallLog.call_date <= date_to,
-                CallLog.call_disposition.isnot(None)
+                CallLog.call_date >= date_from, CallLog.call_date <= date_to, CallLog.call_disposition.isnot(None)
             )
         )
         calls = result.scalars().all()
@@ -49,12 +48,14 @@ async def get_disposition_analytics(
         disposition_stats = []
         for disposition, count in disposition_counts.items():
             percentage = (count / total_calls) * 100 if total_calls > 0 else 0
-            disposition_stats.append({
-                "disposition": disposition,
-                "count": count,
-                "percentage": round(percentage, 1),
-                "color": "#6B7280"  # Default color, could be customized
-            })
+            disposition_stats.append(
+                {
+                    "disposition": disposition,
+                    "count": count,
+                    "percentage": round(percentage, 1),
+                    "color": "#6B7280",  # Default color, could be customized
+                }
+            )
 
         # Sort by count descending
         disposition_stats.sort(key=lambda x: x["count"], reverse=True)
@@ -62,10 +63,7 @@ async def get_disposition_analytics(
         return {
             "stats": disposition_stats,
             "total_calls": total_calls,
-            "date_range": {
-                "from": date_from.isoformat(),
-                "to": date_to.isoformat()
-            },
+            "date_range": {"from": date_from.isoformat(), "to": date_to.isoformat()},
             "top_disposition": disposition_stats[0]["disposition"] if disposition_stats else None,
             "updated_at": datetime.utcnow().isoformat(),
         }

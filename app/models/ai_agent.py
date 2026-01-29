@@ -1,4 +1,5 @@
 """AI Agent models for autonomous customer engagement."""
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, JSON, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func

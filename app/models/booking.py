@@ -1,6 +1,7 @@
 """
 Booking model for direct book & pay services.
 """
+
 import uuid
 from sqlalchemy import Column, String, Integer, Date, Time, Numeric, DateTime, Boolean, ForeignKey, Text
 from sqlalchemy.sql import func

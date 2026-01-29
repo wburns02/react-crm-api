@@ -63,6 +63,7 @@ class TaskOutcome(str, Enum):
 
 class CSTaskBase(BaseModel):
     """Base CS task schema."""
+
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
 
@@ -116,12 +117,14 @@ class CSTaskBase(BaseModel):
 
 class CSTaskCreate(CSTaskBase):
     """Schema for creating a CS task."""
+
     customer_id: int
     assigned_to_user_id: Optional[int] = None
 
 
 class CSTaskUpdate(BaseModel):
     """Schema for updating a CS task."""
+
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     task_type: Optional[TaskType] = None
@@ -160,6 +163,7 @@ class CSTaskUpdate(BaseModel):
 
 class CSTaskResponse(CSTaskBase):
     """CS task response schema."""
+
     id: int
     customer_id: int
     status: TaskStatus
@@ -214,6 +218,7 @@ class CSTaskResponse(CSTaskBase):
 
 class CSTaskListResponse(BaseModel):
     """Paginated CS task list response."""
+
     items: list[CSTaskResponse]
     total: int
     page: int
@@ -222,8 +227,10 @@ class CSTaskListResponse(BaseModel):
 
 # Task Operations
 
+
 class CSTaskCompleteRequest(BaseModel):
     """Request to complete a task."""
+
     outcome: TaskOutcome
     outcome_notes: Optional[str] = None
     completed_artifacts: Optional[dict] = None
@@ -232,12 +239,14 @@ class CSTaskCompleteRequest(BaseModel):
 
 class CSTaskAssignRequest(BaseModel):
     """Request to assign/reassign a task."""
+
     assigned_to_user_id: int
     reason: Optional[str] = None
 
 
 class CSTaskBulkUpdateRequest(BaseModel):
     """Request to bulk update tasks."""
+
     task_ids: list[int]
     status: Optional[TaskStatus] = None
     priority: Optional[TaskPriority] = None

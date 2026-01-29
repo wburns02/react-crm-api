@@ -1,0 +1,26 @@
+# Ruff configuration for react-crm-api
+line-length = 120
+
+[lint]
+# Ignore F401 (unused imports) - common in FastAPI with dependency injection
+# Ignore E712 (boolean comparisons) - often needed for SQLAlchemy queries
+# Ignore F541 (f-string without placeholders) - sometimes used intentionally
+# Ignore F841 (assigned but unused) - sometimes needed for debugging
+# Ignore E501 (line too long) - already set line-length to 120
+# Ignore W292 (no newline at end of file) - auto-fixable
+# Ignore E402 (module import not at top) - sometimes needed for logging setup
+# Ignore E711 (comparison to None) - often needed for SQLAlchemy queries
+# Ignore E741 (ambiguous variable name) - 'l' is common for list comprehensions
+# Ignore W293 (blank line with whitespace) - auto-fixable
+# Ignore F402 (import shadowed by loop variable) - common pattern
+# Ignore F811 (redefinition of unused) - sometimes needed for route overloading
+ignore = ["F401", "E712", "F541", "F841", "E501", "W292", "E402", "E711", "E741", "W293", "F402", "F811"]
+
+# Enable additional checks
+select = ["E", "F", "W"]
+
+[lint.per-file-ignores]
+# Allow unused imports in __init__.py files (common for re-exports)
+"__init__.py" = ["F401"]
+# Allow unused imports in test files
+"tests/*" = ["F401", "F841"]

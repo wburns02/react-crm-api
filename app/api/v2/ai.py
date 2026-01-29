@@ -9,6 +9,7 @@ Endpoints for:
 - Sentiment analysis
 - AI-powered dispatch suggestions and optimization
 """
+
 from fastapi import APIRouter, HTTPException, status, Query, Body
 from sqlalchemy import select, func, text, and_, or_, cast, String
 from typing import Optional, List, Dict, Any
@@ -32,6 +33,7 @@ router = APIRouter()
 
 
 # Request/Response Models
+
 
 class ChatMessageInput(BaseModel):
     role: str = Field(..., description="Message role: user, assistant, or system")
@@ -84,6 +86,7 @@ class SentimentRequest(BaseModel):
 
 # Endpoints
 
+
 @router.get("/health")
 async def ai_health_check():
     """Check AI server health and availability."""
@@ -108,9 +111,7 @@ async def chat_completion(
         # If conversation_id provided, load history
         conversation = None
         if request.conversation_id:
-            conv_result = await db.execute(
-                select(AIConversation).where(AIConversation.id == request.conversation_id)
-            )
+            conv_result = await db.execute(select(AIConversation).where(AIConversation.id == request.conversation_id))
             conversation = conv_result.scalar_one_or_none()
 
             if conversation:
@@ -244,9 +245,7 @@ async def semantic_search(
 
         if query_result.get("error"):
             # Fallback to text search
-            query = select(AIEmbedding).where(
-                AIEmbedding.content.ilike(f"%{request.query}%")
-            )
+            query = select(AIEmbedding).where(AIEmbedding.content.ilike(f"%{request.query}%"))
 
             if request.entity_types:
                 query = query.where(AIEmbedding.entity_type.in_(request.entity_types))
@@ -355,9 +354,11 @@ async def list_conversations(
     page_size: int = Query(20, ge=1, le=100),
 ):
     """List user's AI conversations."""
-    query = select(AIConversation).where(
-        AIConversation.user_id == str(current_user.id)
-    ).order_by(AIConversation.updated_at.desc())
+    query = (
+        select(AIConversation)
+        .where(AIConversation.user_id == str(current_user.id))
+        .order_by(AIConversation.updated_at.desc())
+    )
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())
@@ -413,9 +414,7 @@ async def get_conversation_messages(
 
     # Get messages
     msg_result = await db.execute(
-        select(AIMessage)
-        .where(AIMessage.conversation_id == conversation_id)
-        .order_by(AIMessage.created_at)
+        select(AIMessage).where(AIMessage.conversation_id == conversation_id).order_by(AIMessage.created_at)
     )
     messages = msg_result.scalars().all()
 
@@ -472,6 +471,7 @@ async def delete_conversation(
 # AI DISPATCH ENDPOINTS
 # =============================================================================
 
+
 # Helper function to calculate distance between two coordinates (Haversine formula)
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
@@ -479,7 +479,7 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     Returns float miles.
     """
     if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
-        return float('inf')
+        return float("inf")
 
     R = 3959  # Earth's radius in miles
 
@@ -488,8 +488,7 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     delta_lat = math.radians(lat2 - lat1)
     delta_lon = math.radians(lon2 - lon1)
 
-    a = math.sin(delta_lat / 2) ** 2 + \
-        math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
+    a = math.sin(delta_lat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     return R * c
@@ -500,8 +499,8 @@ def estimate_travel_time(distance_miles: float, avg_speed_mph: float = 35.0) -> 
     Estimate travel time in minutes given distance in miles.
     Uses average speed of 35 mph for local service calls.
     """
-    if distance_miles == float('inf'):
-        return float('inf')
+    if distance_miles == float("inf"):
+        return float("inf")
     return (distance_miles / avg_speed_mph) * 60
 
 
@@ -540,8 +539,10 @@ def calculate_skill_match_score(technician_skills: List[str], job_type: str) -> 
 
 # Pydantic Models for Dispatch
 
+
 class TechnicianMatch(BaseModel):
     """Technician match details for a dispatch suggestion."""
+
     technician_id: str
     technician_name: str
     distance_miles: float
@@ -553,6 +554,7 @@ class TechnicianMatch(BaseModel):
 
 class DispatchSuggestion(BaseModel):
     """A single dispatch suggestion from AI."""
+
     work_order_id: str
     work_order_job_type: str
     work_order_priority: str
@@ -572,6 +574,7 @@ class DispatchSuggestion(BaseModel):
 
 class DispatchSuggestionsResponse(BaseModel):
     """Response containing AI dispatch suggestions."""
+
     suggestions: List[DispatchSuggestion] = []
     unassigned_count: int = 0
     available_technician_count: int = 0
@@ -579,6 +582,7 @@ class DispatchSuggestionsResponse(BaseModel):
 
 class AcceptSuggestionRequest(BaseModel):
     """Request to accept a dispatch suggestion."""
+
     work_order_id: str
     technician_id: str
     scheduled_date: date
@@ -587,6 +591,7 @@ class AcceptSuggestionRequest(BaseModel):
 
 class AcceptSuggestionResponse(BaseModel):
     """Response after accepting a dispatch suggestion."""
+
     success: bool
     message: str
     work_order_id: str
@@ -598,12 +603,14 @@ class AcceptSuggestionResponse(BaseModel):
 
 class OptimizeRouteRequest(BaseModel):
     """Request to optimize a technician's route for a day."""
+
     technician_id: str
     date: date
 
 
 class RouteStop(BaseModel):
     """A stop in an optimized route."""
+
     order: int
     work_order_id: str
     customer_name: Optional[str] = None
@@ -621,6 +628,7 @@ class RouteStop(BaseModel):
 
 class OptimizeRouteResponse(BaseModel):
     """Response with optimized route."""
+
     technician_id: str
     technician_name: str
     date: str
@@ -632,6 +640,7 @@ class OptimizeRouteResponse(BaseModel):
 
 class DispatchStatsResponse(BaseModel):
     """Comprehensive dispatch statistics."""
+
     # Suggestion stats
     suggestions_accepted_today: int = 0
     suggestions_accepted_week: int = 0
@@ -655,11 +664,13 @@ class DispatchStatsResponse(BaseModel):
 
 class NLQueryRequest(BaseModel):
     """Natural language query request."""
+
     query: str = Field(..., min_length=3, max_length=500)
 
 
 class NLQueryResponse(BaseModel):
     """Natural language query response."""
+
     success: bool
     query: str
     parsed_intent: str
@@ -671,6 +682,7 @@ class NLQueryResponse(BaseModel):
 # =============================================================================
 # DISPATCH ENDPOINTS
 # =============================================================================
+
 
 @router.get("/dispatch/suggestions", response_model=DispatchSuggestionsResponse)
 async def get_dispatch_suggestions(
@@ -691,25 +703,28 @@ async def get_dispatch_suggestions(
     """
     try:
         # 1. Query unassigned work orders (draft status, no technician, or no scheduled date)
-        unassigned_query = select(WorkOrder).where(
-            or_(
-                WorkOrder.technician_id.is_(None),
-                WorkOrder.scheduled_date.is_(None),
-                cast(WorkOrder.status, String) == "draft",
+        unassigned_query = (
+            select(WorkOrder)
+            .where(
+                or_(
+                    WorkOrder.technician_id.is_(None),
+                    WorkOrder.scheduled_date.is_(None),
+                    cast(WorkOrder.status, String) == "draft",
+                )
             )
-        ).order_by(
-            # Prioritize by priority field
-            WorkOrder.priority.desc(),
-            WorkOrder.created_at.asc()
-        ).limit(20)
+            .order_by(
+                # Prioritize by priority field
+                WorkOrder.priority.desc(),
+                WorkOrder.created_at.asc(),
+            )
+            .limit(20)
+        )
 
         unassigned_result = await db.execute(unassigned_query)
         unassigned_work_orders = unassigned_result.scalars().all()
 
         # 2. Query available (active) technicians
-        technicians_query = select(Technician).where(
-            Technician.is_active == True
-        )
+        technicians_query = select(Technician).where(Technician.is_active == True)
         technicians_result = await db.execute(technicians_query)
         technicians = technicians_result.scalars().all()
 
@@ -724,16 +739,17 @@ async def get_dispatch_suggestions(
         today = date.today()
         tomorrow = today + timedelta(days=1)
 
-        workload_query = select(
-            WorkOrder.technician_id,
-            func.count(WorkOrder.id).label("job_count")
-        ).where(
-            and_(
-                WorkOrder.technician_id.isnot(None),
-                WorkOrder.scheduled_date >= today,
-                WorkOrder.scheduled_date <= tomorrow,
+        workload_query = (
+            select(WorkOrder.technician_id, func.count(WorkOrder.id).label("job_count"))
+            .where(
+                and_(
+                    WorkOrder.technician_id.isnot(None),
+                    WorkOrder.scheduled_date >= today,
+                    WorkOrder.scheduled_date <= tomorrow,
+                )
             )
-        ).group_by(WorkOrder.technician_id)
+            .group_by(WorkOrder.technician_id)
+        )
 
         workload_result = await db.execute(workload_query)
         workload_data = {row[0]: row[1] for row in workload_result.fetchall()}
@@ -746,9 +762,7 @@ async def get_dispatch_suggestions(
                 break
 
             # Get customer info
-            customer_result = await db.execute(
-                select(Customer).where(Customer.id == wo.customer_id)
-            )
+            customer_result = await db.execute(select(Customer).where(Customer.id == wo.customer_id))
             customer = customer_result.scalar_one_or_none()
 
             customer_name = f"{customer.first_name} {customer.last_name}" if customer else "Unknown"
@@ -788,26 +802,26 @@ async def get_dispatch_suggestions(
                 workload_penalty = min(current_workload * 0.1, 0.5)  # Max 0.5 penalty
 
                 # Distance penalty (normalize to 0-0.5 range, 50 miles = max penalty)
-                if distance == float('inf'):
+                if distance == float("inf"):
                     distance_penalty = 0.5
                 else:
                     distance_penalty = min(distance / 100, 0.5)
 
                 # Final score
-                confidence = max(0.0, min(1.0,
-                    skill_score * 0.5 +
-                    (1.0 - distance_penalty) * 0.3 +
-                    (1.0 - workload_penalty) * 0.2
-                ))
+                confidence = max(
+                    0.0, min(1.0, skill_score * 0.5 + (1.0 - distance_penalty) * 0.3 + (1.0 - workload_penalty) * 0.2)
+                )
 
-                technician_scores.append({
-                    "technician": tech,
-                    "confidence": confidence,
-                    "distance": distance if distance != float('inf') else 999,
-                    "travel_time": travel_time if travel_time != float('inf') else 999,
-                    "skill_score": skill_score,
-                    "workload": current_workload,
-                })
+                technician_scores.append(
+                    {
+                        "technician": tech,
+                        "confidence": confidence,
+                        "distance": distance if distance != float("inf") else 999,
+                        "travel_time": travel_time if travel_time != float("inf") else 999,
+                        "skill_score": skill_score,
+                        "workload": current_workload,
+                    }
+                )
 
             # Get best technician for this work order
             if technician_scores:
@@ -842,23 +856,25 @@ async def get_dispatch_suggestions(
                 if wo.service_city:
                     service_address += f", {wo.service_city}"
 
-                suggestions.append(DispatchSuggestion(
-                    work_order_id=str(wo.id),
-                    work_order_job_type=job_type,
-                    work_order_priority=priority,
-                    customer_id=wo.customer_id,
-                    customer_name=customer_name,
-                    service_address=service_address or None,
-                    technician_id=str(best_tech.id),
-                    technician_name=f"{best_tech.first_name} {best_tech.last_name}",
-                    suggested_date=suggested_date.isoformat(),
-                    suggested_time=suggested_time,
-                    confidence=round(best["confidence"], 2),
-                    reason=reason.capitalize(),
-                    distance_miles=round(best["distance"], 1),
-                    estimated_travel_minutes=round(best["travel_time"], 0),
-                    skill_match_score=round(best["skill_score"], 2),
-                ))
+                suggestions.append(
+                    DispatchSuggestion(
+                        work_order_id=str(wo.id),
+                        work_order_job_type=job_type,
+                        work_order_priority=priority,
+                        customer_id=wo.customer_id,
+                        customer_name=customer_name,
+                        service_address=service_address or None,
+                        technician_id=str(best_tech.id),
+                        technician_name=f"{best_tech.first_name} {best_tech.last_name}",
+                        suggested_date=suggested_date.isoformat(),
+                        suggested_time=suggested_time,
+                        confidence=round(best["confidence"], 2),
+                        reason=reason.capitalize(),
+                        distance_miles=round(best["distance"], 1),
+                        estimated_travel_minutes=round(best["travel_time"], 0),
+                        skill_match_score=round(best["skill_score"], 2),
+                    )
+                )
 
         return DispatchSuggestionsResponse(
             suggestions=suggestions,
@@ -869,6 +885,7 @@ async def get_dispatch_suggestions(
     except Exception as e:
         logger.error(f"Error generating dispatch suggestions: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -893,9 +910,7 @@ async def accept_dispatch_suggestion(
     """
     try:
         # 1. Get the work order
-        wo_result = await db.execute(
-            select(WorkOrder).where(WorkOrder.id == request.work_order_id)
-        )
+        wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == request.work_order_id))
         work_order = wo_result.scalar_one_or_none()
 
         if not work_order:
@@ -905,9 +920,7 @@ async def accept_dispatch_suggestion(
             )
 
         # 2. Get the technician
-        tech_result = await db.execute(
-            select(Technician).where(Technician.id == request.technician_id)
-        )
+        tech_result = await db.execute(select(Technician).where(Technician.id == request.technician_id))
         technician = tech_result.scalar_one_or_none()
 
         if not technician:
@@ -958,6 +971,7 @@ async def accept_dispatch_suggestion(
         await db.rollback()
         logger.error(f"Error accepting dispatch suggestion: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -981,9 +995,7 @@ async def optimize_technician_route(
     """
     try:
         # 1. Get technician
-        tech_result = await db.execute(
-            select(Technician).where(Technician.id == request.technician_id)
-        )
+        tech_result = await db.execute(select(Technician).where(Technician.id == request.technician_id))
         technician = tech_result.scalar_one_or_none()
 
         if not technician:
@@ -994,12 +1006,14 @@ async def optimize_technician_route(
 
         # 2. Get all work orders assigned to this technician for the date
         wo_result = await db.execute(
-            select(WorkOrder).where(
+            select(WorkOrder)
+            .where(
                 and_(
                     WorkOrder.technician_id == request.technician_id,
                     WorkOrder.scheduled_date == request.date,
                 )
-            ).order_by(WorkOrder.time_window_start)
+            )
+            .order_by(WorkOrder.time_window_start)
         )
         work_orders = wo_result.scalars().all()
 
@@ -1021,9 +1035,7 @@ async def optimize_technician_route(
 
         # Get customer names for display
         customer_ids = [wo.customer_id for wo in work_orders]
-        customers_result = await db.execute(
-            select(Customer).where(Customer.id.in_(customer_ids))
-        )
+        customers_result = await db.execute(select(Customer).where(Customer.id.in_(customer_ids)))
         customers = {c.id: c for c in customers_result.scalars().all()}
 
         # Create job list with locations
@@ -1034,15 +1046,17 @@ async def optimize_technician_route(
 
             service_address = wo.service_address_line1 or ""
 
-            jobs.append({
-                "work_order": wo,
-                "customer_name": customer_name,
-                "service_address": service_address,
-                "service_city": wo.service_city,
-                "lat": float(wo.service_latitude) if wo.service_latitude else None,
-                "lon": float(wo.service_longitude) if wo.service_longitude else None,
-                "visited": False,
-            })
+            jobs.append(
+                {
+                    "work_order": wo,
+                    "customer_name": customer_name,
+                    "service_address": service_address,
+                    "service_city": wo.service_city,
+                    "lat": float(wo.service_latitude) if wo.service_latitude else None,
+                    "lon": float(wo.service_longitude) if wo.service_longitude else None,
+                    "visited": False,
+                }
+            )
 
         # 4. Nearest neighbor algorithm
         optimized_route = []
@@ -1057,16 +1071,13 @@ async def optimize_technician_route(
         while len(optimized_route) < len(jobs):
             # Find nearest unvisited job
             nearest_job = None
-            nearest_distance = float('inf')
+            nearest_distance = float("inf")
 
             for job in jobs:
                 if job["visited"]:
                     continue
 
-                distance = haversine_distance(
-                    current_lat, current_lon,
-                    job["lat"], job["lon"]
-                )
+                distance = haversine_distance(current_lat, current_lon, job["lat"], job["lon"])
 
                 if distance < nearest_distance:
                     nearest_distance = distance
@@ -1079,33 +1090,37 @@ async def optimize_technician_route(
             nearest_job["visited"] = True
 
             # Calculate travel time
-            travel_time = estimate_travel_time(nearest_distance) if nearest_distance != float('inf') else 30
+            travel_time = estimate_travel_time(nearest_distance) if nearest_distance != float("inf") else 30
 
             # Add travel time to current time
             if len(optimized_route) > 0:  # Not the first stop
                 current_time = current_time + timedelta(minutes=travel_time)
 
-            total_distance += nearest_distance if nearest_distance != float('inf') else 0
-            total_travel_time += travel_time if travel_time != float('inf') else 0
+            total_distance += nearest_distance if nearest_distance != float("inf") else 0
+            total_travel_time += travel_time if travel_time != float("inf") else 0
 
             wo = nearest_job["work_order"]
             estimated_duration = float(wo.estimated_duration_hours) if wo.estimated_duration_hours else 1.0
 
-            optimized_route.append(RouteStop(
-                order=len(optimized_route) + 1,
-                work_order_id=str(wo.id),
-                customer_name=nearest_job["customer_name"],
-                service_address=nearest_job["service_address"],
-                service_city=nearest_job["service_city"],
-                job_type=wo.job_type or "pumping",
-                priority=wo.priority or "normal",
-                estimated_arrival=current_time.strftime("%H:%M"),
-                estimated_duration_hours=estimated_duration,
-                latitude=nearest_job["lat"],
-                longitude=nearest_job["lon"],
-                distance_from_previous_miles=round(nearest_distance, 1) if nearest_distance != float('inf') else None,
-                travel_time_minutes=round(travel_time, 0) if travel_time != float('inf') else None,
-            ))
+            optimized_route.append(
+                RouteStop(
+                    order=len(optimized_route) + 1,
+                    work_order_id=str(wo.id),
+                    customer_name=nearest_job["customer_name"],
+                    service_address=nearest_job["service_address"],
+                    service_city=nearest_job["service_city"],
+                    job_type=wo.job_type or "pumping",
+                    priority=wo.priority or "normal",
+                    estimated_arrival=current_time.strftime("%H:%M"),
+                    estimated_duration_hours=estimated_duration,
+                    latitude=nearest_job["lat"],
+                    longitude=nearest_job["lon"],
+                    distance_from_previous_miles=round(nearest_distance, 1)
+                    if nearest_distance != float("inf")
+                    else None,
+                    travel_time_minutes=round(travel_time, 0) if travel_time != float("inf") else None,
+                )
+            )
 
             # Update current location for next iteration
             current_lat = nearest_job["lat"]
@@ -1129,6 +1144,7 @@ async def optimize_technician_route(
     except Exception as e:
         logger.error(f"Error optimizing route: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1198,56 +1214,54 @@ async def get_dispatch_stats(
 
         # Top technicians by job count this month
         tech_stats_result = await db.execute(
-            select(
-                WorkOrder.technician_id,
-                WorkOrder.assigned_technician,
-                func.count(WorkOrder.id).label("job_count")
-            ).where(
+            select(WorkOrder.technician_id, WorkOrder.assigned_technician, func.count(WorkOrder.id).label("job_count"))
+            .where(
                 and_(
                     WorkOrder.technician_id.isnot(None),
                     WorkOrder.scheduled_date >= month_start,
                 )
-            ).group_by(
-                WorkOrder.technician_id,
-                WorkOrder.assigned_technician
-            ).order_by(
-                func.count(WorkOrder.id).desc()
-            ).limit(5)
+            )
+            .group_by(WorkOrder.technician_id, WorkOrder.assigned_technician)
+            .order_by(func.count(WorkOrder.id).desc())
+            .limit(5)
         )
 
         top_technicians = []
         for row in tech_stats_result.all():
-            top_technicians.append({
-                "technician_id": str(row[0]) if row[0] else None,
-                "technician_name": row[1] or "Unknown",
-                "job_count": row[2],
-            })
+            top_technicians.append(
+                {
+                    "technician_id": str(row[0]) if row[0] else None,
+                    "technician_name": row[1] or "Unknown",
+                    "job_count": row[2],
+                }
+            )
 
         # Busiest days of week (last 30 days)
         days_result = await db.execute(
             select(
-                func.extract('dow', WorkOrder.scheduled_date).label("day_of_week"),
-                func.count(WorkOrder.id).label("count")
-            ).where(
+                func.extract("dow", WorkOrder.scheduled_date).label("day_of_week"),
+                func.count(WorkOrder.id).label("count"),
+            )
+            .where(
                 and_(
                     WorkOrder.scheduled_date >= today - timedelta(days=30),
                     WorkOrder.scheduled_date <= today,
                 )
-            ).group_by(
-                func.extract('dow', WorkOrder.scheduled_date)
-            ).order_by(
-                func.count(WorkOrder.id).desc()
             )
+            .group_by(func.extract("dow", WorkOrder.scheduled_date))
+            .order_by(func.count(WorkOrder.id).desc())
         )
 
         day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         busiest_days = []
         for row in days_result.all():
             dow = int(row[0]) if row[0] is not None else 0
-            busiest_days.append({
-                "day": day_names[dow],
-                "count": row[1],
-            })
+            busiest_days.append(
+                {
+                    "day": day_names[dow],
+                    "count": row[1],
+                }
+            )
 
         # Busiest hours (from time_window_start)
         # Note: This requires time extraction which varies by database
@@ -1269,11 +1283,7 @@ async def get_dispatch_stats(
         unassigned_count = unassigned_result.scalar() or 0
 
         # Jobs scheduled today
-        today_jobs_result = await db.execute(
-            select(func.count()).where(
-                WorkOrder.scheduled_date == today
-            )
-        )
+        today_jobs_result = await db.execute(select(func.count()).where(WorkOrder.scheduled_date == today))
         jobs_today = today_jobs_result.scalar() or 0
 
         # Jobs scheduled this week
@@ -1303,6 +1313,7 @@ async def get_dispatch_stats(
     except Exception as e:
         logger.error(f"Error getting dispatch stats: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1379,9 +1390,7 @@ async def natural_language_dispatch_query(
                 break
 
         # Try to find technician name
-        technicians_result = await db.execute(
-            select(Technician).where(Technician.is_active == True)
-        )
+        technicians_result = await db.execute(select(Technician).where(Technician.is_active == True))
         technicians = technicians_result.scalars().all()
 
         for tech in technicians:
@@ -1406,12 +1415,14 @@ async def natural_language_dispatch_query(
                 if i + 1 < len(words):
                     potential_name = words[i + 1].capitalize()
                     customer_result = await db.execute(
-                        select(Customer).where(
+                        select(Customer)
+                        .where(
                             or_(
                                 func.lower(Customer.first_name) == potential_name.lower(),
                                 func.lower(Customer.last_name) == potential_name.lower(),
                             )
-                        ).limit(1)
+                        )
+                        .limit(1)
                     )
                     customer = customer_result.scalar_one_or_none()
                     if customer:
@@ -1445,15 +1456,18 @@ async def natural_language_dispatch_query(
                 if "customer_id" in entities:
                     # Find unassigned work order for this customer
                     wo_result = await db.execute(
-                        select(WorkOrder).where(
+                        select(WorkOrder)
+                        .where(
                             and_(
                                 WorkOrder.customer_id == entities["customer_id"],
                                 or_(
                                     WorkOrder.technician_id.is_(None),
                                     cast(WorkOrder.status, String) == "draft",
-                                )
+                                ),
                             )
-                        ).order_by(WorkOrder.created_at.desc()).limit(1)
+                        )
+                        .order_by(WorkOrder.created_at.desc())
+                        .limit(1)
                     )
                     wo = wo_result.scalar_one_or_none()
 
@@ -1501,7 +1515,9 @@ async def natural_language_dispatch_query(
         elif intent == "get_status":
             message = "Query dispatching status and metrics."
         else:
-            message = "Could not understand the request. Try something like 'schedule John for Smith job tomorrow at 9am'."
+            message = (
+                "Could not understand the request. Try something like 'schedule John for Smith job tomorrow at 9am'."
+            )
 
         return NLQueryResponse(
             success=intent != "unknown",
@@ -1515,6 +1531,7 @@ async def natural_language_dispatch_query(
     except Exception as e:
         logger.error(f"Error processing NL query: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1526,13 +1543,16 @@ async def natural_language_dispatch_query(
 # Missing Dispatch Endpoints (Added for AI Assistant)
 # ============================================
 
+
 class DispatchPromptRequest(BaseModel):
     """Request for natural language dispatch prompt."""
+
     prompt: str = Field(..., description="Natural language dispatch query")
 
 
 class DispatchPromptResponse(BaseModel):
     """Response from dispatch prompt processing."""
+
     success: bool
     response: str
     suggestions: List[Dict[str, Any]] = []
@@ -1550,7 +1570,7 @@ async def process_dispatch_prompt(
         success=True,
         response=f"Processed prompt: {request.prompt}",
         suggestions=[],
-        actions_taken=["Analyzed query", "Generated response"]
+        actions_taken=["Analyzed query", "Generated response"],
     )
 
 
@@ -1565,7 +1585,7 @@ async def execute_dispatch_suggestion(
         "success": True,
         "suggestion_id": suggestion_id,
         "status": "executed",
-        "message": f"Suggestion {suggestion_id} has been executed"
+        "message": f"Suggestion {suggestion_id} has been executed",
     }
 
 
@@ -1580,7 +1600,7 @@ async def dismiss_dispatch_suggestion(
         "success": True,
         "suggestion_id": suggestion_id,
         "status": "dismissed",
-        "message": f"Suggestion {suggestion_id} has been dismissed"
+        "message": f"Suggestion {suggestion_id} has been dismissed",
     }
 
 
@@ -1591,11 +1611,7 @@ async def get_dispatch_history(
     limit: int = 50,
 ) -> Dict[str, Any]:
     """Get dispatch action history."""
-    return {
-        "history": [],
-        "total_count": 0,
-        "limit": limit
-    }
+    return {"history": [], "total_count": 0, "limit": limit}
 
 
 @router.post("/dispatch/auto-assign")
@@ -1609,7 +1625,7 @@ async def auto_assign_work_orders(
         "assigned_count": 0,
         "skipped_count": 0,
         "assignments": [],
-        "message": "Auto-assignment completed"
+        "message": "Auto-assignment completed",
     }
 
 
@@ -1622,12 +1638,7 @@ async def get_work_order_predictions(
     """Get AI predictions for a work order."""
     return {
         "work_order_id": work_order_id,
-        "predictions": {
-            "estimated_duration": 60,
-            "best_technicians": [],
-            "optimal_time_slots": [],
-            "risk_factors": []
-        }
+        "predictions": {"estimated_duration": 60, "best_technicians": [], "optimal_time_slots": [], "risk_factors": []},
     }
 
 
@@ -1637,11 +1648,7 @@ async def get_dispatch_technicians(
     current_user: CurrentUser,
 ) -> Dict[str, Any]:
     """Get technicians available for dispatch with AI insights."""
-    return {
-        "technicians": [],
-        "total_count": 0,
-        "available_count": 0
-    }
+    return {"technicians": [], "total_count": 0, "available_count": 0}
 
 
 @router.get("/dispatch/work-orders/{work_order_id}/suggestions")
@@ -1651,11 +1658,7 @@ async def get_work_order_suggestions(
     current_user: CurrentUser,
 ) -> Dict[str, Any]:
     """Get AI suggestions for a specific work order."""
-    return {
-        "work_order_id": work_order_id,
-        "suggestions": [],
-        "generated_at": "2026-01-14T00:00:00Z"
-    }
+    return {"work_order_id": work_order_id, "suggestions": [], "generated_at": "2026-01-14T00:00:00Z"}
 
 
 @router.patch("/dispatch/suggestions/{suggestion_id}")
@@ -1665,11 +1668,7 @@ async def update_dispatch_suggestion(
     current_user: CurrentUser,
 ) -> Dict[str, Any]:
     """Update/modify a dispatch suggestion."""
-    return {
-        "success": True,
-        "suggestion_id": suggestion_id,
-        "status": "updated"
-    }
+    return {"success": True, "suggestion_id": suggestion_id, "status": "updated"}
 
 
 @router.post("/dispatch/analyze")
@@ -1682,5 +1681,5 @@ async def analyze_dispatch(
         "success": True,
         "message": "Dispatch analysis refreshed",
         "suggestions_generated": 0,
-        "analyzed_at": "2026-01-14T00:00:00Z"
+        "analyzed_at": "2026-01-14T00:00:00Z",
     }

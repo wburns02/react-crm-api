@@ -6,6 +6,7 @@ Features:
 - Profitability analysis
 - Cost reports
 """
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 from typing import Optional, List
@@ -25,6 +26,7 @@ router = APIRouter()
 # ========================
 # Pydantic Schemas
 # ========================
+
 
 class JobCostCreate(BaseModel):
     work_order_id: str
@@ -114,6 +116,7 @@ class ProfitabilityReport(BaseModel):
 # ========================
 # Endpoints
 # ========================
+
 
 @router.get("", response_model=ListResponse)
 async def list_job_costs(
@@ -363,6 +366,7 @@ async def delete_job_cost(
 # Summary Endpoints
 # ========================
 
+
 @router.get("/work-order/{work_order_id}/summary", response_model=WorkOrderCostSummary)
 async def get_work_order_cost_summary(
     work_order_id: str,
@@ -371,9 +375,7 @@ async def get_work_order_cost_summary(
 ):
     """Get cost summary for a work order."""
     try:
-        result = await db.execute(
-            select(JobCost).where(JobCost.work_order_id == work_order_id)
-        )
+        result = await db.execute(select(JobCost).where(JobCost.work_order_id == work_order_id))
         costs = result.scalars().all()
 
         total_costs = sum(c.total_cost for c in costs)
@@ -415,9 +417,7 @@ async def get_work_order_profitability(
     """Get profitability analysis for a work order."""
     try:
         # Get costs
-        cost_result = await db.execute(
-            select(JobCost).where(JobCost.work_order_id == work_order_id)
-        )
+        cost_result = await db.execute(select(JobCost).where(JobCost.work_order_id == work_order_id))
         costs = cost_result.scalars().all()
 
         total_costs = sum(c.total_cost for c in costs)
@@ -430,13 +430,11 @@ async def get_work_order_profitability(
             cost_breakdown[cost.cost_type] += cost.total_cost
 
         # Get work order for revenue (if available)
-        wo_result = await db.execute(
-            select(WorkOrder).where(WorkOrder.id == work_order_id)
-        )
+        wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
         work_order = wo_result.scalar_one_or_none()
 
         revenue = 0.0
-        if work_order and hasattr(work_order, 'total_amount'):
+        if work_order and hasattr(work_order, "total_amount"):
             revenue = float(work_order.total_amount or 0)
 
         gross_profit = revenue - total_costs
@@ -469,12 +467,7 @@ async def get_cost_reports_summary(
         if not date_to:
             date_to = date.today()
 
-        result = await db.execute(
-            select(JobCost).where(
-                JobCost.cost_date >= date_from,
-                JobCost.cost_date <= date_to
-            )
-        )
+        result = await db.execute(select(JobCost).where(JobCost.cost_date >= date_from, JobCost.cost_date <= date_to))
         costs = result.scalars().all()
 
         total_costs = sum(c.total_cost for c in costs)

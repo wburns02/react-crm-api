@@ -3,6 +3,7 @@ Booking API endpoints for direct book & pay services.
 
 Supports test mode for development without real payment processing.
 """
+
 import logging
 from datetime import datetime, time
 from decimal import Decimal
@@ -80,10 +81,7 @@ async def create_booking(
 
     # Require overage acknowledgment
     if not booking_data.overage_acknowledged:
-        raise HTTPException(
-            status_code=400,
-            detail="You must acknowledge the overage pricing policy"
-        )
+        raise HTTPException(status_code=400, detail="You must acknowledge the overage pricing policy")
 
     # Get time window from slot
     time_start, time_end = TIME_SLOTS.get(booking_data.time_slot or "any", TIME_SLOTS["any"])
@@ -98,27 +96,21 @@ async def create_booking(
             amount_cents=preauth_cents,
             token="test_token",
             description=f"Septic Pumping - {booking_data.scheduled_date}",
-            test_mode=True
+            test_mode=True,
         )
     else:
         # Live mode - require token
         if not booking_data.payment_token:
-            raise HTTPException(
-                status_code=400,
-                detail="Payment token is required for live bookings"
-            )
+            raise HTTPException(status_code=400, detail="Payment token is required for live bookings")
         payment_result = await clover.preauthorize(
             amount_cents=preauth_cents,
             token=booking_data.payment_token,
             description=f"Septic Pumping - {booking_data.scheduled_date}",
-            test_mode=False
+            test_mode=False,
         )
 
     if not payment_result.success:
-        raise HTTPException(
-            status_code=402,
-            detail=f"Payment authorization failed: {payment_result.error_message}"
-        )
+        raise HTTPException(status_code=402, detail=f"Payment authorization failed: {payment_result.error_message}")
 
     # Create booking record
     booking = Booking(
@@ -127,26 +119,21 @@ async def create_booking(
         customer_email=booking_data.email,
         customer_phone=booking_data.phone,
         service_address=booking_data.service_address,
-
         service_type=booking_data.service_type,
         scheduled_date=booking_data.scheduled_date,
         time_slot=booking_data.time_slot,
         time_window_start=time_start,
         time_window_end=time_end,
-
         base_price=pricing["base_price"],
         included_gallons=pricing["included_gallons"],
         overage_rate=pricing["overage_rate"],
         preauth_amount=pricing["preauth_amount"],
-
         clover_charge_id=payment_result.charge_id,
         payment_status="preauthorized" if not booking_data.test_mode else "test",
         is_test=booking_data.test_mode,
-
         overage_acknowledged=booking_data.overage_acknowledged,
         sms_consent=booking_data.sms_consent,
         customer_notes=booking_data.notes,
-
         status="confirmed",
     )
 
@@ -172,9 +159,7 @@ async def get_booking(
 
     This is a PUBLIC endpoint - allows customers to view their booking.
     """
-    result = await db.execute(
-        select(Booking).where(Booking.id == booking_id)
-    )
+    result = await db.execute(select(Booking).where(Booking.id == booking_id))
     booking = result.scalar_one_or_none()
 
     if not booking:
@@ -197,19 +182,14 @@ async def capture_booking_payment(
 
     Calculates final amount based on actual gallons pumped.
     """
-    result = await db.execute(
-        select(Booking).where(Booking.id == booking_id)
-    )
+    result = await db.execute(select(Booking).where(Booking.id == booking_id))
     booking = result.scalar_one_or_none()
 
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
     if booking.payment_status not in ("preauthorized", "test"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot capture payment with status: {booking.payment_status}"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot capture payment with status: {booking.payment_status}")
 
     # Calculate final amount
     booking.actual_gallons = capture_data.actual_gallons
@@ -224,16 +204,11 @@ async def capture_booking_payment(
     final_cents = int(final_amount * 100)
 
     payment_result = await clover.capture(
-        charge_id=booking.clover_charge_id,
-        amount_cents=final_cents,
-        test_mode=booking.is_test
+        charge_id=booking.clover_charge_id, amount_cents=final_cents, test_mode=booking.is_test
     )
 
     if not payment_result.success:
-        raise HTTPException(
-            status_code=402,
-            detail=f"Payment capture failed: {payment_result.error_message}"
-        )
+        raise HTTPException(status_code=402, detail=f"Payment capture failed: {payment_result.error_message}")
 
     booking.payment_status = "captured" if not booking.is_test else "test_captured"
     booking.captured_at = datetime.utcnow()
@@ -287,11 +262,7 @@ async def list_bookings(
     query = query.order_by(Booking.created_at.desc())
 
     # Get total count
-    count_result = await db.execute(
-        select(Booking.id).where(
-            Booking.is_test == False if not include_test else True
-        )
-    )
+    count_result = await db.execute(select(Booking.id).where(Booking.is_test == False if not include_test else True))
     total = len(count_result.all())
 
     # Get page
@@ -320,9 +291,7 @@ async def cancel_booking(
 
     Requires authentication.
     """
-    result = await db.execute(
-        select(Booking).where(Booking.id == booking_id)
-    )
+    result = await db.execute(select(Booking).where(Booking.id == booking_id))
     booking = result.scalar_one_or_none()
 
     if not booking:
@@ -332,10 +301,7 @@ async def cancel_booking(
         raise HTTPException(status_code=400, detail="Booking already cancelled")
 
     if booking.payment_status == "captured":
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot cancel - payment already captured. Use refund instead."
-        )
+        raise HTTPException(status_code=400, detail="Cannot cancel - payment already captured. Use refund instead.")
 
     # Release pre-authorization (Clover auto-releases after 7 days, but we can void it)
     # For test mode, just mark as cancelled

@@ -6,6 +6,7 @@ Features:
 - Revenue forecasting
 - Deal health analysis
 """
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 from typing import Optional, List
@@ -22,6 +23,7 @@ router = APIRouter()
 
 
 # Lead Scoring Endpoints
+
 
 @router.get("/lead-scores")
 async def list_lead_scores(
@@ -80,9 +82,7 @@ async def get_lead_score(
     current_user: CurrentUser,
 ):
     """Get lead score for a customer."""
-    result = await db.execute(
-        select(LeadScore).where(LeadScore.customer_id == int(customer_id))
-    )
+    result = await db.execute(select(LeadScore).where(LeadScore.customer_id == int(customer_id)))
     score = result.scalar_one_or_none()
 
     if not score:
@@ -125,6 +125,7 @@ async def calculate_lead_scores(
 
 
 # Churn Prediction Endpoints
+
 
 @router.get("/churn")
 async def list_churn_predictions(
@@ -181,9 +182,7 @@ async def get_churn_prediction(
     current_user: CurrentUser,
 ):
     """Get churn prediction for a customer."""
-    result = await db.execute(
-        select(ChurnPrediction).where(ChurnPrediction.customer_id == int(customer_id))
-    )
+    result = await db.execute(select(ChurnPrediction).where(ChurnPrediction.customer_id == int(customer_id)))
     prediction = result.scalar_one_or_none()
 
     if not prediction:
@@ -234,6 +233,7 @@ async def get_at_risk_customers(
 
 
 # Revenue Forecast Endpoints
+
 
 @router.get("/revenue-forecast")
 async def get_revenue_forecast(
@@ -309,6 +309,7 @@ async def get_forecast_accuracy(
 
 
 # Deal Health Endpoints
+
 
 @router.get("/deal-health")
 async def list_deal_health(
@@ -395,6 +396,7 @@ async def get_rotting_deals(
 
 # Dashboard Summary
 
+
 @router.get("/summary")
 async def get_predictions_summary(
     db: DbSession,
@@ -409,17 +411,13 @@ async def get_predictions_summary(
 
     # At-risk customers
     at_risk_result = await db.execute(
-        select(func.count()).select_from(ChurnPrediction).where(
-            ChurnPrediction.risk_level.in_(["high", "critical"])
-        )
+        select(func.count()).select_from(ChurnPrediction).where(ChurnPrediction.risk_level.in_(["high", "critical"]))
     )
     at_risk_customers = at_risk_result.scalar() or 0
 
     # Rotting deals
     rotting_result = await db.execute(
-        select(func.count()).select_from(DealHealth).where(
-            DealHealth.health_status.in_(["at_risk", "stale"])
-        )
+        select(func.count()).select_from(DealHealth).where(DealHealth.health_status.in_(["at_risk", "stale"]))
     )
     rotting_deals = rotting_result.scalar() or 0
 
@@ -428,10 +426,12 @@ async def get_predictions_summary(
     next_month = next_month.replace(day=1)
 
     forecast_result = await db.execute(
-        select(RevenueForecast).where(
+        select(RevenueForecast)
+        .where(
             RevenueForecast.period_type == "monthly",
             RevenueForecast.period_start >= next_month,
-        ).limit(1)
+        )
+        .limit(1)
     )
     forecast = forecast_result.scalar_one_or_none()
 
@@ -442,5 +442,7 @@ async def get_predictions_summary(
         "next_month_forecast": {
             "revenue": forecast.predicted_revenue if forecast else None,
             "jobs": forecast.predicted_jobs if forecast else None,
-        } if forecast else None,
+        }
+        if forecast
+        else None,
     }

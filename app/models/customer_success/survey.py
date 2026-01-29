@@ -9,10 +9,7 @@ Enables NPS, CSAT, CES and custom surveys with:
 - AI-powered analysis and insights (2025-2026 enhancements)
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, Enum as SQLEnum, JSON
-)
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -22,6 +19,7 @@ class Survey(Base):
     """
     Survey definition for NPS, CSAT, CES, or custom surveys.
     """
+
     __tablename__ = "cs_surveys"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -29,21 +27,14 @@ class Survey(Base):
     description = Column(Text)
 
     # Survey type
-    survey_type = Column(
-        SQLEnum('nps', 'csat', 'ces', 'custom', name='cs_survey_type_enum'),
-        default='nps'
-    )
+    survey_type = Column(SQLEnum("nps", "csat", "ces", "custom", name="cs_survey_type_enum"), default="nps")
 
     # Status
-    status = Column(
-        SQLEnum('draft', 'active', 'paused', 'completed', name='cs_survey_status_enum'),
-        default='draft'
-    )
+    status = Column(SQLEnum("draft", "active", "paused", "completed", name="cs_survey_status_enum"), default="draft")
 
     # Trigger configuration
     trigger_type = Column(
-        SQLEnum('manual', 'scheduled', 'event', 'milestone', name='cs_survey_trigger_enum'),
-        default='manual'
+        SQLEnum("manual", "scheduled", "event", "milestone", name="cs_survey_trigger_enum"), default="manual"
     )
 
     # For scheduled triggers
@@ -68,7 +59,9 @@ class Survey(Base):
     last_reminder_sent = Column(DateTime(timezone=True))  # Timestamp of last reminder
     response_rate = Column(Float)  # Calculated response rate percentage
     a_b_test_variant = Column(String(50))  # For A/B testing different survey versions
-    conditional_logic = Column(JSON)  # Question branching rules {"question_id": {"condition": "equals", "value": 5, "next_question_id": 10}}
+    conditional_logic = Column(
+        JSON
+    )  # Question branching rules {"question_id": {"condition": "equals", "value": 5, "next_question_id": 10}}
 
     # Metrics (auto-calculated)
     responses_count = Column(Integer, default=0)
@@ -90,7 +83,9 @@ class Survey(Base):
     completed_at = Column(DateTime(timezone=True))
 
     # Relationships
-    questions = relationship("SurveyQuestion", back_populates="survey", cascade="all, delete-orphan", order_by="SurveyQuestion.order")
+    questions = relationship(
+        "SurveyQuestion", back_populates="survey", cascade="all, delete-orphan", order_by="SurveyQuestion.order"
+    )
     responses = relationship("SurveyResponse", back_populates="survey", cascade="all, delete-orphan")
     analyses = relationship("SurveyAnalysis", back_populates="survey", cascade="all, delete-orphan")
     target_segment = relationship("Segment", foreign_keys=[target_segment_id])
@@ -103,6 +98,7 @@ class SurveyQuestion(Base):
     """
     Individual question within a survey.
     """
+
     __tablename__ = "cs_survey_questions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -114,8 +110,8 @@ class SurveyQuestion(Base):
 
     # Question type
     question_type = Column(
-        SQLEnum('rating', 'scale', 'text', 'multiple_choice', 'single_choice', name='cs_question_type_enum'),
-        nullable=False
+        SQLEnum("rating", "scale", "text", "multiple_choice", "single_choice", name="cs_question_type_enum"),
+        nullable=False,
     )
 
     # Order within survey
@@ -149,6 +145,7 @@ class SurveyResponse(Base):
     """
     A customer's response to a survey (contains multiple answers).
     """
+
     __tablename__ = "cs_survey_responses"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -159,16 +156,14 @@ class SurveyResponse(Base):
     overall_score = Column(Float)  # Calculated score (NPS score, CSAT rating, etc.)
 
     # Sentiment analysis
-    sentiment = Column(
-        SQLEnum('positive', 'neutral', 'negative', name='cs_sentiment_enum')
-    )
+    sentiment = Column(SQLEnum("positive", "neutral", "negative", name="cs_sentiment_enum"))
     sentiment_score = Column(Float)  # -1 to 1
 
     # 2025-2026 Enhancements: AI-detected insights
     feedback_text = Column(Text)  # Consolidated open-text feedback from all text answers
     topics_detected = Column(JSON)  # AI-detected topics ["billing", "support", "feature_request"]
     urgency_level = Column(
-        SQLEnum('critical', 'high', 'medium', 'low', name='cs_urgency_level_enum')
+        SQLEnum("critical", "high", "medium", "low", name="cs_urgency_level_enum")
     )  # AI-determined urgency
 
     # Action tracking for follow-up
@@ -206,6 +201,7 @@ class SurveyAnswer(Base):
     """
     Individual answer to a survey question.
     """
+
     __tablename__ = "cs_survey_answers"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -236,11 +232,14 @@ class SurveyAnalysis(Base):
     2025-2026 Enhancement: Stores sentiment analysis, theme extraction,
     churn risk indicators, and actionable recommendations generated by AI.
     """
+
     __tablename__ = "cs_survey_analyses"
 
     id = Column(Integer, primary_key=True, index=True)
     survey_id = Column(Integer, ForeignKey("cs_surveys.id"), nullable=False, index=True)
-    response_id = Column(Integer, ForeignKey("cs_survey_responses.id"), nullable=True, index=True)  # null = survey-level analysis
+    response_id = Column(
+        Integer, ForeignKey("cs_survey_responses.id"), nullable=True, index=True
+    )  # null = survey-level analysis
 
     # AI Analysis Results - Sentiment
     sentiment_breakdown = Column(JSON)  # {"positive": 45, "neutral": 30, "negative": 25}
@@ -251,10 +250,14 @@ class SurveyAnalysis(Base):
     # AI Analysis Results - Issues and Risks
     urgent_issues = Column(JSON)  # [{"text": "...", "customer_id": 1, "severity": "high"}]
     churn_risk_indicators = Column(JSON)  # [{"indicator": "competitor_mention", "weight": 0.8, "details": "..."}]
-    competitor_mentions = Column(JSON)  # [{"competitor": "CompanyX", "context": "considering switch", "customer_id": 1}]
+    competitor_mentions = Column(
+        JSON
+    )  # [{"competitor": "CompanyX", "context": "considering switch", "customer_id": 1}]
 
     # AI Analysis Results - Recommendations
-    action_recommendations = Column(JSON)  # [{"type": "callback", "customer_id": 1, "reason": "...", "priority": "high"}]
+    action_recommendations = Column(
+        JSON
+    )  # [{"type": "callback", "customer_id": 1, "reason": "...", "priority": "high"}]
 
     # Calculated Scores (-1 to 1 for sentiment, 0 to 100 for others)
     overall_sentiment_score = Column(Float)  # -1 to 1 scale
@@ -272,8 +275,7 @@ class SurveyAnalysis(Base):
 
     # Status tracking
     status = Column(
-        SQLEnum('pending', 'processing', 'completed', 'failed', name='cs_analysis_status_enum'),
-        default='pending'
+        SQLEnum("pending", "processing", "completed", "failed", name="cs_analysis_status_enum"), default="pending"
     )
     error_message = Column(Text)  # Store error details if analysis fails
 
@@ -297,6 +299,7 @@ class SurveyAction(Base):
     Links survey insights to concrete follow-up actions like tasks, callbacks,
     tickets, or offers.
     """
+
     __tablename__ = "cs_survey_actions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -307,15 +310,14 @@ class SurveyAction(Base):
 
     # Action details
     action_type = Column(
-        SQLEnum('callback', 'task', 'ticket', 'offer', 'escalation', 'email', 'meeting', name='cs_survey_action_type_enum'),
-        nullable=False
+        SQLEnum(
+            "callback", "task", "ticket", "offer", "escalation", "email", "meeting", name="cs_survey_action_type_enum"
+        ),
+        nullable=False,
     )
     title = Column(String(300), nullable=False)
     description = Column(Text)
-    priority = Column(
-        SQLEnum('low', 'medium', 'high', 'critical', name='cs_action_priority_enum'),
-        default='medium'
-    )
+    priority = Column(SQLEnum("low", "medium", "high", "critical", name="cs_action_priority_enum"), default="medium")
 
     # Source of the action
     source = Column(String(50))  # 'ai_recommendation', 'manual', 'automation'
@@ -327,8 +329,7 @@ class SurveyAction(Base):
 
     # Status tracking
     status = Column(
-        SQLEnum('pending', 'in_progress', 'completed', 'cancelled', name='cs_action_status_enum'),
-        default='pending'
+        SQLEnum("pending", "in_progress", "completed", "cancelled", name="cs_action_status_enum"), default="pending"
     )
 
     # Due date and completion

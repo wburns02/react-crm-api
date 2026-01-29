@@ -13,9 +13,15 @@ from app.api.deps import DbSession, CurrentUser
 from app.models.customer_success import Campaign
 from app.models.customer_success.ab_test import ABTest
 from app.schemas.customer_success.ab_test import (
-    ABTestCreate, ABTestUpdate, ABTestResponse, ABTestListResponse,
-    ABTestResults, MetricUpdateRequest, CompleteTestRequest,
-    AssignVariantResponse, ActionResponse,
+    ABTestCreate,
+    ABTestUpdate,
+    ABTestResponse,
+    ABTestListResponse,
+    ABTestResults,
+    MetricUpdateRequest,
+    CompleteTestRequest,
+    AssignVariantResponse,
+    ActionResponse,
 )
 from app.services.customer_success.ab_test_service import ABTestService
 
@@ -24,6 +30,7 @@ router = APIRouter()
 
 
 # CRUD Operations
+
 
 @router.get("/", response_model=ABTestListResponse)
 async def list_ab_tests(
@@ -73,8 +80,7 @@ async def list_ab_tests(
     except Exception as e:
         logger.error(f"Error listing A/B tests: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing A/B tests: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing A/B tests: {str(e)}"
         )
 
 
@@ -85,9 +91,7 @@ async def get_ab_test(
     current_user: CurrentUser,
 ):
     """Get a specific A/B test by ID."""
-    result = await db.execute(
-        select(ABTest).where(ABTest.id == test_id)
-    )
+    result = await db.execute(select(ABTest).where(ABTest.id == test_id))
     test = result.scalar_one_or_none()
 
     if not test:
@@ -112,9 +116,7 @@ async def create_ab_test(
     """
     try:
         # Verify campaign exists
-        campaign_result = await db.execute(
-            select(Campaign).where(Campaign.id == data.campaign_id)
-        )
+        campaign_result = await db.execute(select(Campaign).where(Campaign.id == data.campaign_id))
         campaign = campaign_result.scalar_one_or_none()
 
         if not campaign:
@@ -128,7 +130,7 @@ async def create_ab_test(
             campaign_id=data.campaign_id,
             name=data.name,
             description=data.description,
-            test_type=data.test_type.value if hasattr(data.test_type, 'value') else data.test_type,
+            test_type=data.test_type.value if hasattr(data.test_type, "value") else data.test_type,
             variant_a_name=data.variant_a_name,
             variant_a_config=data.variant_a_config,
             variant_b_name=data.variant_b_name,
@@ -137,7 +139,7 @@ async def create_ab_test(
             min_sample_size=data.min_sample_size,
             significance_threshold=data.significance_threshold,
             auto_winner=data.auto_winner,
-            primary_metric=data.primary_metric.value if hasattr(data.primary_metric, 'value') else data.primary_metric,
+            primary_metric=data.primary_metric.value if hasattr(data.primary_metric, "value") else data.primary_metric,
         )
 
         db.add(test)
@@ -152,8 +154,7 @@ async def create_ab_test(
     except Exception as e:
         logger.error(f"Error creating A/B test: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating A/B test: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating A/B test: {str(e)}"
         )
 
 
@@ -170,9 +171,7 @@ async def update_ab_test(
     Note: Only tests in 'draft' status can have their core configuration changed.
     Running tests can only update min_sample_size, significance_threshold, and auto_winner.
     """
-    result = await db.execute(
-        select(ABTest).where(ABTest.id == test_id)
-    )
+    result = await db.execute(select(ABTest).where(ABTest.id == test_id))
     test = result.scalar_one_or_none()
 
     if not test:
@@ -182,8 +181,8 @@ async def update_ab_test(
         )
 
     # Restrict updates for non-draft tests
-    if test.status != 'draft':
-        allowed_fields = {'min_sample_size', 'significance_threshold', 'auto_winner'}
+    if test.status != "draft":
+        allowed_fields = {"min_sample_size", "significance_threshold", "auto_winner"}
         update_data = data.model_dump(exclude_unset=True)
         restricted_fields = set(update_data.keys()) - allowed_fields
 
@@ -196,8 +195,8 @@ async def update_ab_test(
     update_data = data.model_dump(exclude_unset=True)
 
     # Handle enum values
-    if 'primary_metric' in update_data and hasattr(update_data['primary_metric'], 'value'):
-        update_data['primary_metric'] = update_data['primary_metric'].value
+    if "primary_metric" in update_data and hasattr(update_data["primary_metric"], "value"):
+        update_data["primary_metric"] = update_data["primary_metric"].value
 
     for field, value in update_data.items():
         setattr(test, field, value)
@@ -218,9 +217,7 @@ async def delete_ab_test(
 
     Note: Only tests in 'draft' or 'completed' status can be deleted.
     """
-    result = await db.execute(
-        select(ABTest).where(ABTest.id == test_id)
-    )
+    result = await db.execute(select(ABTest).where(ABTest.id == test_id))
     test = result.scalar_one_or_none()
 
     if not test:
@@ -229,7 +226,7 @@ async def delete_ab_test(
             detail="A/B test not found",
         )
 
-    if test.status not in ('draft', 'completed'):
+    if test.status not in ("draft", "completed"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Can only delete tests in draft or completed status",
@@ -240,6 +237,7 @@ async def delete_ab_test(
 
 
 # Results and Analysis
+
 
 @router.get("/{test_id}/results", response_model=ABTestResults)
 async def get_ab_test_results(
@@ -271,6 +269,7 @@ async def get_ab_test_results(
 
 
 # Test Actions
+
 
 @router.post("/{test_id}/start", response_model=ActionResponse)
 async def start_ab_test(
@@ -411,6 +410,7 @@ async def complete_ab_test(
 
 # Metric Updates
 
+
 @router.post("/{test_id}/metrics", response_model=ABTestResponse)
 async def update_ab_test_metrics(
     test_id: int,
@@ -448,6 +448,7 @@ async def update_ab_test_metrics(
 
 # Variant Assignment
 
+
 @router.post("/{test_id}/assign", response_model=AssignVariantResponse)
 async def assign_variant(
     test_id: int,
@@ -472,8 +473,8 @@ async def assign_variant(
     # Get test details for response
     test = await service.get_test_by_id(test_id)
 
-    variant_name = test.variant_a_name if assigned == 'a' else test.variant_b_name
-    variant_config = test.variant_a_config if assigned == 'a' else test.variant_b_config
+    variant_name = test.variant_a_name if assigned == "a" else test.variant_b_name
+    variant_config = test.variant_a_config if assigned == "a" else test.variant_b_config
 
     return AssignVariantResponse(
         test_id=test_id,
@@ -484,6 +485,7 @@ async def assign_variant(
 
 
 # Campaign-specific endpoints
+
 
 @router.get("/campaign/{campaign_id}", response_model=ABTestListResponse)
 async def get_campaign_ab_tests(
@@ -497,9 +499,7 @@ async def get_campaign_ab_tests(
     Get all A/B tests for a specific campaign.
     """
     # Verify campaign exists
-    campaign_result = await db.execute(
-        select(Campaign).where(Campaign.id == campaign_id)
-    )
+    campaign_result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
     if not campaign_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

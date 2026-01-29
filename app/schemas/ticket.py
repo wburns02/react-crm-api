@@ -1,4 +1,5 @@
 """Ticket schemas for request/response validation."""
+
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
@@ -10,6 +11,7 @@ TicketCategory = Literal["complaint", "request", "inquiry", "feedback", "other"]
 
 class TicketBase(BaseModel):
     """Base ticket schema."""
+
     customer_id: str = Field(..., description="Customer ID (string, converted to int)")
     work_order_id: Optional[str] = None
     subject: str = Field(..., min_length=1, max_length=255)
@@ -22,11 +24,13 @@ class TicketBase(BaseModel):
 
 class TicketCreate(TicketBase):
     """Schema for creating a ticket."""
+
     pass
 
 
 class TicketUpdate(BaseModel):
     """Schema for updating a ticket (all fields optional)."""
+
     subject: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, min_length=1)
     category: Optional[TicketCategory] = None
@@ -38,6 +42,7 @@ class TicketUpdate(BaseModel):
 
 class TicketResponse(BaseModel):
     """Schema for ticket response."""
+
     id: str
     customer_id: str
     work_order_id: Optional[str] = None
@@ -59,6 +64,7 @@ class TicketResponse(BaseModel):
 
 class TicketListResponse(BaseModel):
     """Paginated ticket list response."""
+
     items: list[TicketResponse]
     total: int
     page: int

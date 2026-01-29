@@ -31,6 +31,7 @@ class HealthEventType(str, Enum):
 
 class HealthScoreBase(BaseModel):
     """Base health score schema."""
+
     overall_score: int = Field(50, ge=0, le=100, description="Overall health score 0-100")
     health_status: Optional[HealthStatus] = None
 
@@ -63,11 +64,13 @@ class HealthScoreBase(BaseModel):
 
 class HealthScoreCreate(HealthScoreBase):
     """Schema for creating a health score."""
+
     customer_id: int
 
 
 class HealthScoreUpdate(BaseModel):
     """Schema for updating a health score."""
+
     overall_score: Optional[int] = Field(None, ge=0, le=100)
     health_status: Optional[HealthStatus] = None
 
@@ -92,6 +95,7 @@ class HealthScoreUpdate(BaseModel):
 
 class HealthScoreResponse(HealthScoreBase):
     """Health score response schema."""
+
     id: int
     customer_id: int
 
@@ -122,6 +126,7 @@ class HealthScoreResponse(HealthScoreBase):
 
 class HealthScoreListResponse(BaseModel):
     """Paginated health score list response."""
+
     items: list[HealthScoreResponse]
     total: int
     page: int
@@ -130,8 +135,10 @@ class HealthScoreListResponse(BaseModel):
 
 # Health Score Events
 
+
 class HealthScoreEventBase(BaseModel):
     """Base health score event schema."""
+
     event_type: HealthEventType
     old_score: Optional[int] = None
     new_score: Optional[int] = None
@@ -143,12 +150,14 @@ class HealthScoreEventBase(BaseModel):
 
 class HealthScoreEventCreate(HealthScoreEventBase):
     """Schema for creating a health score event."""
+
     health_score_id: int
     triggered_by_user_id: Optional[int] = None
 
 
 class HealthScoreEventResponse(HealthScoreEventBase):
     """Health score event response schema."""
+
     id: int
     health_score_id: int
     triggered_by_user_id: Optional[int] = None
@@ -160,6 +169,7 @@ class HealthScoreEventResponse(HealthScoreEventBase):
 
 class HealthScoreEventListResponse(BaseModel):
     """Paginated health score event list response."""
+
     items: list[HealthScoreEventResponse]
     total: int
     page: int
@@ -168,8 +178,10 @@ class HealthScoreEventListResponse(BaseModel):
 
 # Bulk Operations
 
+
 class HealthScoreBulkCalculateRequest(BaseModel):
     """Request to bulk calculate health scores."""
+
     customer_ids: Optional[list[int]] = Field(None, description="Specific customer IDs, or None for all")
     segment_id: Optional[int] = Field(None, description="Calculate for all customers in segment")
     force_recalculate: bool = Field(False, description="Recalculate even if recently calculated")
@@ -177,6 +189,7 @@ class HealthScoreBulkCalculateRequest(BaseModel):
 
 class HealthScoreTrendResponse(BaseModel):
     """Health score trend data for charts."""
+
     customer_id: int
     data_points: list[dict]  # [{"date": "2024-01-01", "score": 75, "status": "healthy"}]
     period_start: datetime

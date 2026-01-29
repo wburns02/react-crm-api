@@ -6,6 +6,7 @@ from decimal import Decimal
 
 class WorkOrderBase(BaseModel):
     """Base work order schema."""
+
     customer_id: int
     technician_id: Optional[str] = None
     job_type: str
@@ -50,11 +51,13 @@ class WorkOrderBase(BaseModel):
 
 class WorkOrderCreate(WorkOrderBase):
     """Schema for creating a work order."""
+
     pass
 
 
 class WorkOrderUpdate(BaseModel):
     """Schema for updating a work order (all fields optional)."""
+
     customer_id: Optional[int] = None
     technician_id: Optional[str] = None
     job_type: Optional[str] = None
@@ -100,6 +103,7 @@ class WorkOrderUpdate(BaseModel):
 
 class WorkOrderResponse(WorkOrderBase):
     """Schema for work order response."""
+
     id: str  # Flask uses VARCHAR(36) UUID
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -126,6 +130,7 @@ class WorkOrderResponse(WorkOrderBase):
 
 class WorkOrderListResponse(BaseModel):
     """Paginated work order list response."""
+
     items: list[WorkOrderResponse]
     total: int
     page: int

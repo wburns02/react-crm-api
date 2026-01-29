@@ -4,6 +4,7 @@ from typing import Optional
 
 class TechnicianBase(BaseModel):
     """Base technician schema."""
+
     first_name: str = Field(default="", max_length=100)
     last_name: str = Field(default="", max_length=100)
     # Using str instead of EmailStr to allow empty strings from database
@@ -41,11 +42,13 @@ class TechnicianBase(BaseModel):
 
 class TechnicianCreate(TechnicianBase):
     """Schema for creating a technician."""
+
     pass
 
 
 class TechnicianUpdate(BaseModel):
     """Schema for updating a technician (all fields optional)."""
+
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     email: Optional[str] = None  # Using str instead of EmailStr to allow empty strings
@@ -82,6 +85,7 @@ class TechnicianUpdate(BaseModel):
 
 class TechnicianResponse(TechnicianBase):
     """Schema for technician response."""
+
     id: str  # Frontend expects string ID
     full_name: Optional[str] = None
     # Accept both datetime and string for flexibility
@@ -94,6 +98,7 @@ class TechnicianResponse(TechnicianBase):
 
 class TechnicianListResponse(BaseModel):
     """Paginated technician list response."""
+
     items: list[TechnicianResponse]
     total: int
     page: int
@@ -104,8 +109,10 @@ class TechnicianListResponse(BaseModel):
 # Performance Stats Schemas
 # =====================================================
 
+
 class TechnicianPerformanceStats(BaseModel):
     """Aggregated performance statistics for a technician."""
+
     technician_id: str
     total_jobs_completed: int = 0
     total_revenue: float = 0.0
@@ -126,6 +133,7 @@ class TechnicianPerformanceStats(BaseModel):
 
 class TechnicianJobDetail(BaseModel):
     """Detailed information about a single job performed by a technician."""
+
     id: str
     scheduled_date: Optional[str] = None
     completed_date: Optional[str] = None
@@ -149,6 +157,7 @@ class TechnicianJobDetail(BaseModel):
 
 class TechnicianJobsResponse(BaseModel):
     """Paginated list of jobs for a technician."""
+
     items: list[TechnicianJobDetail]
     total: int
     page: int

@@ -1,4 +1,5 @@
 """Contract Template model for reusable contract templates."""
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, Float, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func

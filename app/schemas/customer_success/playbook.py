@@ -78,8 +78,10 @@ class PlaybookOutcome(str, Enum):
 
 # Playbook Steps
 
+
 class PlaybookStepBase(BaseModel):
     """Base playbook step schema."""
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     step_type: PlaybookStepType
@@ -123,11 +125,13 @@ class PlaybookStepBase(BaseModel):
 
 class PlaybookStepCreate(PlaybookStepBase):
     """Schema for creating a playbook step."""
+
     playbook_id: int
 
 
 class PlaybookStepUpdate(BaseModel):
     """Schema for updating a playbook step."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     step_type: Optional[PlaybookStepType] = None
@@ -154,6 +158,7 @@ class PlaybookStepUpdate(BaseModel):
 
 class PlaybookStepResponse(PlaybookStepBase):
     """Playbook step response schema."""
+
     id: int
     playbook_id: int
     created_at: Optional[datetime] = None
@@ -165,8 +170,10 @@ class PlaybookStepResponse(PlaybookStepBase):
 
 # Playbooks
 
+
 class PlaybookBase(BaseModel):
     """Base playbook schema."""
+
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     category: PlaybookCategory = PlaybookCategory.CUSTOM
@@ -204,11 +211,13 @@ class PlaybookBase(BaseModel):
 
 class PlaybookCreate(PlaybookBase):
     """Schema for creating a playbook."""
+
     steps: Optional[list[PlaybookStepCreate]] = None
 
 
 class PlaybookUpdate(BaseModel):
     """Schema for updating a playbook."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     category: Optional[PlaybookCategory] = None
@@ -234,6 +243,7 @@ class PlaybookUpdate(BaseModel):
 
 class PlaybookResponse(PlaybookBase):
     """Playbook response schema."""
+
     id: int
 
     # Metrics
@@ -259,6 +269,7 @@ class PlaybookResponse(PlaybookBase):
 
 class PlaybookListResponse(BaseModel):
     """Paginated playbook list response."""
+
     items: list[PlaybookResponse]
     total: int
     page: int
@@ -267,8 +278,10 @@ class PlaybookListResponse(BaseModel):
 
 # Playbook Executions
 
+
 class PlaybookExecutionBase(BaseModel):
     """Base playbook execution schema."""
+
     customer_id: int
     playbook_id: int
     triggered_by: Optional[str] = None
@@ -277,11 +290,13 @@ class PlaybookExecutionBase(BaseModel):
 
 class PlaybookExecutionCreate(PlaybookExecutionBase):
     """Schema for creating a playbook execution."""
+
     assigned_to_user_id: Optional[int] = None
 
 
 class PlaybookExecutionResponse(PlaybookExecutionBase):
     """Playbook execution response schema."""
+
     id: int
     status: PlaybookExecStatus
 
@@ -324,6 +339,7 @@ class PlaybookExecutionResponse(PlaybookExecutionBase):
 
 class PlaybookExecutionListResponse(BaseModel):
     """Paginated playbook execution list response."""
+
     items: list[PlaybookExecutionResponse]
     total: int
     page: int
@@ -332,8 +348,10 @@ class PlaybookExecutionListResponse(BaseModel):
 
 # Trigger Operations
 
+
 class PlaybookTriggerRequest(BaseModel):
     """Request to trigger a playbook for a customer."""
+
     customer_id: int
     playbook_id: int
     reason: Optional[str] = None
@@ -343,6 +361,7 @@ class PlaybookTriggerRequest(BaseModel):
 
 class PlaybookBulkTriggerRequest(BaseModel):
     """Request to bulk trigger a playbook."""
+
     playbook_id: int
     customer_ids: Optional[list[int]] = None
     segment_id: Optional[int] = None

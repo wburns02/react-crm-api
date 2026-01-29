@@ -54,10 +54,17 @@ from app.models.oauth import APIClient, APIToken
 
 # Enterprise Customer Success Platform
 from app.models.customer_success import (
-    HealthScore, HealthScoreEvent,
-    Segment, CustomerSegment,
-    Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution,
-    Playbook, PlaybookStep, PlaybookExecution,
+    HealthScore,
+    HealthScoreEvent,
+    Segment,
+    CustomerSegment,
+    Journey,
+    JourneyStep,
+    JourneyEnrollment,
+    JourneyStepExecution,
+    Playbook,
+    PlaybookStep,
+    PlaybookExecution,
     CSTask,
     Touchpoint,
 )
@@ -70,8 +77,14 @@ from app.models.work_order_photo import WorkOrderPhoto
 
 # National Septic OCR Permit System
 from app.models.septic_permit import (
-    State, County, SepticSystemType, SourcePortal,
-    SepticPermit, PermitVersion, PermitDuplicate, PermitImportBatch
+    State,
+    County,
+    SepticSystemType,
+    SourcePortal,
+    SepticPermit,
+    PermitVersion,
+    PermitDuplicate,
+    PermitImportBatch,
 )
 
 # Book & Pay Bookings

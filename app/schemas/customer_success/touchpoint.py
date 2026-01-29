@@ -93,6 +93,7 @@ class SentimentLabel(str, Enum):
 
 class TouchpointBase(BaseModel):
     """Base touchpoint schema."""
+
     touchpoint_type: TouchpointType
 
     # Details
@@ -161,6 +162,7 @@ class TouchpointBase(BaseModel):
 
 class TouchpointCreate(TouchpointBase):
     """Schema for creating a touchpoint."""
+
     customer_id: int
 
     # Related entities
@@ -172,6 +174,7 @@ class TouchpointCreate(TouchpointBase):
 
 class TouchpointUpdate(BaseModel):
     """Schema for updating a touchpoint."""
+
     touchpoint_type: Optional[TouchpointType] = None
     subject: Optional[str] = None
     summary: Optional[str] = None
@@ -223,6 +226,7 @@ class TouchpointUpdate(BaseModel):
 
 class TouchpointResponse(TouchpointBase):
     """Touchpoint response schema."""
+
     id: int
     customer_id: int
 
@@ -257,6 +261,7 @@ class TouchpointResponse(TouchpointBase):
 
 class TouchpointListResponse(BaseModel):
     """Paginated touchpoint list response."""
+
     items: list[TouchpointResponse]
     total: int
     page: int
@@ -265,8 +270,10 @@ class TouchpointListResponse(BaseModel):
 
 # Sentiment Analysis
 
+
 class TouchpointSentimentAnalysis(BaseModel):
     """Sentiment analysis result for a touchpoint."""
+
     touchpoint_id: int
     sentiment_score: float = Field(..., ge=-1, le=1)
     sentiment_label: SentimentLabel
@@ -282,8 +289,10 @@ class TouchpointSentimentAnalysis(BaseModel):
 
 # Timeline View
 
+
 class TouchpointTimelineResponse(BaseModel):
     """Customer touchpoint timeline response."""
+
     customer_id: int
     touchpoints: list[TouchpointResponse]
     total: int

@@ -7,6 +7,7 @@ Features:
 - Task creation
 - Escalation management
 """
+
 from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy import select, func
 from typing import Optional, List
@@ -23,6 +24,7 @@ router = APIRouter()
 
 
 # Request/Response Models
+
 
 class AgentCreate(BaseModel):
     name: str
@@ -52,6 +54,7 @@ class SendMessageRequest(BaseModel):
 
 
 # Helper functions
+
 
 def agent_to_response(agent: AIAgent) -> dict:
     return {
@@ -94,6 +97,7 @@ def conversation_to_response(conv: AgentConversation) -> dict:
 
 # Agent Management Endpoints
 
+
 @router.get("")
 async def list_agents(
     db: DbSession,
@@ -123,9 +127,7 @@ async def create_agent(
     current_user: CurrentUser,
 ):
     """Create a new AI agent."""
-    existing = await db.execute(
-        select(AIAgent).where(AIAgent.code == request.code)
-    )
+    existing = await db.execute(select(AIAgent).where(AIAgent.code == request.code))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -183,6 +185,7 @@ async def toggle_agent(
 
 # Conversation Endpoints
 
+
 @router.post("/conversations")
 async def start_conversation(
     request: StartConversationRequest,
@@ -191,9 +194,7 @@ async def start_conversation(
 ):
     """Start a new agent conversation with a customer."""
     # Get agent
-    result = await db.execute(
-        select(AIAgent).where(AIAgent.code == request.agent_code)
-    )
+    result = await db.execute(select(AIAgent).where(AIAgent.code == request.agent_code))
     agent = result.scalar_one_or_none()
 
     if not agent:
@@ -289,9 +290,7 @@ async def get_conversation(
     current_user: CurrentUser,
 ):
     """Get a conversation with messages."""
-    conv_result = await db.execute(
-        select(AgentConversation).where(AgentConversation.id == conversation_id)
-    )
+    conv_result = await db.execute(select(AgentConversation).where(AgentConversation.id == conversation_id))
     conversation = conv_result.scalar_one_or_none()
 
     if not conversation:
@@ -302,9 +301,7 @@ async def get_conversation(
 
     # Get messages
     msg_result = await db.execute(
-        select(AgentMessage)
-        .where(AgentMessage.conversation_id == conversation_id)
-        .order_by(AgentMessage.created_at)
+        select(AgentMessage).where(AgentMessage.conversation_id == conversation_id).order_by(AgentMessage.created_at)
     )
     messages = msg_result.scalars().all()
 
@@ -332,9 +329,7 @@ async def send_agent_message(
     current_user: CurrentUser,
 ):
     """Send a message from the agent (manual override)."""
-    conv_result = await db.execute(
-        select(AgentConversation).where(AgentConversation.id == conversation_id)
-    )
+    conv_result = await db.execute(select(AgentConversation).where(AgentConversation.id == conversation_id))
     conversation = conv_result.scalar_one_or_none()
 
     if not conversation:
@@ -377,9 +372,7 @@ async def escalate_conversation(
     current_user: CurrentUser = None,
 ):
     """Escalate conversation to human."""
-    conv_result = await db.execute(
-        select(AgentConversation).where(AgentConversation.id == conversation_id)
-    )
+    conv_result = await db.execute(select(AgentConversation).where(AgentConversation.id == conversation_id))
     conversation = conv_result.scalar_one_or_none()
 
     if not conversation:
@@ -406,9 +399,7 @@ async def complete_conversation(
     current_user: CurrentUser = None,
 ):
     """Mark conversation as completed."""
-    conv_result = await db.execute(
-        select(AgentConversation).where(AgentConversation.id == conversation_id)
-    )
+    conv_result = await db.execute(select(AgentConversation).where(AgentConversation.id == conversation_id))
     conversation = conv_result.scalar_one_or_none()
 
     if not conversation:
@@ -427,6 +418,7 @@ async def complete_conversation(
 
 
 # Task Endpoints
+
 
 @router.get("/tasks")
 async def list_agent_tasks(

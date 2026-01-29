@@ -11,13 +11,25 @@ import math
 import secrets
 
 from app.models.gps_tracking import (
-    TechnicianLocation, LocationHistory, Geofence, GeofenceEvent,
-    CustomerTrackingLink, ETACalculation, GPSTrackingConfig,
-    GeofenceType, GeofenceAction, TrackingLinkStatus
+    TechnicianLocation,
+    LocationHistory,
+    Geofence,
+    GeofenceEvent,
+    CustomerTrackingLink,
+    ETACalculation,
+    GPSTrackingConfig,
+    GeofenceType,
+    GeofenceAction,
+    TrackingLinkStatus,
 )
 from app.schemas.gps_tracking import (
-    LocationUpdate, TechnicianLocationResponse, LocationHistoryPoint,
-    ETAResponse, PublicTrackingInfo, DispatchMapTechnician, DispatchMapWorkOrder
+    LocationUpdate,
+    TechnicianLocationResponse,
+    LocationHistoryPoint,
+    ETAResponse,
+    PublicTrackingInfo,
+    DispatchMapTechnician,
+    DispatchMapWorkOrder,
 )
 
 
@@ -40,26 +52,17 @@ class GPSTrackingService:
 
     # ==================== Location Updates ====================
 
-    def update_technician_location(
-        self,
-        technician_id: int,
-        location: LocationUpdate
-    ) -> TechnicianLocationResponse:
+    def update_technician_location(self, technician_id: int, location: LocationUpdate) -> TechnicianLocationResponse:
         """
         Update a technician's current location and save to history
         """
         # Get or create current location record
-        current = self.db.query(TechnicianLocation).filter(
-            TechnicianLocation.technician_id == technician_id
-        ).first()
+        current = self.db.query(TechnicianLocation).filter(TechnicianLocation.technician_id == technician_id).first()
 
         if current:
             # Calculate distance from previous location
             prev_lat, prev_lng = current.latitude, current.longitude
-            distance = self._calculate_distance(
-                prev_lat, prev_lng,
-                location.latitude, location.longitude
-            )
+            distance = self._calculate_distance(prev_lat, prev_lng, location.latitude, location.longitude)
 
             # Update existing record
             current.latitude = location.latitude
@@ -90,7 +93,7 @@ class GPSTrackingService:
                 received_at=datetime.utcnow(),
                 is_online=True,
                 current_status=location.current_status or "available",
-                current_work_order_id=location.work_order_id
+                current_work_order_id=location.work_order_id,
             )
             self.db.add(current)
 
@@ -108,6 +111,7 @@ class GPSTrackingService:
 
         # Get technician name for response
         from app.models.technician import Technician
+
         tech = self.db.query(Technician).filter(Technician.id == technician_id).first()
         tech_name = f"{tech.first_name} {tech.last_name}" if tech else "Unknown"
 
@@ -125,26 +129,23 @@ class GPSTrackingService:
             current_work_order_id=current.current_work_order_id,
             captured_at=current.captured_at,
             received_at=current.received_at,
-            minutes_since_update=0
+            minutes_since_update=0,
         )
 
-    def _save_location_history(
-        self,
-        technician_id: int,
-        location: LocationUpdate,
-        distance_from_prev: float
-    ):
+    def _save_location_history(self, technician_id: int, location: LocationUpdate, distance_from_prev: float):
         """Save location to history table"""
         # Get cumulative distance for today
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        last_history = self.db.query(LocationHistory).filter(
-            and_(
-                LocationHistory.technician_id == technician_id,
-                LocationHistory.captured_at >= today_start
-            )
-        ).order_by(LocationHistory.captured_at.desc()).first()
+        last_history = (
+            self.db.query(LocationHistory)
+            .filter(and_(LocationHistory.technician_id == technician_id, LocationHistory.captured_at >= today_start))
+            .order_by(LocationHistory.captured_at.desc())
+            .first()
+        )
 
-        cumulative = (last_history.cumulative_distance or 0) + distance_from_prev if last_history else distance_from_prev
+        cumulative = (
+            (last_history.cumulative_distance or 0) + distance_from_prev if last_history else distance_from_prev
+        )
 
         history = LocationHistory(
             technician_id=technician_id,
@@ -157,23 +158,19 @@ class GPSTrackingService:
             distance_from_previous=distance_from_prev,
             cumulative_distance=cumulative,
             captured_at=location.captured_at,
-            status=location.current_status
+            status=location.current_status,
         )
         self.db.add(history)
 
-    def get_technician_location(
-        self,
-        technician_id: int
-    ) -> Optional[TechnicianLocationResponse]:
+    def get_technician_location(self, technician_id: int) -> Optional[TechnicianLocationResponse]:
         """Get current location for a technician"""
-        location = self.db.query(TechnicianLocation).filter(
-            TechnicianLocation.technician_id == technician_id
-        ).first()
+        location = self.db.query(TechnicianLocation).filter(TechnicianLocation.technician_id == technician_id).first()
 
         if not location:
             return None
 
         from app.models.technician import Technician
+
         tech = self.db.query(Technician).filter(Technician.id == technician_id).first()
         tech_name = f"{tech.first_name} {tech.last_name}" if tech else "Unknown"
 
@@ -193,7 +190,7 @@ class GPSTrackingService:
             current_work_order_id=location.current_work_order_id,
             captured_at=location.captured_at,
             received_at=location.received_at,
-            minutes_since_update=minutes_since
+            minutes_since_update=minutes_since,
         )
 
     def get_all_technician_locations(self) -> Dict:
@@ -201,6 +198,7 @@ class GPSTrackingService:
         locations = self.db.query(TechnicianLocation).all()
 
         from app.models.technician import Technician
+
         technicians = []
         online_count = 0
         offline_count = 0
@@ -218,37 +216,36 @@ class GPSTrackingService:
             else:
                 offline_count += 1
 
-            technicians.append(TechnicianLocationResponse(
-                technician_id=loc.technician_id,
-                technician_name=f"{tech.first_name} {tech.last_name}",
-                latitude=loc.latitude,
-                longitude=loc.longitude,
-                accuracy=loc.accuracy,
-                speed=loc.speed,
-                heading=loc.heading,
-                is_online=is_online,
-                battery_level=loc.battery_level,
-                current_status=loc.current_status,
-                current_work_order_id=loc.current_work_order_id,
-                captured_at=loc.captured_at,
-                received_at=loc.received_at,
-                minutes_since_update=minutes_since
-            ))
+            technicians.append(
+                TechnicianLocationResponse(
+                    technician_id=loc.technician_id,
+                    technician_name=f"{tech.first_name} {tech.last_name}",
+                    latitude=loc.latitude,
+                    longitude=loc.longitude,
+                    accuracy=loc.accuracy,
+                    speed=loc.speed,
+                    heading=loc.heading,
+                    is_online=is_online,
+                    battery_level=loc.battery_level,
+                    current_status=loc.current_status,
+                    current_work_order_id=loc.current_work_order_id,
+                    captured_at=loc.captured_at,
+                    received_at=loc.received_at,
+                    minutes_since_update=minutes_since,
+                )
+            )
 
         return {
             "technicians": technicians,
             "total_online": online_count,
             "total_offline": offline_count,
-            "last_refresh": datetime.utcnow()
+            "last_refresh": datetime.utcnow(),
         }
 
     # ==================== Location History ====================
 
     def get_location_history(
-        self,
-        technician_id: int,
-        date: Optional[datetime] = None,
-        work_order_id: Optional[int] = None
+        self, technician_id: int, date: Optional[datetime] = None, work_order_id: Optional[int] = None
     ) -> Dict:
         """Get location history for a technician"""
         if date is None:
@@ -261,7 +258,7 @@ class GPSTrackingService:
             and_(
                 LocationHistory.technician_id == technician_id,
                 LocationHistory.captured_at >= start_of_day,
-                LocationHistory.captured_at < end_of_day
+                LocationHistory.captured_at < end_of_day,
             )
         )
 
@@ -278,10 +275,11 @@ class GPSTrackingService:
                 "points": [],
                 "total_distance_miles": 0,
                 "total_duration_minutes": 0,
-                "average_speed_mph": None
+                "average_speed_mph": None,
             }
 
         from app.models.technician import Technician
+
         tech = self.db.query(Technician).filter(Technician.id == technician_id).first()
         tech_name = f"{tech.first_name} {tech.last_name}" if tech else "Unknown"
 
@@ -294,14 +292,18 @@ class GPSTrackingService:
                 heading=h.heading,
                 captured_at=h.captured_at,
                 status=h.status,
-                distance_from_previous=h.distance_from_previous
+                distance_from_previous=h.distance_from_previous,
             )
             for h in history
         ]
 
         total_distance = sum(p.distance_from_previous or 0 for p in points)
         total_duration = int((history[-1].captured_at - history[0].captured_at).total_seconds() / 60)
-        avg_speed = sum(p.speed or 0 for p in points if p.speed) / len([p for p in points if p.speed]) if any(p.speed for p in points) else None
+        avg_speed = (
+            sum(p.speed or 0 for p in points if p.speed) / len([p for p in points if p.speed])
+            if any(p.speed for p in points)
+            else None
+        )
 
         return {
             "technician_id": technician_id,
@@ -310,16 +312,12 @@ class GPSTrackingService:
             "points": points,
             "total_distance_miles": round(total_distance, 2),
             "total_duration_minutes": total_duration,
-            "average_speed_mph": round(avg_speed, 1) if avg_speed else None
+            "average_speed_mph": round(avg_speed, 1) if avg_speed else None,
         }
 
     # ==================== ETA Calculations ====================
 
-    def calculate_eta(
-        self,
-        work_order_id: int,
-        force_recalculate: bool = False
-    ) -> Optional[ETAResponse]:
+    def calculate_eta(self, work_order_id: int, force_recalculate: bool = False) -> Optional[ETAResponse]:
         """
         Calculate ETA for a work order based on technician's current location
         """
@@ -334,9 +332,7 @@ class GPSTrackingService:
 
         # Check for cached ETA
         if not force_recalculate:
-            cached = self.db.query(ETACalculation).filter(
-                ETACalculation.work_order_id == work_order_id
-            ).first()
+            cached = self.db.query(ETACalculation).filter(ETACalculation.work_order_id == work_order_id).first()
             if cached and (datetime.utcnow() - cached.calculated_at).total_seconds() < 60:
                 # Return cached if less than 1 minute old
                 tech = self.db.query(Technician).filter(Technician.id == cached.technician_id).first()
@@ -355,13 +351,15 @@ class GPSTrackingService:
                     estimated_arrival=cached.estimated_arrival,
                     confidence=cached.confidence,
                     calculation_source=cached.calculation_source,
-                    calculated_at=cached.calculated_at
+                    calculated_at=cached.calculated_at,
                 )
 
         # Get technician's current location
-        tech_location = self.db.query(TechnicianLocation).filter(
-            TechnicianLocation.technician_id == work_order.technician_id
-        ).first()
+        tech_location = (
+            self.db.query(TechnicianLocation)
+            .filter(TechnicianLocation.technician_id == work_order.technician_id)
+            .first()
+        )
 
         if not tech_location:
             return None
@@ -372,14 +370,11 @@ class GPSTrackingService:
             return None
 
         # Use customer address for destination (geocoded)
-        dest_lat = customer.latitude if hasattr(customer, 'latitude') and customer.latitude else 32.0
-        dest_lng = customer.longitude if hasattr(customer, 'longitude') and customer.longitude else -96.0
+        dest_lat = customer.latitude if hasattr(customer, "latitude") and customer.latitude else 32.0
+        dest_lng = customer.longitude if hasattr(customer, "longitude") and customer.longitude else -96.0
 
         # Calculate distance
-        distance_miles = self._calculate_distance(
-            tech_location.latitude, tech_location.longitude,
-            dest_lat, dest_lng
-        )
+        distance_miles = self._calculate_distance(tech_location.latitude, tech_location.longitude, dest_lat, dest_lng)
 
         # Estimate duration based on distance and time of day
         base_duration = self._estimate_duration(distance_miles, tech_location.speed)
@@ -394,9 +389,7 @@ class GPSTrackingService:
         tech_name = f"{tech.first_name} {tech.last_name}" if tech else "Unknown"
 
         # Save/update ETA calculation
-        existing = self.db.query(ETACalculation).filter(
-            ETACalculation.work_order_id == work_order_id
-        ).first()
+        existing = self.db.query(ETACalculation).filter(ETACalculation.work_order_id == work_order_id).first()
 
         if existing:
             existing.origin_latitude = tech_location.latitude
@@ -423,7 +416,7 @@ class GPSTrackingService:
                 adjusted_duration_minutes=adjusted_duration,
                 estimated_arrival=estimated_arrival,
                 confidence=0.85,
-                calculation_source="internal"
+                calculation_source="internal",
             )
             self.db.add(eta_calc)
 
@@ -444,7 +437,7 @@ class GPSTrackingService:
             estimated_arrival=estimated_arrival,
             confidence=0.85,
             calculation_source="internal",
-            calculated_at=datetime.utcnow()
+            calculated_at=datetime.utcnow(),
         )
 
     def _update_eta_for_work_order(self, work_order_id: int, technician_id: int):
@@ -486,11 +479,7 @@ class GPSTrackingService:
 
     # ==================== Geofencing ====================
 
-    def _check_geofences(
-        self,
-        technician_id: int,
-        location: LocationUpdate
-    ) -> List[Dict]:
+    def _check_geofences(self, technician_id: int, location: LocationUpdate) -> List[Dict]:
         """Check if technician has entered/exited any geofences"""
         events = []
 
@@ -498,49 +487,37 @@ class GPSTrackingService:
         geofences = self.db.query(Geofence).filter(Geofence.is_active == True).all()
 
         for geofence in geofences:
-            is_inside = self._is_inside_geofence(
-                location.latitude, location.longitude, geofence
-            )
+            is_inside = self._is_inside_geofence(location.latitude, location.longitude, geofence)
 
             # Get last event for this technician/geofence
-            last_event = self.db.query(GeofenceEvent).filter(
-                and_(
-                    GeofenceEvent.geofence_id == geofence.id,
-                    GeofenceEvent.technician_id == technician_id
-                )
-            ).order_by(GeofenceEvent.occurred_at.desc()).first()
+            last_event = (
+                self.db.query(GeofenceEvent)
+                .filter(and_(GeofenceEvent.geofence_id == geofence.id, GeofenceEvent.technician_id == technician_id))
+                .order_by(GeofenceEvent.occurred_at.desc())
+                .first()
+            )
 
             was_inside = last_event and last_event.event_type == "entry"
 
             # Detect entry
             if is_inside and not was_inside:
-                event = self._create_geofence_event(
-                    geofence, technician_id, location, "entry"
-                )
+                event = self._create_geofence_event(geofence, technician_id, location, "entry")
                 events.append(event)
 
             # Detect exit
             elif not is_inside and was_inside:
-                event = self._create_geofence_event(
-                    geofence, technician_id, location, "exit"
-                )
+                event = self._create_geofence_event(geofence, technician_id, location, "exit")
                 events.append(event)
 
         return events
 
-    def _is_inside_geofence(
-        self,
-        lat: float,
-        lng: float,
-        geofence: Geofence
-    ) -> bool:
+    def _is_inside_geofence(self, lat: float, lng: float, geofence: Geofence) -> bool:
         """Check if coordinates are inside a geofence"""
         if geofence.radius_meters:
             # Circle geofence
-            distance_meters = self._calculate_distance(
-                lat, lng,
-                geofence.center_latitude, geofence.center_longitude
-            ) * 1609.34  # Convert miles to meters
+            distance_meters = (
+                self._calculate_distance(lat, lng, geofence.center_latitude, geofence.center_longitude) * 1609.34
+            )  # Convert miles to meters
 
             return distance_meters <= geofence.radius_meters
 
@@ -550,12 +527,7 @@ class GPSTrackingService:
 
         return False
 
-    def _point_in_polygon(
-        self,
-        lat: float,
-        lng: float,
-        polygon: List[List[float]]
-    ) -> bool:
+    def _point_in_polygon(self, lat: float, lng: float, polygon: List[List[float]]) -> bool:
         """Ray casting algorithm to check if point is in polygon"""
         n = len(polygon)
         inside = False
@@ -573,11 +545,7 @@ class GPSTrackingService:
         return inside
 
     def _create_geofence_event(
-        self,
-        geofence: Geofence,
-        technician_id: int,
-        location: LocationUpdate,
-        event_type: str
+        self, geofence: Geofence, technician_id: int, location: LocationUpdate, event_type: str
     ) -> Dict:
         """Create a geofence event and trigger actions"""
         action = geofence.entry_action if event_type == "entry" else geofence.exit_action
@@ -605,7 +573,7 @@ class GPSTrackingService:
             action_triggered=action,
             action_result=action_result,
             action_details=action_details,
-            occurred_at=datetime.utcnow()
+            occurred_at=datetime.utcnow(),
         )
         self.db.add(event)
 
@@ -614,7 +582,7 @@ class GPSTrackingService:
             "geofence_name": geofence.name,
             "event_type": event_type,
             "action": action.value if action else None,
-            "action_result": action_result
+            "action_result": action_result,
         }
 
     def _auto_clock_in(self, technician_id: int, geofence: Geofence) -> Dict:
@@ -626,12 +594,7 @@ class GPSTrackingService:
         """Auto clock-out when leaving office geofence"""
         return {"action": "clock_out", "timestamp": datetime.utcnow().isoformat()}
 
-    def _notify_customer_arrival(
-        self,
-        technician_id: int,
-        geofence: Geofence,
-        location: LocationUpdate
-    ) -> Dict:
+    def _notify_customer_arrival(self, technician_id: int, geofence: Geofence, location: LocationUpdate) -> Dict:
         """Notify customer that technician is arriving"""
         # Would integrate with notification system
         return {"notification_sent": True, "customer_id": geofence.customer_id}
@@ -651,14 +614,14 @@ class GPSTrackingService:
         show_technician_name: bool = True,
         show_technician_photo: bool = True,
         show_live_map: bool = True,
-        show_eta: bool = True
+        show_eta: bool = True,
     ) -> CustomerTrackingLink:
         """Create a customer tracking link for a work order"""
         # Deactivate any existing links for this work order
         self.db.query(CustomerTrackingLink).filter(
             and_(
                 CustomerTrackingLink.work_order_id == work_order_id,
-                CustomerTrackingLink.status == TrackingLinkStatus.ACTIVE
+                CustomerTrackingLink.status == TrackingLinkStatus.ACTIVE,
             )
         ).update({"status": TrackingLinkStatus.EXPIRED})
 
@@ -675,7 +638,7 @@ class GPSTrackingService:
             show_technician_photo=show_technician_photo,
             show_live_map=show_live_map,
             show_eta=show_eta,
-            expires_at=expires_at
+            expires_at=expires_at,
         )
         self.db.add(link)
         self.db.commit()
@@ -684,9 +647,7 @@ class GPSTrackingService:
 
     def get_public_tracking_info(self, token: str) -> Optional[PublicTrackingInfo]:
         """Get tracking info for public tracking page"""
-        link = self.db.query(CustomerTrackingLink).filter(
-            CustomerTrackingLink.token == token
-        ).first()
+        link = self.db.query(CustomerTrackingLink).filter(CustomerTrackingLink.token == token).first()
 
         if not link:
             return None
@@ -724,9 +685,9 @@ class GPSTrackingService:
         distance = None
 
         if link.show_live_map or link.show_eta:
-            tech_location = self.db.query(TechnicianLocation).filter(
-                TechnicianLocation.technician_id == link.technician_id
-            ).first()
+            tech_location = (
+                self.db.query(TechnicianLocation).filter(TechnicianLocation.technician_id == link.technician_id).first()
+            )
 
             if tech_location:
                 if link.show_live_map:
@@ -741,18 +702,24 @@ class GPSTrackingService:
                         distance = eta.distance_miles
 
         # Determine status
-        status, status_message = self._get_tracking_status(work_order, tech_location if link.show_live_map else None, eta_minutes)
+        status, status_message = self._get_tracking_status(
+            work_order, tech_location if link.show_live_map else None, eta_minutes
+        )
 
         # Destination coordinates
-        dest_lat = customer.latitude if hasattr(customer, 'latitude') and customer.latitude else 32.0
-        dest_lng = customer.longitude if hasattr(customer, 'longitude') and customer.longitude else -96.0
+        dest_lat = customer.latitude if hasattr(customer, "latitude") and customer.latitude else 32.0
+        dest_lng = customer.longitude if hasattr(customer, "longitude") and customer.longitude else -96.0
 
         return PublicTrackingInfo(
             work_order_id=link.work_order_id,
             service_type=work_order.service_type or "Service",
             scheduled_date=work_order.scheduled_date.strftime("%B %d, %Y") if work_order.scheduled_date else "TBD",
-            technician_name=f"{technician.first_name} {technician.last_name}" if link.show_technician_name and technician else None,
-            technician_photo_url=technician.photo_url if link.show_technician_photo and technician and hasattr(technician, 'photo_url') else None,
+            technician_name=f"{technician.first_name} {technician.last_name}"
+            if link.show_technician_name and technician
+            else None,
+            technician_photo_url=technician.photo_url
+            if link.show_technician_photo and technician and hasattr(technician, "photo_url")
+            else None,
             technician_latitude=tech_lat,
             technician_longitude=tech_lng,
             destination_latitude=dest_lat,
@@ -762,14 +729,11 @@ class GPSTrackingService:
             distance_miles=distance,
             status=status,
             status_message=status_message,
-            last_updated=datetime.utcnow()
+            last_updated=datetime.utcnow(),
         )
 
     def _get_tracking_status(
-        self,
-        work_order,
-        tech_location: Optional[TechnicianLocation],
-        eta_minutes: Optional[int]
+        self, work_order, tech_location: Optional[TechnicianLocation], eta_minutes: Optional[int]
     ) -> Tuple[str, str]:
         """Determine tracking status and message"""
         wo_status = work_order.status if work_order else "scheduled"
@@ -790,13 +754,7 @@ class GPSTrackingService:
 
     # ==================== Utility Methods ====================
 
-    def _calculate_distance(
-        self,
-        lat1: float,
-        lng1: float,
-        lat2: float,
-        lng2: float
-    ) -> float:
+    def _calculate_distance(self, lat1: float, lng1: float, lat2: float, lng2: float) -> float:
         """
         Calculate distance between two coordinates using Haversine formula
         Returns distance in miles
@@ -806,17 +764,14 @@ class GPSTrackingService:
         delta_lat = math.radians(lat2 - lat1)
         delta_lng = math.radians(lng2 - lng1)
 
-        a = (
-            math.sin(delta_lat / 2) ** 2 +
-            math.cos(lat1_rad) * math.cos(lat2_rad) *
-            math.sin(delta_lng / 2) ** 2
-        )
+        a = math.sin(delta_lat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lng / 2) ** 2
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
         return self.EARTH_RADIUS_MILES * c
 
 
 # ==================== Geofence CRUD Operations ====================
+
 
 class GeofenceService:
     """Service for geofence management"""
@@ -837,9 +792,7 @@ class GeofenceService:
         return self.db.query(Geofence).filter(Geofence.id == geofence_id).first()
 
     def get_all_geofences(
-        self,
-        geofence_type: Optional[str] = None,
-        is_active: Optional[bool] = None
+        self, geofence_type: Optional[str] = None, is_active: Optional[bool] = None
     ) -> List[Geofence]:
         """Get all geofences with optional filters"""
         query = self.db.query(Geofence)
@@ -877,23 +830,20 @@ class GeofenceService:
         return True
 
     def create_customer_geofence(
-        self,
-        customer_id: int,
-        customer_name: str,
-        latitude: float,
-        longitude: float,
-        radius_meters: float = 100
+        self, customer_id: int, customer_name: str, latitude: float, longitude: float, radius_meters: float = 100
     ) -> Geofence:
         """Create a geofence for a customer site"""
-        return self.create_geofence({
-            "name": f"{customer_name} - Service Location",
-            "geofence_type": GeofenceType.CUSTOMER_SITE,
-            "center_latitude": latitude,
-            "center_longitude": longitude,
-            "radius_meters": radius_meters,
-            "customer_id": customer_id,
-            "entry_action": GeofenceAction.NOTIFY_CUSTOMER,
-            "exit_action": GeofenceAction.LOG_ONLY,
-            "notify_on_entry": True,
-            "is_active": True
-        })
+        return self.create_geofence(
+            {
+                "name": f"{customer_name} - Service Location",
+                "geofence_type": GeofenceType.CUSTOMER_SITE,
+                "center_latitude": latitude,
+                "center_longitude": longitude,
+                "radius_meters": radius_meters,
+                "customer_id": customer_id,
+                "entry_action": GeofenceAction.NOTIFY_CUSTOMER,
+                "exit_action": GeofenceAction.LOG_ONLY,
+                "notify_on_entry": True,
+                "is_active": True,
+            }
+        )

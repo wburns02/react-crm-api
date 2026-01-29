@@ -39,9 +39,7 @@ class AICampaignOptimizer:
         """
         # Get campaign with all data
         result = await self.db.execute(
-            select(Campaign)
-            .options(selectinload(Campaign.steps))
-            .where(Campaign.id == campaign_id)
+            select(Campaign).options(selectinload(Campaign.steps)).where(Campaign.id == campaign_id)
         )
         campaign = result.scalar_one_or_none()
 
@@ -64,10 +62,10 @@ class AICampaignOptimizer:
                     "sent_count": s.sent_count or 0,
                     "open_rate": s.open_rate,
                     "click_rate": s.click_rate,
-                    "delay_days": s.delay_days
+                    "delay_days": s.delay_days,
                 }
                 for s in campaign.steps
-            ]
+            ],
         }
 
         # Generate AI analysis
@@ -88,9 +86,7 @@ Provide analysis in this JSON format:
 }}"""
 
         response = await ai_gateway.chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
-            temperature=0.3
+            messages=[{"role": "user", "content": prompt}], max_tokens=1024, temperature=0.3
         )
 
         try:
@@ -110,7 +106,7 @@ Provide analysis in this JSON format:
             "campaign_id": campaign_id,
             "campaign_name": campaign.name,
             "analysis": analysis,
-            "analyzed_at": datetime.utcnow().isoformat()
+            "analyzed_at": datetime.utcnow().isoformat(),
         }
 
     def _generate_fallback_analysis(self, campaign: Campaign) -> Dict[str, Any]:
@@ -134,19 +130,23 @@ Provide analysis in this JSON format:
 
         if enrolled < 100:
             insights.append("Low enrollment count may limit statistical significance")
-            recommendations.append({
-                "priority": "medium",
-                "action": "Expand target segment to increase enrollments",
-                "expected_impact": "Better data for optimization decisions"
-            })
+            recommendations.append(
+                {
+                    "priority": "medium",
+                    "action": "Expand target segment to increase enrollments",
+                    "expected_impact": "Better data for optimization decisions",
+                }
+            )
 
         if conversion_rate < 5:
             insights.append("Conversion rate is below industry average")
-            recommendations.append({
-                "priority": "high",
-                "action": "Review campaign content and targeting",
-                "expected_impact": "Potential 2-3x improvement in conversions"
-            })
+            recommendations.append(
+                {
+                    "priority": "high",
+                    "action": "Review campaign content and targeting",
+                    "expected_impact": "Potential 2-3x improvement in conversions",
+                }
+            )
 
         return {
             "overall_health": health,
@@ -154,7 +154,7 @@ Provide analysis in this JSON format:
             "key_insights": insights or ["Campaign metrics are within normal range"],
             "recommendations": recommendations,
             "bottlenecks": [],
-            "opportunities": ["Consider A/B testing subject lines"]
+            "opportunities": ["Consider A/B testing subject lines"],
         }
 
     async def suggest_subject_lines(self, original_subject: str, campaign_goal: str) -> Dict[str, Any]:
@@ -187,7 +187,7 @@ Provide variants in JSON format:
         response = await ai_gateway.chat_completion(
             messages=[{"role": "user", "content": prompt}],
             max_tokens=512,
-            temperature=0.7  # Higher temperature for creative variations
+            temperature=0.7,  # Higher temperature for creative variations
         )
 
         try:
@@ -205,9 +205,9 @@ Provide variants in JSON format:
                 "variants": [
                     {"subject": f"[Action Required] {original_subject}", "strategy": "urgency"},
                     {"subject": f"Quick tip: {original_subject}", "strategy": "value-focused"},
-                    {"subject": f"Don't miss: {original_subject}", "strategy": "FOMO"}
+                    {"subject": f"Don't miss: {original_subject}", "strategy": "FOMO"},
                 ],
-                "recommended_test": "Start with urgency variant for business audience"
+                "recommended_test": "Start with urgency variant for business audience",
             }
 
         return suggestions
@@ -222,9 +222,7 @@ Provide variants in JSON format:
         """
         # Get all active campaigns with metrics
         result = await self.db.execute(
-            select(Campaign)
-            .options(selectinload(Campaign.steps))
-            .where(Campaign.status.in_(["active", "paused"]))
+            select(Campaign).options(selectinload(Campaign.steps)).where(Campaign.status.in_(["active", "paused"]))
         )
         campaigns = result.scalars().all()
 
@@ -232,19 +230,21 @@ Provide variants in JSON format:
             return {
                 "campaign_count": 0,
                 "insights": {"message": "No active campaigns found"},
-                "generated_at": datetime.utcnow().isoformat()
+                "generated_at": datetime.utcnow().isoformat(),
             }
 
         # Build summary for AI
         campaign_summaries = []
         for c in campaigns:
-            campaign_summaries.append({
-                "name": c.name,
-                "type": c.campaign_type,
-                "enrolled": c.enrolled_count or 0,
-                "conversion_rate": c.conversion_rate or 0,
-                "status": c.status
-            })
+            campaign_summaries.append(
+                {
+                    "name": c.name,
+                    "type": c.campaign_type,
+                    "enrolled": c.enrolled_count or 0,
+                    "conversion_rate": c.conversion_rate or 0,
+                    "status": c.status,
+                }
+            )
 
         prompt = f"""Analyze these marketing campaigns and provide strategic insights:
 
@@ -263,9 +263,7 @@ Provide insights in JSON format:
 }}"""
 
         response = await ai_gateway.chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
-            temperature=0.3
+            messages=[{"role": "user", "content": prompt}], max_tokens=1024, temperature=0.3
         )
 
         try:
@@ -280,11 +278,7 @@ Provide insights in JSON format:
             # Generate fallback insights
             insights = self._generate_fallback_portfolio_insights(campaigns)
 
-        return {
-            "campaign_count": len(campaigns),
-            "insights": insights,
-            "generated_at": datetime.utcnow().isoformat()
-        }
+        return {"campaign_count": len(campaigns), "insights": insights, "generated_at": datetime.utcnow().isoformat()}
 
     def _generate_fallback_portfolio_insights(self, campaigns: List[Campaign]) -> Dict[str, Any]:
         """Generate fallback portfolio insights when AI is unavailable."""
@@ -295,10 +289,7 @@ Provide insights in JSON format:
         top_performer = max(campaigns, key=lambda c: c.conversion_rate or 0)
 
         # Find campaigns needing attention (low conversion or paused)
-        needs_attention = [
-            c.name for c in campaigns
-            if (c.conversion_rate or 0) < 5 or c.status == "paused"
-        ]
+        needs_attention = [c.name for c in campaigns if (c.conversion_rate or 0) < 5 or c.status == "paused"]
 
         # Calculate average conversion rate
         avg_conversion = sum(c.conversion_rate or 0 for c in campaigns) / len(campaigns)
@@ -318,11 +309,11 @@ Provide insights in JSON format:
                 {
                     "category": "performance",
                     "insight": f"Average conversion rate is {avg_conversion:.1f}%",
-                    "action": "Review underperforming campaigns for optimization"
+                    "action": "Review underperforming campaigns for optimization",
                 }
             ],
             "quick_wins": ["Review subject lines for low-performing campaigns"],
-            "resource_allocation": "Focus on campaigns with highest engagement potential"
+            "resource_allocation": "Focus on campaigns with highest engagement potential",
         }
 
     async def predict_campaign_success(self, campaign_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -355,9 +346,7 @@ Provide prediction in JSON format:
 }}"""
 
         response = await ai_gateway.chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=768,
-            temperature=0.4
+            messages=[{"role": "user", "content": prompt}], max_tokens=768, temperature=0.4
         )
 
         try:
@@ -411,8 +400,8 @@ Provide prediction in JSON format:
             "expected_metrics": {
                 "open_rate_estimate": "15-25%",
                 "click_rate_estimate": "2-5%",
-                "conversion_rate_estimate": "1-3%"
-            }
+                "conversion_rate_estimate": "1-3%",
+            },
         }
 
     async def optimize_send_time(self, campaign_id: int) -> Dict[str, Any]:
@@ -428,10 +417,7 @@ Provide prediction in JSON format:
         # Get campaign enrollment and execution data
         result = await self.db.execute(
             select(Campaign)
-            .options(
-                selectinload(Campaign.steps),
-                selectinload(Campaign.enrollments)
-            )
+            .options(selectinload(Campaign.steps), selectinload(Campaign.enrollments))
             .where(Campaign.id == campaign_id)
         )
         campaign = result.scalar_one_or_none()
@@ -444,9 +430,10 @@ Provide prediction in JSON format:
             "campaign_name": campaign.name,
             "current_send_times": [
                 {"step": s.name, "send_at": s.send_at_time, "days": s.send_on_days}
-                for s in campaign.steps if s.send_at_time
+                for s in campaign.steps
+                if s.send_at_time
             ],
-            "total_enrollments": campaign.enrolled_count or 0
+            "total_enrollments": campaign.enrolled_count or 0,
         }
 
         prompt = f"""Analyze this campaign's engagement data and suggest optimal send times:
@@ -464,9 +451,7 @@ Provide recommendations in JSON format:
 }}"""
 
         response = await ai_gateway.chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=512,
-            temperature=0.3
+            messages=[{"role": "user", "content": prompt}], max_tokens=512, temperature=0.3
         )
 
         try:
@@ -481,16 +466,16 @@ Provide recommendations in JSON format:
             recommendations = {
                 "recommended_times": [
                     {"day": "weekday", "hour": "10:00", "reason": "Mid-morning has high open rates"},
-                    {"day": "weekday", "hour": "14:00", "reason": "Post-lunch engagement peak"}
+                    {"day": "weekday", "hour": "14:00", "reason": "Post-lunch engagement peak"},
                 ],
                 "avoid_times": ["Late night (after 9 PM)", "Early morning (before 7 AM)"],
                 "timezone_considerations": "Send based on recipient's local timezone when possible",
-                "expected_improvement": "10-20% lift in open rates with optimized timing"
+                "expected_improvement": "10-20% lift in open rates with optimized timing",
             }
 
         return {
             "campaign_id": campaign_id,
             "campaign_name": campaign.name,
             "recommendations": recommendations,
-            "analyzed_at": datetime.utcnow().isoformat()
+            "analyzed_at": datetime.utcnow().isoformat(),
         }

@@ -71,8 +71,7 @@ async def login(
     except Exception as e:
         logger.error(f"Login error: {type(e).__name__}: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed: {type(e).__name__}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Login failed: {type(e).__name__}"
         )
 
 

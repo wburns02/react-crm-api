@@ -68,8 +68,9 @@ class UserRoleSession(Base):
     switched_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationship to role view
-    current_role = relationship("RoleView", foreign_keys=[current_role_key],
-                                primaryjoin="UserRoleSession.current_role_key == RoleView.role_key")
+    current_role = relationship(
+        "RoleView", foreign_keys=[current_role_key], primaryjoin="UserRoleSession.current_role_key == RoleView.role_key"
+    )
 
 
 # Demo user email constant

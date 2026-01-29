@@ -6,6 +6,7 @@ from decimal import Decimal
 
 class CustomerBase(BaseModel):
     """Base customer schema."""
+
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     email: Optional[EmailStr] = None
@@ -66,17 +67,20 @@ class CustomerBase(BaseModel):
 
 class CustomerCreate(CustomerBase):
     """Schema for creating a customer."""
+
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
 
 
 class CustomerUpdate(CustomerBase):
     """Schema for updating a customer (all fields optional)."""
+
     pass
 
 
 class CustomerResponse(CustomerBase):
     """Schema for customer response."""
+
     id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -89,6 +93,7 @@ class CustomerResponse(CustomerBase):
 
 class CustomerListResponse(BaseModel):
     """Paginated customer list response."""
+
     items: list[CustomerResponse]
     total: int
     page: int

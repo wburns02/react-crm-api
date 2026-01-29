@@ -11,9 +11,7 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
-from app.models.customer_success import (
-    Segment, CustomerSegment, HealthScore
-)
+from app.models.customer_success import Segment, CustomerSegment, HealthScore
 
 
 class SegmentEvaluator:
@@ -85,9 +83,7 @@ class SegmentEvaluator:
             List of customer IDs that match the segment rules
         """
         # Get segment
-        result = await self.db.execute(
-            select(Segment).where(Segment.id == segment_id)
-        )
+        result = await self.db.execute(select(Segment).where(Segment.id == segment_id))
         segment = result.scalar_one_or_none()
 
         if not segment:
@@ -116,9 +112,7 @@ class SegmentEvaluator:
             True if customer matches segment rules
         """
         # Get segment
-        result = await self.db.execute(
-            select(Segment).where(Segment.id == segment_id)
-        )
+        result = await self.db.execute(select(Segment).where(Segment.id == segment_id))
         segment = result.scalar_one_or_none()
 
         if not segment:
@@ -152,9 +146,7 @@ class SegmentEvaluator:
             Dictionary with added/removed counts
         """
         # Get segment
-        result = await self.db.execute(
-            select(Segment).where(Segment.id == segment_id)
-        )
+        result = await self.db.execute(select(Segment).where(Segment.id == segment_id))
         segment = result.scalar_one_or_none()
 
         if not segment:
@@ -238,13 +230,15 @@ class SegmentEvaluator:
             )
             sample_customers = []
             for customer, health in preview_result.all():
-                sample_customers.append({
-                    "id": customer.id,
-                    "name": f"{customer.first_name} {customer.last_name}",
-                    "email": customer.email,
-                    "health_score": health.overall_score if health else None,
-                    "customer_type": customer.customer_type,
-                })
+                sample_customers.append(
+                    {
+                        "id": customer.id,
+                        "name": f"{customer.first_name} {customer.last_name}",
+                        "email": customer.email,
+                        "health_score": health.overall_score if health else None,
+                        "customer_type": customer.customer_type,
+                    }
+                )
         else:
             sample_customers = []
 
@@ -253,15 +247,10 @@ class SegmentEvaluator:
             "sample_customers": sample_customers,
         }
 
-    async def _evaluate_rules(
-        self, rules: dict, limit: Optional[int] = None
-    ) -> list[int]:
+    async def _evaluate_rules(self, rules: dict, limit: Optional[int] = None) -> list[int]:
         """Evaluate rules and return matching customer IDs."""
         # Build base query joining customer and health score
-        query = (
-            select(Customer.id)
-            .outerjoin(HealthScore, Customer.id == HealthScore.customer_id)
-        )
+        query = select(Customer.id).outerjoin(HealthScore, Customer.id == HealthScore.customer_id)
 
         # Build filter conditions
         conditions = self._build_conditions(rules)
@@ -274,9 +263,7 @@ class SegmentEvaluator:
         result = await self.db.execute(query)
         return [r[0] for r in result.all()]
 
-    async def _evaluate_rules_for_customer(
-        self, customer_id: int, rules: dict
-    ) -> bool:
+    async def _evaluate_rules_for_customer(self, customer_id: int, rules: dict) -> bool:
         """Evaluate rules for a specific customer."""
         query = (
             select(Customer.id)

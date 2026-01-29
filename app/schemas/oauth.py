@@ -14,22 +14,18 @@ from typing import Optional
 # Token Request/Response Schemas (RFC 6749)
 # ============================================================================
 
+
 class TokenRequest(BaseModel):
     """
     OAuth2 Token Request for client credentials flow.
 
     Follows RFC 6749 Section 4.4 - Client Credentials Grant.
     """
-    grant_type: str = Field(
-        ...,
-        description="Grant type, must be 'client_credentials' or 'refresh_token'"
-    )
+
+    grant_type: str = Field(..., description="Grant type, must be 'client_credentials' or 'refresh_token'")
     client_id: str = Field(..., description="Client ID")
     client_secret: str = Field(..., description="Client secret")
-    scope: Optional[str] = Field(
-        None,
-        description="Space-separated list of requested scopes"
-    )
+    scope: Optional[str] = Field(None, description="Space-separated list of requested scopes")
 
 
 class RefreshTokenRequest(BaseModel):
@@ -38,16 +34,13 @@ class RefreshTokenRequest(BaseModel):
 
     Follows RFC 6749 Section 6 - Refreshing an Access Token.
     """
-    grant_type: str = Field(
-        default="refresh_token",
-        description="Must be 'refresh_token'"
-    )
+
+    grant_type: str = Field(default="refresh_token", description="Must be 'refresh_token'")
     refresh_token: str = Field(..., description="The refresh token")
     client_id: str = Field(..., description="Client ID")
     client_secret: str = Field(..., description="Client secret")
     scope: Optional[str] = Field(
-        None,
-        description="Space-separated list of requested scopes (must be subset of original)"
+        None, description="Space-separated list of requested scopes (must be subset of original)"
     )
 
 
@@ -57,13 +50,11 @@ class TokenResponse(BaseModel):
 
     Follows RFC 6749 Section 5.1 - Successful Response.
     """
+
     access_token: str = Field(..., description="The access token")
     token_type: str = Field(default="Bearer", description="Token type")
     expires_in: int = Field(..., description="Token lifetime in seconds")
-    refresh_token: Optional[str] = Field(
-        None,
-        description="Refresh token for obtaining new access tokens"
-    )
+    refresh_token: Optional[str] = Field(None, description="Refresh token for obtaining new access tokens")
     scope: str = Field(..., description="Space-separated list of granted scopes")
 
 
@@ -73,32 +64,28 @@ class TokenErrorResponse(BaseModel):
 
     Follows RFC 6749 Section 5.2 - Error Response.
     """
+
     error: str = Field(
         ...,
         description="Error code: invalid_request, invalid_client, invalid_grant, "
-                    "unauthorized_client, unsupported_grant_type, invalid_scope"
+        "unauthorized_client, unsupported_grant_type, invalid_scope",
     )
-    error_description: Optional[str] = Field(
-        None,
-        description="Human-readable error description"
-    )
-    error_uri: Optional[str] = Field(
-        None,
-        description="URI for more information about the error"
-    )
+    error_description: Optional[str] = Field(None, description="Human-readable error description")
+    error_uri: Optional[str] = Field(None, description="URI for more information about the error")
 
 
 # ============================================================================
 # Client Management Schemas
 # ============================================================================
 
+
 class APIClientCreate(BaseModel):
     """Schema for creating a new API client."""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     scopes: str = Field(
-        default="read",
-        description="Space-separated scopes: read, write, customers, work_orders, admin"
+        default="read", description="Space-separated scopes: read, write, customers, work_orders, admin"
     )
     rate_limit_per_minute: int = Field(default=100, ge=1, le=10000)
     rate_limit_per_hour: int = Field(default=1000, ge=1, le=100000)
@@ -106,6 +93,7 @@ class APIClientCreate(BaseModel):
 
 class APIClientResponse(BaseModel):
     """Schema for API client response (excludes secret)."""
+
     id: int
     client_id: str
     name: str
@@ -127,14 +115,13 @@ class APIClientWithSecretResponse(APIClientResponse):
 
     Only returned on client creation - secret cannot be retrieved later.
     """
-    client_secret: str = Field(
-        ...,
-        description="Client secret - SAVE THIS! Cannot be retrieved later."
-    )
+
+    client_secret: str = Field(..., description="Client secret - SAVE THIS! Cannot be retrieved later.")
 
 
 class APIClientUpdate(BaseModel):
     """Schema for updating an API client."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     scopes: Optional[str] = None
@@ -147,17 +134,17 @@ class APIClientUpdate(BaseModel):
 # Token Introspection Schemas (RFC 7662)
 # ============================================================================
 
+
 class TokenIntrospectionRequest(BaseModel):
     """Token introspection request."""
+
     token: str = Field(..., description="The token to introspect")
-    token_type_hint: Optional[str] = Field(
-        None,
-        description="Hint about token type: access_token or refresh_token"
-    )
+    token_type_hint: Optional[str] = Field(None, description="Hint about token type: access_token or refresh_token")
 
 
 class TokenIntrospectionResponse(BaseModel):
     """Token introspection response."""
+
     active: bool = Field(..., description="Whether the token is active")
     scope: Optional[str] = Field(None, description="Token scopes")
     client_id: Optional[str] = Field(None, description="Client that owns the token")
@@ -171,8 +158,10 @@ class TokenIntrospectionResponse(BaseModel):
 # Public API Error Schemas
 # ============================================================================
 
+
 class PublicAPIError(BaseModel):
     """Standard error response for public API."""
+
     error: str = Field(..., description="Error code")
     message: str = Field(..., description="Human-readable error message")
     details: Optional[dict] = Field(None, description="Additional error details")

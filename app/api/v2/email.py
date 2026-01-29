@@ -25,6 +25,7 @@ router = APIRouter()
 
 class EmailReplyRequest(BaseModel):
     """Request body for replying to an email."""
+
     conversation_id: int
     body: str
 
@@ -69,12 +70,7 @@ async def get_email_conversation(
 ):
     """Get a single email conversation/thread."""
     # Get the original message
-    result = await db.execute(
-        select(Message).where(
-            Message.id == conversation_id,
-            Message.type == MessageType.email
-        )
-    )
+    result = await db.execute(select(Message).where(Message.id == conversation_id, Message.type == MessageType.email))
     message = result.scalar_one_or_none()
 
     if not message:
@@ -121,9 +117,7 @@ async def reply_to_email(
     body = request.body
 
     # Get original message
-    result = await db.execute(
-        select(Message).where(Message.id == conversation_id)
-    )
+    result = await db.execute(select(Message).where(Message.id == conversation_id))
     original = result.scalar_one_or_none()
 
     if not original:
@@ -149,10 +143,7 @@ async def reply_to_email(
     await db.commit()
     await db.refresh(reply)
 
-    logger.info(
-        "Email reply created",
-        extra={"message_id": reply.id, "user_id": current_user.id}
-    )
+    logger.info("Email reply created", extra={"message_id": reply.id, "user_id": current_user.id})
 
     return {
         "id": reply.id,

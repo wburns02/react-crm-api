@@ -12,13 +12,26 @@ from app.database import get_db
 from app.api.deps import get_current_user
 from app.services.gps_tracking_service import GPSTrackingService, GeofenceService
 from app.schemas.gps_tracking import (
-    LocationUpdate, LocationUpdateBatch, TechnicianLocationResponse,
-    AllTechniciansLocationResponse, LocationHistoryResponse,
-    GeofenceCreate, GeofenceUpdate, GeofenceResponse, GeofenceEventResponse,
-    TrackingLinkCreate, TrackingLinkResponse, PublicTrackingInfo,
-    ETARequest, ETAResponse, ETANotification,
-    GPSConfigUpdate, GPSConfigResponse,
-    DispatchMapData, DispatchMapTechnician, DispatchMapWorkOrder
+    LocationUpdate,
+    LocationUpdateBatch,
+    TechnicianLocationResponse,
+    AllTechniciansLocationResponse,
+    LocationHistoryResponse,
+    GeofenceCreate,
+    GeofenceUpdate,
+    GeofenceResponse,
+    GeofenceEventResponse,
+    TrackingLinkCreate,
+    TrackingLinkResponse,
+    PublicTrackingInfo,
+    ETARequest,
+    ETAResponse,
+    ETANotification,
+    GPSConfigUpdate,
+    GPSConfigResponse,
+    DispatchMapData,
+    DispatchMapTechnician,
+    DispatchMapWorkOrder,
 )
 
 router = APIRouter(prefix="/gps", tags=["GPS Tracking"])
@@ -26,18 +39,17 @@ router = APIRouter(prefix="/gps", tags=["GPS Tracking"])
 
 # ==================== Location Updates ====================
 
+
 @router.post("/location", response_model=TechnicianLocationResponse)
 async def update_location(
-    location: LocationUpdate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    location: LocationUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """
     Update technician's current GPS location.
     Called by mobile app at configured intervals.
     """
     # Get technician ID from current user
-    technician_id = current_user.technician_id if hasattr(current_user, 'technician_id') else current_user.id
+    technician_id = current_user.technician_id if hasattr(current_user, "technician_id") else current_user.id
 
     service = GPSTrackingService(db)
     return service.update_technician_location(technician_id, location)
@@ -45,15 +57,13 @@ async def update_location(
 
 @router.post("/location/batch", response_model=dict)
 async def update_location_batch(
-    batch: LocationUpdateBatch,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    batch: LocationUpdateBatch, db: Session = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """
     Submit batch of location updates (for offline sync).
     Mobile app can queue locations while offline and sync when online.
     """
-    technician_id = current_user.technician_id if hasattr(current_user, 'technician_id') else current_user.id
+    technician_id = current_user.technician_id if hasattr(current_user, "technician_id") else current_user.id
     service = GPSTrackingService(db)
 
     processed = 0
@@ -65,18 +75,14 @@ async def update_location_batch(
             # Log error but continue processing
             pass
 
-    return {
-        "processed": processed,
-        "total": len(batch.locations),
-        "success": processed == len(batch.locations)
-    }
+    return {"processed": processed, "total": len(batch.locations), "success": processed == len(batch.locations)}
 
 
 @router.get("/location/{technician_id}", response_model=TechnicianLocationResponse)
 async def get_technician_location(
     technician_id: int = Path(..., description="Technician ID"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """Get current location for a specific technician."""
     service = GPSTrackingService(db)
@@ -89,10 +95,7 @@ async def get_technician_location(
 
 
 @router.get("/locations", response_model=AllTechniciansLocationResponse)
-async def get_all_locations(
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
+async def get_all_locations(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Get all technician locations for dispatch map.
     Returns current position, status, and online/offline count.
@@ -104,11 +107,12 @@ async def get_all_locations(
         technicians=data["technicians"],
         total_online=data["total_online"],
         total_offline=data["total_offline"],
-        last_refresh=data["last_refresh"]
+        last_refresh=data["last_refresh"],
     )
 
 
 # ==================== Location History ====================
+
 
 @router.get("/history/{technician_id}", response_model=LocationHistoryResponse)
 async def get_location_history(
@@ -116,7 +120,7 @@ async def get_location_history(
     date: Optional[str] = Query(None, description="Date (YYYY-MM-DD), defaults to today"),
     work_order_id: Optional[int] = Query(None, description="Filter by work order"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Get location history for route verification.
@@ -140,7 +144,7 @@ async def get_route_for_work_order(
     technician_id: int = Path(..., description="Technician ID"),
     work_order_id: int = Path(..., description="Work Order ID"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Get the route a technician took to reach a work order.
@@ -154,12 +158,13 @@ async def get_route_for_work_order(
 
 # ==================== ETA Calculations ====================
 
+
 @router.get("/eta/{work_order_id}", response_model=ETAResponse)
 async def get_eta(
     work_order_id: int = Path(..., description="Work Order ID"),
     recalculate: bool = Query(False, description="Force recalculation"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Get ETA for a work order.
@@ -171,7 +176,7 @@ async def get_eta(
     if not eta:
         raise HTTPException(
             status_code=404,
-            detail="Cannot calculate ETA. Work order may not have an assigned technician or technician location is unknown."
+            detail="Cannot calculate ETA. Work order may not have an assigned technician or technician location is unknown.",
         )
 
     return eta
@@ -182,7 +187,7 @@ async def send_eta_notification(
     notification: ETANotification,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Send ETA notification to customer.
@@ -195,18 +200,17 @@ async def send_eta_notification(
         "notification_type": "sms",
         "recipient": notification.customer_phone,
         "message": f"Your technician {notification.technician_name} is on the way! "
-                   f"ETA: {notification.eta_minutes} minutes. "
-                   f"Track here: {notification.tracking_url}"
+        f"ETA: {notification.eta_minutes} minutes. "
+        f"Track here: {notification.tracking_url}",
     }
 
 
 # ==================== Customer Tracking Links ====================
 
+
 @router.post("/tracking-links", response_model=TrackingLinkResponse)
 async def create_tracking_link(
-    data: TrackingLinkCreate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    data: TrackingLinkCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """
     Create a customer tracking link for a work order.
@@ -230,7 +234,7 @@ async def create_tracking_link(
         show_technician_name=data.show_technician_name,
         show_technician_photo=data.show_technician_photo,
         show_live_map=data.show_live_map,
-        show_eta=data.show_eta
+        show_eta=data.show_eta,
     )
 
     return TrackingLinkResponse(
@@ -243,7 +247,7 @@ async def create_tracking_link(
         status=link.status.value,
         expires_at=link.expires_at,
         view_count=link.view_count,
-        created_at=link.created_at
+        created_at=link.created_at,
     )
 
 
@@ -251,14 +255,17 @@ async def create_tracking_link(
 async def get_tracking_links(
     work_order_id: int = Path(..., description="Work Order ID"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """Get all tracking links for a work order."""
     from app.models.gps_tracking import CustomerTrackingLink
 
-    links = db.query(CustomerTrackingLink).filter(
-        CustomerTrackingLink.work_order_id == work_order_id
-    ).order_by(CustomerTrackingLink.created_at.desc()).all()
+    links = (
+        db.query(CustomerTrackingLink)
+        .filter(CustomerTrackingLink.work_order_id == work_order_id)
+        .order_by(CustomerTrackingLink.created_at.desc())
+        .all()
+    )
 
     return [
         TrackingLinkResponse(
@@ -271,7 +278,7 @@ async def get_tracking_links(
             status=link.status.value,
             expires_at=link.expires_at,
             view_count=link.view_count,
-            created_at=link.created_at
+            created_at=link.created_at,
         )
         for link in links
     ]
@@ -279,10 +286,7 @@ async def get_tracking_links(
 
 # Public endpoint - no auth required
 @router.get("/track/{token}", response_model=PublicTrackingInfo)
-async def get_public_tracking(
-    token: str = Path(..., description="Tracking link token"),
-    db: Session = Depends(get_db)
-):
+async def get_public_tracking(token: str = Path(..., description="Tracking link token"), db: Session = Depends(get_db)):
     """
     PUBLIC ENDPOINT - Get tracking info for customer.
     This is the endpoint customers access to track their technician.
@@ -299,11 +303,10 @@ async def get_public_tracking(
 
 # ==================== Geofences ====================
 
+
 @router.post("/geofences", response_model=GeofenceResponse)
 async def create_geofence(
-    geofence: GeofenceCreate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    geofence: GeofenceCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """Create a new geofence."""
     service = GeofenceService(db)
@@ -326,7 +329,7 @@ async def create_geofence(
         notify_on_entry=result.notify_on_entry,
         notify_on_exit=result.notify_on_exit,
         created_at=result.created_at,
-        updated_at=result.updated_at
+        updated_at=result.updated_at,
     )
 
 
@@ -335,7 +338,7 @@ async def list_geofences(
     geofence_type: Optional[str] = Query(None, description="Filter by type"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """List all geofences."""
     service = GeofenceService(db)
@@ -359,7 +362,7 @@ async def list_geofences(
             notify_on_entry=g.notify_on_entry,
             notify_on_exit=g.notify_on_exit,
             created_at=g.created_at,
-            updated_at=g.updated_at
+            updated_at=g.updated_at,
         )
         for g in geofences
     ]
@@ -369,7 +372,7 @@ async def list_geofences(
 async def get_geofence(
     geofence_id: int = Path(..., description="Geofence ID"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """Get a specific geofence."""
     service = GeofenceService(db)
@@ -395,7 +398,7 @@ async def get_geofence(
         notify_on_entry=geofence.notify_on_entry,
         notify_on_exit=geofence.notify_on_exit,
         created_at=geofence.created_at,
-        updated_at=geofence.updated_at
+        updated_at=geofence.updated_at,
     )
 
 
@@ -404,7 +407,7 @@ async def update_geofence(
     geofence_id: int = Path(..., description="Geofence ID"),
     update: GeofenceUpdate = None,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """Update a geofence."""
     service = GeofenceService(db)
@@ -430,7 +433,7 @@ async def update_geofence(
         notify_on_entry=geofence.notify_on_entry,
         notify_on_exit=geofence.notify_on_exit,
         created_at=geofence.created_at,
-        updated_at=geofence.updated_at
+        updated_at=geofence.updated_at,
     )
 
 
@@ -438,7 +441,7 @@ async def update_geofence(
 async def delete_geofence(
     geofence_id: int = Path(..., description="Geofence ID"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """Delete a geofence."""
     service = GeofenceService(db)
@@ -458,7 +461,7 @@ async def get_geofence_events(
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     limit: int = Query(100, le=1000),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """Get geofence events log."""
     from app.models.gps_tracking import GeofenceEvent, Geofence
@@ -485,30 +488,33 @@ async def get_geofence_events(
         geofence = db.query(Geofence).filter(Geofence.id == event.geofence_id).first()
         tech = db.query(Technician).filter(Technician.id == event.technician_id).first()
 
-        results.append(GeofenceEventResponse(
-            id=event.id,
-            geofence_id=event.geofence_id,
-            geofence_name=geofence.name if geofence else "Unknown",
-            technician_id=event.technician_id,
-            technician_name=f"{tech.first_name} {tech.last_name}" if tech else "Unknown",
-            event_type=event.event_type,
-            latitude=event.latitude,
-            longitude=event.longitude,
-            action_triggered=event.action_triggered.value if event.action_triggered else None,
-            action_result=event.action_result,
-            occurred_at=event.occurred_at
-        ))
+        results.append(
+            GeofenceEventResponse(
+                id=event.id,
+                geofence_id=event.geofence_id,
+                geofence_name=geofence.name if geofence else "Unknown",
+                technician_id=event.technician_id,
+                technician_name=f"{tech.first_name} {tech.last_name}" if tech else "Unknown",
+                event_type=event.event_type,
+                latitude=event.latitude,
+                longitude=event.longitude,
+                action_triggered=event.action_triggered.value if event.action_triggered else None,
+                action_result=event.action_result,
+                occurred_at=event.occurred_at,
+            )
+        )
 
     return results
 
 
 # ==================== Dispatch Map ====================
 
+
 @router.get("/dispatch-map")
 async def get_dispatch_map_data(
     include_completed: bool = Query(False, description="Include completed work orders"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Get all data needed for the dispatch map.
@@ -522,7 +528,8 @@ async def get_dispatch_map_data(
         work_orders = []
 
         # Get technician locations with names
-        loc_result = await db.execute(text("""
+        loc_result = await db.execute(
+            text("""
             SELECT
                 tl.technician_id, t.first_name, t.last_name,
                 tl.latitude, tl.longitude, tl.accuracy, tl.speed, tl.heading,
@@ -530,12 +537,27 @@ async def get_dispatch_map_data(
                 tl.current_work_order_id, tl.current_status
             FROM technician_locations tl
             JOIN technicians t ON tl.technician_id = t.id
-        """))
+        """)
+        )
         locations = loc_result.fetchall()
 
         for loc in locations:
-            tech_id, first_name, last_name, lat, lng, accuracy, speed, heading, \
-                is_online, battery, captured_at, received_at, wo_id, status = loc
+            (
+                tech_id,
+                first_name,
+                last_name,
+                lat,
+                lng,
+                accuracy,
+                speed,
+                heading,
+                is_online,
+                battery,
+                captured_at,
+                received_at,
+                wo_id,
+                status,
+            ) = loc
 
             # Calculate minutes since update
             if captured_at:
@@ -545,19 +567,21 @@ async def get_dispatch_map_data(
 
             is_stale = minutes_since > 5
 
-            technicians.append({
-                "id": tech_id,
-                "name": f"{first_name} {last_name}",
-                "latitude": lat,
-                "longitude": lng,
-                "status": status or "available",
-                "current_work_order_id": wo_id,
-                "current_job_address": None,
-                "battery_level": battery,
-                "speed": speed,
-                "last_updated": captured_at.isoformat() if captured_at else None,
-                "is_stale": is_stale
-            })
+            technicians.append(
+                {
+                    "id": tech_id,
+                    "name": f"{first_name} {last_name}",
+                    "latitude": lat,
+                    "longitude": lng,
+                    "status": status or "available",
+                    "current_work_order_id": wo_id,
+                    "current_job_address": None,
+                    "battery_level": battery,
+                    "speed": speed,
+                    "last_updated": captured_at.isoformat() if captured_at else None,
+                    "is_stale": is_stale,
+                }
+            )
 
         # Get work orders for today
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -565,7 +589,8 @@ async def get_dispatch_map_data(
 
         status_filter = "" if include_completed else "AND wo.status != 'completed'"
 
-        wo_result = await db.execute(text(f"""
+        wo_result = await db.execute(
+            text(f"""
             SELECT
                 wo.id, wo.customer_id, wo.technician_id, wo.assigned_technician,
                 wo.job_type, wo.status, wo.scheduled_date,
@@ -579,32 +604,54 @@ async def get_dispatch_map_data(
               AND wo.scheduled_date < :today_end
               {status_filter}
             ORDER BY wo.scheduled_date
-        """), {"today_start": today_start, "today_end": today_end})
+        """),
+            {"today_start": today_start, "today_end": today_end},
+        )
         work_orders_db = wo_result.fetchall()
 
         for wo in work_orders_db:
-            wo_id, cust_id, tech_id, assigned_tech, job_type, status, sched_date, \
-                cust_first, cust_last, addr, city, state, lat, lng, tech_first, tech_last = wo
+            (
+                wo_id,
+                cust_id,
+                tech_id,
+                assigned_tech,
+                job_type,
+                status,
+                sched_date,
+                cust_first,
+                cust_last,
+                addr,
+                city,
+                state,
+                lat,
+                lng,
+                tech_first,
+                tech_last,
+            ) = wo
 
             tech_name = f"{tech_first} {tech_last}" if tech_first else assigned_tech
             address = f"{addr}, {city}, {state}" if addr else "No address"
 
-            work_orders.append({
-                "id": wo_id,
-                "customer_name": f"{cust_first} {cust_last}",
-                "address": address,
-                "latitude": float(lat),
-                "longitude": float(lng),
-                "status": status,
-                "scheduled_time": sched_date.isoformat() if sched_date else None,
-                "assigned_technician_id": tech_id,
-                "assigned_technician_name": tech_name,
-                "service_type": job_type or "Service",
-                "priority": "normal"
-            })
+            work_orders.append(
+                {
+                    "id": wo_id,
+                    "customer_name": f"{cust_first} {cust_last}",
+                    "address": address,
+                    "latitude": float(lat),
+                    "longitude": float(lng),
+                    "status": status,
+                    "scheduled_time": sched_date.isoformat() if sched_date else None,
+                    "assigned_technician_id": tech_id,
+                    "assigned_technician_name": tech_name,
+                    "service_type": job_type or "Service",
+                    "priority": "normal",
+                }
+            )
 
         # Calculate map center
-        all_points = [(t["latitude"], t["longitude"]) for t in technicians] + [(w["latitude"], w["longitude"]) for w in work_orders]
+        all_points = [(t["latitude"], t["longitude"]) for t in technicians] + [
+            (w["latitude"], w["longitude"]) for w in work_orders
+        ]
         if all_points:
             center_lat = sum(p[0] for p in all_points) / len(all_points)
             center_lng = sum(p[1] for p in all_points) / len(all_points)
@@ -619,7 +666,7 @@ async def get_dispatch_map_data(
             "center_latitude": center_lat,
             "center_longitude": center_lng,
             "zoom_level": 10,
-            "last_refresh": datetime.utcnow().isoformat()
+            "last_refresh": datetime.utcnow().isoformat(),
         }
 
     except Exception as e:
@@ -632,23 +679,19 @@ async def get_dispatch_map_data(
             "center_latitude": 30.27,
             "center_longitude": -97.74,
             "zoom_level": 10,
-            "last_refresh": datetime.utcnow().isoformat()
+            "last_refresh": datetime.utcnow().isoformat(),
         }
 
 
 # ==================== GPS Configuration ====================
 
+
 @router.get("/config", response_model=GPSConfigResponse)
-async def get_global_config(
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
+async def get_global_config(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Get global GPS tracking configuration."""
     from app.models.gps_tracking import GPSTrackingConfig
 
-    config = db.query(GPSTrackingConfig).filter(
-        GPSTrackingConfig.technician_id == None
-    ).first()
+    config = db.query(GPSTrackingConfig).filter(GPSTrackingConfig.technician_id == None).first()
 
     if not config:
         # Return defaults
@@ -669,7 +712,7 @@ async def get_global_config(
             work_hours_start="07:00",
             work_hours_end="18:00",
             history_retention_days=90,
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
 
     return GPSConfigResponse(
@@ -689,22 +732,18 @@ async def get_global_config(
         work_hours_start=config.work_hours_start,
         work_hours_end=config.work_hours_end,
         history_retention_days=config.history_retention_days,
-        updated_at=config.updated_at
+        updated_at=config.updated_at,
     )
 
 
 @router.patch("/config", response_model=GPSConfigResponse)
 async def update_global_config(
-    update: GPSConfigUpdate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    update: GPSConfigUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """Update global GPS tracking configuration."""
     from app.models.gps_tracking import GPSTrackingConfig
 
-    config = db.query(GPSTrackingConfig).filter(
-        GPSTrackingConfig.technician_id == None
-    ).first()
+    config = db.query(GPSTrackingConfig).filter(GPSTrackingConfig.technician_id == None).first()
 
     if not config:
         config = GPSTrackingConfig(technician_id=None)
@@ -733,7 +772,7 @@ async def update_global_config(
         work_hours_start=config.work_hours_start,
         work_hours_end=config.work_hours_end,
         history_retention_days=config.history_retention_days,
-        updated_at=config.updated_at
+        updated_at=config.updated_at,
     )
 
 
@@ -741,21 +780,17 @@ async def update_global_config(
 async def get_technician_config(
     technician_id: int = Path(..., description="Technician ID"),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """Get GPS configuration for a specific technician (falls back to global)."""
     from app.models.gps_tracking import GPSTrackingConfig
 
     # Try technician-specific config
-    config = db.query(GPSTrackingConfig).filter(
-        GPSTrackingConfig.technician_id == technician_id
-    ).first()
+    config = db.query(GPSTrackingConfig).filter(GPSTrackingConfig.technician_id == technician_id).first()
 
     # Fall back to global
     if not config:
-        config = db.query(GPSTrackingConfig).filter(
-            GPSTrackingConfig.technician_id == None
-        ).first()
+        config = db.query(GPSTrackingConfig).filter(GPSTrackingConfig.technician_id == None).first()
 
     if not config:
         # Return defaults
@@ -776,7 +811,7 @@ async def get_technician_config(
             work_hours_start="07:00",
             work_hours_end="18:00",
             history_retention_days=90,
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
 
     return GPSConfigResponse(
@@ -796,17 +831,15 @@ async def get_technician_config(
         work_hours_start=config.work_hours_start,
         work_hours_end=config.work_hours_end,
         history_retention_days=config.history_retention_days,
-        updated_at=config.updated_at
+        updated_at=config.updated_at,
     )
 
 
 # ==================== Demo Data Seeding ====================
 
+
 @router.post("/seed-demo-data")
-async def seed_demo_data(
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
+async def seed_demo_data(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Seed demo GPS data for testing the tracking page.
     Creates technician locations and work orders for today.
@@ -821,7 +854,8 @@ async def seed_demo_data(
     try:
         # First, ensure the technician_locations table exists
         # Note: technicians.id is VARCHAR(36) in the existing schema
-        await db.execute(text("""
+        await db.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS technician_locations (
                 id SERIAL PRIMARY KEY,
                 technician_id VARCHAR(36) NOT NULL UNIQUE,
@@ -838,7 +872,8 @@ async def seed_demo_data(
                 current_work_order_id VARCHAR(36),
                 current_status VARCHAR(50) DEFAULT 'available'
             )
-        """))
+        """)
+        )
         await db.commit()
 
         # Texas locations for demo
@@ -858,9 +893,7 @@ async def seed_demo_data(
         STATUSES = ["available", "en_route", "on_site", "break"]
 
         # Get active technicians using raw SQL
-        result = await db.execute(
-            text("SELECT id, first_name, last_name FROM technicians WHERE is_active = true")
-        )
+        result = await db.execute(text("SELECT id, first_name, last_name FROM technicians WHERE is_active = true"))
         technicians = result.fetchall()
 
         if not technicians:
@@ -885,8 +918,7 @@ async def seed_demo_data(
 
             # Check if location exists
             existing_result = await db.execute(
-                text("SELECT id FROM technician_locations WHERE technician_id = :tech_id"),
-                {"tech_id": tech_id}
+                text("SELECT id FROM technician_locations WHERE technician_id = :tech_id"), {"tech_id": tech_id}
             )
             existing = existing_result.fetchone()
 
@@ -901,11 +933,17 @@ async def seed_demo_data(
                         WHERE technician_id = :tech_id
                     """),
                     {
-                        "tech_id": tech_id, "lat": lat, "lng": lng,
-                        "accuracy": random.uniform(5, 25), "speed": speed,
-                        "heading": heading, "battery": battery,
-                        "captured_at": now, "received_at": now, "status": status
-                    }
+                        "tech_id": tech_id,
+                        "lat": lat,
+                        "lng": lng,
+                        "accuracy": random.uniform(5, 25),
+                        "speed": speed,
+                        "heading": heading,
+                        "battery": battery,
+                        "captured_at": now,
+                        "received_at": now,
+                        "status": status,
+                    },
                 )
                 updated_locations += 1
             else:
@@ -922,11 +960,17 @@ async def seed_demo_data(
                         )
                     """),
                     {
-                        "tech_id": tech_id, "lat": lat, "lng": lng,
-                        "accuracy": random.uniform(5, 25), "speed": speed,
-                        "heading": heading, "battery": battery,
-                        "captured_at": now, "received_at": now, "status": status
-                    }
+                        "tech_id": tech_id,
+                        "lat": lat,
+                        "lng": lng,
+                        "accuracy": random.uniform(5, 25),
+                        "speed": speed,
+                        "heading": heading,
+                        "battery": battery,
+                        "captured_at": now,
+                        "received_at": now,
+                        "status": status,
+                    },
                 )
                 created_locations += 1
 
@@ -941,7 +985,7 @@ async def seed_demo_data(
                   AND scheduled_date < :today_end
                   AND status != 'completed'
             """),
-            {"today_start": today_start, "today_end": today_end}
+            {"today_start": today_start, "today_end": today_end},
         )
         todays_orders = count_result.scalar() or 0
 
@@ -954,7 +998,7 @@ async def seed_demo_data(
             customers = customers_result.fetchall()
 
             if customers and technicians:
-                for i, customer in enumerate(customers[:min(5, len(technicians))]):
+                for i, customer in enumerate(customers[: min(5, len(technicians))]):
                     cust_id, cust_first, cust_last = customer
                     tech = technicians[i % len(technicians)]
                     tech_id, tech_first, tech_last = tech
@@ -982,8 +1026,8 @@ async def seed_demo_data(
                             "scheduled_date": scheduled_time,
                             "notes": "[GPS DEMO] Test work order for GPS tracking demo",
                             "created_at": now,
-                            "updated_at": now
-                        }
+                            "updated_at": now,
+                        },
                     )
                     created_orders += 1
 
@@ -996,12 +1040,8 @@ async def seed_demo_data(
             "locations_updated": updated_locations,
             "existing_orders_today": todays_orders,
             "work_orders_created": created_orders,
-            "message": f"Seeded {created_locations + updated_locations} technician locations and {created_orders} work orders"
+            "message": f"Seeded {created_locations + updated_locations} technician locations and {created_orders} work orders",
         }
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}

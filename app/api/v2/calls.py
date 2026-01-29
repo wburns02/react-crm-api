@@ -6,6 +6,7 @@ Features:
 - Call dispositions management
 - Call analytics (volume, missed calls, avg duration)
 """
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, extract, case
 from sqlalchemy.orm import selectinload
@@ -24,6 +25,7 @@ router = APIRouter()
 
 
 # Request/Response Models
+
 
 class CallResponse(BaseModel):
     id: int
@@ -85,6 +87,7 @@ class CallAnalyticsResponse(BaseModel):
 
 # Helper functions
 
+
 def call_to_response(call: CallLog) -> dict:
     """Convert CallLog model to response dict."""
     return {
@@ -108,6 +111,7 @@ def call_to_response(call: CallLog) -> dict:
 
 
 # Endpoints
+
 
 @router.get("", response_model=CallListResponse)
 async def list_calls(
@@ -140,8 +144,7 @@ async def list_calls(
         if search:
             search_pattern = f"%{search}%"
             query = query.where(
-                (CallLog.caller_number.ilike(search_pattern)) |
-                (CallLog.called_number.ilike(search_pattern))
+                (CallLog.caller_number.ilike(search_pattern)) | (CallLog.called_number.ilike(search_pattern))
             )
 
         # Count total
@@ -183,10 +186,7 @@ async def get_call_analytics(
             date_to = date.today()
 
         # Base query with date filter
-        base_query = select(CallLog).where(
-            CallLog.call_date >= date_from,
-            CallLog.call_date <= date_to
-        )
+        base_query = select(CallLog).where(CallLog.call_date >= date_from, CallLog.call_date <= date_to)
 
         # Get all calls in range
         result = await db.execute(base_query)
@@ -194,8 +194,8 @@ async def get_call_analytics(
 
         # Calculate metrics
         total_calls = len(calls)
-        missed_calls = sum(1 for c in calls if c.call_disposition in ('no_answer', 'busy', 'missed'))
-        answered_calls = sum(1 for c in calls if c.call_disposition in ('answered', 'completed', 'connected'))
+        missed_calls = sum(1 for c in calls if c.call_disposition in ("no_answer", "busy", "missed"))
+        answered_calls = sum(1 for c in calls if c.call_disposition in ("answered", "completed", "connected"))
 
         durations = [c.duration_seconds for c in calls if c.duration_seconds]
         total_duration = sum(durations)
@@ -211,13 +211,13 @@ async def get_call_analytics(
         # Calls by direction
         calls_by_direction = {}
         for c in calls:
-            direction = c.direction or 'unknown'
+            direction = c.direction or "unknown"
             calls_by_direction[direction] = calls_by_direction.get(direction, 0) + 1
 
         # Calls by disposition
         calls_by_disposition = {}
         for c in calls:
-            disposition = c.call_disposition or 'unknown'
+            disposition = c.call_disposition or "unknown"
             calls_by_disposition[disposition] = calls_by_disposition.get(disposition, 0) + 1
 
         return {
@@ -288,9 +288,7 @@ async def get_disposition_analytics(
         # Get all calls with dispositions in date range
         result = await db.execute(
             select(CallLog).where(
-                CallLog.call_date >= date_from,
-                CallLog.call_date <= date_to,
-                CallLog.call_disposition.isnot(None)
+                CallLog.call_date >= date_from, CallLog.call_date <= date_to, CallLog.call_disposition.isnot(None)
             )
         )
         calls = result.scalars().all()
@@ -307,12 +305,14 @@ async def get_disposition_analytics(
         disposition_stats = []
         for disposition, count in disposition_counts.items():
             percentage = (count / total_calls) * 100 if total_calls > 0 else 0
-            disposition_stats.append({
-                "disposition": disposition,
-                "count": count,
-                "percentage": round(percentage, 1),
-                "color": "#6B7280"  # Default color, could be customized
-            })
+            disposition_stats.append(
+                {
+                    "disposition": disposition,
+                    "count": count,
+                    "percentage": round(percentage, 1),
+                    "color": "#6B7280",  # Default color, could be customized
+                }
+            )
 
         # Sort by count descending
         disposition_stats.sort(key=lambda x: x["count"], reverse=True)
@@ -320,10 +320,7 @@ async def get_disposition_analytics(
         return {
             "stats": disposition_stats,
             "total_calls": total_calls,
-            "date_range": {
-                "from": date_from.isoformat(),
-                "to": date_to.isoformat()
-            },
+            "date_range": {"from": date_from.isoformat(), "to": date_to.isoformat()},
             "top_disposition": disposition_stats[0]["disposition"] if disposition_stats else None,
             "updated_at": datetime.utcnow().isoformat(),
         }
@@ -379,8 +376,7 @@ async def set_call_disposition(
         # Validate disposition exists
         disp_result = await db.execute(
             select(CallDisposition).where(
-                CallDisposition.name == request.disposition,
-                CallDisposition.is_active == True
+                CallDisposition.name == request.disposition, CallDisposition.is_active == True
             )
         )
         disposition = disp_result.scalar_one_or_none()

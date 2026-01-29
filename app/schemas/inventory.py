@@ -1,10 +1,12 @@
 """Inventory schemas for request/response validation."""
+
 from pydantic import BaseModel, Field
 from typing import Optional
 
 
 class InventoryItemBase(BaseModel):
     """Base inventory item schema."""
+
     sku: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -29,11 +31,13 @@ class InventoryItemBase(BaseModel):
 
 class InventoryItemCreate(InventoryItemBase):
     """Schema for creating an inventory item."""
+
     pass
 
 
 class InventoryItemUpdate(BaseModel):
     """Schema for updating an inventory item (all fields optional)."""
+
     sku: Optional[str] = Field(None, min_length=1, max_length=50)
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
@@ -58,6 +62,7 @@ class InventoryItemUpdate(BaseModel):
 
 class InventoryItemResponse(BaseModel):
     """Schema for inventory item response."""
+
     id: str
     sku: str
     name: str
@@ -90,6 +95,7 @@ class InventoryItemResponse(BaseModel):
 
 class InventoryListResponse(BaseModel):
     """Paginated inventory list response."""
+
     items: list[InventoryItemResponse]
     total: int
     page: int
@@ -98,5 +104,6 @@ class InventoryListResponse(BaseModel):
 
 class InventoryAdjustment(BaseModel):
     """Schema for adjusting inventory quantity."""
+
     adjustment: int = Field(..., description="Positive to add, negative to subtract")
     reason: Optional[str] = Field(None, max_length=255)

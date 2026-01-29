@@ -10,9 +10,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.customer_success import (
-    Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution
-)
+from app.models.customer_success import Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution
 
 
 class JourneyOrchestrator:
@@ -54,10 +52,12 @@ class JourneyOrchestrator:
                 await self._process_enrollment(enrollment)
                 processed += 1
             except Exception as e:
-                errors.append({
-                    "enrollment_id": enrollment.id,
-                    "error": str(e),
-                })
+                errors.append(
+                    {
+                        "enrollment_id": enrollment.id,
+                        "error": str(e),
+                    }
+                )
 
         return {
             "processed": processed,
@@ -76,9 +76,7 @@ class JourneyOrchestrator:
             Status of advancement
         """
         # Get enrollment
-        result = await self.db.execute(
-            select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id)
-        )
+        result = await self.db.execute(select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id))
         enrollment = result.scalar_one_or_none()
 
         if not enrollment:
@@ -89,9 +87,7 @@ class JourneyOrchestrator:
 
         return await self._process_enrollment(enrollment)
 
-    async def execute_step(
-        self, enrollment_id: int, step_id: int, force: bool = False
-    ) -> dict:
+    async def execute_step(self, enrollment_id: int, step_id: int, force: bool = False) -> dict:
         """
         Execute a specific step for an enrollment.
 
@@ -109,9 +105,7 @@ class JourneyOrchestrator:
         )
         enrollment = enrollment_result.scalar_one_or_none()
 
-        step_result = await self.db.execute(
-            select(JourneyStep).where(JourneyStep.id == step_id)
-        )
+        step_result = await self.db.execute(select(JourneyStep).where(JourneyStep.id == step_id))
         step = step_result.scalar_one_or_none()
 
         if not enrollment or not step:
@@ -173,9 +167,7 @@ class JourneyOrchestrator:
         # Get current step
         if not enrollment.current_step_id:
             # Get first step of journey
-            journey_result = await self.db.execute(
-                select(Journey).where(Journey.id == enrollment.journey_id)
-            )
+            journey_result = await self.db.execute(select(Journey).where(Journey.id == enrollment.journey_id))
             journey = journey_result.scalar_one_or_none()
 
             if not journey:
@@ -195,9 +187,7 @@ class JourneyOrchestrator:
             enrollment.current_step_id = first_step.id
             enrollment.current_step_order = first_step.step_order
 
-        step_result = await self.db.execute(
-            select(JourneyStep).where(JourneyStep.id == enrollment.current_step_id)
-        )
+        step_result = await self.db.execute(select(JourneyStep).where(JourneyStep.id == enrollment.current_step_id))
         step = step_result.scalar_one_or_none()
 
         if not step:
@@ -256,10 +246,7 @@ class JourneyOrchestrator:
 
         elif step_type == "condition":
             # Evaluate condition
-            condition_result = await self._evaluate_condition(
-                enrollment.customer_id,
-                step.condition_rules
-            )
+            condition_result = await self._evaluate_condition(enrollment.customer_id, step.condition_rules)
 
             if execution:
                 execution.condition_result = condition_result
@@ -332,9 +319,7 @@ class JourneyOrchestrator:
                 "status": "completed",
             }
 
-    async def _evaluate_condition(
-        self, customer_id: int, condition_rules: Optional[dict]
-    ) -> bool:
+    async def _evaluate_condition(self, customer_id: int, condition_rules: Optional[dict]) -> bool:
         """Evaluate condition rules for a customer."""
         if not condition_rules:
             return True
@@ -369,9 +354,7 @@ class JourneyOrchestrator:
                 next_step_id = current_step.false_next_step_id
 
             if next_step_id:
-                result = await self.db.execute(
-                    select(JourneyStep).where(JourneyStep.id == next_step_id)
-                )
+                result = await self.db.execute(select(JourneyStep).where(JourneyStep.id == next_step_id))
                 return result.scalar_one_or_none()
 
         # Get next step by order
@@ -387,9 +370,7 @@ class JourneyOrchestrator:
         )
         return result.scalar_one_or_none()
 
-    async def _get_pending_execution(
-        self, enrollment_id: int
-    ) -> Optional[JourneyStepExecution]:
+    async def _get_pending_execution(self, enrollment_id: int) -> Optional[JourneyStepExecution]:
         """Get pending execution for an enrollment."""
         result = await self.db.execute(
             select(JourneyStepExecution).where(
@@ -399,9 +380,7 @@ class JourneyOrchestrator:
         )
         return result.scalar_one_or_none()
 
-    async def check_exit_criteria(
-        self, enrollment_id: int
-    ) -> tuple[bool, Optional[str]]:
+    async def check_exit_criteria(self, enrollment_id: int) -> tuple[bool, Optional[str]]:
         """
         Check if an enrollment should exit the journey.
 
@@ -411,17 +390,13 @@ class JourneyOrchestrator:
         Returns:
             Tuple of (should_exit, reason)
         """
-        result = await self.db.execute(
-            select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id)
-        )
+        result = await self.db.execute(select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id))
         enrollment = result.scalar_one_or_none()
 
         if not enrollment:
             return False, None
 
-        journey_result = await self.db.execute(
-            select(Journey).where(Journey.id == enrollment.journey_id)
-        )
+        journey_result = await self.db.execute(select(Journey).where(Journey.id == enrollment.journey_id))
         journey = journey_result.scalar_one_or_none()
 
         if not journey:
@@ -429,18 +404,13 @@ class JourneyOrchestrator:
 
         # Check exit criteria
         if journey.exit_criteria:
-            should_exit = await self._evaluate_condition(
-                enrollment.customer_id,
-                journey.exit_criteria
-            )
+            should_exit = await self._evaluate_condition(enrollment.customer_id, journey.exit_criteria)
             if should_exit:
                 return True, "Exit criteria met"
 
         return False, None
 
-    async def check_goal_achieved(
-        self, enrollment_id: int
-    ) -> tuple[bool, Optional[str]]:
+    async def check_goal_achieved(self, enrollment_id: int) -> tuple[bool, Optional[str]]:
         """
         Check if the journey goal has been achieved.
 
@@ -450,27 +420,20 @@ class JourneyOrchestrator:
         Returns:
             Tuple of (goal_achieved, details)
         """
-        result = await self.db.execute(
-            select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id)
-        )
+        result = await self.db.execute(select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id))
         enrollment = result.scalar_one_or_none()
 
         if not enrollment:
             return False, None
 
-        journey_result = await self.db.execute(
-            select(Journey).where(Journey.id == enrollment.journey_id)
-        )
+        journey_result = await self.db.execute(select(Journey).where(Journey.id == enrollment.journey_id))
         journey = journey_result.scalar_one_or_none()
 
         if not journey or not journey.goal_criteria:
             return False, None
 
         # Check goal criteria
-        goal_achieved = await self._evaluate_condition(
-            enrollment.customer_id,
-            journey.goal_criteria
-        )
+        goal_achieved = await self._evaluate_condition(enrollment.customer_id, journey.goal_criteria)
 
         if goal_achieved:
             enrollment.goal_achieved = True

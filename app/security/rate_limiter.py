@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RateLimitWindow:
     """Track requests within a time window."""
+
     count: int = 0
     window_start: float = field(default_factory=time.time)
 
@@ -66,14 +67,11 @@ class RateLimiter:
         # Check limit
         if window.count >= max_requests:
             retry_after = int(window_seconds - (now - window.window_start))
-            logger.warning(
-                f"Rate limit exceeded: {limit_name}",
-                extra={"retry_after": retry_after}
-            )
+            logger.warning(f"Rate limit exceeded: {limit_name}", extra={"retry_after": retry_after})
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"Rate limit exceeded: {limit_name}. Retry after {retry_after} seconds.",
-                headers={"Retry-After": str(retry_after)}
+                headers={"Retry-After": str(retry_after)},
             )
 
         # Increment counter
@@ -86,7 +84,7 @@ class RateLimiter:
             self._minute_windows[user_id],
             window_seconds=60,
             max_requests=self.requests_per_minute,
-            limit_name=f"Per-minute limit ({self.requests_per_minute}/min)"
+            limit_name=f"Per-minute limit ({self.requests_per_minute}/min)",
         )
 
         # Check hour limit
@@ -94,7 +92,7 @@ class RateLimiter:
             self._hour_windows[user_id],
             window_seconds=3600,
             max_requests=self.requests_per_hour,
-            limit_name=f"Per-hour limit ({self.requests_per_hour}/hour)"
+            limit_name=f"Per-hour limit ({self.requests_per_hour}/hour)",
         )
 
     def check_destination_limit(self, user_id: int, destination: str) -> None:
@@ -104,7 +102,7 @@ class RateLimiter:
             self._destination_windows[key],
             window_seconds=3600,
             max_requests=self.per_destination_per_hour,
-            limit_name=f"Per-destination limit ({self.per_destination_per_hour}/hour to same number)"
+            limit_name=f"Per-destination limit ({self.per_destination_per_hour}/hour to same number)",
         )
 
     def check_sms_limits(self, user_id: int, destination: str) -> None:

@@ -1,6 +1,7 @@
 """
 Pydantic schemas for booking API.
 """
+
 from datetime import date, time, datetime
 from typing import Optional
 from decimal import Decimal
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field, EmailStr
 
 class BookingCreate(BaseModel):
     """Schema for creating a new booking."""
+
     # Customer info
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
@@ -37,6 +39,7 @@ class BookingCreate(BaseModel):
 
 class BookingResponse(BaseModel):
     """Schema for booking response."""
+
     id: str
     customer_first_name: str
     customer_last_name: str
@@ -70,12 +73,14 @@ class BookingResponse(BaseModel):
 
 class BookingCaptureRequest(BaseModel):
     """Schema for capturing payment after service."""
+
     actual_gallons: int = Field(..., ge=0, le=50000)
     notes: Optional[str] = None
 
 
 class BookingCaptureResponse(BaseModel):
     """Schema for capture response."""
+
     id: str
     actual_gallons: int
     overage_gallons: int
@@ -90,6 +95,7 @@ class BookingCaptureResponse(BaseModel):
 
 class PricingInfo(BaseModel):
     """Schema for pricing information."""
+
     service_type: str
     base_price: Decimal
     included_gallons: int
@@ -100,6 +106,7 @@ class PricingInfo(BaseModel):
 
 class BookingListResponse(BaseModel):
     """Schema for listing bookings."""
+
     items: list[BookingResponse]
     total: int
     page: int

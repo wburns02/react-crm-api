@@ -4,6 +4,7 @@ Admin Settings API - System configuration endpoints.
 Provides settings management for system, notifications, integrations, and security.
 Also provides user management endpoints.
 """
+
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
@@ -33,6 +34,7 @@ router = APIRouter()
 
 
 # ============ User Management ============
+
 
 class UserResponse(BaseModel):
     id: str
@@ -144,7 +146,7 @@ async def update_user(
     if request.last_name is not None:
         user.last_name = request.last_name
     if request.role is not None:
-        user.is_superuser = (request.role == "admin")
+        user.is_superuser = request.role == "admin"
     if request.is_active is not None:
         user.is_active = request.is_active
     if request.password is not None:
@@ -275,23 +277,88 @@ async def update_security_settings(
 
 # Fake data for generating customers
 FIRST_NAMES = [
-    "James", "Mary", "Robert", "Patricia", "John", "Jennifer", "Michael", "Linda",
-    "David", "Elizabeth", "William", "Barbara", "Richard", "Susan", "Joseph", "Jessica",
-    "Thomas", "Sarah", "Christopher", "Karen", "Charles", "Lisa", "Daniel", "Nancy",
-    "Matthew", "Betty", "Anthony", "Margaret", "Mark", "Sandra", "Donald", "Ashley",
-    "Steven", "Kimberly", "Paul", "Emily", "Andrew", "Donna", "Joshua", "Michelle"
+    "James",
+    "Mary",
+    "Robert",
+    "Patricia",
+    "John",
+    "Jennifer",
+    "Michael",
+    "Linda",
+    "David",
+    "Elizabeth",
+    "William",
+    "Barbara",
+    "Richard",
+    "Susan",
+    "Joseph",
+    "Jessica",
+    "Thomas",
+    "Sarah",
+    "Christopher",
+    "Karen",
+    "Charles",
+    "Lisa",
+    "Daniel",
+    "Nancy",
+    "Matthew",
+    "Betty",
+    "Anthony",
+    "Margaret",
+    "Mark",
+    "Sandra",
+    "Donald",
+    "Ashley",
+    "Steven",
+    "Kimberly",
+    "Paul",
+    "Emily",
+    "Andrew",
+    "Donna",
+    "Joshua",
+    "Michelle",
 ]
 
 LAST_NAMES = [
-    "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis",
-    "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson",
-    "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Perez", "Thompson",
-    "White", "Harris", "Sanchez", "Clark", "Ramirez", "Lewis", "Robinson", "Walker"
+    "Smith",
+    "Johnson",
+    "Williams",
+    "Brown",
+    "Jones",
+    "Garcia",
+    "Miller",
+    "Davis",
+    "Rodriguez",
+    "Martinez",
+    "Hernandez",
+    "Lopez",
+    "Gonzalez",
+    "Wilson",
+    "Anderson",
+    "Thomas",
+    "Taylor",
+    "Moore",
+    "Jackson",
+    "Martin",
+    "Lee",
+    "Perez",
+    "Thompson",
+    "White",
+    "Harris",
+    "Sanchez",
+    "Clark",
+    "Ramirez",
+    "Lewis",
+    "Robinson",
+    "Walker",
 ]
 
 CITIES = [
-    ("Houston", "TX", "77001"), ("Austin", "TX", "78701"), ("Dallas", "TX", "75201"),
-    ("San Antonio", "TX", "78201"), ("Fort Worth", "TX", "76101"),
+    ("Houston", "TX", "77001"),
+    ("Austin", "TX", "78701"),
+    ("Dallas", "TX", "75201"),
+    ("San Antonio", "TX", "78201"),
+    ("Fort Worth", "TX", "76101"),
 ]
 
 SUBDIVISIONS = ["Oak Meadows", "Riverside Estates", "Cedar Creek", "Pine Valley", "Willow Springs"]
@@ -321,10 +388,7 @@ async def seed_customer_success_data(
     - Creates health scores, segments, playbooks, journeys, tasks, touchpoints
     """
     if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can seed data"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can seed data")
 
     stats = {}
 
@@ -349,8 +413,7 @@ async def seed_customer_success_data(
         # 2. Remove Stephanie Burns (or rename if has FK constraints)
         result = await db.execute(
             select(Customer).where(
-                func.lower(Customer.first_name) == 'stephanie',
-                func.lower(Customer.last_name) == 'burns'
+                func.lower(Customer.first_name) == "stephanie", func.lower(Customer.last_name) == "burns"
             )
         )
         for s in result.scalars().all():
@@ -383,7 +446,7 @@ async def seed_customer_success_data(
                 attempts += 1
                 first = random.choice(FIRST_NAMES)
                 last = random.choice(LAST_NAMES)
-                if first.lower() == 'stephanie' and last.lower() == 'burns':
+                if first.lower() == "stephanie" and last.lower() == "burns":
                     continue
                 if (first, last) in used_combos:
                     continue
@@ -415,20 +478,54 @@ async def seed_customer_success_data(
             await db.commit()
 
         # Get customer IDs (limit to target)
-        result = await db.execute(
-            select(Customer.id).order_by(Customer.id).limit(target_customers)
-        )
+        result = await db.execute(select(Customer.id).order_by(Customer.id).limit(target_customers))
         customer_ids = [row[0] for row in result.fetchall()]
         stats["customers"] = len(customer_ids)
 
         # 4. Create segments
         segments_data = [
-            {"name": "High Value Accounts", "description": "High contract value customers", "color": "#10B981", "segment_type": "dynamic", "priority": 10},
-            {"name": "At Risk - Low Engagement", "description": "Customers showing disengagement", "color": "#EF4444", "segment_type": "dynamic", "priority": 5},
-            {"name": "Growth Candidates", "description": "Healthy accounts with expansion potential", "color": "#3B82F6", "segment_type": "dynamic", "priority": 15},
-            {"name": "New Customers (< 90 days)", "description": "Recently onboarded customers", "color": "#8B5CF6", "segment_type": "dynamic", "priority": 20},
-            {"name": "Champions", "description": "Highly engaged advocates", "color": "#F59E0B", "segment_type": "dynamic", "priority": 25},
-            {"name": "Commercial Accounts", "description": "Business customers", "color": "#6366F1", "segment_type": "dynamic", "priority": 30},
+            {
+                "name": "High Value Accounts",
+                "description": "High contract value customers",
+                "color": "#10B981",
+                "segment_type": "dynamic",
+                "priority": 10,
+            },
+            {
+                "name": "At Risk - Low Engagement",
+                "description": "Customers showing disengagement",
+                "color": "#EF4444",
+                "segment_type": "dynamic",
+                "priority": 5,
+            },
+            {
+                "name": "Growth Candidates",
+                "description": "Healthy accounts with expansion potential",
+                "color": "#3B82F6",
+                "segment_type": "dynamic",
+                "priority": 15,
+            },
+            {
+                "name": "New Customers (< 90 days)",
+                "description": "Recently onboarded customers",
+                "color": "#8B5CF6",
+                "segment_type": "dynamic",
+                "priority": 20,
+            },
+            {
+                "name": "Champions",
+                "description": "Highly engaged advocates",
+                "color": "#F59E0B",
+                "segment_type": "dynamic",
+                "priority": 25,
+            },
+            {
+                "name": "Commercial Accounts",
+                "description": "Business customers",
+                "color": "#6366F1",
+                "segment_type": "dynamic",
+                "priority": 30,
+            },
         ]
 
         segment_ids = []
@@ -450,10 +547,12 @@ async def seed_customer_success_data(
             financial = max(0, min(100, int(base_score + random.gauss(0, 12))))
             support = max(0, min(100, int(base_score + random.gauss(-5, 18))))
 
-            overall = int(product_adoption * 0.30 + engagement * 0.25 + relationship * 0.15 + financial * 0.20 + support * 0.10)
-            status_val = 'healthy' if overall >= 70 else ('at_risk' if overall >= 40 else 'critical')
+            overall = int(
+                product_adoption * 0.30 + engagement * 0.25 + relationship * 0.15 + financial * 0.20 + support * 0.10
+            )
+            status_val = "healthy" if overall >= 70 else ("at_risk" if overall >= 40 else "critical")
             trend_roll = random.random()
-            trend = 'improving' if trend_roll < 0.3 else ('stable' if trend_roll < 0.6 else 'declining')
+            trend = "improving" if trend_roll < 0.3 else ("stable" if trend_roll < 0.6 else "declining")
 
             hs = HealthScore(
                 customer_id=cid,
@@ -465,7 +564,9 @@ async def seed_customer_success_data(
                 financial_score=financial,
                 support_score=support,
                 churn_probability=round(max(0, min(1, (100 - overall) / 100 * 0.8)), 3),
-                expansion_probability=round(random.uniform(0, 0.5) if status_val == 'healthy' else random.uniform(0, 0.2), 3),
+                expansion_probability=round(
+                    random.uniform(0, 0.5) if status_val == "healthy" else random.uniform(0, 0.2), 3
+                ),
                 days_since_last_login=random.randint(0, 90),
                 days_to_renewal=random.randint(30, 365),
                 score_trend=trend,
@@ -503,13 +604,15 @@ async def seed_customer_success_data(
                 assigned.append(segment_ids[5])  # Commercial
 
             for sid in assigned:
-                memberships.append(CustomerSegment(
-                    customer_id=cid,
-                    segment_id=sid,
-                    is_active=True,
-                    entry_reason="Initial segmentation",
-                    added_by="system:seed"
-                ))
+                memberships.append(
+                    CustomerSegment(
+                        customer_id=cid,
+                        segment_id=sid,
+                        is_active=True,
+                        entry_reason="Initial segmentation",
+                        added_by="system:seed",
+                    )
+                )
                 segment_counts[sid] += 1
 
         db.add_all(memberships)
@@ -581,11 +684,16 @@ async def seed_customer_success_data(
             {"title": "Review usage metrics", "task_type": "review", "category": "adoption", "priority": "low"},
             {"title": "Send training resources", "task_type": "email", "category": "onboarding", "priority": "medium"},
             {"title": "Schedule QBR", "task_type": "meeting", "category": "relationship", "priority": "high"},
-            {"title": "Follow up on support ticket", "task_type": "follow_up", "category": "support", "priority": "high"},
+            {
+                "title": "Follow up on support ticket",
+                "task_type": "follow_up",
+                "category": "support",
+                "priority": "high",
+            },
         ]
 
         tasks = []
-        statuses = ['pending', 'in_progress', 'completed', 'blocked', 'snoozed']
+        statuses = ["pending", "in_progress", "completed", "blocked", "snoozed"]
 
         for cid in customer_ids:
             num_tasks = random.randint(1, 3)
@@ -601,9 +709,9 @@ async def seed_customer_success_data(
                     due_date=date.today() + timedelta(days=random.randint(-10, 30)),
                     source="seed_script",
                 )
-                if task_status == 'completed':
+                if task_status == "completed":
                     task.completed_at = datetime.now() - timedelta(days=random.randint(0, 5))
-                    task.outcome = random.choice(['successful', 'rescheduled', 'no_response'])
+                    task.outcome = random.choice(["successful", "rescheduled", "no_response"])
                 tasks.append(task)
 
         db.add_all(tasks)
@@ -611,7 +719,14 @@ async def seed_customer_success_data(
         stats["tasks"] = len(tasks)
 
         # 10. Create touchpoints
-        touchpoint_types = ['email_sent', 'email_opened', 'call_outbound', 'call_inbound', 'meeting_held', 'product_login']
+        touchpoint_types = [
+            "email_sent",
+            "email_opened",
+            "call_outbound",
+            "call_inbound",
+            "meeting_held",
+            "product_login",
+        ]
         touchpoints = []
 
         for cid in customer_ids:
@@ -620,11 +735,13 @@ async def seed_customer_success_data(
                 touchpoint = Touchpoint(
                     customer_id=cid,
                     touchpoint_type=tp_type,
-                    channel=random.choice(['email', 'phone', 'in_app', 'video']),
-                    direction='outbound' if 'sent' in tp_type or 'outbound' in tp_type else 'inbound',
-                    sentiment_label=random.choice(['positive', 'neutral', 'negative']) if 'call' in tp_type or 'meeting' in tp_type else None,
+                    channel=random.choice(["email", "phone", "in_app", "video"]),
+                    direction="outbound" if "sent" in tp_type or "outbound" in tp_type else "inbound",
+                    sentiment_label=random.choice(["positive", "neutral", "negative"])
+                    if "call" in tp_type or "meeting" in tp_type
+                    else None,
                     occurred_at=datetime.now() - timedelta(days=random.randint(1, 180)),
-                    source='seed_script',
+                    source="seed_script",
                 )
                 touchpoints.append(touchpoint)
 
@@ -640,9 +757,9 @@ async def seed_customer_success_data(
                 enrollment = JourneyEnrollment(
                     journey_id=journey_id,
                     customer_id=cid,
-                    status=random.choice(['active', 'completed']),
+                    status=random.choice(["active", "completed"]),
                     steps_completed=random.randint(1, 4),
-                    enrolled_by='system:seed'
+                    enrolled_by="system:seed",
                 )
                 enrollments.append(enrollment)
 
@@ -658,10 +775,10 @@ async def seed_customer_success_data(
                 execution = PlaybookExecution(
                     playbook_id=playbook_id,
                     customer_id=cid,
-                    status=random.choice(['active', 'completed']),
+                    status=random.choice(["active", "completed"]),
                     steps_completed=random.randint(1, 4),
                     steps_total=4,
-                    triggered_by='system:seed'
+                    triggered_by="system:seed",
                 )
                 executions.append(execution)
 
@@ -669,18 +786,11 @@ async def seed_customer_success_data(
         await db.commit()
         stats["playbook_executions"] = len(executions)
 
-        return SeedResponse(
-            success=True,
-            message="Customer Success test data seeded successfully",
-            stats=stats
-        )
+        return SeedResponse(success=True, message="Customer Success test data seeded successfully", stats=stats)
 
     except Exception as e:
         logger.error(f"Error seeding data: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error seeding data: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error seeding data: {str(e)}")
 
 
 # Temporary endpoint to add journey status column
@@ -697,17 +807,20 @@ async def fix_journey_status(
         from sqlalchemy import text
 
         # Check if column exists
-        result = await db.execute(text("""
+        result = await db.execute(
+            text("""
             SELECT column_name FROM information_schema.columns
             WHERE table_name = 'cs_journeys' AND column_name = 'status'
-        """))
+        """)
+        )
         exists = result.scalar_one_or_none()
 
         if exists:
             return {"success": True, "message": "Column already exists", "column_exists": True}
 
         # Create enum type if not exists
-        await db.execute(text("""
+        await db.execute(
+            text("""
             DO $$
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'cs_journey_status_enum') THEN
@@ -715,17 +828,22 @@ async def fix_journey_status(
                 END IF;
             END
             $$;
-        """))
+        """)
+        )
 
         # Add the column
-        await db.execute(text("""
+        await db.execute(
+            text("""
             ALTER TABLE cs_journeys ADD COLUMN status cs_journey_status_enum DEFAULT 'draft';
-        """))
+        """)
+        )
 
         # Update existing rows
-        await db.execute(text("""
+        await db.execute(
+            text("""
             UPDATE cs_journeys SET status = 'draft' WHERE status IS NULL;
-        """))
+        """)
+        )
 
         await db.commit()
 
@@ -733,10 +851,7 @@ async def fix_journey_status(
 
     except Exception as e:
         logger.error(f"Error adding status column: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error: {str(e)}")
 
 
 # =============================================================================
@@ -745,44 +860,411 @@ async def fix_journey_status(
 
 # Technicians data
 SEED_TECHNICIANS = [
-    {"first_name": "Marcus", "last_name": "Rodriguez", "email": "marcus.rodriguez@ecbtx.com", "phone": "(512) 555-0101", "employee_id": "TECH-001", "skills": ["pumping", "repairs", "inspections", "camera"], "assigned_vehicle": "Truck-101", "vehicle_capacity_gallons": 3500, "hourly_rate": 32.00, "home_city": "Round Rock"},
-    {"first_name": "Jake", "last_name": "Thompson", "email": "jake.thompson@ecbtx.com", "phone": "(512) 555-0102", "employee_id": "TECH-002", "skills": ["pumping", "maintenance", "emergency"], "assigned_vehicle": "Truck-102", "vehicle_capacity_gallons": 3000, "hourly_rate": 28.50, "home_city": "Georgetown"},
-    {"first_name": "Sarah", "last_name": "Chen", "email": "sarah.chen@ecbtx.com", "phone": "(512) 555-0103", "employee_id": "TECH-003", "skills": ["inspections", "camera", "installations"], "assigned_vehicle": "Truck-103", "vehicle_capacity_gallons": 2500, "hourly_rate": 30.00, "home_city": "Cedar Park"},
-    {"first_name": "David", "last_name": "Martinez", "email": "david.martinez@ecbtx.com", "phone": "(512) 555-0104", "employee_id": "TECH-004", "skills": ["pumping", "grease_trap", "repairs"], "assigned_vehicle": "Truck-104", "vehicle_capacity_gallons": 4000, "hourly_rate": 29.00, "home_city": "Austin"},
-    {"first_name": "Chris", "last_name": "Williams", "email": "chris.williams@ecbtx.com", "phone": "(512) 555-0105", "employee_id": "TECH-005", "skills": ["pumping", "repairs", "inspections", "camera", "installations", "emergency"], "assigned_vehicle": "Truck-105", "vehicle_capacity_gallons": 3500, "hourly_rate": 35.00, "home_city": "Pflugerville"},
+    {
+        "first_name": "Marcus",
+        "last_name": "Rodriguez",
+        "email": "marcus.rodriguez@ecbtx.com",
+        "phone": "(512) 555-0101",
+        "employee_id": "TECH-001",
+        "skills": ["pumping", "repairs", "inspections", "camera"],
+        "assigned_vehicle": "Truck-101",
+        "vehicle_capacity_gallons": 3500,
+        "hourly_rate": 32.00,
+        "home_city": "Round Rock",
+    },
+    {
+        "first_name": "Jake",
+        "last_name": "Thompson",
+        "email": "jake.thompson@ecbtx.com",
+        "phone": "(512) 555-0102",
+        "employee_id": "TECH-002",
+        "skills": ["pumping", "maintenance", "emergency"],
+        "assigned_vehicle": "Truck-102",
+        "vehicle_capacity_gallons": 3000,
+        "hourly_rate": 28.50,
+        "home_city": "Georgetown",
+    },
+    {
+        "first_name": "Sarah",
+        "last_name": "Chen",
+        "email": "sarah.chen@ecbtx.com",
+        "phone": "(512) 555-0103",
+        "employee_id": "TECH-003",
+        "skills": ["inspections", "camera", "installations"],
+        "assigned_vehicle": "Truck-103",
+        "vehicle_capacity_gallons": 2500,
+        "hourly_rate": 30.00,
+        "home_city": "Cedar Park",
+    },
+    {
+        "first_name": "David",
+        "last_name": "Martinez",
+        "email": "david.martinez@ecbtx.com",
+        "phone": "(512) 555-0104",
+        "employee_id": "TECH-004",
+        "skills": ["pumping", "grease_trap", "repairs"],
+        "assigned_vehicle": "Truck-104",
+        "vehicle_capacity_gallons": 4000,
+        "hourly_rate": 29.00,
+        "home_city": "Austin",
+    },
+    {
+        "first_name": "Chris",
+        "last_name": "Williams",
+        "email": "chris.williams@ecbtx.com",
+        "phone": "(512) 555-0105",
+        "employee_id": "TECH-005",
+        "skills": ["pumping", "repairs", "inspections", "camera", "installations", "emergency"],
+        "assigned_vehicle": "Truck-105",
+        "vehicle_capacity_gallons": 3500,
+        "hourly_rate": 35.00,
+        "home_city": "Pflugerville",
+    },
 ]
 
 # Customers from real Central Texas permit data
 SEED_CUSTOMERS = [
-    {"first_name": "John", "last_name": "Cooke", "email": "john.cooke@example.com", "phone": "(512) 555-1001", "address_line1": "294 Call Dr", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1000, "system_type": "Conventional"},
-    {"first_name": "Brad", "last_name": "Hoff", "email": "brad.hoff@example.com", "phone": "(512) 555-1002", "address_line1": "495 July Johnson Dr", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1500, "system_type": "Aerobic"},
-    {"first_name": "Robert", "last_name": "Bitterli", "email": "robert.bitterli@example.com", "phone": "(512) 555-1003", "address_line1": "1911 Lohman Ford Rd", "city": "Leander", "state": "TX", "postal_code": "78641", "customer_type": "commercial", "tank_size_gallons": 2000, "system_type": "Conventional"},
-    {"first_name": "Thomas", "last_name": "Vetter", "email": "thomas.vetter@example.com", "phone": "(512) 555-1004", "address_line1": "12961 Trail Driver", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1000, "system_type": "Conventional"},
-    {"first_name": "Keith", "last_name": "Hansen", "email": "keith.hansen@example.com", "phone": "(512) 555-1005", "address_line1": "855 Gato Del Sol Ave", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1500, "system_type": "ATU"},
-    {"first_name": "William", "last_name": "Curtis", "email": "william.curtis@example.com", "phone": "(830) 555-1006", "address_line1": "3106 Golf Course Dr", "city": "Horseshoe Bay", "state": "TX", "postal_code": "78657", "customer_type": "residential", "tank_size_gallons": 2000, "system_type": "Mound"},
-    {"first_name": "Darrell", "last_name": "Minton", "email": "darrell.minton@example.com", "phone": "(512) 555-1007", "address_line1": "428 Big Brown Dr", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1250, "system_type": "Conventional"},
-    {"first_name": "Bobby", "last_name": "Dean", "email": "bobby.dean@example.com", "phone": "(512) 555-1008", "address_line1": "623 July Johnson Dr", "city": "Austin", "state": "TX", "postal_code": "78737", "customer_type": "residential", "tank_size_gallons": 1250, "system_type": "Chamber"},
-    {"first_name": "Tommy", "last_name": "Mathis", "email": "tommy.mathis@lonestarbrewing.com", "phone": "(512) 555-1009", "address_line1": "2110 County Road 118", "city": "Burnet", "state": "TX", "postal_code": "78611", "customer_type": "commercial", "tank_size_gallons": 2500, "system_type": "Grease Trap"},
-    {"first_name": "Alfred", "last_name": "Stone", "email": "alfred.stone@example.com", "phone": "(512) 555-1010", "address_line1": "11104 Trails End Rd", "city": "Leander", "state": "TX", "postal_code": "78641", "customer_type": "residential", "tank_size_gallons": 1000, "system_type": "Conventional"},
-    {"first_name": "John", "last_name": "Miller", "email": "john.miller@example.com", "phone": "(830) 555-1011", "address_line1": "2905 Blue Lake Dr", "city": "Horseshoe Bay", "state": "TX", "postal_code": "78657", "customer_type": "residential", "tank_size_gallons": 1500, "system_type": "Conventional"},
-    {"first_name": "Charles", "last_name": "Castro", "email": "charles.castro@example.com", "phone": "(830) 555-1012", "address_line1": "406 Lakeview Dr", "city": "Horseshoe Bay", "state": "TX", "postal_code": "78657", "customer_type": "residential", "tank_size_gallons": 1500, "system_type": "Aerobic"},
-    {"first_name": "Eugene", "last_name": "Zimmermann", "email": "eugene.zimmermann@example.com", "phone": "(325) 555-1013", "address_line1": "4016 River Oaks Dr", "city": "Kingsland", "state": "TX", "postal_code": "78639", "customer_type": "residential", "tank_size_gallons": 1500, "system_type": "Conventional"},
-    {"first_name": "Robert", "last_name": "Anderson", "email": "robert.anderson@example.com", "phone": "(512) 555-1014", "address_line1": "129 Lakeway Dr", "city": "Austin", "state": "TX", "postal_code": "78734", "customer_type": "residential", "tank_size_gallons": 1000, "system_type": "Conventional"},
-    {"first_name": "Steven", "last_name": "Wellman", "email": "steven.wellman@example.com", "phone": "(512) 555-1015", "address_line1": "1305 Cat Hollow Club Dr", "city": "Spicewood", "state": "TX", "postal_code": "78669", "customer_type": "residential", "tank_size_gallons": 2000, "system_type": "ATU"},
+    {
+        "first_name": "John",
+        "last_name": "Cooke",
+        "email": "john.cooke@example.com",
+        "phone": "(512) 555-1001",
+        "address_line1": "294 Call Dr",
+        "city": "Austin",
+        "state": "TX",
+        "postal_code": "78737",
+        "customer_type": "residential",
+        "tank_size_gallons": 1000,
+        "system_type": "Conventional",
+    },
+    {
+        "first_name": "Brad",
+        "last_name": "Hoff",
+        "email": "brad.hoff@example.com",
+        "phone": "(512) 555-1002",
+        "address_line1": "495 July Johnson Dr",
+        "city": "Austin",
+        "state": "TX",
+        "postal_code": "78737",
+        "customer_type": "residential",
+        "tank_size_gallons": 1500,
+        "system_type": "Aerobic",
+    },
+    {
+        "first_name": "Robert",
+        "last_name": "Bitterli",
+        "email": "robert.bitterli@example.com",
+        "phone": "(512) 555-1003",
+        "address_line1": "1911 Lohman Ford Rd",
+        "city": "Leander",
+        "state": "TX",
+        "postal_code": "78641",
+        "customer_type": "commercial",
+        "tank_size_gallons": 2000,
+        "system_type": "Conventional",
+    },
+    {
+        "first_name": "Thomas",
+        "last_name": "Vetter",
+        "email": "thomas.vetter@example.com",
+        "phone": "(512) 555-1004",
+        "address_line1": "12961 Trail Driver",
+        "city": "Austin",
+        "state": "TX",
+        "postal_code": "78737",
+        "customer_type": "residential",
+        "tank_size_gallons": 1000,
+        "system_type": "Conventional",
+    },
+    {
+        "first_name": "Keith",
+        "last_name": "Hansen",
+        "email": "keith.hansen@example.com",
+        "phone": "(512) 555-1005",
+        "address_line1": "855 Gato Del Sol Ave",
+        "city": "Austin",
+        "state": "TX",
+        "postal_code": "78737",
+        "customer_type": "residential",
+        "tank_size_gallons": 1500,
+        "system_type": "ATU",
+    },
+    {
+        "first_name": "William",
+        "last_name": "Curtis",
+        "email": "william.curtis@example.com",
+        "phone": "(830) 555-1006",
+        "address_line1": "3106 Golf Course Dr",
+        "city": "Horseshoe Bay",
+        "state": "TX",
+        "postal_code": "78657",
+        "customer_type": "residential",
+        "tank_size_gallons": 2000,
+        "system_type": "Mound",
+    },
+    {
+        "first_name": "Darrell",
+        "last_name": "Minton",
+        "email": "darrell.minton@example.com",
+        "phone": "(512) 555-1007",
+        "address_line1": "428 Big Brown Dr",
+        "city": "Austin",
+        "state": "TX",
+        "postal_code": "78737",
+        "customer_type": "residential",
+        "tank_size_gallons": 1250,
+        "system_type": "Conventional",
+    },
+    {
+        "first_name": "Bobby",
+        "last_name": "Dean",
+        "email": "bobby.dean@example.com",
+        "phone": "(512) 555-1008",
+        "address_line1": "623 July Johnson Dr",
+        "city": "Austin",
+        "state": "TX",
+        "postal_code": "78737",
+        "customer_type": "residential",
+        "tank_size_gallons": 1250,
+        "system_type": "Chamber",
+    },
+    {
+        "first_name": "Tommy",
+        "last_name": "Mathis",
+        "email": "tommy.mathis@lonestarbrewing.com",
+        "phone": "(512) 555-1009",
+        "address_line1": "2110 County Road 118",
+        "city": "Burnet",
+        "state": "TX",
+        "postal_code": "78611",
+        "customer_type": "commercial",
+        "tank_size_gallons": 2500,
+        "system_type": "Grease Trap",
+    },
+    {
+        "first_name": "Alfred",
+        "last_name": "Stone",
+        "email": "alfred.stone@example.com",
+        "phone": "(512) 555-1010",
+        "address_line1": "11104 Trails End Rd",
+        "city": "Leander",
+        "state": "TX",
+        "postal_code": "78641",
+        "customer_type": "residential",
+        "tank_size_gallons": 1000,
+        "system_type": "Conventional",
+    },
+    {
+        "first_name": "John",
+        "last_name": "Miller",
+        "email": "john.miller@example.com",
+        "phone": "(830) 555-1011",
+        "address_line1": "2905 Blue Lake Dr",
+        "city": "Horseshoe Bay",
+        "state": "TX",
+        "postal_code": "78657",
+        "customer_type": "residential",
+        "tank_size_gallons": 1500,
+        "system_type": "Conventional",
+    },
+    {
+        "first_name": "Charles",
+        "last_name": "Castro",
+        "email": "charles.castro@example.com",
+        "phone": "(830) 555-1012",
+        "address_line1": "406 Lakeview Dr",
+        "city": "Horseshoe Bay",
+        "state": "TX",
+        "postal_code": "78657",
+        "customer_type": "residential",
+        "tank_size_gallons": 1500,
+        "system_type": "Aerobic",
+    },
+    {
+        "first_name": "Eugene",
+        "last_name": "Zimmermann",
+        "email": "eugene.zimmermann@example.com",
+        "phone": "(325) 555-1013",
+        "address_line1": "4016 River Oaks Dr",
+        "city": "Kingsland",
+        "state": "TX",
+        "postal_code": "78639",
+        "customer_type": "residential",
+        "tank_size_gallons": 1500,
+        "system_type": "Conventional",
+    },
+    {
+        "first_name": "Robert",
+        "last_name": "Anderson",
+        "email": "robert.anderson@example.com",
+        "phone": "(512) 555-1014",
+        "address_line1": "129 Lakeway Dr",
+        "city": "Austin",
+        "state": "TX",
+        "postal_code": "78734",
+        "customer_type": "residential",
+        "tank_size_gallons": 1000,
+        "system_type": "Conventional",
+    },
+    {
+        "first_name": "Steven",
+        "last_name": "Wellman",
+        "email": "steven.wellman@example.com",
+        "phone": "(512) 555-1015",
+        "address_line1": "1305 Cat Hollow Club Dr",
+        "city": "Spicewood",
+        "state": "TX",
+        "postal_code": "78669",
+        "customer_type": "residential",
+        "tank_size_gallons": 2000,
+        "system_type": "ATU",
+    },
 ]
 
 # Prospects from real Central Texas permit data
 SEED_PROSPECTS = [
-    {"first_name": "Dennis", "last_name": "Glover", "email": "dennis.glover@example.com", "phone": "(512) 555-2001", "address_line1": "21802 Mockingbird St", "city": "Leander", "state": "TX", "postal_code": "78641", "prospect_stage": "qualified", "estimated_value": 4500.00, "lead_source": "Google", "lead_notes": "ATU repair needed - compressor failing"},
-    {"first_name": "Teresa", "last_name": "Wildi", "email": "teresa.wildi@example.com", "phone": "(512) 555-2002", "address_line1": "18222 Center St", "city": "Leander", "state": "TX", "postal_code": "78641", "prospect_stage": "new_lead", "estimated_value": 350.00, "lead_source": "Referral", "lead_notes": "Due for routine pump out"},
-    {"first_name": "Michael", "last_name": "Kaspar", "email": "michael.kaspar@example.com", "phone": "(512) 555-2003", "address_line1": "21909 Surrey Ln", "city": "Leander", "state": "TX", "postal_code": "78641", "prospect_stage": "quoted", "estimated_value": 8200.00, "lead_source": "Website", "lead_notes": "New septic system installation"},
-    {"first_name": "Jester King", "last_name": "Holdings LLC", "email": "info@jesterkingbrewery.com", "phone": "(512) 555-2004", "address_line1": "13187 Fitzhugh Rd", "city": "Austin", "state": "TX", "postal_code": "78736", "prospect_stage": "negotiation", "estimated_value": 12000.00, "lead_source": "Cold Call", "lead_notes": "Commercial brewery - multiple grease traps", "customer_type": "commercial"},
-    {"first_name": "Harriet", "last_name": "Brandon", "email": "harriet.brandon@example.com", "phone": "(830) 555-2005", "address_line1": "613 Highland Dr", "city": "Marble Falls", "state": "TX", "postal_code": "78654", "prospect_stage": "contacted", "estimated_value": 450.00, "lead_source": "Facebook", "lead_notes": "Inspection request before home sale"},
-    {"first_name": "Jack", "last_name": "O'Leary", "email": "jack.oleary@example.com", "phone": "(512) 555-2006", "address_line1": "8621 Grandview Dr", "city": "Leander", "state": "TX", "postal_code": "78641", "prospect_stage": "qualified", "estimated_value": 2800.00, "lead_source": "Google", "lead_notes": "ATU maintenance contract inquiry"},
-    {"first_name": "James", "last_name": "Collins", "email": "james.collins@example.com", "phone": "(512) 555-2007", "address_line1": "716 Cutlass", "city": "Lakeway", "state": "TX", "postal_code": "78734", "prospect_stage": "quoted", "estimated_value": 6500.00, "lead_source": "Referral", "lead_notes": "Quarterly service contract for lakefront property"},
-    {"first_name": "Kimberly", "last_name": "McDonald", "email": "kimberly.mcdonald@example.com", "phone": "(512) 555-2008", "address_line1": "128 Firebird St", "city": "Lakeway", "state": "TX", "postal_code": "78734", "prospect_stage": "new_lead", "estimated_value": 375.00, "lead_source": "Yelp", "lead_notes": "Residential pump out request"},
-    {"first_name": "Daniel", "last_name": "Yannitell", "email": "daniel.yannitell@example.com", "phone": "(512) 555-2009", "address_line1": "4001 Outpost Trce", "city": "Leander", "state": "TX", "postal_code": "78641", "prospect_stage": "negotiation", "estimated_value": 24000.00, "lead_source": "Website", "lead_notes": "Multi-unit property - annual contract negotiation", "customer_type": "commercial"},
-    {"first_name": "Patrick", "last_name": "Wendland", "email": "patrick.wendland@example.com", "phone": "(512) 555-2010", "address_line1": "915 Porpoise St", "city": "Lakeway", "state": "TX", "postal_code": "78734", "prospect_stage": "contacted", "estimated_value": 1200.00, "lead_source": "Door-to-door", "lead_notes": "Inspection + pump out combo requested"},
+    {
+        "first_name": "Dennis",
+        "last_name": "Glover",
+        "email": "dennis.glover@example.com",
+        "phone": "(512) 555-2001",
+        "address_line1": "21802 Mockingbird St",
+        "city": "Leander",
+        "state": "TX",
+        "postal_code": "78641",
+        "prospect_stage": "qualified",
+        "estimated_value": 4500.00,
+        "lead_source": "Google",
+        "lead_notes": "ATU repair needed - compressor failing",
+    },
+    {
+        "first_name": "Teresa",
+        "last_name": "Wildi",
+        "email": "teresa.wildi@example.com",
+        "phone": "(512) 555-2002",
+        "address_line1": "18222 Center St",
+        "city": "Leander",
+        "state": "TX",
+        "postal_code": "78641",
+        "prospect_stage": "new_lead",
+        "estimated_value": 350.00,
+        "lead_source": "Referral",
+        "lead_notes": "Due for routine pump out",
+    },
+    {
+        "first_name": "Michael",
+        "last_name": "Kaspar",
+        "email": "michael.kaspar@example.com",
+        "phone": "(512) 555-2003",
+        "address_line1": "21909 Surrey Ln",
+        "city": "Leander",
+        "state": "TX",
+        "postal_code": "78641",
+        "prospect_stage": "quoted",
+        "estimated_value": 8200.00,
+        "lead_source": "Website",
+        "lead_notes": "New septic system installation",
+    },
+    {
+        "first_name": "Jester King",
+        "last_name": "Holdings LLC",
+        "email": "info@jesterkingbrewery.com",
+        "phone": "(512) 555-2004",
+        "address_line1": "13187 Fitzhugh Rd",
+        "city": "Austin",
+        "state": "TX",
+        "postal_code": "78736",
+        "prospect_stage": "negotiation",
+        "estimated_value": 12000.00,
+        "lead_source": "Cold Call",
+        "lead_notes": "Commercial brewery - multiple grease traps",
+        "customer_type": "commercial",
+    },
+    {
+        "first_name": "Harriet",
+        "last_name": "Brandon",
+        "email": "harriet.brandon@example.com",
+        "phone": "(830) 555-2005",
+        "address_line1": "613 Highland Dr",
+        "city": "Marble Falls",
+        "state": "TX",
+        "postal_code": "78654",
+        "prospect_stage": "contacted",
+        "estimated_value": 450.00,
+        "lead_source": "Facebook",
+        "lead_notes": "Inspection request before home sale",
+    },
+    {
+        "first_name": "Jack",
+        "last_name": "O'Leary",
+        "email": "jack.oleary@example.com",
+        "phone": "(512) 555-2006",
+        "address_line1": "8621 Grandview Dr",
+        "city": "Leander",
+        "state": "TX",
+        "postal_code": "78641",
+        "prospect_stage": "qualified",
+        "estimated_value": 2800.00,
+        "lead_source": "Google",
+        "lead_notes": "ATU maintenance contract inquiry",
+    },
+    {
+        "first_name": "James",
+        "last_name": "Collins",
+        "email": "james.collins@example.com",
+        "phone": "(512) 555-2007",
+        "address_line1": "716 Cutlass",
+        "city": "Lakeway",
+        "state": "TX",
+        "postal_code": "78734",
+        "prospect_stage": "quoted",
+        "estimated_value": 6500.00,
+        "lead_source": "Referral",
+        "lead_notes": "Quarterly service contract for lakefront property",
+    },
+    {
+        "first_name": "Kimberly",
+        "last_name": "McDonald",
+        "email": "kimberly.mcdonald@example.com",
+        "phone": "(512) 555-2008",
+        "address_line1": "128 Firebird St",
+        "city": "Lakeway",
+        "state": "TX",
+        "postal_code": "78734",
+        "prospect_stage": "new_lead",
+        "estimated_value": 375.00,
+        "lead_source": "Yelp",
+        "lead_notes": "Residential pump out request",
+    },
+    {
+        "first_name": "Daniel",
+        "last_name": "Yannitell",
+        "email": "daniel.yannitell@example.com",
+        "phone": "(512) 555-2009",
+        "address_line1": "4001 Outpost Trce",
+        "city": "Leander",
+        "state": "TX",
+        "postal_code": "78641",
+        "prospect_stage": "negotiation",
+        "estimated_value": 24000.00,
+        "lead_source": "Website",
+        "lead_notes": "Multi-unit property - annual contract negotiation",
+        "customer_type": "commercial",
+    },
+    {
+        "first_name": "Patrick",
+        "last_name": "Wendland",
+        "email": "patrick.wendland@example.com",
+        "phone": "(512) 555-2010",
+        "address_line1": "915 Porpoise St",
+        "city": "Lakeway",
+        "state": "TX",
+        "postal_code": "78734",
+        "prospect_stage": "contacted",
+        "estimated_value": 1200.00,
+        "lead_source": "Door-to-door",
+        "lead_notes": "Inspection + pump out combo requested",
+    },
 ]
 
 
@@ -805,8 +1287,7 @@ async def seed_central_texas_data(
         # Seed Technicians
         for tech in SEED_TECHNICIANS:
             result = await db.execute(
-                text("SELECT id FROM technicians WHERE employee_id = :emp_id"),
-                {"emp_id": tech["employee_id"]}
+                text("SELECT id FROM technicians WHERE employee_id = :emp_id"), {"emp_id": tech["employee_id"]}
             )
             if result.fetchone():
                 results["technicians"]["skipped"] += 1
@@ -825,16 +1306,13 @@ async def seed_central_texas_data(
                         :hourly_rate, :home_city, 'TX', true, NOW()
                     )
                 """),
-                {**tech, "id": tech_id, "skills": tech["skills"]}
+                {**tech, "id": tech_id, "skills": tech["skills"]},
             )
             results["technicians"]["created"] += 1
 
         # Seed Customers
         for cust in SEED_CUSTOMERS:
-            result = await db.execute(
-                text("SELECT id FROM customers WHERE email = :email"),
-                {"email": cust["email"]}
-            )
+            result = await db.execute(text("SELECT id FROM customers WHERE email = :email"), {"email": cust["email"]})
             if result.fetchone():
                 results["customers"]["skipped"] += 1
                 continue
@@ -853,15 +1331,14 @@ async def seed_central_texas_data(
                         true, NOW()
                     )
                 """),
-                cust
+                cust,
             )
             results["customers"]["created"] += 1
 
         # Seed Prospects
         for prospect in SEED_PROSPECTS:
             result = await db.execute(
-                text("SELECT id FROM customers WHERE email = :email"),
-                {"email": prospect["email"]}
+                text("SELECT id FROM customers WHERE email = :email"), {"email": prospect["email"]}
             )
             if result.fetchone():
                 results["prospects"]["skipped"] += 1
@@ -881,27 +1358,21 @@ async def seed_central_texas_data(
                         :customer_type, true, NOW()
                     )
                 """),
-                {**prospect, "customer_type": prospect.get("customer_type", "residential")}
+                {**prospect, "customer_type": prospect.get("customer_type", "residential")},
             )
             results["prospects"]["created"] += 1
 
         await db.commit()
 
-        return {
-            "success": True,
-            "message": "Central Texas data seeded successfully",
-            "results": results
-        }
+        return {"success": True, "message": "Central Texas data seeded successfully", "results": results}
 
     except Exception as e:
         logger.error(f"Error seeding Central Texas data: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error: {str(e)}")
 
 
 # ============ Database Migration Endpoints ============
+
 
 @router.get("/migrations/status")
 async def get_migration_status(
@@ -948,14 +1419,11 @@ async def get_migration_status(
             "current_version": current_version,
             "expected_latest": expected_migrations[-1] if expected_migrations else None,
             "needs_upgrade": current_version != expected_migrations[-1] if current_version else True,
-            "expected_migrations": expected_migrations
+            "expected_migrations": expected_migrations,
         }
     except Exception as e:
         logger.error(f"Error checking migration status: {e}")
-        return {
-            "current_version": None,
-            "error": str(e)
-        }
+        return {"current_version": None, "error": str(e)}
 
 
 @router.post("/migrations/run")
@@ -976,28 +1444,17 @@ async def run_migrations(
             cwd=project_root,
             capture_output=True,
             text=True,
-            timeout=120  # 2 minute timeout
+            timeout=120,  # 2 minute timeout
         )
 
         success = result.returncode == 0
 
-        return {
-            "success": success,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "return_code": result.returncode
-        }
+        return {"success": success, "stdout": result.stdout, "stderr": result.stderr, "return_code": result.returncode}
     except subprocess.TimeoutExpired:
-        return {
-            "success": False,
-            "error": "Migration timed out after 120 seconds"
-        }
+        return {"success": False, "error": "Migration timed out after 120 seconds"}
     except Exception as e:
         logger.error(f"Error running migrations: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 @router.post("/migrations/create-work-order-enums")
@@ -1012,7 +1469,8 @@ async def create_work_order_enums(
 
     try:
         # Create work_order_status_enum
-        await db.execute(text("""
+        await db.execute(
+            text("""
             DO $$
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_status_enum') THEN
@@ -1023,11 +1481,13 @@ async def create_work_order_enums(
                 END IF;
             END
             $$;
-        """))
+        """)
+        )
         results["work_order_status_enum"] = "created or exists"
 
         # Create work_order_job_type_enum
-        await db.execute(text("""
+        await db.execute(
+            text("""
             DO $$
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_job_type_enum') THEN
@@ -1038,11 +1498,13 @@ async def create_work_order_enums(
                 END IF;
             END
             $$;
-        """))
+        """)
+        )
         results["work_order_job_type_enum"] = "created or exists"
 
         # Create work_order_priority_enum
-        await db.execute(text("""
+        await db.execute(
+            text("""
             DO $$
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_priority_enum') THEN
@@ -1052,23 +1514,18 @@ async def create_work_order_enums(
                 END IF;
             END
             $$;
-        """))
+        """)
+        )
         results["work_order_priority_enum"] = "created or exists"
 
         await db.commit()
 
-        return {
-            "success": True,
-            "results": results
-        }
+        return {"success": True, "results": results}
 
     except Exception as e:
         await db.rollback()
         logger.error(f"Error creating ENUM types: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error: {str(e)}")
 
 
 @router.post("/migrations/create-missing-tables")
@@ -1082,22 +1539,25 @@ async def create_missing_tables(
     results = {
         "role_views": {"created": False, "error": None},
         "user_role_sessions": {"created": False, "error": None},
-        "seed_roles": {"success": False, "error": None}
+        "seed_roles": {"success": False, "error": None},
     }
 
     try:
         # Check if role_views exists
-        check = await db.execute(text("""
+        check = await db.execute(
+            text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name = 'role_views'
             )
-        """))
+        """)
+        )
         role_views_exists = check.scalar()
 
         if not role_views_exists:
             # Create role_views table
-            await db.execute(text("""
+            await db.execute(
+                text("""
                 CREATE TABLE role_views (
                     id SERIAL PRIMARY KEY,
                     role_key VARCHAR(50) NOT NULL UNIQUE,
@@ -1115,7 +1575,8 @@ async def create_missing_tables(
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ
                 )
-            """))
+            """)
+            )
             await db.execute(text("CREATE INDEX ix_role_views_role_key ON role_views (role_key)"))
             results["role_views"]["created"] = True
             logger.info("Created role_views table")
@@ -1123,24 +1584,28 @@ async def create_missing_tables(
             results["role_views"]["error"] = "Table already exists"
 
         # Check if user_role_sessions exists
-        check = await db.execute(text("""
+        check = await db.execute(
+            text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name = 'user_role_sessions'
             )
-        """))
+        """)
+        )
         sessions_exists = check.scalar()
 
         if not sessions_exists:
             # Create user_role_sessions table
-            await db.execute(text("""
+            await db.execute(
+                text("""
                 CREATE TABLE user_role_sessions (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES api_users(id) ON DELETE CASCADE,
                     current_role_key VARCHAR(50) NOT NULL REFERENCES role_views(role_key) ON DELETE CASCADE,
                     switched_at TIMESTAMPTZ DEFAULT NOW()
                 )
-            """))
+            """)
+            )
             await db.execute(text("CREATE INDEX ix_user_role_sessions_user_id ON user_role_sessions (user_id)"))
             results["user_role_sessions"]["created"] = True
             logger.info("Created user_role_sessions table")
@@ -1149,7 +1614,8 @@ async def create_missing_tables(
 
         # Seed default roles if role_views was just created or is empty
         if results["role_views"]["created"]:
-            await db.execute(text("""
+            await db.execute(
+                text("""
                 INSERT INTO role_views (role_key, display_name, description, icon, color, sort_order, visible_modules, default_route, dashboard_widgets, quick_actions, features, is_active)
                 VALUES
                 ('admin', 'Administrator', 'Full system access with all features and settings', '👑', 'purple', 1, '["*"]', '/', '["revenue_chart", "work_orders_summary", "customer_health", "team_performance"]', '["create_work_order", "add_customer", "view_reports", "manage_users"]', '{"can_manage_users": true, "can_view_reports": true, "can_manage_settings": true}', true),
@@ -1160,21 +1626,16 @@ async def create_missing_tables(
                 ('dispatcher', 'Dispatcher', 'Schedule management, route optimization, and real-time tracking', '🗺️', 'indigo', 6, '["schedule", "schedule-map", "work-orders", "technicians", "fleet"]', '/schedule-map', '["live_map", "unassigned_jobs", "technician_status", "route_efficiency"]', '["assign_job", "optimize_routes", "contact_technician", "reschedule"]', '{"can_assign_work": true, "can_manage_schedule": true, "can_track_fleet": true}', true),
                 ('billing', 'Billing Specialist', 'Invoicing, payments, and financial operations', '💰', 'emerald', 7, '["invoices", "payments", "customers", "reports"]', '/invoices', '["outstanding_invoices", "payments_today", "aging_report", "collection_queue"]', '["create_invoice", "record_payment", "send_reminder", "generate_statement"]', '{"can_manage_invoices": true, "can_process_payments": true, "can_view_financial_reports": true}', true)
                 ON CONFLICT (role_key) DO NOTHING
-            """))
+            """)
+            )
             results["seed_roles"]["success"] = True
             logger.info("Seeded default roles")
 
         await db.commit()
 
-        return {
-            "success": True,
-            "results": results
-        }
+        return {"success": True, "results": results}
 
     except Exception as e:
         await db.rollback()
         logger.error(f"Error creating tables: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error: {str(e)}")

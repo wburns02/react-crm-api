@@ -25,8 +25,10 @@ router = APIRouter()
 # Pydantic Schemas
 # =============================================================================
 
+
 class SetupStep(BaseModel):
     """Onboarding setup step."""
+
     id: str
     title: str
     description: str
@@ -39,6 +41,7 @@ class SetupStep(BaseModel):
 
 class OnboardingProgress(BaseModel):
     """User's onboarding progress."""
+
     user_id: str
     steps: list[SetupStep]
     overall_progress: float  # 0-100
@@ -48,6 +51,7 @@ class OnboardingProgress(BaseModel):
 
 class ImportJob(BaseModel):
     """Data import job."""
+
     id: str
     source: str  # csv, quickbooks, servicetitan, housecall_pro
     entity_type: str  # customers, work_orders, equipment
@@ -62,6 +66,7 @@ class ImportJob(BaseModel):
 
 class Tutorial(BaseModel):
     """Training tutorial."""
+
     id: str
     title: str
     description: str
@@ -74,6 +79,7 @@ class Tutorial(BaseModel):
 
 class UserTutorialProgress(BaseModel):
     """User's tutorial progress."""
+
     tutorial_id: str
     user_id: str
     status: str  # not_started, in_progress, completed
@@ -85,6 +91,7 @@ class UserTutorialProgress(BaseModel):
 
 class HelpCategory(BaseModel):
     """Help article category."""
+
     id: str
     name: str
     icon: str
@@ -94,6 +101,7 @@ class HelpCategory(BaseModel):
 
 class HelpArticle(BaseModel):
     """Help article."""
+
     id: str
     title: str
     excerpt: str
@@ -109,6 +117,7 @@ class HelpArticle(BaseModel):
 
 class ChatMessage(BaseModel):
     """AI chat message."""
+
     id: str
     role: str  # user, assistant
     content: str
@@ -118,6 +127,7 @@ class ChatMessage(BaseModel):
 
 class SupportTicket(BaseModel):
     """Support ticket."""
+
     id: str
     subject: str
     description: str
@@ -132,6 +142,7 @@ class SupportTicket(BaseModel):
 
 class ReleaseNote(BaseModel):
     """Release note."""
+
     id: str
     version: str
     title: str
@@ -155,7 +166,7 @@ ONBOARDING_STEPS = [
         status="pending",
         is_required=True,
         estimated_minutes=10,
-        order=1
+        order=1,
     ),
     SetupStep(
         id="configure-services",
@@ -165,7 +176,7 @@ ONBOARDING_STEPS = [
         status="pending",
         is_required=True,
         estimated_minutes=15,
-        order=2
+        order=2,
     ),
     SetupStep(
         id="add-technicians",
@@ -175,7 +186,7 @@ ONBOARDING_STEPS = [
         status="pending",
         is_required=True,
         estimated_minutes=5,
-        order=3
+        order=3,
     ),
     SetupStep(
         id="connect-payments",
@@ -185,7 +196,7 @@ ONBOARDING_STEPS = [
         status="pending",
         is_required=False,
         estimated_minutes=10,
-        order=4
+        order=4,
     ),
     SetupStep(
         id="connect-calendar",
@@ -195,7 +206,7 @@ ONBOARDING_STEPS = [
         status="pending",
         is_required=False,
         estimated_minutes=5,
-        order=5
+        order=5,
     ),
 ]
 
@@ -213,6 +224,7 @@ HELP_CATEGORIES = [
 # Onboarding Endpoints
 # =============================================================================
 
+
 @router.get("/progress")
 async def get_onboarding_progress(
     db: DbSession,
@@ -227,7 +239,7 @@ async def get_onboarding_progress(
         user_id=str(current_user.id),
         steps=ONBOARDING_STEPS,
         overall_progress=round(progress, 1),
-        started_at="2024-03-01T00:00:00Z"
+        started_at="2024-03-01T00:00:00Z",
     )
 
 
@@ -252,7 +264,7 @@ async def update_step_status(
         user_id=str(current_user.id),
         steps=ONBOARDING_STEPS,
         overall_progress=round((completed / total) * 100, 1),
-        started_at="2024-03-01T00:00:00Z"
+        started_at="2024-03-01T00:00:00Z",
     )
 
 
@@ -275,7 +287,7 @@ async def skip_step(
         user_id=str(current_user.id),
         steps=ONBOARDING_STEPS,
         overall_progress=round((completed / total) * 100, 1),
-        started_at="2024-03-01T00:00:00Z"
+        started_at="2024-03-01T00:00:00Z",
     )
 
 
@@ -285,10 +297,7 @@ async def complete_onboarding(
     current_user: CurrentUser,
 ) -> dict:
     """Mark onboarding as complete."""
-    return {
-        "success": True,
-        "completed_at": datetime.utcnow().isoformat()
-    }
+    return {"success": True, "completed_at": datetime.utcnow().isoformat()}
 
 
 @router.get("/recommendations")
@@ -466,6 +475,7 @@ async def get_feature_tour(
 # Import Endpoints
 # =============================================================================
 
+
 @router.get("/import/jobs")
 async def get_import_jobs(
     db: DbSession,
@@ -482,7 +492,7 @@ async def get_import_jobs(
             processed_records=148,
             failed_records=2,
             created_at="2024-02-15T00:00:00Z",
-            completed_at="2024-02-15T00:05:00Z"
+            completed_at="2024-02-15T00:05:00Z",
         ),
     ]
     return {"jobs": [j.model_dump() for j in jobs]}
@@ -504,7 +514,7 @@ async def get_import_job(
         processed_records=148,
         failed_records=2,
         created_at="2024-02-15T00:00:00Z",
-        completed_at="2024-02-15T00:05:00Z"
+        completed_at="2024-02-15T00:05:00Z",
     )
     return {"job": job.model_dump()}
 
@@ -528,7 +538,7 @@ async def upload_import_file(
             {"source_field": "name", "target_field": "full_name", "confidence": 0.95},
             {"source_field": "email", "target_field": "email", "confidence": 1.0},
             {"source_field": "phone", "target_field": "phone", "confidence": 0.9},
-        ]
+        ],
     }
 
 
@@ -547,7 +557,7 @@ async def start_import(
         source=source,
         entity_type=entity_type,
         status="processing",
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.utcnow().isoformat(),
     )
     return {"job": job.model_dump()}
 
@@ -560,15 +570,13 @@ async def connect_external_crm(
     credentials: dict,
 ) -> dict:
     """Connect to external CRM for import."""
-    return {
-        "auth_url": f"https://api.{source}.com/oauth",
-        "connected": False
-    }
+    return {"auth_url": f"https://api.{source}.com/oauth", "connected": False}
 
 
 # =============================================================================
 # Tutorial Endpoints
 # =============================================================================
+
 
 @router.get("/tutorials")
 async def get_tutorials(
@@ -585,7 +593,7 @@ async def get_tutorials(
             feature="work_orders",
             duration_minutes=8,
             video_url="https://example.com/tutorials/work-orders",
-            is_interactive=True
+            is_interactive=True,
         ),
         Tutorial(
             id="tut-scheduling",
@@ -594,7 +602,7 @@ async def get_tutorials(
             feature="scheduling",
             duration_minutes=12,
             video_url="https://example.com/tutorials/scheduling",
-            is_interactive=True
+            is_interactive=True,
         ),
         Tutorial(
             id="tut-invoicing",
@@ -602,7 +610,7 @@ async def get_tutorials(
             description="Create invoices and collect payments",
             feature="invoicing",
             duration_minutes=6,
-            video_url="https://example.com/tutorials/invoicing"
+            video_url="https://example.com/tutorials/invoicing",
         ),
     ]
 
@@ -624,7 +632,7 @@ async def get_recommended_tutorials(
             title="Creating Work Orders",
             description="Learn how to create and manage work orders",
             feature="work_orders",
-            duration_minutes=8
+            duration_minutes=8,
         ),
     ]
     return {"tutorials": [t.model_dump() for t in tutorials]}
@@ -641,7 +649,7 @@ async def get_tutorial_progress(
             tutorial_id="tut-work-orders",
             user_id=str(current_user.id),
             status="completed",
-            completed_at="2024-02-20T00:00:00Z"
+            completed_at="2024-02-20T00:00:00Z",
         ),
     ]
     return {"progress": [p.model_dump() for p in progress]}
@@ -663,7 +671,7 @@ async def update_tutorial_progress(
         status=status or "in_progress",
         current_step=current_step or 0,
         time_spent_seconds=time_spent_seconds or 0,
-        started_at=datetime.utcnow().isoformat()
+        started_at=datetime.utcnow().isoformat(),
     )
 
 
@@ -678,13 +686,14 @@ async def complete_tutorial(
         tutorial_id=tutorial_id,
         user_id=str(current_user.id),
         status="completed",
-        completed_at=datetime.utcnow().isoformat()
+        completed_at=datetime.utcnow().isoformat(),
     )
 
 
 # =============================================================================
 # Help Endpoints
 # =============================================================================
+
 
 @router.get("/help/categories")
 async def get_help_categories(
@@ -712,7 +721,7 @@ async def get_help_articles(
             views=1250,
             helpful_count=89,
             not_helpful_count=3,
-            created_at="2024-01-15T00:00:00Z"
+            created_at="2024-01-15T00:00:00Z",
         ),
         HelpArticle(
             id="art-002",
@@ -723,7 +732,7 @@ async def get_help_articles(
             views=980,
             helpful_count=65,
             not_helpful_count=5,
-            created_at="2024-01-20T00:00:00Z"
+            created_at="2024-01-20T00:00:00Z",
         ),
     ]
 
@@ -750,7 +759,7 @@ async def get_help_article(
         views=1251,
         helpful_count=89,
         not_helpful_count=3,
-        created_at="2024-01-15T00:00:00Z"
+        created_at="2024-01-15T00:00:00Z",
     )
     return {"article": article.model_dump()}
 
@@ -772,7 +781,7 @@ async def search_help(
             views=1250,
             helpful_count=89,
             not_helpful_count=3,
-            created_at="2024-01-15T00:00:00Z"
+            created_at="2024-01-15T00:00:00Z",
         ),
     ]
     return {"results": [r.model_dump() for r in results]}
@@ -802,14 +811,9 @@ async def ai_help_chat(
         role="assistant",
         content="I'd be happy to help! Based on your question, here's what I found...",
         timestamp=datetime.utcnow().isoformat(),
-        sources=[
-            {"type": "article", "title": "Related Article", "url": "/help/articles/art-001"}
-        ]
+        sources=[{"type": "article", "title": "Related Article", "url": "/help/articles/art-001"}],
     )
-    return {
-        "conversation_id": conversation_id or uuid4().hex,
-        "message": response.model_dump()
-    }
+    return {"conversation_id": conversation_id or uuid4().hex, "message": response.model_dump()}
 
 
 @router.post("/help/tickets")
@@ -830,7 +834,7 @@ async def create_support_ticket(
         priority=priority,
         status="open",
         created_by=str(current_user.id),
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.utcnow().isoformat(),
     )
     return {"ticket": ticket.model_dump()}
 
@@ -838,6 +842,7 @@ async def create_support_ticket(
 # =============================================================================
 # Release Notes Endpoints
 # =============================================================================
+
 
 @router.get("/releases")
 async def get_release_notes(
@@ -854,13 +859,13 @@ async def get_release_notes(
             highlights=[
                 "AI dispatch suggestions for optimal technician assignment",
                 "IoT device integration for predictive maintenance",
-                "New financial dashboard with cash flow forecasting"
+                "New financial dashboard with cash flow forecasting",
             ],
             features=[
                 {"title": "AI Dispatch", "description": "Smart technician assignment recommendations"},
-                {"title": "IoT Integration", "description": "Connect thermostats and sensors"}
+                {"title": "IoT Integration", "description": "Connect thermostats and sensors"},
             ],
-            fixes=["Fixed scheduling conflict detection", "Improved invoice PDF generation"]
+            fixes=["Fixed scheduling conflict detection", "Improved invoice PDF generation"],
         ),
         ReleaseNote(
             id="rel-2.4.0",
@@ -869,7 +874,7 @@ async def get_release_notes(
             release_date="2024-02-15",
             highlights=["Multi-region support", "Franchise management", "Advanced permissions"],
             features=[],
-            fixes=[]
+            fixes=[],
         ),
     ]
     return {"releases": [r.model_dump() for r in releases]}
@@ -888,10 +893,10 @@ async def get_latest_release(
         release_date="2024-03-01",
         highlights=[
             "AI dispatch suggestions for optimal technician assignment",
-            "IoT device integration for predictive maintenance"
+            "IoT device integration for predictive maintenance",
         ],
         features=[],
-        fixes=[]
+        fixes=[],
     )
     return {"release": release.model_dump()}
 
@@ -902,10 +907,7 @@ async def get_unread_release_count(
     current_user: CurrentUser,
 ) -> dict:
     """Get unread release count."""
-    return {
-        "count": 1,
-        "latest_version": "2.5.0"
-    }
+    return {"count": 1, "latest_version": "2.5.0"}
 
 
 @router.post("/releases/mark-read")

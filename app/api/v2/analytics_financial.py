@@ -29,8 +29,10 @@ router = APIRouter()
 # Pydantic Response Schemas
 # =============================================================================
 
+
 class RevenuePeriod(BaseModel):
     """Revenue for a time period."""
+
     period: str  # today, week, month, quarter, year
     current: float
     previous: float
@@ -41,6 +43,7 @@ class RevenuePeriod(BaseModel):
 
 class ARAgingBucket(BaseModel):
     """AR aging bucket data."""
+
     bucket: str  # current, 1_30, 31_60, 61_90, 90_plus
     label: str
     amount: float
@@ -50,6 +53,7 @@ class ARAgingBucket(BaseModel):
 
 class MarginByJobType(BaseModel):
     """Margin analysis for a job type."""
+
     job_type: str
     revenue: float
     cost: float
@@ -60,6 +64,7 @@ class MarginByJobType(BaseModel):
 
 class FinancialSnapshot(BaseModel):
     """Complete financial snapshot."""
+
     revenue_periods: list[RevenuePeriod]
     total_outstanding: float
     overdue_amount: float
@@ -70,6 +75,7 @@ class FinancialSnapshot(BaseModel):
 
 class CashFlowProjection(BaseModel):
     """Cash flow projection for a period."""
+
     period: str
     expected_inflows: float
     expected_outflows: float
@@ -79,6 +85,7 @@ class CashFlowProjection(BaseModel):
 
 class CashFlowForecast(BaseModel):
     """Cash flow forecast."""
+
     current_balance: float
     projections: list[CashFlowProjection]
     risk_periods: list[str]
@@ -87,6 +94,7 @@ class CashFlowForecast(BaseModel):
 
 class CollectionRecommendation(BaseModel):
     """Collection recommendation for overdue customer."""
+
     customer_id: str
     customer_name: str
     total_overdue: float
@@ -99,6 +107,7 @@ class CollectionRecommendation(BaseModel):
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def get_period_dates(period: str) -> tuple[date, date, date, date]:
     """Get start/end dates for current and previous period."""
@@ -140,12 +149,13 @@ def get_period_dates(period: str) -> tuple[date, date, date, date]:
 async def get_revenue_for_period(db, start_date: date, end_date: date) -> float:
     """Get total revenue for a date range."""
     result = await db.execute(
-        select(func.sum(WorkOrder.total_amount))
-        .where(and_(
-            WorkOrder.scheduled_date >= start_date,
-            WorkOrder.scheduled_date <= end_date,
-            WorkOrder.status == "completed"
-        ))
+        select(func.sum(WorkOrder.total_amount)).where(
+            and_(
+                WorkOrder.scheduled_date >= start_date,
+                WorkOrder.scheduled_date <= end_date,
+                WorkOrder.status == "completed",
+            )
+        )
     )
     return float(result.scalar() or 0)
 
@@ -153,6 +163,7 @@ async def get_revenue_for_period(db, start_date: date, end_date: date) -> float:
 # =============================================================================
 # API Endpoints
 # =============================================================================
+
 
 @router.get("/snapshot")
 async def get_financial_snapshot(
@@ -175,24 +186,20 @@ async def get_financial_snapshot(
             change_pct = ((current_revenue - prev_revenue) / prev_revenue) * 100
 
         # Set targets (in production, these would come from settings)
-        targets = {
-            "today": 5000,
-            "week": 35000,
-            "month": 150000,
-            "quarter": 450000,
-            "year": 1800000
-        }
+        targets = {"today": 5000, "week": 35000, "month": 150000, "quarter": 450000, "year": 1800000}
         target = targets.get(p)
         progress_pct = (current_revenue / target * 100) if target else None
 
-        revenue_periods.append(RevenuePeriod(
-            period=p,
-            current=round(current_revenue, 2),
-            previous=round(prev_revenue, 2),
-            change_pct=round(change_pct, 1),
-            target=target,
-            progress_pct=round(progress_pct, 1) if progress_pct else None
-        ))
+        revenue_periods.append(
+            RevenuePeriod(
+                period=p,
+                current=round(current_revenue, 2),
+                previous=round(prev_revenue, 2),
+                change_pct=round(change_pct, 1),
+                target=target,
+                progress_pct=round(progress_pct, 1) if progress_pct else None,
+            )
+        )
 
     # AR Aging
     ar_aging = []
@@ -213,13 +220,15 @@ async def get_financial_snapshot(
         bucket_count = int(bucket_amount / 500)
         total_outstanding += bucket_amount
 
-        ar_aging.append(ARAgingBucket(
-            bucket=bucket_id,
-            label=label,
-            amount=bucket_amount,
-            count=bucket_count,
-            percentage=0  # Will calculate after totaling
-        ))
+        ar_aging.append(
+            ARAgingBucket(
+                bucket=bucket_id,
+                label=label,
+                amount=bucket_amount,
+                count=bucket_count,
+                percentage=0,  # Will calculate after totaling
+            )
+        )
 
     # Calculate percentages
     for bucket in ar_aging:
@@ -236,41 +245,35 @@ async def get_financial_snapshot(
     for jt in job_types:
         # Get revenue for this job type
         revenue_result = await db.execute(
-            select(
-                func.sum(WorkOrder.total_amount).label("revenue"),
-                func.count().label("count")
+            select(func.sum(WorkOrder.total_amount).label("revenue"), func.count().label("count")).where(
+                and_(
+                    WorkOrder.job_type == jt,
+                    WorkOrder.status == "completed",
+                    WorkOrder.scheduled_date >= today - timedelta(days=90),
+                )
             )
-            .where(and_(
-                WorkOrder.job_type == jt,
-                WorkOrder.status == "completed",
-                WorkOrder.scheduled_date >= today - timedelta(days=90)
-            ))
         )
         row = revenue_result.first()
         revenue = float(row.revenue or 0)
         job_count = row.count or 0
 
         # Estimate costs (in production, use actual cost tracking)
-        cost_ratios = {
-            "Installation": 0.45,
-            "Repair": 0.50,
-            "Maintenance": 0.35,
-            "Inspection": 0.25,
-            "Pumping": 0.40
-        }
+        cost_ratios = {"Installation": 0.45, "Repair": 0.50, "Maintenance": 0.35, "Inspection": 0.25, "Pumping": 0.40}
         cost_ratio = cost_ratios.get(jt, 0.50)
         cost = revenue * cost_ratio
         margin = revenue - cost
         margin_pct = (margin / revenue) if revenue > 0 else 0
 
-        margins_by_type.append(MarginByJobType(
-            job_type=jt,
-            revenue=round(revenue, 2),
-            cost=round(cost, 2),
-            margin=round(margin, 2),
-            margin_pct=round(margin_pct, 4),
-            job_count=job_count
-        ))
+        margins_by_type.append(
+            MarginByJobType(
+                job_type=jt,
+                revenue=round(revenue, 2),
+                cost=round(cost, 2),
+                margin=round(margin, 2),
+                margin_pct=round(margin_pct, 4),
+                job_count=job_count,
+            )
+        )
 
     return FinancialSnapshot(
         revenue_periods=revenue_periods,
@@ -278,7 +281,7 @@ async def get_financial_snapshot(
         overdue_amount=round(overdue_amount, 2),
         average_days_to_pay=28,  # Would calculate from actual data
         ar_aging=ar_aging,
-        margins_by_type=margins_by_type
+        margins_by_type=margins_by_type,
     )
 
 
@@ -298,26 +301,11 @@ async def get_ar_aging_details(
     ]
 
     invoices = [
-        {
-            "id": "INV-001",
-            "customer_name": "ABC Company",
-            "amount": 2500.00,
-            "days_outstanding": 15,
-            "bucket": "1_30"
-        },
-        {
-            "id": "INV-002",
-            "customer_name": "XYZ Corp",
-            "amount": 1800.00,
-            "days_outstanding": 45,
-            "bucket": "31_60"
-        }
+        {"id": "INV-001", "customer_name": "ABC Company", "amount": 2500.00, "days_outstanding": 15, "bucket": "1_30"},
+        {"id": "INV-002", "customer_name": "XYZ Corp", "amount": 1800.00, "days_outstanding": 45, "bucket": "31_60"},
     ]
 
-    return {
-        "buckets": [b.model_dump() for b in buckets],
-        "invoices": invoices
-    }
+    return {"buckets": [b.model_dump() for b in buckets], "invoices": invoices}
 
 
 @router.get("/margins")
@@ -333,14 +321,9 @@ async def get_margin_analysis(
 
     for jt in job_types:
         result = await db.execute(
-            select(
-                func.sum(WorkOrder.total_amount).label("revenue"),
-                func.count().label("count")
+            select(func.sum(WorkOrder.total_amount).label("revenue"), func.count().label("count")).where(
+                and_(WorkOrder.job_type == jt, WorkOrder.status == "completed")
             )
-            .where(and_(
-                WorkOrder.job_type == jt,
-                WorkOrder.status == "completed"
-            ))
         )
         row = result.first()
         revenue = float(row.revenue or 0)
@@ -349,14 +332,16 @@ async def get_margin_analysis(
         cost = revenue * 0.45  # Estimate
         margin = revenue - cost
 
-        margins.append({
-            "job_type": jt,
-            "revenue": round(revenue, 2),
-            "cost": round(cost, 2),
-            "margin": round(margin, 2),
-            "margin_pct": round(margin / revenue, 4) if revenue > 0 else 0,
-            "job_count": count
-        })
+        margins.append(
+            {
+                "job_type": jt,
+                "revenue": round(revenue, 2),
+                "cost": round(cost, 2),
+                "margin": round(margin, 2),
+                "margin_pct": round(margin / revenue, 4) if revenue > 0 else 0,
+                "job_count": count,
+            }
+        )
 
     return {"margins": margins}
 
@@ -383,13 +368,15 @@ async def get_cash_flow_forecast(
             net = expected_inflows - expected_outflows
             running_balance += net
 
-            projections.append(CashFlowProjection(
-                period=week_start.isoformat(),
-                expected_inflows=round(expected_inflows, 2),
-                expected_outflows=round(expected_outflows, 2),
-                net_cash_flow=round(net, 2),
-                running_balance=round(running_balance, 2)
-            ))
+            projections.append(
+                CashFlowProjection(
+                    period=week_start.isoformat(),
+                    expected_inflows=round(expected_inflows, 2),
+                    expected_outflows=round(expected_outflows, 2),
+                    net_cash_flow=round(net, 2),
+                    running_balance=round(running_balance, 2),
+                )
+            )
     elif period == "monthly":
         num_periods = 6
         for i in range(num_periods):
@@ -399,13 +386,15 @@ async def get_cash_flow_forecast(
             net = expected_inflows - expected_outflows
             running_balance += net
 
-            projections.append(CashFlowProjection(
-                period=month_start.strftime("%Y-%m"),
-                expected_inflows=round(expected_inflows, 2),
-                expected_outflows=round(expected_outflows, 2),
-                net_cash_flow=round(net, 2),
-                running_balance=round(running_balance, 2)
-            ))
+            projections.append(
+                CashFlowProjection(
+                    period=month_start.strftime("%Y-%m"),
+                    expected_inflows=round(expected_inflows, 2),
+                    expected_outflows=round(expected_outflows, 2),
+                    net_cash_flow=round(net, 2),
+                    running_balance=round(running_balance, 2),
+                )
+            )
 
     # Identify risk periods
     risk_periods = [p.period for p in projections if p.running_balance < 10000]
@@ -418,10 +407,7 @@ async def get_cash_flow_forecast(
     recommendations.append("Review recurring expenses for optimization opportunities")
 
     return CashFlowForecast(
-        current_balance=50000.0,
-        projections=projections,
-        risk_periods=risk_periods,
-        recommendations=recommendations
+        current_balance=50000.0, projections=projections, risk_periods=risk_periods, recommendations=recommendations
     )
 
 
@@ -439,7 +425,7 @@ async def get_collection_recommendations(
             days_overdue=45,
             priority="high",
             recommended_action="Call immediately - historically responsive to phone contact",
-            success_probability=0.78
+            success_probability=0.78,
         ),
         CollectionRecommendation(
             customer_id="456",
@@ -448,7 +434,7 @@ async def get_collection_recommendations(
             days_overdue=32,
             priority="medium",
             recommended_action="Send payment reminder email with payment link",
-            success_probability=0.85
+            success_probability=0.85,
         ),
         CollectionRecommendation(
             customer_id="789",
@@ -457,8 +443,8 @@ async def get_collection_recommendations(
             days_overdue=92,
             priority="high",
             recommended_action="Escalate to collection agency - multiple failed attempts",
-            success_probability=0.45
-        )
+            success_probability=0.45,
+        ),
     ]
 
     return {"recommendations": [r.model_dump() for r in recommendations]}
@@ -478,5 +464,5 @@ async def send_payment_reminder(
         "sent": True,
         "message": f"Payment reminder sent via {channel}",
         "customer_id": customer_id,
-        "invoice_count": len(invoice_ids)
+        "invoice_count": len(invoice_ids),
     }

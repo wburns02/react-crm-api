@@ -1,4 +1,5 @@
 """Dump Sites API endpoints for waste disposal location management."""
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, text
 from typing import Optional
@@ -60,9 +61,9 @@ async def list_dump_sites(
     """List all dump sites with optional filtering."""
     try:
         # First check if table exists
-        check_result = await db.execute(text(
-            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'dump_sites')"
-        ))
+        check_result = await db.execute(
+            text("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'dump_sites')")
+        )
         table_exists = check_result.scalar()
         if not table_exists:
             logger.error("dump_sites table does not exist!")
@@ -100,7 +101,7 @@ async def list_dump_sites(
                     "notes": site.notes,
                     "contact_name": site.contact_name,
                     "contact_phone": site.contact_phone,
-                    "hours_of_operation": getattr(site, 'hours_of_operation', None),
+                    "hours_of_operation": getattr(site, "hours_of_operation", None),
                     "created_at": site.created_at.isoformat() if site.created_at else None,
                     "updated_at": site.updated_at.isoformat() if site.updated_at else None,
                 }
@@ -111,8 +112,7 @@ async def list_dump_sites(
     except Exception as e:
         logger.error(f"Error listing dump sites: {type(e).__name__}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {type(e).__name__}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
 
 

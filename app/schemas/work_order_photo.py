@@ -5,6 +5,7 @@ from typing import Optional
 
 class WorkOrderPhotoBase(BaseModel):
     """Base work order photo schema."""
+
     photo_type: str
     timestamp: datetime
     device_info: Optional[str] = None
@@ -15,12 +16,14 @@ class WorkOrderPhotoBase(BaseModel):
 
 class WorkOrderPhotoCreate(WorkOrderPhotoBase):
     """Schema for creating a work order photo."""
+
     data: str  # base64 encoded image
     thumbnail: Optional[str] = None  # base64 encoded thumbnail
 
 
 class WorkOrderPhotoResponse(WorkOrderPhotoBase):
     """Schema for work order photo response."""
+
     id: str
     work_order_id: str
     data_url: Optional[str] = None  # base64 data URL for display
@@ -50,5 +53,6 @@ class WorkOrderPhotoResponse(WorkOrderPhotoBase):
 
 class WorkOrderPhotoListResponse(BaseModel):
     """Paginated photo list response."""
+
     items: list[WorkOrderPhotoResponse]
     total: int

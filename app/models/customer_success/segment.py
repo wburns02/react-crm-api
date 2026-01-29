@@ -10,8 +10,19 @@ World-class segmentation engine enabling:
 """
 
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, Enum as SQLEnum, JSON, Numeric, Index, UniqueConstraint
+    Column,
+    Integer,
+    String,
+    Float,
+    Boolean,
+    DateTime,
+    Text,
+    ForeignKey,
+    Enum as SQLEnum,
+    JSON,
+    Numeric,
+    Index,
+    UniqueConstraint,
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -28,18 +39,18 @@ class Segment(Base):
     - AI-generated segments (clustering, lookalike)
     - Nested segments (composite from other segments)
     """
+
     __tablename__ = "cs_segments"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     description = Column(Text)
-    color = Column(String(7), default='#3B82F6')  # Hex color for UI
+    color = Column(String(7), default="#3B82F6")  # Hex color for UI
     icon = Column(String(50))  # Icon name for UI
 
     # Segment type
     segment_type = Column(
-        SQLEnum('static', 'dynamic', 'ai_generated', 'nested', name='cs_segment_type_enum'),
-        default='dynamic'
+        SQLEnum("static", "dynamic", "ai_generated", "nested", name="cs_segment_type_enum"), default="dynamic"
     )
 
     # Is this a system-defined segment (protected from deletion)
@@ -72,10 +83,7 @@ class Segment(Base):
     exclude_segment_ids = Column(JSON)  # [4, 5] - exclude customers in these
 
     # Rule evaluation mode (for backward compatibility)
-    rule_evaluation_mode = Column(
-        SQLEnum('all_match', 'any_match', name='cs_rule_mode_enum'),
-        default='all_match'
-    )
+    rule_evaluation_mode = Column(SQLEnum("all_match", "any_match", name="cs_rule_mode_enum"), default="all_match")
 
     # AI-generated segment metadata
     ai_confidence = Column(Float)
@@ -142,6 +150,7 @@ class SegmentRule(Base):
     While rules can be stored as JSON in Segment.rules_json for flexibility,
     this table provides normalized storage for better querying and indexing.
     """
+
     __tablename__ = "cs_segment_rules"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -149,10 +158,7 @@ class SegmentRule(Base):
 
     # Rule grouping (for nested logic)
     parent_rule_id = Column(Integer, ForeignKey("cs_segment_rules.id", ondelete="CASCADE"))
-    group_logic = Column(
-        SQLEnum('and', 'or', name='cs_rule_logic_enum'),
-        default='and'
-    )
+    group_logic = Column(SQLEnum("and", "or", name="cs_rule_logic_enum"), default="and")
     rule_order = Column(Integer, default=0)  # Order within parent group
 
     # Field specification
@@ -163,26 +169,46 @@ class SegmentRule(Base):
     operator = Column(
         SQLEnum(
             # Equality
-            'equals', 'not_equals',
+            "equals",
+            "not_equals",
             # Comparison
-            'greater_than', 'less_than', 'greater_than_or_equals', 'less_than_or_equals',
-            'between',
+            "greater_than",
+            "less_than",
+            "greater_than_or_equals",
+            "less_than_or_equals",
+            "between",
             # String
-            'contains', 'not_contains', 'starts_with', 'ends_with',
+            "contains",
+            "not_contains",
+            "starts_with",
+            "ends_with",
             # List
-            'in_list', 'not_in_list',
+            "in_list",
+            "not_in_list",
             # Null checks
-            'is_empty', 'is_not_empty',
+            "is_empty",
+            "is_not_empty",
             # Date relative
-            'days_ago', 'weeks_ago', 'months_ago',
-            'in_last_n_days', 'in_last_n_weeks', 'in_last_n_months',
-            'before_date', 'after_date',
+            "days_ago",
+            "weeks_ago",
+            "months_ago",
+            "in_last_n_days",
+            "in_last_n_weeks",
+            "in_last_n_months",
+            "before_date",
+            "after_date",
             # Relative periods
-            'this_week', 'this_month', 'this_quarter', 'this_year',
-            'last_week', 'last_month', 'last_quarter', 'last_year',
-            name='cs_rule_operator_enum'
+            "this_week",
+            "this_month",
+            "this_quarter",
+            "this_year",
+            "last_week",
+            "last_month",
+            "last_quarter",
+            "last_year",
+            name="cs_rule_operator_enum",
         ),
-        nullable=False
+        nullable=False,
     )
 
     # Value (stored as JSON for flexibility with different types)
@@ -212,6 +238,7 @@ class SegmentMembership(Base):
 
     Provides comprehensive audit trail for when customers enter and exit segments.
     """
+
     __tablename__ = "cs_segment_memberships"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -258,12 +285,14 @@ class SegmentMembership(Base):
 
     # Indexes for performance
     __table_args__ = (
-        Index('ix_segment_membership_active', 'segment_id', 'is_active'),
-        Index('ix_segment_membership_customer_active', 'customer_id', 'is_active'),
+        Index("ix_segment_membership_active", "segment_id", "is_active"),
+        Index("ix_segment_membership_customer_active", "customer_id", "is_active"),
     )
 
     def __repr__(self):
-        return f"<SegmentMembership segment_id={self.segment_id} customer_id={self.customer_id} active={self.is_active}>"
+        return (
+            f"<SegmentMembership segment_id={self.segment_id} customer_id={self.customer_id} active={self.is_active}>"
+        )
 
 
 class SegmentSnapshot(Base):
@@ -276,6 +305,7 @@ class SegmentSnapshot(Base):
     - Auditing and compliance
     - Historical reporting
     """
+
     __tablename__ = "cs_segment_snapshots"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -323,8 +353,7 @@ class SegmentSnapshot(Base):
 
     # Snapshot type
     snapshot_type = Column(
-        SQLEnum('scheduled', 'manual', 'on_change', name='cs_snapshot_type_enum'),
-        default='scheduled'
+        SQLEnum("scheduled", "manual", "on_change", name="cs_snapshot_type_enum"), default="scheduled"
     )
 
     # Who/what triggered the snapshot
@@ -337,9 +366,7 @@ class SegmentSnapshot(Base):
     segment = relationship("Segment", back_populates="snapshots")
 
     # Indexes
-    __table_args__ = (
-        Index('ix_segment_snapshot_time', 'segment_id', 'snapshot_at'),
-    )
+    __table_args__ = (Index("ix_segment_snapshot_time", "segment_id", "snapshot_at"),)
 
     def __repr__(self):
         return f"<SegmentSnapshot segment_id={self.segment_id} at={self.snapshot_at} count={self.member_count}>"
@@ -352,6 +379,7 @@ class CustomerSegment(Base):
     This maintains backward compatibility with existing code while
     SegmentMembership provides richer tracking.
     """
+
     __tablename__ = "cs_customer_segments"
 
     id = Column(Integer, primary_key=True, index=True)

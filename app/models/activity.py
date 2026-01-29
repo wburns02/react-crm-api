@@ -1,4 +1,5 @@
 """Activity model for tracking customer interactions."""
+
 from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Enum, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -10,6 +11,7 @@ from app.database import Base
 
 class ActivityType(str, enum.Enum):
     """Types of customer activities."""
+
     CALL = "call"
     EMAIL = "email"
     SMS = "sms"

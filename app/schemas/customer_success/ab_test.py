@@ -14,6 +14,7 @@ from enum import Enum
 
 class ABTestType(str, Enum):
     """Type of element being tested."""
+
     SUBJECT = "subject"
     CONTENT = "content"
     SEND_TIME = "send_time"
@@ -22,6 +23,7 @@ class ABTestType(str, Enum):
 
 class ABTestStatus(str, Enum):
     """Status of an A/B test."""
+
     DRAFT = "draft"
     RUNNING = "running"
     PAUSED = "paused"
@@ -30,6 +32,7 @@ class ABTestStatus(str, Enum):
 
 class PrimaryMetric(str, Enum):
     """Primary metric for determining winner."""
+
     CONVERSION = "conversion"
     OPEN = "open"
     CLICK = "click"
@@ -37,8 +40,10 @@ class PrimaryMetric(str, Enum):
 
 # Base Schemas
 
+
 class ABTestBase(BaseModel):
     """Base A/B test schema."""
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     test_type: ABTestType = ABTestType.SUBJECT
@@ -55,11 +60,13 @@ class ABTestBase(BaseModel):
 
 class ABTestCreate(ABTestBase):
     """Schema for creating an A/B test."""
+
     campaign_id: int
 
 
 class ABTestUpdate(BaseModel):
     """Schema for updating an A/B test."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     variant_a_name: Optional[str] = Field(None, max_length=200)
@@ -75,8 +82,10 @@ class ABTestUpdate(BaseModel):
 
 # Response Schemas
 
+
 class VariantMetrics(BaseModel):
     """Metrics for a single variant."""
+
     name: str
     config: Optional[dict[str, Any]] = None
     sent: int = 0
@@ -91,6 +100,7 @@ class VariantMetrics(BaseModel):
 
 class StatisticalResults(BaseModel):
     """Statistical analysis results."""
+
     chi_square: Optional[dict[str, Any]] = None
     z_score: Optional[dict[str, Any]] = None
     confidence: float = 0
@@ -103,6 +113,7 @@ class StatisticalResults(BaseModel):
 
 class LiftResult(BaseModel):
     """Lift/improvement calculation."""
+
     value: float = 0
     direction: str = "none"  # increase, decrease, none
     variant_b_vs_a: str = "0%"
@@ -110,6 +121,7 @@ class LiftResult(BaseModel):
 
 class ABTestResponse(BaseModel):
     """A/B test response schema."""
+
     id: int
     campaign_id: int
     name: str
@@ -147,6 +159,7 @@ class ABTestResponse(BaseModel):
 
 class ABTestListResponse(BaseModel):
     """Paginated A/B test list response."""
+
     items: list[ABTestResponse]
     total: int
     page: int
@@ -155,6 +168,7 @@ class ABTestListResponse(BaseModel):
 
 class ABTestResults(BaseModel):
     """Comprehensive A/B test results with statistical analysis."""
+
     test_id: int
     test_name: str
     test_type: str
@@ -171,8 +185,10 @@ class ABTestResults(BaseModel):
 
 # Action Schemas
 
+
 class MetricUpdateRequest(BaseModel):
     """Request to update a metric."""
+
     variant: str = Field(..., pattern="^[ab]$")  # 'a' or 'b'
     metric: str = Field(..., pattern="^(sent|opened|clicked|converted)$")
     increment: int = Field(default=1, ge=1)
@@ -180,11 +196,13 @@ class MetricUpdateRequest(BaseModel):
 
 class CompleteTestRequest(BaseModel):
     """Request to complete a test with optional manual winner."""
+
     winner: Optional[str] = Field(None, pattern="^[ab]$")  # 'a' or 'b' or None
 
 
 class AssignVariantResponse(BaseModel):
     """Response from variant assignment."""
+
     test_id: int
     assigned_variant: str
     variant_name: str
@@ -193,6 +211,7 @@ class AssignVariantResponse(BaseModel):
 
 class ActionResponse(BaseModel):
     """Generic action response."""
+
     status: str = "success"
     message: str
     test_id: Optional[int] = None

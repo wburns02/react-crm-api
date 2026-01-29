@@ -39,12 +39,7 @@ class ConnectionManager:
         # Lock for thread-safe operations
         self._lock = asyncio.Lock()
 
-    async def connect(
-        self,
-        websocket: WebSocket,
-        user_id: int,
-        user_role: Optional[str] = None
-    ) -> None:
+    async def connect(self, websocket: WebSocket, user_id: int, user_role: Optional[str] = None) -> None:
         """
         Accept a WebSocket connection and register it.
 
@@ -67,10 +62,7 @@ class ConnectionManager:
             if user_role:
                 self._user_roles[user_id] = user_role
 
-        logger.info(
-            f"WebSocket connected: user_id={user_id}, "
-            f"total_connections={self.total_connections}"
-        )
+        logger.info(f"WebSocket connected: user_id={user_id}, total_connections={self.total_connections}")
 
     def disconnect(self, websocket: WebSocket, user_id: int) -> None:
         """
@@ -92,10 +84,7 @@ class ConnectionManager:
         self._websocket_to_user.pop(websocket, None)
         self._heartbeats.pop(websocket, None)
 
-        logger.info(
-            f"WebSocket disconnected: user_id={user_id}, "
-            f"total_connections={self.total_connections}"
-        )
+        logger.info(f"WebSocket disconnected: user_id={user_id}, total_connections={self.total_connections}")
 
     def update_heartbeat(self, websocket: WebSocket) -> None:
         """Update the heartbeat timestamp for a connection."""
@@ -153,10 +142,7 @@ class ConnectionManager:
         Returns:
             Number of users the message was sent to
         """
-        target_users = [
-            user_id for user_id, user_role in self._user_roles.items()
-            if user_role == role
-        ]
+        target_users = [user_id for user_id, user_role in self._user_roles.items() if user_role == role]
 
         sent_count = 0
         for user_id in target_users:
@@ -195,7 +181,7 @@ class ConnectionManager:
         data: dict,
         target_users: Optional[Set[int]] = None,
         target_role: Optional[str] = None,
-        exclude_user: Optional[int] = None
+        exclude_user: Optional[int] = None,
     ) -> int:
         """
         Broadcast a typed event with data payload.

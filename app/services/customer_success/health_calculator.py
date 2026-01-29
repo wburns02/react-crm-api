@@ -22,6 +22,7 @@ from app.models.customer_success import HealthScore, HealthScoreEvent, Touchpoin
 @dataclass
 class ComponentScore:
     """Individual component score with details."""
+
     score: int
     weight: int
     weighted_score: float
@@ -31,6 +32,7 @@ class ComponentScore:
 @dataclass
 class HealthCalculationResult:
     """Result of health score calculation."""
+
     overall_score: int
     health_status: str
     product_adoption: ComponentScore
@@ -97,11 +99,11 @@ class HealthScoreCalculator:
 
         # Calculate weighted overall score
         overall_score = int(
-            adoption.weighted_score +
-            engagement.weighted_score +
-            relationship.weighted_score +
-            financial.weighted_score +
-            support.weighted_score
+            adoption.weighted_score
+            + engagement.weighted_score
+            + relationship.weighted_score
+            + financial.weighted_score
+            + support.weighted_score
         )
 
         # Determine health status
@@ -111,9 +113,7 @@ class HealthScoreCalculator:
         churn_probability = self._calculate_churn_probability(
             overall_score, adoption.score, engagement.score, support.score
         )
-        expansion_probability = self._calculate_expansion_probability(
-            overall_score, adoption.score, financial.score
-        )
+        expansion_probability = self._calculate_expansion_probability(overall_score, adoption.score, financial.score)
 
         return HealthCalculationResult(
             overall_score=overall_score,
@@ -140,9 +140,7 @@ class HealthScoreCalculator:
         result = await self.calculate_score(customer_id)
 
         # Get or create health score record
-        existing = await self.db.execute(
-            select(HealthScore).where(HealthScore.customer_id == customer_id)
-        )
+        existing = await self.db.execute(select(HealthScore).where(HealthScore.customer_id == customer_id))
         health_score = existing.scalar_one_or_none()
 
         if health_score:
@@ -176,10 +174,7 @@ class HealthScoreCalculator:
             else:
                 health_score.score_trend = "stable"
 
-            health_score.trend_percentage = (
-                (result.overall_score - old_score) / old_score * 100
-                if old_score > 0 else 0
-            )
+            health_score.trend_percentage = (result.overall_score - old_score) / old_score * 100 if old_score > 0 else 0
 
             # Create event
             if old_score != result.overall_score:
@@ -225,9 +220,7 @@ class HealthScoreCalculator:
 
     async def _get_customer(self, customer_id: int) -> Optional[Customer]:
         """Get customer by ID."""
-        result = await self.db.execute(
-            select(Customer).where(Customer.id == customer_id)
-        )
+        result = await self.db.execute(select(Customer).where(Customer.id == customer_id))
         return result.scalar_one_or_none()
 
     async def _calculate_adoption_score(self, customer_id: int) -> ComponentScore:
@@ -243,13 +236,11 @@ class HealthScoreCalculator:
         # Count product-related touchpoints in last 30 days
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         usage_result = await self.db.execute(
-            select(func.count(Touchpoint.id))
-            .where(
+            select(func.count(Touchpoint.id)).where(
                 Touchpoint.customer_id == customer_id,
-                Touchpoint.touchpoint_type.in_([
-                    "product_login", "feature_usage", "feature_adoption",
-                    "training_completed"
-                ]),
+                Touchpoint.touchpoint_type.in_(
+                    ["product_login", "feature_usage", "feature_adoption", "training_completed"]
+                ),
                 Touchpoint.occurred_at >= thirty_days_ago,
             )
         )
@@ -278,7 +269,7 @@ class HealthScoreCalculator:
                 "usage_count_30d": usage_count,
                 "login_frequency": "calculated",
                 "features_used": "calculated",
-            }
+            },
         )
 
     async def _calculate_engagement_score(self, customer_id: int) -> ComponentScore:
@@ -295,13 +286,11 @@ class HealthScoreCalculator:
 
         # Count engagement touchpoints
         engagement_result = await self.db.execute(
-            select(func.count(Touchpoint.id))
-            .where(
+            select(func.count(Touchpoint.id)).where(
                 Touchpoint.customer_id == customer_id,
-                Touchpoint.touchpoint_type.in_([
-                    "email_replied", "meeting_held", "call_inbound",
-                    "chat_session", "video_call"
-                ]),
+                Touchpoint.touchpoint_type.in_(
+                    ["email_replied", "meeting_held", "call_inbound", "chat_session", "video_call"]
+                ),
                 Touchpoint.occurred_at >= thirty_days_ago,
             )
         )
@@ -309,8 +298,7 @@ class HealthScoreCalculator:
 
         # Get positive interactions
         positive_result = await self.db.execute(
-            select(func.count(Touchpoint.id))
-            .where(
+            select(func.count(Touchpoint.id)).where(
                 Touchpoint.customer_id == customer_id,
                 Touchpoint.was_positive == True,
                 Touchpoint.occurred_at >= thirty_days_ago,
@@ -335,7 +323,7 @@ class HealthScoreCalculator:
                 "touchpoints_30d": engagement_count,
                 "positive_interactions": positive_count,
                 "response_rate": "calculated",
-            }
+            },
         )
 
     async def _calculate_relationship_score(self, customer_id: int) -> ComponentScore:
@@ -352,8 +340,7 @@ class HealthScoreCalculator:
 
         # Check for executive and champion touchpoints
         executive_result = await self.db.execute(
-            select(func.count(Touchpoint.id))
-            .where(
+            select(func.count(Touchpoint.id)).where(
                 Touchpoint.customer_id == customer_id,
                 Touchpoint.contact_is_executive == True,
                 Touchpoint.occurred_at >= ninety_days_ago,
@@ -362,8 +349,7 @@ class HealthScoreCalculator:
         executive_count = executive_result.scalar() or 0
 
         champion_result = await self.db.execute(
-            select(func.count(Touchpoint.id))
-            .where(
+            select(func.count(Touchpoint.id)).where(
                 Touchpoint.customer_id == customer_id,
                 Touchpoint.contact_is_champion == True,
                 Touchpoint.occurred_at >= ninety_days_ago,
@@ -399,7 +385,7 @@ class HealthScoreCalculator:
             if nps_score >= 9:
                 score += 15  # Promoter
             elif nps_score >= 7:
-                score += 5   # Passive
+                score += 5  # Passive
             else:
                 score -= 10  # Detractor
 
@@ -412,7 +398,7 @@ class HealthScoreCalculator:
                 "executive_touchpoints_90d": executive_count,
                 "champion_touchpoints_90d": champion_count,
                 "latest_nps": nps_score,
-            }
+            },
         )
 
     async def _calculate_financial_score(self, customer: Customer) -> ComponentScore:
@@ -434,8 +420,7 @@ class HealthScoreCalculator:
 
         # Check for payment issues
         payment_issues_result = await self.db.execute(
-            select(func.count(Touchpoint.id))
-            .where(
+            select(func.count(Touchpoint.id)).where(
                 Touchpoint.customer_id == customer.id,
                 Touchpoint.touchpoint_type == "payment_issue",
                 Touchpoint.occurred_at >= datetime.utcnow() - timedelta(days=90),
@@ -448,8 +433,7 @@ class HealthScoreCalculator:
 
         # Check for recent invoices paid
         paid_result = await self.db.execute(
-            select(func.count(Touchpoint.id))
-            .where(
+            select(func.count(Touchpoint.id)).where(
                 Touchpoint.customer_id == customer.id,
                 Touchpoint.touchpoint_type == "invoice_paid",
                 Touchpoint.occurred_at >= datetime.utcnow() - timedelta(days=90),
@@ -469,7 +453,7 @@ class HealthScoreCalculator:
                 "payment_issues_90d": payment_issues,
                 "invoices_paid_90d": invoices_paid,
                 "customer_type": customer.customer_type,
-            }
+            },
         )
 
     async def _calculate_support_score(self, customer_id: int) -> ComponentScore:
@@ -486,8 +470,7 @@ class HealthScoreCalculator:
 
         # Count support tickets
         tickets_result = await self.db.execute(
-            select(func.count(Touchpoint.id))
-            .where(
+            select(func.count(Touchpoint.id)).where(
                 Touchpoint.customer_id == customer_id,
                 Touchpoint.touchpoint_type == "support_ticket_opened",
                 Touchpoint.occurred_at >= thirty_days_ago,
@@ -497,8 +480,7 @@ class HealthScoreCalculator:
 
         # Count escalations
         escalations_result = await self.db.execute(
-            select(func.count(Touchpoint.id))
-            .where(
+            select(func.count(Touchpoint.id)).where(
                 Touchpoint.customer_id == customer_id,
                 Touchpoint.touchpoint_type == "support_escalation",
                 Touchpoint.occurred_at >= thirty_days_ago,
@@ -508,8 +490,7 @@ class HealthScoreCalculator:
 
         # Get average CSAT
         csat_result = await self.db.execute(
-            select(func.avg(Touchpoint.csat_score))
-            .where(
+            select(func.avg(Touchpoint.csat_score)).where(
                 Touchpoint.customer_id == customer_id,
                 Touchpoint.csat_score.isnot(None),
                 Touchpoint.occurred_at >= datetime.utcnow() - timedelta(days=90),
@@ -548,7 +529,7 @@ class HealthScoreCalculator:
                 "tickets_30d": ticket_count,
                 "escalations_30d": escalation_count,
                 "avg_csat_90d": float(avg_csat) if avg_csat else None,
-            }
+            },
         )
 
     def _determine_health_status(self, score: int) -> str:
@@ -562,9 +543,7 @@ class HealthScoreCalculator:
         else:
             return "churned"
 
-    def _calculate_churn_probability(
-        self, overall: int, adoption: int, engagement: int, support: int
-    ) -> float:
+    def _calculate_churn_probability(self, overall: int, adoption: int, engagement: int, support: int) -> float:
         """
         Calculate churn probability based on scores.
 
@@ -595,9 +574,7 @@ class HealthScoreCalculator:
 
         return min(0.95, max(0.01, base_prob))
 
-    def _calculate_expansion_probability(
-        self, overall: int, adoption: int, financial: int
-    ) -> float:
+    def _calculate_expansion_probability(self, overall: int, adoption: int, financial: int) -> float:
         """
         Calculate expansion probability based on scores.
 

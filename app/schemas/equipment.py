@@ -1,14 +1,18 @@
 """Equipment schemas for request/response validation."""
+
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
 
-EquipmentType = Literal["septic_tank", "pump", "drain_field", "grease_trap", "lift_station", "distribution_box", "other"]
+EquipmentType = Literal[
+    "septic_tank", "pump", "drain_field", "grease_trap", "lift_station", "distribution_box", "other"
+]
 EquipmentCondition = Literal["excellent", "good", "fair", "poor", "needs_replacement"]
 
 
 class EquipmentBase(BaseModel):
     """Base equipment schema."""
+
     customer_id: str = Field(..., description="Customer ID (string, converted to int)")
     equipment_type: str = Field(..., min_length=1, max_length=100)
     manufacturer: Optional[str] = Field(None, max_length=100)
@@ -33,11 +37,13 @@ class EquipmentBase(BaseModel):
 
 class EquipmentCreate(EquipmentBase):
     """Schema for creating equipment."""
+
     pass
 
 
 class EquipmentUpdate(BaseModel):
     """Schema for updating equipment (all fields optional)."""
+
     equipment_type: Optional[str] = Field(None, min_length=1, max_length=100)
     manufacturer: Optional[str] = Field(None, max_length=100)
     model: Optional[str] = Field(None, max_length=100)
@@ -61,6 +67,7 @@ class EquipmentUpdate(BaseModel):
 
 class EquipmentResponse(BaseModel):
     """Schema for equipment response."""
+
     id: str
     customer_id: str
     equipment_type: str
@@ -91,6 +98,7 @@ class EquipmentResponse(BaseModel):
 
 class EquipmentListResponse(BaseModel):
     """Paginated equipment list response."""
+
     items: list[EquipmentResponse]
     total: int
     page: int

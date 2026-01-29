@@ -24,14 +24,17 @@ router = APIRouter()
 # Pydantic Schemas
 # =============================================================================
 
+
 class AppScreenshot(BaseModel):
     """App screenshot."""
+
     url: str
     caption: Optional[str] = None
 
 
 class AppPricing(BaseModel):
     """App pricing info."""
+
     type: str  # free, paid, freemium, trial
     price: Optional[float] = None
     billing_period: Optional[str] = None  # monthly, yearly
@@ -40,6 +43,7 @@ class AppPricing(BaseModel):
 
 class MarketplaceApp(BaseModel):
     """Marketplace app listing."""
+
     id: str
     name: str
     slug: str
@@ -64,6 +68,7 @@ class MarketplaceApp(BaseModel):
 
 class InstalledApp(BaseModel):
     """Installed app instance."""
+
     appId: str
     app: MarketplaceApp
     installStatus: str  # installed, needs_update, error, installing
@@ -76,6 +81,7 @@ class InstalledApp(BaseModel):
 
 class AppReview(BaseModel):
     """App review."""
+
     id: str
     appId: str
     userId: str
@@ -90,6 +96,7 @@ class AppReview(BaseModel):
 
 class CategoryStat(BaseModel):
     """Category statistics."""
+
     category: str
     count: int
 
@@ -118,7 +125,7 @@ MOCK_APPS = [
         isFeatured=True,
         isVerified=True,
         createdAt="2023-01-15T00:00:00Z",
-        updatedAt="2024-02-20T00:00:00Z"
+        updatedAt="2024-02-20T00:00:00Z",
     ),
     MarketplaceApp(
         id="app-stripe",
@@ -139,7 +146,7 @@ MOCK_APPS = [
         isFeatured=True,
         isVerified=True,
         createdAt="2022-06-01T00:00:00Z",
-        updatedAt="2024-03-01T00:00:00Z"
+        updatedAt="2024-03-01T00:00:00Z",
     ),
     MarketplaceApp(
         id="app-google-calendar",
@@ -160,7 +167,7 @@ MOCK_APPS = [
         isFeatured=False,
         isVerified=True,
         createdAt="2023-03-10T00:00:00Z",
-        updatedAt="2024-01-15T00:00:00Z"
+        updatedAt="2024-01-15T00:00:00Z",
     ),
     MarketplaceApp(
         id="app-twilio",
@@ -181,7 +188,7 @@ MOCK_APPS = [
         isFeatured=True,
         isVerified=True,
         createdAt="2023-02-01T00:00:00Z",
-        updatedAt="2024-02-28T00:00:00Z"
+        updatedAt="2024-02-28T00:00:00Z",
     ),
     MarketplaceApp(
         id="app-mailchimp",
@@ -202,7 +209,7 @@ MOCK_APPS = [
         isFeatured=False,
         isVerified=True,
         createdAt="2023-08-15T00:00:00Z",
-        updatedAt="2024-01-20T00:00:00Z"
+        updatedAt="2024-01-20T00:00:00Z",
     ),
 ]
 
@@ -212,6 +219,7 @@ MOCK_INSTALLED = []
 # =============================================================================
 # API Endpoints
 # =============================================================================
+
 
 @router.get("/apps")
 async def get_marketplace_apps(
@@ -253,12 +261,7 @@ async def get_marketplace_apps(
     end = start + page_size
     apps = apps[start:end]
 
-    return {
-        "apps": [a.model_dump() for a in apps],
-        "total": total,
-        "page": page,
-        "pageSize": page_size
-    }
+    return {"apps": [a.model_dump() for a in apps], "total": total, "page": page, "pageSize": page_size}
 
 
 @router.get("/apps/{app_id}")
@@ -291,7 +294,7 @@ async def get_app_reviews(
             title="Great integration!",
             body="Works perfectly with our workflow. Easy setup.",
             helpful_count=12,
-            createdAt="2024-02-15T00:00:00Z"
+            createdAt="2024-02-15T00:00:00Z",
         ),
         AppReview(
             id="review-2",
@@ -302,7 +305,7 @@ async def get_app_reviews(
             title="Good but could be better",
             body="Does what it says, would like more customization options.",
             helpful_count=5,
-            createdAt="2024-01-20T00:00:00Z"
+            createdAt="2024-01-20T00:00:00Z",
         ),
     ]
     return reviews
@@ -326,7 +329,7 @@ async def submit_app_review(
         rating=rating,
         title=title,
         body=body,
-        createdAt=datetime.utcnow().isoformat()
+        createdAt=datetime.utcnow().isoformat(),
     )
     return review
 
@@ -366,14 +369,16 @@ async def get_installed_apps(
         # Default installed app
         for app in MOCK_APPS:
             if app.id == "app-stripe":
-                MOCK_INSTALLED.append(InstalledApp(
-                    appId=app.id,
-                    app=app,
-                    installStatus="installed",
-                    version=app.version,
-                    installedAt="2024-01-01T00:00:00Z",
-                    lastSync="2024-03-01T00:00:00Z"
-                ))
+                MOCK_INSTALLED.append(
+                    InstalledApp(
+                        appId=app.id,
+                        app=app,
+                        installStatus="installed",
+                        version=app.version,
+                        installedAt="2024-01-01T00:00:00Z",
+                        lastSync="2024-03-01T00:00:00Z",
+                    )
+                )
     return MOCK_INSTALLED
 
 
@@ -391,13 +396,13 @@ async def install_app(
                 app=app,
                 installStatus="installed",
                 version=app.version,
-                installedAt=datetime.utcnow().isoformat()
+                installedAt=datetime.utcnow().isoformat(),
             )
             MOCK_INSTALLED.append(installed)
             return {
                 "success": True,
                 "message": f"Successfully installed {app.name}",
-                "installed_app": installed.model_dump()
+                "installed_app": installed.model_dump(),
             }
     raise HTTPException(status_code=404, detail="App not found")
 

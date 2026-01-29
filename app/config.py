@@ -30,12 +30,12 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://localhost:5432/react_crm"
 
-    @field_validator('DATABASE_URL', mode='before')
+    @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def convert_database_url(cls, v: str) -> str:
         """Convert postgresql:// to postgresql+asyncpg:// for async support."""
-        if v and v.startswith('postgresql://'):
-            return v.replace('postgresql://', 'postgresql+asyncpg://', 1)
+        if v and v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
         return v
 
     LEGACY_DATABASE_URL: str | None = None
@@ -98,14 +98,14 @@ class Settings(BaseSettings):
     RATE_LIMIT_SMS_PER_HOUR: int = 100
     RATE_LIMIT_SMS_PER_DESTINATION_HOUR: int = 5
 
-    @model_validator(mode='after')
-    def validate_production_settings(self) -> 'Settings':
+    @model_validator(mode="after")
+    def validate_production_settings(self) -> "Settings":
         """
         Validate security settings for production environment.
 
         SECURITY: Fails startup if production environment has weak secrets.
         """
-        is_production = self.ENVIRONMENT.lower() in ('production', 'prod', 'staging')
+        is_production = self.ENVIRONMENT.lower() in ("production", "prod", "staging")
 
         if is_production:
             # Check SECRET_KEY strength
@@ -113,22 +113,21 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "SECURITY ERROR: SECRET_KEY is set to a known weak/default value. "
                     "Set a strong SECRET_KEY environment variable for production. "
-                    "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+                    'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
                 )
 
             if len(self.SECRET_KEY) < 32:
                 raise ValueError(
                     "SECURITY ERROR: SECRET_KEY must be at least 32 characters in production. "
-                    "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+                    'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
                 )
 
             # Force DEBUG off in production
             if self.DEBUG:
                 logger.warning(
-                    "SECURITY WARNING: DEBUG=True in production environment. "
-                    "This will be overridden to False."
+                    "SECURITY WARNING: DEBUG=True in production environment. This will be overridden to False."
                 )
-                object.__setattr__(self, 'DEBUG', False)
+                object.__setattr__(self, "DEBUG", False)
 
             # Disable docs in production by default
             if self.DOCS_ENABLED:
@@ -139,17 +138,14 @@ class Settings(BaseSettings):
 
             # Warn if Twilio auth token is missing (webhooks won't be secure)
             if not self.TWILIO_AUTH_TOKEN:
-                logger.warning(
-                    "SECURITY WARNING: TWILIO_AUTH_TOKEN not set. "
-                    "Twilio webhooks will reject all requests."
-                )
+                logger.warning("SECURITY WARNING: TWILIO_AUTH_TOKEN not set. Twilio webhooks will reject all requests.")
 
         return self
 
     @property
     def is_production(self) -> bool:
         """Check if running in production environment."""
-        return self.ENVIRONMENT.lower() in ('production', 'prod', 'staging')
+        return self.ENVIRONMENT.lower() in ("production", "prod", "staging")
 
     @property
     def sqlalchemy_echo(self) -> bool:

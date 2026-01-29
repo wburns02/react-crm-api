@@ -45,6 +45,7 @@ class RuleOperator(str, Enum):
 
 class SegmentRule(BaseModel):
     """Single segment rule definition."""
+
     field: str = Field(..., description="Field to evaluate (e.g., 'health_score', 'contract_value')")
     operator: RuleOperator
     value: Any = Field(None, description="Value to compare against")
@@ -53,6 +54,7 @@ class SegmentRule(BaseModel):
 
 class SegmentRuleSet(BaseModel):
     """Rule set with AND/OR logic."""
+
     logic: Literal["and", "or"] = "and"
     rules: list[Union[SegmentRule, "SegmentRuleSet"]] = Field(default_factory=list)
 
@@ -63,6 +65,7 @@ SegmentRuleSet.model_rebuild()
 
 class SegmentBase(BaseModel):
     """Base segment schema."""
+
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     segment_type: SegmentType = SegmentType.DYNAMIC
@@ -92,11 +95,14 @@ class SegmentBase(BaseModel):
     # Smart segment metadata
     category: Optional[SegmentCategory] = None
     ai_insight: Optional[str] = Field(None, description="AI-generated insight message for this segment")
-    recommended_actions: Optional[list[dict]] = Field(None, description="List of recommended actions for segment members")
+    recommended_actions: Optional[list[dict]] = Field(
+        None, description="List of recommended actions for segment members"
+    )
 
 
 class RecommendedAction(BaseModel):
     """Recommended action for segment members."""
+
     action: str = Field(..., description="Action identifier")
     label: str = Field(..., description="Human-readable action label")
     priority: str = Field("medium", description="Action priority: critical, high, medium, low")
@@ -104,11 +110,13 @@ class RecommendedAction(BaseModel):
 
 class SegmentCreate(SegmentBase):
     """Schema for creating a segment."""
+
     pass
 
 
 class SegmentUpdate(BaseModel):
     """Schema for updating a segment."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     segment_type: Optional[SegmentType] = None
@@ -131,6 +139,7 @@ class SegmentUpdate(BaseModel):
 
 class SegmentResponse(SegmentBase):
     """Segment response schema."""
+
     id: int
 
     # System segment flag
@@ -161,6 +170,7 @@ class SegmentResponse(SegmentBase):
 
 class SegmentListResponse(BaseModel):
     """Paginated segment list response."""
+
     items: list[SegmentResponse]
     total: int
     page: int
@@ -169,8 +179,10 @@ class SegmentListResponse(BaseModel):
 
 # Customer Segment Membership
 
+
 class CustomerSegmentBase(BaseModel):
     """Base customer segment membership schema."""
+
     customer_id: int
     segment_id: int
     entry_reason: Optional[str] = None
@@ -178,6 +190,7 @@ class CustomerSegmentBase(BaseModel):
 
 class CustomerSegmentResponse(CustomerSegmentBase):
     """Customer segment membership response."""
+
     id: int
     entered_at: Optional[datetime] = None
     exited_at: Optional[datetime] = None
@@ -196,14 +209,17 @@ class CustomerSegmentResponse(CustomerSegmentBase):
 
 # Segment Preview
 
+
 class SegmentPreviewRequest(BaseModel):
     """Request to preview segment membership before saving."""
+
     rules: SegmentRuleSet
     limit: int = Field(100, ge=1, le=1000)
 
 
 class SegmentPreviewResponse(BaseModel):
     """Segment preview response."""
+
     total_matches: int
     sample_customers: list[dict]  # [{"id": 1, "name": "...", "health_score": 75}]
     estimated_arr: Optional[float] = None
@@ -216,8 +232,10 @@ class SegmentPreviewResponse(BaseModel):
 
 # Enhanced Segment Preview with Inclusions/Exclusions
 
+
 class EnhancedSegmentPreviewRequest(BaseModel):
     """Enhanced preview request with segment inclusions/exclusions."""
+
     rules: SegmentRuleSet
     include_segments: Optional[list[int]] = Field(None, description="Segment IDs to include (union)")
     exclude_segments: Optional[list[int]] = Field(None, description="Segment IDs to exclude")
@@ -226,14 +244,17 @@ class EnhancedSegmentPreviewRequest(BaseModel):
 
 # AI-Powered Segment Schemas
 
+
 class NaturalLanguageQueryRequest(BaseModel):
     """Request to parse natural language into segment rules."""
+
     query: str = Field(..., min_length=3, max_length=500, description="Natural language query")
     use_llm: bool = Field(False, description="Use LLM for complex queries (if available)")
 
 
 class NaturalLanguageQueryResponse(BaseModel):
     """Response from parsing natural language query."""
+
     success: bool
     rules: Optional[SegmentRuleSet] = None
     confidence: float = Field(0.0, ge=0, le=1)
@@ -244,6 +265,7 @@ class NaturalLanguageQueryResponse(BaseModel):
 
 class SegmentSuggestion(BaseModel):
     """AI-generated segment suggestion."""
+
     name: str
     description: str
     rules: dict[str, Any]
@@ -257,12 +279,14 @@ class SegmentSuggestion(BaseModel):
 
 class SegmentSuggestionsResponse(BaseModel):
     """Response containing AI-generated segment suggestions."""
+
     suggestions: list[SegmentSuggestion]
     total: int
 
 
 class RevenueOpportunityResponse(BaseModel):
     """Revenue opportunity analysis for a segment."""
+
     segment_id: int
     segment_name: str
     total_customers: int
@@ -277,8 +301,10 @@ class RevenueOpportunityResponse(BaseModel):
 
 # Segment Membership History
 
+
 class SegmentMembershipResponse(BaseModel):
     """Detailed segment membership record."""
+
     id: int
     segment_id: int
     customer_id: int
@@ -301,8 +327,10 @@ class SegmentMembershipResponse(BaseModel):
 
 # Segment Snapshot
 
+
 class SegmentSnapshotResponse(BaseModel):
     """Point-in-time snapshot of segment membership."""
+
     id: int
     segment_id: int
     snapshot_at: datetime
@@ -325,6 +353,7 @@ class SegmentSnapshotResponse(BaseModel):
 
 class SegmentSnapshotListResponse(BaseModel):
     """Paginated list of segment snapshots."""
+
     items: list[SegmentSnapshotResponse]
     total: int
     page: int
@@ -333,8 +362,10 @@ class SegmentSnapshotListResponse(BaseModel):
 
 # Available Fields and Operators
 
+
 class FieldDefinitionResponse(BaseModel):
     """Available field for segment rules."""
+
     name: str
     display_name: str
     category: str
@@ -344,6 +375,7 @@ class FieldDefinitionResponse(BaseModel):
 
 class OperatorDefinitionResponse(BaseModel):
     """Available operator for segment rules."""
+
     name: str
     display: str
     types: list[str]
@@ -351,20 +383,24 @@ class OperatorDefinitionResponse(BaseModel):
 
 class SegmentFieldsResponse(BaseModel):
     """Available fields for segment rules."""
+
     fields: list[FieldDefinitionResponse]
     operators: list[OperatorDefinitionResponse]
 
 
 # Segment Evaluation
 
+
 class SegmentEvaluationRequest(BaseModel):
     """Request to evaluate/refresh a segment."""
+
     track_history: bool = Field(True, description="Track entry/exit in membership history")
     create_snapshot: bool = Field(True, description="Create a snapshot of the results")
 
 
 class SegmentEvaluationResponse(BaseModel):
     """Response from segment evaluation."""
+
     segment_id: int
     total_members: int
     customers_added: int
@@ -375,8 +411,10 @@ class SegmentEvaluationResponse(BaseModel):
 
 # Segment Members with Details
 
+
 class SegmentMemberDetail(BaseModel):
     """Customer details for segment member."""
+
     id: int
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -395,6 +433,7 @@ class SegmentMemberDetail(BaseModel):
 
 class SegmentMembersResponse(BaseModel):
     """Paginated segment members with details."""
+
     items: list[SegmentMemberDetail]
     total: int
     page: int
@@ -405,8 +444,10 @@ class SegmentMembersResponse(BaseModel):
 
 # Segment Templates
 
+
 class SegmentTemplateResponse(BaseModel):
     """Pre-built segment template."""
+
     key: str
     name: str
     description: str
@@ -415,13 +456,16 @@ class SegmentTemplateResponse(BaseModel):
 
 class SegmentTemplatesResponse(BaseModel):
     """List of available segment templates."""
+
     templates: list[SegmentTemplateResponse]
 
 
 # Smart Segment Schemas
 
+
 class SmartSegmentCategory(BaseModel):
     """Smart segment category information."""
+
     code: str
     label: str
     description: str
@@ -430,6 +474,7 @@ class SmartSegmentCategory(BaseModel):
 
 class SmartSegmentSeedResponse(BaseModel):
     """Response from seeding smart segments."""
+
     created: int
     updated: int
     skipped: int
@@ -438,6 +483,7 @@ class SmartSegmentSeedResponse(BaseModel):
 
 class SmartSegmentListResponse(BaseModel):
     """List of smart segments with category information."""
+
     segments: list[SegmentResponse]
     categories: list[SmartSegmentCategory]
     total: int

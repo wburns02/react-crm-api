@@ -33,8 +33,10 @@ router = APIRouter()
 # Pydantic Response Schemas
 # =============================================================================
 
+
 class TechnicianFTFR(BaseModel):
     """FTFR metrics for a single technician."""
+
     technician_id: str
     technician_name: str
     total_jobs: int
@@ -45,6 +47,7 @@ class TechnicianFTFR(BaseModel):
 
 class JobTypeFTFR(BaseModel):
     """FTFR metrics for a job type."""
+
     job_type: str
     total_jobs: int
     first_time_fixes: int
@@ -54,6 +57,7 @@ class JobTypeFTFR(BaseModel):
 
 class FTFRResponse(BaseModel):
     """First-Time Fix Rate response."""
+
     overall_ftfr: float = Field(..., description="Overall FTFR percentage")
     total_jobs: int = Field(..., description="Total jobs in period")
     first_time_fixes: int = Field(..., description="Jobs with no return visit")
@@ -68,6 +72,7 @@ class FTFRResponse(BaseModel):
 
 class EquipmentHealthItem(BaseModel):
     """Health score for a single piece of equipment."""
+
     equipment_id: str
     equipment_type: str
     customer_id: int
@@ -86,6 +91,7 @@ class EquipmentHealthItem(BaseModel):
 
 class EquipmentHealthResponse(BaseModel):
     """Equipment health overview response."""
+
     total_equipment: int
     average_health_score: float
     critical_count: int
@@ -97,6 +103,7 @@ class EquipmentHealthResponse(BaseModel):
 
 class CustomerIntelligenceItem(BaseModel):
     """Intelligence metrics for a single customer."""
+
     customer_id: int
     customer_name: str
     email: Optional[str] = None
@@ -113,6 +120,7 @@ class CustomerIntelligenceItem(BaseModel):
 
 class CustomerIntelligenceResponse(BaseModel):
     """Customer intelligence overview response."""
+
     total_customers: int
     high_risk_count: int
     medium_risk_count: int
@@ -125,6 +133,7 @@ class CustomerIntelligenceResponse(BaseModel):
 
 class DashboardAlert(BaseModel):
     """Active alert for dashboard."""
+
     alert_type: str  # overdue_invoice, equipment_maintenance, low_inventory, etc.
     severity: str  # info, warning, critical
     message: str
@@ -134,6 +143,7 @@ class DashboardAlert(BaseModel):
 
 class DashboardMetricsResponse(BaseModel):
     """Dashboard KPIs response."""
+
     jobs_completed_today: int
     jobs_scheduled_today: int
     revenue_today: float
@@ -150,6 +160,7 @@ class DashboardMetricsResponse(BaseModel):
 
 class TechnicianPerformance(BaseModel):
     """Performance metrics for a single technician."""
+
     technician_id: str
     technician_name: str
     jobs_completed: int
@@ -162,6 +173,7 @@ class TechnicianPerformance(BaseModel):
 
 class PerformanceMetricsResponse(BaseModel):
     """Performance metrics response."""
+
     period: str
     period_start: str
     period_end: str
@@ -177,6 +189,7 @@ class PerformanceMetricsResponse(BaseModel):
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def get_period_dates(period: str) -> tuple[date, date, date, date]:
     """Get start/end dates for current and previous period."""
@@ -222,10 +235,7 @@ def get_period_dates(period: str) -> tuple[date, date, date, date]:
     return current_start, current_end, prev_start, prev_end
 
 
-def calculate_equipment_health_score(
-    equipment: Equipment,
-    service_count: int = 0
-) -> tuple[float, str, list[str]]:
+def calculate_equipment_health_score(equipment: Equipment, service_count: int = 0) -> tuple[float, str, list[str]]:
     """
     Calculate health score for equipment.
 
@@ -272,13 +282,7 @@ def calculate_equipment_health_score(
         recommendations.append("No service history - schedule initial inspection")
 
     # Condition factor (max 25 points deduction)
-    condition_scores = {
-        "excellent": 0,
-        "good": 5,
-        "fair": 15,
-        "poor": 25,
-        "needs_replacement": 40
-    }
+    condition_scores = {"excellent": 0, "good": 5, "fair": 15, "poor": 25, "needs_replacement": 40}
     if equipment.condition:
         condition_deduction = condition_scores.get(equipment.condition.lower(), 10)
         score -= condition_deduction
@@ -322,7 +326,7 @@ def calculate_customer_metrics(
     last_service_date: Optional[date],
     total_invoiced: float,
     paid_on_time_count: int,
-    total_paid_invoices: int
+    total_paid_invoices: int,
 ) -> tuple[float, float, float, str, list[str]]:
     """
     Calculate customer intelligence metrics.
@@ -413,6 +417,7 @@ def calculate_customer_metrics(
 # API Endpoints
 # =============================================================================
 
+
 @router.get("/ftfr", response_model=FTFRResponse)
 async def get_ftfr(
     db: DbSession,
@@ -430,12 +435,11 @@ async def get_ftfr(
 
     # Get all completed work orders for the current period
     wo_query = await db.execute(
-        select(WorkOrder)
-        .where(
+        select(WorkOrder).where(
             and_(
                 WorkOrder.status == "completed",
                 WorkOrder.scheduled_date >= current_start,
-                WorkOrder.scheduled_date <= current_end
+                WorkOrder.scheduled_date <= current_end,
             )
         )
     )
@@ -459,7 +463,7 @@ async def get_ftfr(
             # Sort by date
             sorted_orders = sorted(orders, key=lambda x: x.scheduled_date or date.min)
             for i in range(1, len(sorted_orders)):
-                prev_date = sorted_orders[i-1].scheduled_date
+                prev_date = sorted_orders[i - 1].scheduled_date
                 curr_date = sorted_orders[i].scheduled_date
                 if prev_date and curr_date:
                     days_diff = (curr_date - prev_date).days
@@ -478,7 +482,7 @@ async def get_ftfr(
             and_(
                 WorkOrder.status == "completed",
                 WorkOrder.scheduled_date >= prev_start,
-                WorkOrder.scheduled_date <= prev_end
+                WorkOrder.scheduled_date <= prev_end,
             )
         )
     )
@@ -508,7 +512,7 @@ async def get_ftfr(
             total_jobs=stats["total"],
             first_time_fixes=stats["total"] - stats["returns"],
             return_visits=stats["returns"],
-            ftfr_rate=((stats["total"] - stats["returns"]) / stats["total"] * 100) if stats["total"] > 0 else 0.0
+            ftfr_rate=((stats["total"] - stats["returns"]) / stats["total"] * 100) if stats["total"] > 0 else 0.0,
         )
         for tech_id, stats in tech_stats.items()
     ]
@@ -529,7 +533,7 @@ async def get_ftfr(
             total_jobs=stats["total"],
             first_time_fixes=stats["total"] - stats["returns"],
             return_visits=stats["returns"],
-            ftfr_rate=((stats["total"] - stats["returns"]) / stats["total"] * 100) if stats["total"] > 0 else 0.0
+            ftfr_rate=((stats["total"] - stats["returns"]) / stats["total"] * 100) if stats["total"] > 0 else 0.0,
         )
         for job_type, stats in job_type_stats.items()
     ]
@@ -544,7 +548,7 @@ async def get_ftfr(
         by_job_type=by_job_type,
         period=period,
         period_start=current_start.isoformat(),
-        period_end=current_end.isoformat()
+        period_end=current_end.isoformat(),
     )
 
 
@@ -566,9 +570,7 @@ async def get_equipment_health(
     - Failure history
     """
     # Get all equipment with customer info
-    query = select(Equipment, Customer).outerjoin(
-        Customer, Equipment.customer_id == Customer.id
-    )
+    query = select(Equipment, Customer).outerjoin(Customer, Equipment.customer_id == Customer.id)
 
     result = await db.execute(query)
     equipment_rows = result.all()
@@ -586,16 +588,14 @@ async def get_equipment_health(
                 and_(
                     WorkOrder.customer_id == equip.customer_id,
                     WorkOrder.status == "completed",
-                    WorkOrder.job_type.in_(["maintenance", "inspection", "repair"])
+                    WorkOrder.job_type.in_(["maintenance", "inspection", "repair"]),
                 )
             )
         )
         service_count = service_count_query.scalar() or 0
 
         # Calculate health score
-        health_score, equip_risk_level, recommendations = calculate_equipment_health_score(
-            equip, service_count
-        )
+        health_score, equip_risk_level, recommendations = calculate_equipment_health_score(equip, service_count)
 
         # Apply filter if specified
         if risk_level and equip_risk_level != risk_level:
@@ -610,22 +610,24 @@ async def get_equipment_health(
         if customer:
             customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
 
-        equipment_list.append(EquipmentHealthItem(
-            equipment_id=str(equip.id),
-            equipment_type=equip.equipment_type,
-            customer_id=equip.customer_id,
-            customer_name=customer_name,
-            manufacturer=equip.manufacturer,
-            model=equip.model,
-            health_score=round(health_score, 1),
-            age_years=age_years,
-            last_service_date=equip.last_service_date.isoformat() if equip.last_service_date else None,
-            next_service_date=equip.next_service_date.isoformat() if equip.next_service_date else None,
-            service_count=service_count,
-            condition=equip.condition,
-            risk_level=equip_risk_level,
-            maintenance_recommendations=recommendations
-        ))
+        equipment_list.append(
+            EquipmentHealthItem(
+                equipment_id=str(equip.id),
+                equipment_type=equip.equipment_type,
+                customer_id=equip.customer_id,
+                customer_name=customer_name,
+                manufacturer=equip.manufacturer,
+                model=equip.model,
+                health_score=round(health_score, 1),
+                age_years=age_years,
+                last_service_date=equip.last_service_date.isoformat() if equip.last_service_date else None,
+                next_service_date=equip.next_service_date.isoformat() if equip.next_service_date else None,
+                service_count=service_count,
+                condition=equip.condition,
+                risk_level=equip_risk_level,
+                maintenance_recommendations=recommendations,
+            )
+        )
 
         total_score += health_score
         risk_counts[equip_risk_level] += 1
@@ -646,7 +648,7 @@ async def get_equipment_health(
         high_risk_count=risk_counts["high"],
         medium_risk_count=risk_counts["medium"],
         low_risk_count=risk_counts["low"],
-        equipment=equipment_list
+        equipment=equipment_list,
     )
 
 
@@ -671,9 +673,7 @@ async def get_customer_intelligence(
     """
     # Get customers who are "won" (actual customers, not prospects)
     customers_query = await db.execute(
-        select(Customer)
-        .where(Customer.prospect_stage == "won")
-        .limit(limit * 2)  # Get extra to filter later
+        select(Customer).where(Customer.prospect_stage == "won").limit(limit * 2)  # Get extra to filter later
     )
     customers = customers_query.scalars().all()
 
@@ -685,11 +685,9 @@ async def get_customer_intelligence(
     for customer in customers:
         # Get work order stats
         wo_stats = await db.execute(
-            select(
-                func.count().label("total"),
-                func.max(WorkOrder.scheduled_date).label("last_date")
+            select(func.count().label("total"), func.max(WorkOrder.scheduled_date).label("last_date")).where(
+                WorkOrder.customer_id == customer.id
             )
-            .where(WorkOrder.customer_id == customer.id)
         )
         wo_row = wo_stats.first()
         work_order_count = wo_row.total if wo_row else 0
@@ -704,11 +702,9 @@ async def get_customer_intelligence(
 
         try:
             invoice_stats = await db.execute(
-                select(
-                    func.sum(Invoice.amount).label("total_amount"),
-                    func.count().label("count")
+                select(func.sum(Invoice.amount).label("total_amount"), func.count().label("count")).where(
+                    Invoice.status == "paid"
                 )
-                .where(Invoice.status == "paid")
             )
             inv_row = invoice_stats.first()
             if inv_row and inv_row.total_amount:
@@ -722,12 +718,7 @@ async def get_customer_intelligence(
             payment_stats = await db.execute(
                 select(func.count())
                 .select_from(Payment)
-                .where(
-                    and_(
-                        Payment.customer_id == customer.id,
-                        Payment.status == "completed"
-                    )
-                )
+                .where(and_(Payment.customer_id == customer.id, Payment.status == "completed"))
             )
             total_paid = payment_stats.scalar() or 0
             paid_on_time = total_paid  # Simplified - assume all paid are on time
@@ -736,12 +727,7 @@ async def get_customer_intelligence(
 
         # Calculate metrics
         churn_risk, engagement, payment_rel, cust_risk_level, recommendations = calculate_customer_metrics(
-            customer,
-            work_order_count,
-            last_service_date,
-            total_invoiced,
-            paid_on_time,
-            total_paid
+            customer, work_order_count, last_service_date, total_invoiced, paid_on_time, total_paid
         )
 
         # Apply filter
@@ -755,20 +741,22 @@ async def get_customer_intelligence(
 
         customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
 
-        customer_list.append(CustomerIntelligenceItem(
-            customer_id=customer.id,
-            customer_name=customer_name,
-            email=customer.email,
-            phone=customer.phone,
-            churn_risk_score=round(churn_risk, 1),
-            lifetime_value=round(total_invoiced, 2),
-            engagement_score=round(engagement, 1),
-            days_since_last_service=days_since,
-            total_work_orders=work_order_count,
-            payment_reliability=round(payment_rel, 1),
-            recommended_actions=recommendations,
-            risk_level=cust_risk_level
-        ))
+        customer_list.append(
+            CustomerIntelligenceItem(
+                customer_id=customer.id,
+                customer_name=customer_name,
+                email=customer.email,
+                phone=customer.phone,
+                churn_risk_score=round(churn_risk, 1),
+                lifetime_value=round(total_invoiced, 2),
+                engagement_score=round(engagement, 1),
+                days_since_last_service=days_since,
+                total_work_orders=work_order_count,
+                payment_reliability=round(payment_rel, 1),
+                recommended_actions=recommendations,
+                risk_level=cust_risk_level,
+            )
+        )
 
         total_ltv += total_invoiced
         total_engagement += engagement
@@ -792,7 +780,7 @@ async def get_customer_intelligence(
         total_ltv=round(total_ltv, 2),
         average_ltv=round(avg_ltv, 2),
         average_engagement=round(avg_engagement, 1),
-        customers=customer_list
+        customers=customer_list,
     )
 
 
@@ -819,43 +807,31 @@ async def get_dashboard_metrics(
     completed_today_query = await db.execute(
         select(func.count())
         .select_from(WorkOrder)
-        .where(
-            and_(
-                WorkOrder.scheduled_date == today,
-                WorkOrder.status == "completed"
-            )
-        )
+        .where(and_(WorkOrder.scheduled_date == today, WorkOrder.status == "completed"))
     )
     jobs_completed_today = completed_today_query.scalar() or 0
 
     # Jobs scheduled today (all statuses)
     scheduled_today_query = await db.execute(
-        select(func.count())
-        .select_from(WorkOrder)
-        .where(WorkOrder.scheduled_date == today)
+        select(func.count()).select_from(WorkOrder).where(WorkOrder.scheduled_date == today)
     )
     jobs_scheduled_today = scheduled_today_query.scalar() or 0
 
     # Revenue today (from completed work orders)
     revenue_today_query = await db.execute(
-        select(func.sum(WorkOrder.total_amount))
-        .where(
-            and_(
-                WorkOrder.scheduled_date == today,
-                WorkOrder.status == "completed"
-            )
+        select(func.sum(WorkOrder.total_amount)).where(
+            and_(WorkOrder.scheduled_date == today, WorkOrder.status == "completed")
         )
     )
     revenue_today = float(revenue_today_query.scalar() or 0)
 
     # Revenue MTD
     revenue_mtd_query = await db.execute(
-        select(func.sum(WorkOrder.total_amount))
-        .where(
+        select(func.sum(WorkOrder.total_amount)).where(
             and_(
                 WorkOrder.scheduled_date >= month_start,
                 WorkOrder.scheduled_date <= today,
-                WorkOrder.status == "completed"
+                WorkOrder.status == "completed",
             )
         )
     )
@@ -863,37 +839,27 @@ async def get_dashboard_metrics(
 
     # Technicians on duty (have work orders today in active status)
     techs_on_duty_query = await db.execute(
-        select(func.count(distinct(WorkOrder.technician_id)))
-        .where(
-            and_(
-                WorkOrder.scheduled_date == today,
-                WorkOrder.status.in_(["enroute", "on_site", "in_progress"])
-            )
+        select(func.count(distinct(WorkOrder.technician_id))).where(
+            and_(WorkOrder.scheduled_date == today, WorkOrder.status.in_(["enroute", "on_site", "in_progress"]))
         )
     )
     technicians_on_duty = techs_on_duty_query.scalar() or 0
 
     # Total active technicians
     total_techs_query = await db.execute(
-        select(func.count())
-        .select_from(Technician)
-        .where(Technician.is_active == True)
+        select(func.count()).select_from(Technician).where(Technician.is_active == True)
     )
     technicians_total = total_techs_query.scalar() or 0
 
     # Pending work orders
     pending_query = await db.execute(
-        select(func.count())
-        .select_from(WorkOrder)
-        .where(WorkOrder.status.in_(["draft", "scheduled", "confirmed"]))
+        select(func.count()).select_from(WorkOrder).where(WorkOrder.status.in_(["draft", "scheduled", "confirmed"]))
     )
     pending_work_orders = pending_query.scalar() or 0
 
     # In progress work orders
     in_progress_query = await db.execute(
-        select(func.count())
-        .select_from(WorkOrder)
-        .where(WorkOrder.status.in_(["enroute", "on_site", "in_progress"]))
+        select(func.count()).select_from(WorkOrder).where(WorkOrder.status.in_(["enroute", "on_site", "in_progress"]))
     )
     in_progress_work_orders = in_progress_query.scalar() or 0
 
@@ -902,8 +868,7 @@ async def get_dashboard_metrics(
     overdue_amount = 0.0
     try:
         overdue_query = await db.execute(
-            select(func.count(), func.sum(Invoice.amount))
-            .where(Invoice.status == "overdue")
+            select(func.count(), func.sum(Invoice.amount)).where(Invoice.status == "overdue")
         )
         overdue_row = overdue_query.first()
         if overdue_row:
@@ -916,28 +881,34 @@ async def get_dashboard_metrics(
     alerts = []
 
     if overdue_invoices > 0:
-        alerts.append(DashboardAlert(
-            alert_type="overdue_invoice",
-            severity="warning",
-            message=f"{overdue_invoices} overdue invoices totaling ${overdue_amount:,.2f}",
-            entity_type="invoice"
-        ))
+        alerts.append(
+            DashboardAlert(
+                alert_type="overdue_invoice",
+                severity="warning",
+                message=f"{overdue_invoices} overdue invoices totaling ${overdue_amount:,.2f}",
+                entity_type="invoice",
+            )
+        )
 
     if pending_work_orders > 50:
-        alerts.append(DashboardAlert(
-            alert_type="backlog",
-            severity="warning",
-            message=f"High backlog: {pending_work_orders} pending work orders",
-            entity_type="work_order"
-        ))
+        alerts.append(
+            DashboardAlert(
+                alert_type="backlog",
+                severity="warning",
+                message=f"High backlog: {pending_work_orders} pending work orders",
+                entity_type="work_order",
+            )
+        )
 
     if technicians_on_duty == 0 and jobs_scheduled_today > 0:
-        alerts.append(DashboardAlert(
-            alert_type="staffing",
-            severity="critical",
-            message=f"No technicians on duty with {jobs_scheduled_today} jobs scheduled",
-            entity_type="schedule"
-        ))
+        alerts.append(
+            DashboardAlert(
+                alert_type="staffing",
+                severity="critical",
+                message=f"No technicians on duty with {jobs_scheduled_today} jobs scheduled",
+                entity_type="schedule",
+            )
+        )
 
     return DashboardMetricsResponse(
         jobs_completed_today=jobs_completed_today,
@@ -951,7 +922,7 @@ async def get_dashboard_metrics(
         overdue_invoices=overdue_invoices,
         overdue_invoice_amount=round(overdue_amount, 2),
         active_alerts=alerts,
-        timestamp=now.isoformat()
+        timestamp=now.isoformat(),
     )
 
 
@@ -975,12 +946,11 @@ async def get_performance_metrics(
 
     # Get completed work orders in period
     wo_query = await db.execute(
-        select(WorkOrder)
-        .where(
+        select(WorkOrder).where(
             and_(
                 WorkOrder.status == "completed",
                 WorkOrder.scheduled_date >= current_start,
-                WorkOrder.scheduled_date <= current_end
+                WorkOrder.scheduled_date <= current_end,
             )
         )
     )
@@ -1008,7 +978,7 @@ async def get_performance_metrics(
                 "total_time": 0,
                 "jobs_with_time": 0,
                 "on_time": 0,
-                "jobs_with_arrival": 0
+                "jobs_with_arrival": 0,
             }
 
         tech_stats[tech_id]["jobs"] += 1
@@ -1050,7 +1020,9 @@ async def get_performance_metrics(
     period_days = (current_end - current_start).days + 1
     work_days = period_days * 5 / 7  # Approximate work days
     available_minutes = len(tech_stats) * work_days * 8 * 60 if tech_stats else 1
-    utilization_rate = min(100, round((total_completion_time / available_minutes) * 100, 1)) if available_minutes > 0 else 0.0
+    utilization_rate = (
+        min(100, round((total_completion_time / available_minutes) * 100, 1)) if available_minutes > 0 else 0.0
+    )
 
     # Build technician performance list
     by_technician = []
@@ -1066,18 +1038,22 @@ async def get_performance_metrics(
             tech_on_time = 85.0  # Assume industry average
 
         tech_available = work_days * 8 * 60  # Available minutes
-        tech_utilization = min(100, round((stats["total_time"] / tech_available) * 100, 1)) if tech_available > 0 else 0.0
+        tech_utilization = (
+            min(100, round((stats["total_time"] / tech_available) * 100, 1)) if tech_available > 0 else 0.0
+        )
 
-        by_technician.append(TechnicianPerformance(
-            technician_id=tech_id,
-            technician_name=stats["name"],
-            jobs_completed=stats["jobs"],
-            avg_completion_time_minutes=avg_time,
-            on_time_arrival_rate=tech_on_time,
-            utilization_rate=tech_utilization,
-            customer_satisfaction=None,  # Would come from survey data
-            revenue_generated=round(stats["revenue"], 2)
-        ))
+        by_technician.append(
+            TechnicianPerformance(
+                technician_id=tech_id,
+                technician_name=stats["name"],
+                jobs_completed=stats["jobs"],
+                avg_completion_time_minutes=avg_time,
+                on_time_arrival_rate=tech_on_time,
+                utilization_rate=tech_utilization,
+                customer_satisfaction=None,  # Would come from survey data
+                revenue_generated=round(stats["revenue"], 2),
+            )
+        )
 
     # Sort by jobs completed (descending)
     by_technician.sort(key=lambda x: -x.jobs_completed)
@@ -1092,5 +1068,5 @@ async def get_performance_metrics(
         overall_customer_satisfaction=None,  # Would come from survey data
         total_jobs_completed=total_jobs,
         total_revenue=round(total_revenue, 2),
-        by_technician=by_technician
+        by_technician=by_technician,
     )

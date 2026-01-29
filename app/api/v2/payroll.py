@@ -7,6 +7,7 @@ Features:
 - Overtime calculations
 - Export for payroll systems (NACHA, CSV)
 """
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, and_, delete
 from typing import Optional, List
@@ -25,6 +26,7 @@ router = APIRouter()
 
 
 # Request Models
+
 
 class TimeEntryCreate(BaseModel):
     technician_id: str
@@ -54,6 +56,7 @@ class PayRateUpdate(BaseModel):
 
 # Helper functions
 
+
 def calculate_hours(clock_in: datetime, clock_out: datetime, break_minutes: int = 0) -> dict:
     """Calculate regular and overtime hours."""
     if not clock_out:
@@ -70,6 +73,7 @@ def calculate_hours(clock_in: datetime, clock_out: datetime, break_minutes: int 
 
 
 # Payroll Period Endpoints
+
 
 def _format_period(p: PayrollPeriod) -> dict:
     """Format a payroll period for the frontend."""
@@ -143,9 +147,7 @@ async def get_payroll_period(
 ):
     """Get a single payroll period by ID."""
     try:
-        result = await db.execute(
-            select(PayrollPeriod).where(PayrollPeriod.id == period_id)
-        )
+        result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
         period = result.scalar_one_or_none()
 
         if not period:
@@ -169,11 +171,13 @@ async def get_current_period(
         today = date.today()
 
         result = await db.execute(
-            select(PayrollPeriod).where(
+            select(PayrollPeriod)
+            .where(
                 PayrollPeriod.start_date <= today,
                 PayrollPeriod.end_date >= today,
                 PayrollPeriod.status == "open",
-            ).limit(1)
+            )
+            .limit(1)
         )
         period = result.scalar_one_or_none()
 
@@ -193,9 +197,7 @@ async def calculate_payroll(
     current_user: CurrentUser,
 ):
     """Calculate payroll for a period."""
-    result = await db.execute(
-        select(PayrollPeriod).where(PayrollPeriod.id == period_id)
-    )
+    result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
     period = result.scalar_one_or_none()
 
     if not period:
@@ -278,9 +280,7 @@ async def approve_payroll(
     current_user: CurrentUser,
 ):
     """Approve payroll period for processing."""
-    result = await db.execute(
-        select(PayrollPeriod).where(PayrollPeriod.id == period_id)
-    )
+    result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
     period = result.scalar_one_or_none()
 
     if not period:
@@ -307,9 +307,7 @@ async def export_payroll(
     format: str = Query("csv", pattern="^(csv|nacha|pdf)$"),
 ):
     """Export payroll data for payroll systems."""
-    result = await db.execute(
-        select(PayrollPeriod).where(PayrollPeriod.id == period_id)
-    )
+    result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
     period = result.scalar_one_or_none()
 
     if not period:
@@ -337,6 +335,7 @@ async def export_payroll(
 
 
 # Time Entry Endpoints
+
 
 @router.get("/time-entries")
 async def list_time_entries(
@@ -433,6 +432,7 @@ async def create_time_entry(
 
 class TimeEntryUpdate(BaseModel):
     """Request to update a time entry."""
+
     clock_in: Optional[datetime] = None
     clock_out: Optional[datetime] = None
     notes: Optional[str] = None
@@ -449,9 +449,7 @@ async def update_time_entry(
     current_user: CurrentUser,
 ):
     """Update a time entry."""
-    result = await db.execute(
-        select(TimeEntry).where(TimeEntry.id == entry_id)
-    )
+    result = await db.execute(select(TimeEntry).where(TimeEntry.id == entry_id))
     entry = result.scalar_one_or_none()
 
     if not entry:
@@ -513,9 +511,7 @@ async def approve_time_entry(
     current_user: CurrentUser,
 ):
     """Approve a time entry."""
-    result = await db.execute(
-        select(TimeEntry).where(TimeEntry.id == entry_id)
-    )
+    result = await db.execute(select(TimeEntry).where(TimeEntry.id == entry_id))
     entry = result.scalar_one_or_none()
 
     if not entry:
@@ -531,6 +527,7 @@ async def approve_time_entry(
 
 
 # Pay Rate Endpoints
+
 
 @router.get("/pay-rates/{technician_id}")
 async def get_pay_rate(
@@ -606,6 +603,7 @@ async def set_pay_rate(
 
 class CreatePeriodRequest(BaseModel):
     """Request to create a new payroll period."""
+
     start_date: date
     end_date: date
     period_type: str = "biweekly"
@@ -613,6 +611,7 @@ class CreatePeriodRequest(BaseModel):
 
 class UpdatePeriodRequest(BaseModel):
     """Request to update a payroll period."""
+
     start_date: Optional[date] = None
     end_date: Optional[date] = None
 
@@ -626,10 +625,7 @@ async def create_payroll_period(
     """Create a new payroll period."""
     # Validate dates
     if request.end_date <= request.start_date:
-        raise HTTPException(
-            status_code=400,
-            detail="End date must be after start date"
-        )
+        raise HTTPException(status_code=400, detail="End date must be after start date")
 
     try:
         # Check for overlapping periods
@@ -642,10 +638,7 @@ async def create_payroll_period(
             )
         )
         if overlap_result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=400,
-                detail="Period overlaps with existing period"
-            )
+            raise HTTPException(status_code=400, detail="Period overlaps with existing period")
 
         # Create the period
         period = PayrollPeriod(
@@ -662,10 +655,7 @@ async def create_payroll_period(
         raise
     except Exception as e:
         logger.error(f"Error creating payroll period: {type(e).__name__}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to create payroll period: {type(e).__name__}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to create payroll period: {type(e).__name__}")
 
     return _format_period(period)
 
@@ -678,9 +668,7 @@ async def update_payroll_period(
     current_user: CurrentUser,
 ):
     """Update a payroll period."""
-    result = await db.execute(
-        select(PayrollPeriod).where(PayrollPeriod.id == period_id)
-    )
+    result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
     period = result.scalar_one_or_none()
 
     if not period:
@@ -723,9 +711,7 @@ async def delete_payroll_period(
 ):
     """Delete a payroll period. Only draft/open periods can be deleted."""
     try:
-        result = await db.execute(
-            select(PayrollPeriod).where(PayrollPeriod.id == period_id)
-        )
+        result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
         period = result.scalar_one_or_none()
 
         if not period:
@@ -735,7 +721,7 @@ async def delete_payroll_period(
         if period.status not in ("open", "draft"):
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot delete period with status '{period.status}'. Only draft periods can be deleted."
+                detail=f"Cannot delete period with status '{period.status}'. Only draft periods can be deleted.",
             )
 
         # Delete associated time entries and commissions first (cascade)
@@ -760,24 +746,18 @@ async def get_period_summary(
     current_user: CurrentUser,
 ):
     """Get payroll summary by technician for a period."""
-    result = await db.execute(
-        select(PayrollPeriod).where(PayrollPeriod.id == period_id)
-    )
+    result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
     period = result.scalar_one_or_none()
 
     if not period:
         raise HTTPException(status_code=404, detail="Payroll period not found")
 
     # Get time entries grouped by technician
-    entries_result = await db.execute(
-        select(TimeEntry).where(TimeEntry.payroll_period_id == period_id)
-    )
+    entries_result = await db.execute(select(TimeEntry).where(TimeEntry.payroll_period_id == period_id))
     entries = entries_result.scalars().all()
 
     # Get commissions
-    comm_result = await db.execute(
-        select(Commission).where(Commission.payroll_period_id == period_id)
-    )
+    comm_result = await db.execute(select(Commission).where(Commission.payroll_period_id == period_id))
     commissions = comm_result.scalars().all()
 
     # Group by technician
@@ -888,6 +868,7 @@ class BulkApproveCommissionsRequest(BaseModel):
 
 class CommissionCreate(BaseModel):
     """Request to create a new commission."""
+
     technician_id: str
     work_order_id: Optional[str] = None
     invoice_id: Optional[str] = None
@@ -935,12 +916,14 @@ async def get_commission_rates(
 
 class CommissionCalculateRequest(BaseModel):
     """Request for commission auto-calculation."""
+
     work_order_id: str
     dump_site_id: Optional[str] = None  # Required for pumping/grease_trap jobs
 
 
 class CommissionCalculateResponse(BaseModel):
     """Response with calculated commission details."""
+
     work_order_id: str
     technician_id: str
     technician_name: Optional[str] = None
@@ -997,29 +980,28 @@ async def get_work_orders_for_commission(
         tech_ids = list(set(wo.technician_id for wo in available_wos if wo.technician_id))
         technicians = {}
         if tech_ids:
-            tech_result = await db.execute(
-                select(Technician).where(Technician.id.in_(tech_ids))
-            )
+            tech_result = await db.execute(select(Technician).where(Technician.id.in_(tech_ids)))
             technicians = {str(t.id): f"{t.first_name} {t.last_name}" for t in tech_result.scalars().all()}
 
         return {
             "work_orders": [
                 {
                     "id": wo.id,
-                    "job_type": wo.job_type.name if hasattr(wo.job_type, 'name') else str(wo.job_type),
+                    "job_type": wo.job_type.name if hasattr(wo.job_type, "name") else str(wo.job_type),
                     "total_amount": float(wo.total_amount) if wo.total_amount else 0,
                     "estimated_gallons": wo.estimated_gallons,
                     "technician_id": wo.technician_id,
                     "technician_name": technicians.get(wo.technician_id, None),
                     "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
-                    "service_address": f"{wo.service_address_line1 or ''}, {wo.service_city or ''}, {wo.service_state or ''}".strip(", "),
+                    "service_address": f"{wo.service_address_line1 or ''}, {wo.service_city or ''}, {wo.service_state or ''}".strip(
+                        ", "
+                    ),
                     "commission_rate": COMMISSION_RATES.get(
-                        wo.job_type.name if hasattr(wo.job_type, 'name') else str(wo.job_type),
-                        {"rate": 0.15}
+                        wo.job_type.name if hasattr(wo.job_type, "name") else str(wo.job_type), {"rate": 0.15}
                     )["rate"],
                     "requires_dump_site": COMMISSION_RATES.get(
-                        wo.job_type.name if hasattr(wo.job_type, 'name') else str(wo.job_type),
-                        {"apply_dump_fee": False}
+                        wo.job_type.name if hasattr(wo.job_type, "name") else str(wo.job_type),
+                        {"apply_dump_fee": False},
                     )["apply_dump_fee"],
                 }
                 for wo in available_wos
@@ -1039,9 +1021,7 @@ async def calculate_commission(
     """Calculate commission for a work order with dump fee deduction if applicable."""
     try:
         # Get work order
-        wo_result = await db.execute(
-            select(WorkOrder).where(WorkOrder.id == request.work_order_id)
-        )
+        wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == request.work_order_id))
         work_order = wo_result.scalar_one_or_none()
 
         if not work_order:
@@ -1051,7 +1031,7 @@ async def calculate_commission(
             raise HTTPException(status_code=400, detail="Work order must be completed to calculate commission")
 
         # Get job type as string
-        job_type = work_order.job_type.name if hasattr(work_order.job_type, 'name') else str(work_order.job_type)
+        job_type = work_order.job_type.name if hasattr(work_order.job_type, "name") else str(work_order.job_type)
         job_total = float(work_order.total_amount) if work_order.total_amount else 0
         gallons = work_order.estimated_gallons
 
@@ -1063,9 +1043,7 @@ async def calculate_commission(
         # Get technician name
         technician_name = None
         if work_order.technician_id:
-            tech_result = await db.execute(
-                select(Technician).where(Technician.id == work_order.technician_id)
-            )
+            tech_result = await db.execute(select(Technician).where(Technician.id == work_order.technician_id))
             tech = tech_result.scalar_one_or_none()
             if tech:
                 technician_name = f"{tech.first_name} {tech.last_name}"
@@ -1079,20 +1057,16 @@ async def calculate_commission(
         if apply_dump_fee:
             if not request.dump_site_id:
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"Dump site is required for {job_type} jobs to calculate commission"
+                    status_code=400, detail=f"Dump site is required for {job_type} jobs to calculate commission"
                 )
 
             if not gallons:
                 raise HTTPException(
-                    status_code=400,
-                    detail="Work order must have estimated gallons to calculate dump fee"
+                    status_code=400, detail="Work order must have estimated gallons to calculate dump fee"
                 )
 
             # Get dump site
-            dump_result = await db.execute(
-                select(DumpSite).where(DumpSite.id == request.dump_site_id)
-            )
+            dump_result = await db.execute(select(DumpSite).where(DumpSite.id == request.dump_site_id))
             dump_site = dump_result.scalar_one_or_none()
 
             if not dump_site:
@@ -1128,7 +1102,9 @@ async def calculate_commission(
                 warning = "Dump fees exceed job total - no commission earned"
             else:
                 steps.append(f"Commissionable: ${job_total:.2f} - ${dump_fee_total:.2f} = ${commissionable_amount:.2f}")
-                steps.append(f"Commission: ${commissionable_amount:.2f} × {commission_rate:.0%} = ${commission_amount:.2f}")
+                steps.append(
+                    f"Commission: ${commissionable_amount:.2f} × {commission_rate:.0%} = ${commission_amount:.2f}"
+                )
 
             breakdown = {
                 "formula": "(job_total - dump_fee) × rate",
@@ -1172,6 +1148,7 @@ async def calculate_commission(
 
 class CommissionUpdate(BaseModel):
     """Request to update an existing commission."""
+
     status: Optional[str] = None  # pending, approved, paid
     base_amount: Optional[float] = Field(None, ge=0)
     rate: Optional[float] = Field(None, ge=0, le=1)
@@ -1189,9 +1166,7 @@ async def bulk_approve_time_entries(
     """Bulk approve time entries."""
     approved = 0
     for entry_id in request.entry_ids:
-        result = await db.execute(
-            select(TimeEntry).where(TimeEntry.id == entry_id)
-        )
+        result = await db.execute(select(TimeEntry).where(TimeEntry.id == entry_id))
         entry = result.scalar_one_or_none()
         if entry and entry.status == "pending":
             entry.status = "approved"
@@ -1211,9 +1186,7 @@ async def delete_time_entry(
 ):
     """Delete a time entry. Only pending entries can be deleted."""
     try:
-        result = await db.execute(
-            select(TimeEntry).where(TimeEntry.id == entry_id)
-        )
+        result = await db.execute(select(TimeEntry).where(TimeEntry.id == entry_id))
         entry = result.scalar_one_or_none()
 
         if not entry:
@@ -1222,7 +1195,7 @@ async def delete_time_entry(
         if entry.status != "pending":
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot delete entry with status '{entry.status}'. Only pending entries can be deleted."
+                detail=f"Cannot delete entry with status '{entry.status}'. Only pending entries can be deleted.",
             )
 
         await db.delete(entry)
@@ -1247,10 +1220,7 @@ async def create_commission(
         # Validate dump site is provided for pumping and grease trap jobs
         if request.job_type in ["pumping", "grease_trap"]:
             if not request.dump_site_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Dump site is required for pumping and grease trap jobs"
-                )
+                raise HTTPException(status_code=400, detail="Dump site is required for pumping and grease trap jobs")
 
         # Calculate commission amount if not provided
         commission_amount = request.commission_amount
@@ -1264,9 +1234,7 @@ async def create_commission(
         earned_date = request.earned_date or date.today()
 
         # Validate technician exists (optional, could be ID from external system)
-        tech_result = await db.execute(
-            select(Technician).where(Technician.id == request.technician_id)
-        )
+        tech_result = await db.execute(select(Technician).where(Technician.id == request.technician_id))
         technician = tech_result.scalar_one_or_none()
 
         commission = Commission(
@@ -1331,9 +1299,7 @@ async def update_commission(
 ):
     """Update an existing commission."""
     try:
-        result = await db.execute(
-            select(Commission).where(Commission.id == commission_id)
-        )
+        result = await db.execute(select(Commission).where(Commission.id == commission_id))
         commission = result.scalar_one_or_none()
 
         if not commission:
@@ -1372,9 +1338,7 @@ async def update_commission(
         await db.refresh(commission)
 
         # Get technician name
-        tech_result = await db.execute(
-            select(Technician).where(Technician.id == commission.technician_id)
-        )
+        tech_result = await db.execute(select(Technician).where(Technician.id == commission.technician_id))
         technician = tech_result.scalar_one_or_none()
 
         return {
@@ -1407,9 +1371,7 @@ async def delete_commission(
 ):
     """Delete a commission (only if pending)."""
     try:
-        result = await db.execute(
-            select(Commission).where(Commission.id == commission_id)
-        )
+        result = await db.execute(select(Commission).where(Commission.id == commission_id))
         commission = result.scalar_one_or_none()
 
         if not commission:
@@ -1418,7 +1380,7 @@ async def delete_commission(
         if commission.status != "pending":
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot delete commission in '{commission.status}' status. Only pending commissions can be deleted."
+                detail=f"Cannot delete commission in '{commission.status}' status. Only pending commissions can be deleted.",
             )
 
         await db.delete(commission)
@@ -1439,9 +1401,7 @@ async def bulk_approve_commissions(
     """Bulk approve commissions."""
     approved = 0
     for comm_id in request.commission_ids:
-        result = await db.execute(
-            select(Commission).where(Commission.id == comm_id)
-        )
+        result = await db.execute(select(Commission).where(Commission.id == comm_id))
         comm = result.scalar_one_or_none()
         if comm and comm.status == "pending":
             comm.status = "approved"
@@ -1524,7 +1484,9 @@ async def create_pay_rate(
         technician_id=request.technician_id,
         pay_type=request.pay_type or "hourly",
         hourly_rate=request.hourly_rate,
-        overtime_multiplier=(request.overtime_rate / request.hourly_rate) if request.hourly_rate and request.overtime_rate else 1.5,
+        overtime_multiplier=(request.overtime_rate / request.hourly_rate)
+        if request.hourly_rate and request.overtime_rate
+        else 1.5,
         salary_amount=request.salary_amount,
         job_commission_rate=request.commission_rate or 0,
         upsell_commission_rate=0,
@@ -1558,9 +1520,7 @@ async def update_pay_rate(
     current_user: CurrentUser,
 ):
     """Update an existing pay rate."""
-    result = await db.execute(
-        select(TechnicianPayRate).where(TechnicianPayRate.id == rate_id)
-    )
+    result = await db.execute(select(TechnicianPayRate).where(TechnicianPayRate.id == rate_id))
     rate = result.scalar_one_or_none()
 
     if not rate:
@@ -1605,9 +1565,7 @@ async def delete_pay_rate(
     current_user: CurrentUser,
 ):
     """Delete a pay rate (soft delete - deactivates it)."""
-    result = await db.execute(
-        select(TechnicianPayRate).where(TechnicianPayRate.id == rate_id)
-    )
+    result = await db.execute(select(TechnicianPayRate).where(TechnicianPayRate.id == rate_id))
     rate = result.scalar_one_or_none()
 
     if not rate:
@@ -1622,6 +1580,7 @@ async def delete_pay_rate(
 
 # Stats
 
+
 @router.get("/stats")
 async def get_payroll_stats(
     db: DbSession,
@@ -1634,10 +1593,12 @@ async def get_payroll_stats(
 
         # Current period stats
         current_result = await db.execute(
-            select(PayrollPeriod).where(
+            select(PayrollPeriod)
+            .where(
                 PayrollPeriod.start_date <= today,
                 PayrollPeriod.end_date >= today,
-            ).limit(1)
+            )
+            .limit(1)
         )
         current_period = current_result.scalar_one_or_none()
 
@@ -1655,9 +1616,7 @@ async def get_payroll_stats(
 
         # Pending approvals
         pending_result = await db.execute(
-            select(func.count()).select_from(TimeEntry).where(
-                TimeEntry.status == "pending"
-            )
+            select(func.count()).select_from(TimeEntry).where(TimeEntry.status == "pending")
         )
         pending_count = pending_result.scalar() or 0
     except Exception as e:
@@ -1673,7 +1632,9 @@ async def get_payroll_stats(
         "current_period": {
             "hours": (current_period.total_regular_hours or 0) + (current_period.total_overtime_hours or 0),
             "amount": current_period.total_gross_pay or 0,
-        } if current_period else None,
+        }
+        if current_period
+        else None,
         "ytd_gross_pay": ytd_gross or 0,
         "ytd_commissions": ytd_commissions or 0,
         "pending_approvals": pending_count,
@@ -1683,6 +1644,7 @@ async def get_payroll_stats(
 # Period detail - MUST be after all fixed-path GET routes to avoid catching
 # /time-entries, /commissions, /pay-rates, /stats as period_id
 
+
 @router.get("/{period_id}")
 async def get_payroll_period(
     period_id: str,
@@ -1691,9 +1653,7 @@ async def get_payroll_period(
 ):
     """Get payroll period with detail."""
     try:
-        result = await db.execute(
-            select(PayrollPeriod).where(PayrollPeriod.id == period_id)
-        )
+        result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
         period = result.scalar_one_or_none()
     except Exception as e:
         logger.error(f"Error fetching period {period_id}: {type(e).__name__}: {str(e)}")
@@ -1703,15 +1663,11 @@ async def get_payroll_period(
         raise HTTPException(status_code=404, detail="Payroll period not found")
 
     # Get time entries for period
-    entries_result = await db.execute(
-        select(TimeEntry).where(TimeEntry.payroll_period_id == period_id)
-    )
+    entries_result = await db.execute(select(TimeEntry).where(TimeEntry.payroll_period_id == period_id))
     entries = entries_result.scalars().all()
 
     # Get commissions for period
-    comm_result = await db.execute(
-        select(Commission).where(Commission.payroll_period_id == period_id)
-    )
+    comm_result = await db.execute(select(Commission).where(Commission.payroll_period_id == period_id))
     commissions = comm_result.scalars().all()
 
     # Group by technician
@@ -1726,13 +1682,15 @@ async def get_payroll_period(
             }
         by_technician[tech_id]["regular_hours"] += entry.regular_hours or 0
         by_technician[tech_id]["overtime_hours"] += entry.overtime_hours or 0
-        by_technician[tech_id]["entries"].append({
-            "id": str(entry.id),
-            "date": entry.entry_date.isoformat(),
-            "regular_hours": entry.regular_hours,
-            "overtime_hours": entry.overtime_hours,
-            "status": entry.status,
-        })
+        by_technician[tech_id]["entries"].append(
+            {
+                "id": str(entry.id),
+                "date": entry.entry_date.isoformat(),
+                "regular_hours": entry.regular_hours,
+                "overtime_hours": entry.overtime_hours,
+                "status": entry.status,
+            }
+        )
 
     return {
         "id": str(period.id),
@@ -1750,6 +1708,7 @@ async def get_payroll_period(
 
 
 # Commission Dashboard Endpoints
+
 
 @router.get("/commissions/stats")
 async def get_commission_stats(
@@ -1900,9 +1859,7 @@ async def get_commission_leaderboard(
         # Get technician names
         tech_ids = list(by_tech.keys())
         if tech_ids:
-            tech_result = await db.execute(
-                select(Technician).where(Technician.id.in_(tech_ids))
-            )
+            tech_result = await db.execute(select(Technician).where(Technician.id.in_(tech_ids)))
             technicians = {str(t.id): t for t in tech_result.scalars().all()}
         else:
             technicians = {}
@@ -1918,17 +1875,19 @@ async def get_commission_leaderboard(
             trend_pct = ((data["total_earned"] - prev_total) / prev_total * 100) if prev_total > 0 else 0
             trend = "up" if trend_pct > 5 else ("down" if trend_pct < -5 else "neutral")
 
-            entries.append({
-                "technician_id": tech_id,
-                "technician_name": f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{tech_id}",
-                "total_earned": round(data["total_earned"], 2),
-                "jobs_completed": data["jobs_completed"],
-                "average_commission": round(avg_commission, 2),
-                "commission_rate": round(avg_rate, 4),
-                "trend": trend,
-                "trend_percentage": round(abs(trend_pct), 1),
-                "rank_change": 0,  # Would need historical data to calculate
-            })
+            entries.append(
+                {
+                    "technician_id": tech_id,
+                    "technician_name": f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{tech_id}",
+                    "total_earned": round(data["total_earned"], 2),
+                    "jobs_completed": data["jobs_completed"],
+                    "average_commission": round(avg_commission, 2),
+                    "commission_rate": round(avg_rate, 4),
+                    "trend": trend,
+                    "trend_percentage": round(abs(trend_pct), 1),
+                    "rank_change": 0,  # Would need historical data to calculate
+                }
+            )
 
         # Sort by total earned and assign ranks
         entries.sort(key=lambda x: x["total_earned"], reverse=True)
@@ -1970,23 +1929,27 @@ async def get_commission_insights(
             pending_amount = sum(c.commission_amount or 0 for c in pending)
             old_pending = [c for c in pending if (today - c.earned_date).days > 5]
             if len(old_pending) > 0:
-                insights.append({
-                    "id": "pending_old",
-                    "type": "alert",
-                    "severity": "warning",
-                    "title": f"{len(old_pending)} commissions pending > 5 days",
-                    "description": f"${sum(c.commission_amount or 0 for c in old_pending):,.2f} in commissions may need management review",
-                    "action": {"label": "Review Now", "callback_type": "view_pending"},
-                })
+                insights.append(
+                    {
+                        "id": "pending_old",
+                        "type": "alert",
+                        "severity": "warning",
+                        "title": f"{len(old_pending)} commissions pending > 5 days",
+                        "description": f"${sum(c.commission_amount or 0 for c in old_pending):,.2f} in commissions may need management review",
+                        "action": {"label": "Review Now", "callback_type": "view_pending"},
+                    }
+                )
             else:
-                insights.append({
-                    "id": "pending_normal",
-                    "type": "info",
-                    "severity": "info",
-                    "title": f"{len(pending)} commissions awaiting approval",
-                    "description": f"${pending_amount:,.2f} total pending",
-                    "metric": {"label": "Pending", "value": f"${pending_amount:,.0f}"},
-                })
+                insights.append(
+                    {
+                        "id": "pending_normal",
+                        "type": "info",
+                        "severity": "info",
+                        "title": f"{len(pending)} commissions awaiting approval",
+                        "description": f"${pending_amount:,.2f} total pending",
+                        "metric": {"label": "Pending", "value": f"${pending_amount:,.0f}"},
+                    }
+                )
 
         # Insight 2: Top performer
         by_tech = {}
@@ -1998,20 +1961,20 @@ async def get_commission_insights(
 
         if by_tech:
             top_tech = max(by_tech.items(), key=lambda x: x[1])
-            tech_result = await db.execute(
-                select(Technician).where(Technician.id == top_tech[0])
-            )
+            tech_result = await db.execute(select(Technician).where(Technician.id == top_tech[0]))
             tech = tech_result.scalar_one_or_none()
             tech_name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{top_tech[0]}"
 
-            insights.append({
-                "id": "top_performer",
-                "type": "trend",
-                "severity": "success",
-                "title": f"{tech_name} is leading this month",
-                "description": "Top earner for current period",
-                "metric": {"label": "Total Earned", "value": f"${top_tech[1]:,.0f}"},
-            })
+            insights.append(
+                {
+                    "id": "top_performer",
+                    "type": "trend",
+                    "severity": "success",
+                    "title": f"{tech_name} is leading this month",
+                    "description": "Top earner for current period",
+                    "metric": {"label": "Total Earned", "value": f"${top_tech[1]:,.0f}"},
+                }
+            )
 
         # Insight 3: Month progress
         days_passed = (today - month_start).days + 1
@@ -2020,14 +1983,20 @@ async def get_commission_insights(
 
         if total > 0:
             projected = total / days_passed * days_in_month
-            insights.append({
-                "id": "projection",
-                "type": "opportunity",
-                "severity": "info",
-                "title": f"On track for ${projected:,.0f} this month",
-                "description": f"{progress_pct}% of month complete",
-                "metric": {"label": "Projected", "value": f"${projected:,.0f}", "change": f"{progress_pct}% complete"},
-            })
+            insights.append(
+                {
+                    "id": "projection",
+                    "type": "opportunity",
+                    "severity": "info",
+                    "title": f"On track for ${projected:,.0f} this month",
+                    "description": f"{progress_pct}% of month complete",
+                    "metric": {
+                        "label": "Projected",
+                        "value": f"${projected:,.0f}",
+                        "change": f"{progress_pct}% complete",
+                    },
+                }
+            )
 
         return {"insights": insights}
     except Exception as e:
@@ -2048,9 +2017,7 @@ async def bulk_mark_paid_commissions(
     """Bulk mark commissions as paid."""
     paid = 0
     for comm_id in request.commission_ids:
-        result = await db.execute(
-            select(Commission).where(Commission.id == comm_id)
-        )
+        result = await db.execute(select(Commission).where(Commission.id == comm_id))
         comm = result.scalar_one_or_none()
         if comm and comm.status == "approved":
             comm.status = "paid"
@@ -2093,9 +2060,7 @@ async def export_commissions(
         # Get technician names
         tech_ids = list(set(c.technician_id for c in commissions))
         if tech_ids:
-            tech_result = await db.execute(
-                select(Technician).where(Technician.id.in_(tech_ids))
-            )
+            tech_result = await db.execute(select(Technician).where(Technician.id.in_(tech_ids)))
             technicians = {str(t.id): f"{t.first_name} {t.last_name}" for t in tech_result.scalars().all()}
         else:
             technicians = {}
@@ -2103,22 +2068,23 @@ async def export_commissions(
         # Build CSV
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "Date", "Technician", "Work Order", "Type", "Job Total",
-            "Rate", "Commission Amount", "Status"
-        ])
+        writer.writerow(
+            ["Date", "Technician", "Work Order", "Type", "Job Total", "Rate", "Commission Amount", "Status"]
+        )
 
         for c in commissions:
-            writer.writerow([
-                c.earned_date.isoformat(),
-                technicians.get(c.technician_id, c.technician_id),
-                c.work_order_id or "",
-                c.commission_type or "job_completion",
-                f"${c.base_amount:.2f}" if c.base_amount else "",
-                f"{(c.rate or 0) * 100:.0f}%",
-                f"${c.commission_amount:.2f}" if c.commission_amount else "",
-                c.status,
-            ])
+            writer.writerow(
+                [
+                    c.earned_date.isoformat(),
+                    technicians.get(c.technician_id, c.technician_id),
+                    c.work_order_id or "",
+                    c.commission_type or "job_completion",
+                    f"${c.base_amount:.2f}" if c.base_amount else "",
+                    f"{(c.rate or 0) * 100:.0f}%",
+                    f"${c.commission_amount:.2f}" if c.commission_amount else "",
+                    c.status,
+                ]
+            )
 
         output.seek(0)
         return StreamingResponse(

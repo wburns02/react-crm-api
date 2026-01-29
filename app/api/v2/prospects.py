@@ -2,6 +2,7 @@
 Prospects API - Customers in prospect stages (not yet won).
 Prospects are customers with prospect_stage != 'won'.
 """
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, or_
 from typing import Optional
@@ -18,7 +19,7 @@ from app.schemas.customer import (
 router = APIRouter()
 
 # Prospect stages (not won)
-PROSPECT_STAGES = ['new_lead', 'contacted', 'qualified', 'quoted', 'negotiation', 'lost']
+PROSPECT_STAGES = ["new_lead", "contacted", "qualified", "quoted", "negotiation", "lost"]
 
 
 @router.get("/", response_model=CustomerListResponse)
@@ -35,11 +36,8 @@ async def list_prospects(
     # Base query - filter to prospect stages only (exclude 'won')
     # Also exclude soft-deleted prospects (is_active=False)
     query = select(Customer).where(
-        or_(
-            Customer.prospect_stage.in_(PROSPECT_STAGES),
-            Customer.prospect_stage.is_(None)
-        ),
-        Customer.is_active == True  # Exclude soft-deleted prospects
+        or_(Customer.prospect_stage.in_(PROSPECT_STAGES), Customer.prospect_stage.is_(None)),
+        Customer.is_active == True,  # Exclude soft-deleted prospects
     )
 
     # Apply filters
@@ -107,8 +105,8 @@ async def create_prospect(
     """Create a new prospect."""
     data = prospect_data.model_dump()
     # Default to new_lead stage if not specified
-    if not data.get('prospect_stage'):
-        data['prospect_stage'] = 'new_lead'
+    if not data.get("prospect_stage"):
+        data["prospect_stage"] = "new_lead"
 
     prospect = Customer(**data)
     db.add(prospect)

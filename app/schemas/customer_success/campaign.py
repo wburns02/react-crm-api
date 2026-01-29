@@ -65,8 +65,10 @@ class ExecutionStatus(str, Enum):
 
 # Campaign Step Schemas
 
+
 class CampaignStepBase(BaseModel):
     """Base campaign step schema."""
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     step_type: StepType
@@ -86,11 +88,13 @@ class CampaignStepBase(BaseModel):
 
 class CampaignStepCreate(CampaignStepBase):
     """Schema for creating a campaign step."""
+
     pass
 
 
 class CampaignStepUpdate(BaseModel):
     """Schema for updating a campaign step."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     step_type: Optional[StepType] = None
@@ -110,6 +114,7 @@ class CampaignStepUpdate(BaseModel):
 
 class CampaignStepResponse(CampaignStepBase):
     """Campaign step response."""
+
     id: int
     campaign_id: int
     sent_count: int = 0
@@ -127,8 +132,10 @@ class CampaignStepResponse(CampaignStepBase):
 
 # Campaign Schemas
 
+
 class CampaignBase(BaseModel):
     """Base campaign schema."""
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     campaign_type: CampaignType = CampaignType.NURTURE
@@ -149,11 +156,13 @@ class CampaignBase(BaseModel):
 
 class CampaignCreate(CampaignBase):
     """Schema for creating a campaign."""
+
     steps: Optional[list[CampaignStepCreate]] = None
 
 
 class CampaignUpdate(BaseModel):
     """Schema for updating a campaign."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     campaign_type: Optional[CampaignType] = None
@@ -175,6 +184,7 @@ class CampaignUpdate(BaseModel):
 
 class CampaignResponse(CampaignBase):
     """Campaign response schema."""
+
     id: int
     status: CampaignStatus = CampaignStatus.DRAFT
 
@@ -207,6 +217,7 @@ class CampaignResponse(CampaignBase):
 
 class CampaignListResponse(BaseModel):
     """Paginated campaign list response."""
+
     items: list[CampaignResponse]
     total: int
     page: int
@@ -215,19 +226,23 @@ class CampaignListResponse(BaseModel):
 
 # Enrollment Schemas
 
+
 class CampaignEnrollmentCreate(BaseModel):
     """Schema for enrolling a customer."""
+
     customer_id: int
 
 
 class CampaignEnrollmentUpdate(BaseModel):
     """Schema for updating an enrollment."""
+
     status: Optional[EnrollmentStatus] = None
     exit_reason: Optional[str] = None
 
 
 class CampaignEnrollmentResponse(BaseModel):
     """Campaign enrollment response."""
+
     id: int
     campaign_id: int
     customer_id: int
@@ -253,6 +268,7 @@ class CampaignEnrollmentResponse(BaseModel):
 
 class EnrollmentListResponse(BaseModel):
     """Paginated enrollment list response."""
+
     items: list[CampaignEnrollmentResponse]
     total: int
     page: int
@@ -261,8 +277,10 @@ class EnrollmentListResponse(BaseModel):
 
 # Step Execution Schemas
 
+
 class StepExecutionResponse(BaseModel):
     """Step execution response."""
+
     id: int
     enrollment_id: int
     step_id: int
@@ -282,8 +300,10 @@ class StepExecutionResponse(BaseModel):
 
 # Campaign Analytics
 
+
 class CampaignAnalytics(BaseModel):
     """Campaign analytics response."""
+
     campaign_id: int
     total_enrolled: int = 0
     total_completed: int = 0

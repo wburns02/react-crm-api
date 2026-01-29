@@ -51,17 +51,19 @@ async def debug_technicians(
 
     debug_info = []
     for row in rows:
-        debug_info.append({
-            "id": {"value": row[0], "type": str(type(row[0]))},
-            "first_name": {"value": row[1], "type": str(type(row[1]))},
-            "last_name": {"value": row[2], "type": str(type(row[2]))},
-            "email": {"value": row[3], "type": str(type(row[3]))},
-            "phone": {"value": row[4], "type": str(type(row[4]))},
-            "is_active": {"value": row[6], "type": str(type(row[6]))},
-            "skills": {"value": str(row[7]), "type": str(type(row[7]))},
-            "created_at": {"value": str(row[21]) if row[21] else None, "type": str(type(row[21]))},
-            "updated_at": {"value": str(row[22]) if row[22] else None, "type": str(type(row[22]))},
-        })
+        debug_info.append(
+            {
+                "id": {"value": row[0], "type": str(type(row[0]))},
+                "first_name": {"value": row[1], "type": str(type(row[1]))},
+                "last_name": {"value": row[2], "type": str(type(row[2]))},
+                "email": {"value": row[3], "type": str(type(row[3]))},
+                "phone": {"value": row[4], "type": str(type(row[4]))},
+                "is_active": {"value": row[6], "type": str(type(row[6]))},
+                "skills": {"value": str(row[7]), "type": str(type(row[7]))},
+                "created_at": {"value": str(row[21]) if row[21] else None, "type": str(type(row[21]))},
+                "updated_at": {"value": str(row[22]) if row[22] else None, "type": str(type(row[22]))},
+            }
+        )
 
     return {"debug_info": debug_info}
 
@@ -116,43 +118,45 @@ async def list_technicians_raw(
         created_at = None
         if row[21]:
             try:
-                created_at = row[21].isoformat() if hasattr(row[21], 'isoformat') else str(row[21])
+                created_at = row[21].isoformat() if hasattr(row[21], "isoformat") else str(row[21])
             except Exception:
                 created_at = None
 
         updated_at = None
         if row[22]:
             try:
-                updated_at = row[22].isoformat() if hasattr(row[22], 'isoformat') else str(row[22])
+                updated_at = row[22].isoformat() if hasattr(row[22], "isoformat") else str(row[22])
             except Exception:
                 updated_at = None
 
-        items.append({
-            "id": str(row[0]),
-            "first_name": first_name,
-            "last_name": last_name,
-            "full_name": f"{first_name} {last_name}".strip(),
-            "email": row[3],
-            "phone": row[4],
-            "employee_id": row[5],
-            "is_active": bool(row[6]) if row[6] is not None else True,
-            "skills": skills,
-            "assigned_vehicle": row[8],
-            "vehicle_capacity_gallons": float(row[9]) if row[9] else None,
-            "license_number": row[10],
-            "license_expiry": str(row[11]) if row[11] else None,
-            "hourly_rate": float(row[12]) if row[12] else None,
-            "notes": row[13],
-            "home_region": row[14],
-            "home_address": row[15],
-            "home_city": row[16],
-            "home_state": row[17],
-            "home_postal_code": row[18],
-            "home_latitude": float(row[19]) if row[19] else None,
-            "home_longitude": float(row[20]) if row[20] else None,
-            "created_at": created_at,
-            "updated_at": updated_at,
-        })
+        items.append(
+            {
+                "id": str(row[0]),
+                "first_name": first_name,
+                "last_name": last_name,
+                "full_name": f"{first_name} {last_name}".strip(),
+                "email": row[3],
+                "phone": row[4],
+                "employee_id": row[5],
+                "is_active": bool(row[6]) if row[6] is not None else True,
+                "skills": skills,
+                "assigned_vehicle": row[8],
+                "vehicle_capacity_gallons": float(row[9]) if row[9] else None,
+                "license_number": row[10],
+                "license_expiry": str(row[11]) if row[11] else None,
+                "hourly_rate": float(row[12]) if row[12] else None,
+                "notes": row[13],
+                "home_region": row[14],
+                "home_address": row[15],
+                "home_city": row[16],
+                "home_state": row[17],
+                "home_postal_code": row[18],
+                "home_latitude": float(row[19]) if row[19] else None,
+                "home_longitude": float(row[20]) if row[20] else None,
+                "created_at": created_at,
+                "updated_at": updated_at,
+            }
+        )
 
     return {"items": items, "total": len(items), "page": 1, "page_size": 20}
 
@@ -208,7 +212,9 @@ async def list_technicians(
             where_clauses.append("is_active = true")
 
         if search:
-            where_clauses.append("(first_name ILIKE :search OR last_name ILIKE :search OR email ILIKE :search OR employee_id ILIKE :search)")
+            where_clauses.append(
+                "(first_name ILIKE :search OR last_name ILIKE :search OR email ILIKE :search OR employee_id ILIKE :search)"
+            )
             params["search"] = f"%{search}%"
 
         where_sql = ""
@@ -262,43 +268,45 @@ async def list_technicians(
             created_at = None
             if row[21]:
                 try:
-                    created_at = row[21].isoformat() if hasattr(row[21], 'isoformat') else str(row[21])
+                    created_at = row[21].isoformat() if hasattr(row[21], "isoformat") else str(row[21])
                 except Exception:
                     created_at = None
 
             updated_at = None
             if row[22]:
                 try:
-                    updated_at = row[22].isoformat() if hasattr(row[22], 'isoformat') else str(row[22])
+                    updated_at = row[22].isoformat() if hasattr(row[22], "isoformat") else str(row[22])
                 except Exception:
                     updated_at = None
 
-            items.append({
-                "id": str(row[0]),
-                "first_name": first_name,
-                "last_name": last_name,
-                "full_name": f"{first_name} {last_name}".strip(),
-                "email": row[3],
-                "phone": row[4],
-                "employee_id": row[5],
-                "is_active": bool(row[6]) if row[6] is not None else True,
-                "skills": skills,
-                "assigned_vehicle": row[8],
-                "vehicle_capacity_gallons": float(row[9]) if row[9] else None,
-                "license_number": row[10],
-                "license_expiry": str(row[11]) if row[11] else None,
-                "hourly_rate": float(row[12]) if row[12] else None,
-                "notes": row[13],
-                "home_region": row[14],
-                "home_address": row[15],
-                "home_city": row[16],
-                "home_state": row[17],
-                "home_postal_code": row[18],
-                "home_latitude": float(row[19]) if row[19] else None,
-                "home_longitude": float(row[20]) if row[20] else None,
-                "created_at": created_at,
-                "updated_at": updated_at,
-            })
+            items.append(
+                {
+                    "id": str(row[0]),
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "full_name": f"{first_name} {last_name}".strip(),
+                    "email": row[3],
+                    "phone": row[4],
+                    "employee_id": row[5],
+                    "is_active": bool(row[6]) if row[6] is not None else True,
+                    "skills": skills,
+                    "assigned_vehicle": row[8],
+                    "vehicle_capacity_gallons": float(row[9]) if row[9] else None,
+                    "license_number": row[10],
+                    "license_expiry": str(row[11]) if row[11] else None,
+                    "hourly_rate": float(row[12]) if row[12] else None,
+                    "notes": row[13],
+                    "home_region": row[14],
+                    "home_address": row[15],
+                    "home_city": row[16],
+                    "home_state": row[17],
+                    "home_postal_code": row[18],
+                    "home_latitude": float(row[19]) if row[19] else None,
+                    "home_longitude": float(row[20]) if row[20] else None,
+                    "created_at": created_at,
+                    "updated_at": updated_at,
+                }
+            )
 
         return {
             "items": items,
@@ -308,6 +316,7 @@ async def list_technicians(
         }
     except Exception as e:
         import traceback
+
         logger.error(f"Error in list_technicians: {traceback.format_exc()}")
         return {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}
 
@@ -315,6 +324,7 @@ async def list_technicians(
 # =====================================================
 # Performance Stats Endpoints (MUST be before /{technician_id})
 # =====================================================
+
 
 @router.get("/{technician_id}/performance", response_model=TechnicianPerformanceStats)
 async def get_technician_performance(
@@ -327,9 +337,7 @@ async def get_technician_performance(
 
     try:
         # First verify technician exists
-        tech_result = await db.execute(
-            select(Technician).where(Technician.id == technician_id)
-        )
+        tech_result = await db.execute(select(Technician).where(Technician.id == technician_id))
         if not tech_result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -395,8 +403,7 @@ async def get_technician_performance(
     except Exception as e:
         logger.error(f"Error getting technician performance: {traceback.format_exc()}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get performance stats: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get performance stats: {str(e)}"
         )
 
 
@@ -415,9 +422,7 @@ async def get_technician_jobs(
 
     try:
         # First verify technician exists
-        tech_result = await db.execute(
-            select(Technician).where(Technician.id == technician_id)
-        )
+        tech_result = await db.execute(select(Technician).where(Technician.id == technician_id))
         if not tech_result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -462,10 +467,7 @@ async def get_technician_jobs(
             LIMIT :limit OFFSET :offset
         """
 
-        result = await db.execute(
-            sql_text(jobs_sql),
-            {"tech_id": technician_id, "limit": page_size, "offset": offset}
-        )
+        result = await db.execute(sql_text(jobs_sql), {"tech_id": technician_id, "limit": page_size, "offset": offset})
         rows = result.fetchall()
 
         # Get total count
@@ -486,31 +488,33 @@ async def get_technician_jobs(
             tank_size = None
             notes = row[10] or ""
 
-            if row[6] in ('pumping', 'grease_trap'):
-                gallon_match = re.search(r'(\d+)\s*(?:gallons?|gal)', notes, re.IGNORECASE)
+            if row[6] in ("pumping", "grease_trap"):
+                gallon_match = re.search(r"(\d+)\s*(?:gallons?|gal)", notes, re.IGNORECASE)
                 if gallon_match:
                     gallons_pumped = int(gallon_match.group(1))
-                tank_match = re.search(r'(\d+)\s*(?:gallon)?\s*tank', notes, re.IGNORECASE)
+                tank_match = re.search(r"(\d+)\s*(?:gallon)?\s*tank", notes, re.IGNORECASE)
                 if tank_match:
                     tank_size = f"{tank_match.group(1)} gallon"
 
-            items.append(TechnicianJobDetail(
-                id=str(row[0]),
-                scheduled_date=row[1],
-                completed_date=row[2],
-                customer_id=row[3],
-                customer_name=row[4],
-                service_location=row[5],
-                job_type=row[6],
-                status=row[7],
-                total_amount=float(row[8] or 0),
-                duration_minutes=int(row[9]) if row[9] else None,
-                notes=notes if notes else None,
-                gallons_pumped=gallons_pumped,
-                tank_size=tank_size,
-                labor_hours=float(row[11]) if row[11] else None,
-                parts_cost=float(row[12]) if row[12] else None,
-            ))
+            items.append(
+                TechnicianJobDetail(
+                    id=str(row[0]),
+                    scheduled_date=row[1],
+                    completed_date=row[2],
+                    customer_id=row[3],
+                    customer_name=row[4],
+                    service_location=row[5],
+                    job_type=row[6],
+                    status=row[7],
+                    total_amount=float(row[8] or 0),
+                    duration_minutes=int(row[9]) if row[9] else None,
+                    notes=notes if notes else None,
+                    gallons_pumped=gallons_pumped,
+                    tank_size=tank_size,
+                    labor_hours=float(row[11]) if row[11] else None,
+                    parts_cost=float(row[12]) if row[12] else None,
+                )
+            )
 
         return TechnicianJobsResponse(
             items=items,
@@ -524,15 +528,13 @@ async def get_technician_jobs(
         raise
     except Exception as e:
         logger.error(f"Error getting technician jobs: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get jobs: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get jobs: {str(e)}")
 
 
 # =====================================================
 # Basic CRUD Endpoints
 # =====================================================
+
 
 @router.get("/{technician_id}", response_model=TechnicianResponse)
 async def get_technician(
@@ -587,8 +589,7 @@ async def create_technician(
     except Exception as e:
         logger.error(f"Error creating technician: {traceback.format_exc()}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create technician: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create technician: {str(e)}"
         )
 
 

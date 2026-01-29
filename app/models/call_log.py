@@ -3,6 +3,7 @@
 NOTE: This model matches the EXISTING production database schema.
 The column names here must match the actual call_logs table.
 """
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Time, JSON, Float
 from sqlalchemy.sql import func
 
@@ -96,6 +97,7 @@ class CallLog(Base):
     def start_time(self):
         """Combine call_date and call_time into a datetime."""
         from datetime import datetime
+
         if self.call_date and self.call_time:
             return datetime.combine(self.call_date, self.call_time)
         elif self.call_date:

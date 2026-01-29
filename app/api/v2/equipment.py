@@ -1,4 +1,5 @@
 """Equipment API - Customer equipment tracking (septic tanks, pumps, etc.)."""
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 from typing import Optional
@@ -32,7 +33,7 @@ def format_date(d: Optional[date]) -> Optional[str]:
     """Format date object to string."""
     if not d:
         return None
-    return d.isoformat() if hasattr(d, 'isoformat') else str(d)
+    return d.isoformat() if hasattr(d, "isoformat") else str(d)
 
 
 def equipment_to_response(equipment: Equipment) -> dict:
@@ -119,6 +120,7 @@ async def list_equipment(
         }
     except Exception as e:
         import traceback
+
         logger.error(f"Error in list_equipment: {traceback.format_exc()}")
         return {"items": [], "total": 0, "page": page, "page_size": page_size, "error": str(e)}
 
@@ -227,11 +229,15 @@ async def get_customer_service_due(
 ):
     """Get all equipment for a customer that needs service."""
     today = date.today()
-    query = select(Equipment).where(
-        Equipment.customer_id == int(customer_id),
-        Equipment.next_service_date <= today,
-        Equipment.is_active == "active"
-    ).order_by(Equipment.next_service_date)
+    query = (
+        select(Equipment)
+        .where(
+            Equipment.customer_id == int(customer_id),
+            Equipment.next_service_date <= today,
+            Equipment.is_active == "active",
+        )
+        .order_by(Equipment.next_service_date)
+    )
 
     result = await db.execute(query)
     equipment_list = result.scalars().all()

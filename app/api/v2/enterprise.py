@@ -26,8 +26,10 @@ router = APIRouter()
 # Pydantic Response Schemas
 # =============================================================================
 
+
 class Region(BaseModel):
     """Region/location data."""
+
     id: str
     name: str
     code: str
@@ -45,6 +47,7 @@ class Region(BaseModel):
 
 class RegionPerformance(BaseModel):
     """Performance metrics for a region."""
+
     region_id: str
     region_name: str
     revenue: float
@@ -62,6 +65,7 @@ class RegionPerformance(BaseModel):
 
 class FranchiseRoyalty(BaseModel):
     """Franchise royalty calculation."""
+
     id: str
     franchise_id: str
     franchise_name: str
@@ -80,6 +84,7 @@ class FranchiseRoyalty(BaseModel):
 
 class Territory(BaseModel):
     """Territory definition."""
+
     id: str
     name: str
     region_id: str
@@ -94,6 +99,7 @@ class Territory(BaseModel):
 
 class Role(BaseModel):
     """User role definition."""
+
     id: str
     name: str
     description: Optional[str] = None
@@ -106,6 +112,7 @@ class Role(BaseModel):
 
 class UserRoleAssignment(BaseModel):
     """User role assignment."""
+
     id: str
     user_id: str
     user_name: Optional[str] = None
@@ -121,6 +128,7 @@ class UserRoleAssignment(BaseModel):
 
 class AuditLog(BaseModel):
     """Audit log entry."""
+
     id: str
     timestamp: str
     user_id: str
@@ -137,6 +145,7 @@ class AuditLog(BaseModel):
 
 class ComplianceReport(BaseModel):
     """Compliance report."""
+
     generated_at: str
     period_start: str
     period_end: str
@@ -159,7 +168,7 @@ MOCK_REGIONS = [
         is_active=True,
         manager_name="John Smith",
         address="123 Main St, Austin, TX",
-        created_at="2024-01-01T00:00:00Z"
+        created_at="2024-01-01T00:00:00Z",
     ),
     Region(
         id="region-2",
@@ -169,7 +178,7 @@ MOCK_REGIONS = [
         is_active=True,
         manager_name="Jane Doe",
         address="456 Oak Ave, San Antonio, TX",
-        created_at="2024-02-01T00:00:00Z"
+        created_at="2024-02-01T00:00:00Z",
     ),
 ]
 
@@ -178,12 +187,10 @@ MOCK_ROLES = [
         id="role-admin",
         name="Administrator",
         description="Full system access",
-        permissions=[
-            {"resource": "*", "actions": ["*"], "scope": "all"}
-        ],
+        permissions=[{"resource": "*", "actions": ["*"], "scope": "all"}],
         is_system_role=True,
         user_count=2,
-        created_at="2024-01-01T00:00:00Z"
+        created_at="2024-01-01T00:00:00Z",
     ),
     Role(
         id="role-manager",
@@ -192,11 +199,11 @@ MOCK_ROLES = [
         permissions=[
             {"resource": "work_orders", "actions": ["read", "write", "delete"], "scope": "region"},
             {"resource": "technicians", "actions": ["read", "write"], "scope": "region"},
-            {"resource": "reports", "actions": ["read"], "scope": "region"}
+            {"resource": "reports", "actions": ["read"], "scope": "region"},
         ],
         is_system_role=True,
         user_count=5,
-        created_at="2024-01-01T00:00:00Z"
+        created_at="2024-01-01T00:00:00Z",
     ),
     Role(
         id="role-technician",
@@ -204,11 +211,11 @@ MOCK_ROLES = [
         description="Field technician access",
         permissions=[
             {"resource": "work_orders", "actions": ["read", "update"], "scope": "assigned"},
-            {"resource": "customers", "actions": ["read"], "scope": "assigned"}
+            {"resource": "customers", "actions": ["read"], "scope": "assigned"},
         ],
         is_system_role=True,
         user_count=15,
-        created_at="2024-01-01T00:00:00Z"
+        created_at="2024-01-01T00:00:00Z",
     ),
 ]
 
@@ -216,6 +223,7 @@ MOCK_ROLES = [
 # =============================================================================
 # Region Endpoints
 # =============================================================================
+
 
 @router.get("/regions")
 async def get_regions(
@@ -253,7 +261,7 @@ async def create_region(
         name=name,
         code=code,
         timezone=timezone,
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.utcnow().isoformat(),
     )
     return {"region": region.model_dump()}
 
@@ -300,7 +308,7 @@ async def get_region_performance(
             avg_job_value=510.20,
             first_time_fix_rate=87.5,
             customer_satisfaction=4.6,
-            trend="up"
+            trend="up",
         )
         performance.append(perf)
     return {"performance": [p.model_dump() for p in performance]}
@@ -320,7 +328,7 @@ async def get_region_comparison(
             {"region_id": "region-2", "region_name": "San Antonio", "value": 98000, "rank": 2},
         ],
         "average": 111500,
-        "leader": "region-1"
+        "leader": "region-1",
     }
     return comparison
 
@@ -328,6 +336,7 @@ async def get_region_comparison(
 # =============================================================================
 # Franchise Endpoints
 # =============================================================================
+
 
 @router.get("/franchise/royalties")
 async def get_franchise_royalties(
@@ -350,7 +359,7 @@ async def get_franchise_royalties(
             total_due=6800.00,
             status="paid",
             due_date="2024-02-15",
-            paid_date="2024-02-12"
+            paid_date="2024-02-12",
         ),
         FranchiseRoyalty(
             id="roy-002",
@@ -364,7 +373,7 @@ async def get_franchise_royalties(
             marketing_fee=1840.00,
             total_due=7360.00,
             status="pending",
-            due_date="2024-03-15"
+            due_date="2024-03-15",
         ),
     ]
     return {"royalties": [r.model_dump() for r in royalties]}
@@ -391,7 +400,7 @@ async def generate_royalty_invoice(
         marketing_fee=1500.00,
         total_due=6000.00,
         status="invoiced",
-        due_date=(datetime.now() + timedelta(days=15)).strftime("%Y-%m-%d")
+        due_date=(datetime.now() + timedelta(days=15)).strftime("%Y-%m-%d"),
     )
     return {"royalty": royalty.model_dump()}
 
@@ -418,7 +427,7 @@ async def mark_royalty_paid(
         total_due=6000.00,
         status="paid",
         paid_date=paid_date,
-        payment_reference=reference
+        payment_reference=reference,
     )
     return {"royalty": royalty.model_dump()}
 
@@ -426,6 +435,7 @@ async def mark_royalty_paid(
 # =============================================================================
 # Territory Endpoints
 # =============================================================================
+
 
 @router.get("/territories")
 async def get_territories(
@@ -442,7 +452,7 @@ async def get_territories(
             region_name="Austin Metro",
             zip_codes=["78701", "78702", "78703"],
             assigned_technicians=["tech-1", "tech-2"],
-            created_at="2024-01-01T00:00:00Z"
+            created_at="2024-01-01T00:00:00Z",
         ),
         Territory(
             id="territory-2",
@@ -451,7 +461,7 @@ async def get_territories(
             region_name="Austin Metro",
             zip_codes=["78704", "78745", "78748"],
             assigned_technicians=["tech-3"],
-            created_at="2024-01-15T00:00:00Z"
+            created_at="2024-01-15T00:00:00Z",
         ),
     ]
     if region_id:
@@ -473,7 +483,7 @@ async def create_territory(
         name=name,
         region_id=region_id,
         zip_codes=zip_codes,
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.utcnow().isoformat(),
     )
     return {"territory": territory.model_dump()}
 
@@ -492,7 +502,7 @@ async def update_territory(
         name=name or "Updated Territory",
         region_id="region-1",
         zip_codes=zip_codes or [],
-        created_at="2024-01-01T00:00:00Z"
+        created_at="2024-01-01T00:00:00Z",
     )
     return {"territory": territory.model_dump()}
 
@@ -500,6 +510,7 @@ async def update_territory(
 # =============================================================================
 # RBAC Endpoints
 # =============================================================================
+
 
 @router.get("/roles")
 async def get_roles(
@@ -538,7 +549,7 @@ async def create_role(
         description=description,
         permissions=permissions,
         is_system_role=False,
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.utcnow().isoformat(),
     )
     return {"role": role.model_dump()}
 
@@ -596,7 +607,7 @@ async def get_role_assignments(
             role_id="role-admin",
             role_name="Administrator",
             assigned_by="system",
-            assigned_at="2024-01-01T00:00:00Z"
+            assigned_at="2024-01-01T00:00:00Z",
         ),
         UserRoleAssignment(
             id="assign-2",
@@ -608,7 +619,7 @@ async def get_role_assignments(
             region_id="region-1",
             region_name="Austin Metro",
             assigned_by="user-1",
-            assigned_at="2024-01-15T00:00:00Z"
+            assigned_at="2024-01-15T00:00:00Z",
         ),
     ]
     if user_id:
@@ -633,7 +644,7 @@ async def assign_role(
         region_id=region_id,
         assigned_by=str(current_user.id),
         assigned_at=datetime.utcnow().isoformat(),
-        expires_at=expires_at
+        expires_at=expires_at,
     )
     return {"assignment": assignment.model_dump()}
 
@@ -657,18 +668,17 @@ async def get_current_permissions(
     # In production, calculate from actual role assignments
     return {
         "roles": ["Administrator"] if current_user.is_superuser else ["User"],
-        "permissions": [
-            {"resource": "*", "actions": ["*"], "scope": "all"}
-        ] if current_user.is_superuser else [
-            {"resource": "work_orders", "actions": ["read"], "scope": "assigned"}
-        ],
-        "regions": []  # All regions if admin
+        "permissions": [{"resource": "*", "actions": ["*"], "scope": "all"}]
+        if current_user.is_superuser
+        else [{"resource": "work_orders", "actions": ["read"], "scope": "assigned"}],
+        "regions": [],  # All regions if admin
     }
 
 
 # =============================================================================
 # Audit & Compliance Endpoints
 # =============================================================================
+
 
 @router.get("/audit/logs")
 async def get_audit_logs(
@@ -693,7 +703,7 @@ async def get_audit_logs(
             resource_type="work_order",
             resource_id="wo-123",
             old_values={"status": "scheduled"},
-            new_values={"status": "completed"}
+            new_values={"status": "completed"},
         ),
         AuditLog(
             id="log-2",
@@ -703,15 +713,10 @@ async def get_audit_logs(
             action="create",
             resource_type="customer",
             resource_id="cust-456",
-            new_values={"name": "New Customer"}
+            new_values={"name": "New Customer"},
         ),
     ]
-    return {
-        "logs": [l.model_dump() for l in logs],
-        "total": len(logs),
-        "page": page,
-        "page_size": page_size
-    }
+    return {"logs": [l.model_dump() for l in logs], "total": len(logs), "page": page, "page_size": page_size}
 
 
 @router.post("/audit/export")
@@ -725,9 +730,7 @@ async def export_audit_logs(
 ) -> dict:
     """Export audit logs."""
     # In production, generate actual export file
-    return {
-        "download_url": f"/api/v2/enterprise/audit/downloads/export-{uuid4().hex[:8]}.{format}"
-    }
+    return {"download_url": f"/api/v2/enterprise/audit/downloads/export-{uuid4().hex[:8]}.{format}"}
 
 
 @router.get("/compliance/report")
@@ -753,12 +756,12 @@ async def get_compliance_report(
                 "category": "License Compliance",
                 "severity": "medium",
                 "description": "3 technician licenses expiring within 30 days",
-                "action_required": "Renew licenses before expiration"
+                "action_required": "Renew licenses before expiration",
             }
         ],
         recommendations=[
             "Schedule license renewals for upcoming expirations",
             "Review access permissions for inactive users",
-            "Enable two-factor authentication for admin accounts"
-        ]
+            "Enable two-factor authentication for admin accounts",
+        ],
     )

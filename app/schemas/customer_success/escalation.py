@@ -45,8 +45,10 @@ class NoteType(str, Enum):
 
 # Escalation Note Schemas
 
+
 class EscalationNoteBase(BaseModel):
     """Base escalation note schema."""
+
     content: str = Field(..., min_length=1)
     note_type: NoteType = NoteType.UPDATE
     is_internal: bool = True
@@ -54,11 +56,13 @@ class EscalationNoteBase(BaseModel):
 
 class EscalationNoteCreate(EscalationNoteBase):
     """Schema for creating a note."""
+
     pass
 
 
 class EscalationNoteUpdate(BaseModel):
     """Schema for updating a note."""
+
     content: Optional[str] = None
     note_type: Optional[NoteType] = None
     is_internal: Optional[bool] = None
@@ -66,6 +70,7 @@ class EscalationNoteUpdate(BaseModel):
 
 class EscalationNoteResponse(EscalationNoteBase):
     """Escalation note response."""
+
     id: int
     escalation_id: int
     created_by_user_id: Optional[int] = None
@@ -79,8 +84,10 @@ class EscalationNoteResponse(EscalationNoteBase):
 
 # Escalation Activity Schemas
 
+
 class EscalationActivityResponse(BaseModel):
     """Escalation activity response."""
+
     id: int
     escalation_id: int
     activity_type: str
@@ -97,8 +104,10 @@ class EscalationActivityResponse(BaseModel):
 
 # Escalation Schemas
 
+
 class EscalationBase(BaseModel):
     """Base escalation schema."""
+
     title: str = Field(..., min_length=1, max_length=300)
     description: str = Field(..., min_length=1)
     escalation_type: EscalationType = EscalationType.SERVICE
@@ -116,6 +125,7 @@ class EscalationBase(BaseModel):
 
 class EscalationCreate(EscalationBase):
     """Schema for creating an escalation."""
+
     customer_id: int
     assigned_to_user_id: Optional[int] = None
     escalated_to_user_id: Optional[int] = None
@@ -123,6 +133,7 @@ class EscalationCreate(EscalationBase):
 
 class EscalationUpdate(BaseModel):
     """Schema for updating an escalation."""
+
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     escalation_type: Optional[EscalationType] = None
@@ -146,6 +157,7 @@ class EscalationUpdate(BaseModel):
 
 class EscalationResponse(EscalationBase):
     """Escalation response schema."""
+
     id: int
     customer_id: int
     customer_name: Optional[str] = None
@@ -190,6 +202,7 @@ class EscalationResponse(EscalationBase):
 
 class EscalationListResponse(BaseModel):
     """Paginated escalation list response."""
+
     items: list[EscalationResponse]
     total: int
     page: int
@@ -198,8 +211,10 @@ class EscalationListResponse(BaseModel):
 
 # Escalation Analytics
 
+
 class EscalationAnalytics(BaseModel):
     """Escalation analytics response."""
+
     total_open: int = 0
     total_in_progress: int = 0
     total_resolved: int = 0

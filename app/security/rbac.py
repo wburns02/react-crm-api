@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class Role(str, Enum):
     """User roles."""
+
     USER = "user"
     ADMIN = "admin"
     SUPERUSER = "superuser"
@@ -24,6 +25,7 @@ class Role(str, Enum):
 
 class Permission(str, Enum):
     """Fine-grained permissions."""
+
     SEND_SMS = "send_sms"
     SEND_EMAIL = "send_email"
     VIEW_CUSTOMERS = "view_customers"
@@ -60,7 +62,7 @@ def get_user_role(user: User) -> Role:
     if user.is_superuser:
         return Role.SUPERUSER
     # Check for admin flag if added to model, otherwise default to USER
-    if getattr(user, 'is_admin', False):
+    if getattr(user, "is_admin", False):
         return Role.ADMIN
     return Role.USER
 
@@ -88,16 +90,17 @@ def require_permission(permission: Permission):
         ):
             ...
     """
+
     def checker(current_user: User) -> None:
         if not has_permission(current_user, permission):
             logger.warning(
                 f"Permission denied: user {current_user.id} lacks {permission.value}",
-                extra={"user_id": current_user.id, "permission": permission.value}
+                extra={"user_id": current_user.id, "permission": permission.value},
             )
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied: requires {permission.value}"
+                status_code=status.HTTP_403_FORBIDDEN, detail=f"Permission denied: requires {permission.value}"
             )
+
     return checker
 
 
@@ -116,26 +119,16 @@ def require_admin(current_user: User) -> None:
     role = get_user_role(current_user)
     if role not in (Role.ADMIN, Role.SUPERUSER):
         logger.warning(
-            f"Admin access denied for user {current_user.id}",
-            extra={"user_id": current_user.id, "role": role.value}
+            f"Admin access denied for user {current_user.id}", extra={"user_id": current_user.id, "role": role.value}
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
 
 def require_superuser(current_user: User) -> None:
     """Dependency for requiring superuser role."""
     if not current_user.is_superuser:
-        logger.warning(
-            f"Superuser access denied for user {current_user.id}",
-            extra={"user_id": current_user.id}
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Superuser access required"
-        )
+        logger.warning(f"Superuser access denied for user {current_user.id}", extra={"user_id": current_user.id})
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superuser access required")
 
 
 class RBACChecker:
@@ -167,8 +160,7 @@ class RBACChecker:
             role_order = [Role.USER, Role.ADMIN, Role.SUPERUSER]
             if role_order.index(user_role) < role_order.index(self.required_role):
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Requires {self.required_role.value} role or higher"
+                    status_code=status.HTTP_403_FORBIDDEN, detail=f"Requires {self.required_role.value} role or higher"
                 )
 
         # Check permissions if specified
@@ -178,15 +170,12 @@ class RBACChecker:
             if self.any_permission:
                 # OR logic: user needs at least one permission
                 if not any(p in user_perms for p in self.required_permissions):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Insufficient permissions"
-                    )
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
             else:
                 # AND logic: user needs all permissions
                 missing = [p for p in self.required_permissions if p not in user_perms]
                 if missing:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail=f"Missing permissions: {', '.join(p.value for p in missing)}"
+                        detail=f"Missing permissions: {', '.join(p.value for p in missing)}",
                     )

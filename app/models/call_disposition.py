@@ -1,4 +1,5 @@
 """CallDisposition model for categorizing call outcomes."""
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean
 from sqlalchemy.sql import func
 

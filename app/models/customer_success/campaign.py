@@ -7,10 +7,7 @@ Enables nurture campaigns, engagement sequences, and automated outreach:
 - Campaign analytics and performance tracking
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, Enum as SQLEnum, JSON
-)
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -20,6 +17,7 @@ class Campaign(Base):
     """
     Customer engagement campaign definition.
     """
+
     __tablename__ = "cs_campaigns"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -28,14 +26,22 @@ class Campaign(Base):
 
     # Campaign type
     campaign_type = Column(
-        SQLEnum('nurture', 'onboarding', 'adoption', 'renewal', 'expansion', 'winback', 'custom', name='cs_campaign_type_enum'),
-        default='nurture'
+        SQLEnum(
+            "nurture",
+            "onboarding",
+            "adoption",
+            "renewal",
+            "expansion",
+            "winback",
+            "custom",
+            name="cs_campaign_type_enum",
+        ),
+        default="nurture",
     )
 
     # Status
     status = Column(
-        SQLEnum('draft', 'active', 'paused', 'completed', 'archived', name='cs_campaign_status_enum'),
-        default='draft'
+        SQLEnum("draft", "active", "paused", "completed", "archived", name="cs_campaign_status_enum"), default="draft"
     )
 
     # Target audience
@@ -44,14 +50,13 @@ class Campaign(Base):
 
     # Channel configuration
     primary_channel = Column(
-        SQLEnum('email', 'in_app', 'sms', 'multi_channel', name='cs_campaign_channel_enum'),
-        default='email'
+        SQLEnum("email", "in_app", "sms", "multi_channel", name="cs_campaign_channel_enum"), default="email"
     )
 
     # Schedule
     start_date = Column(DateTime(timezone=True))
     end_date = Column(DateTime(timezone=True))
-    timezone = Column(String(50), default='UTC')
+    timezone = Column(String(50), default="UTC")
 
     # Campaign settings
     is_recurring = Column(Boolean, default=False)
@@ -82,7 +87,9 @@ class Campaign(Base):
     launched_at = Column(DateTime(timezone=True))
 
     # Relationships
-    steps = relationship("CampaignStep", back_populates="campaign", cascade="all, delete-orphan", order_by="CampaignStep.order")
+    steps = relationship(
+        "CampaignStep", back_populates="campaign", cascade="all, delete-orphan", order_by="CampaignStep.order"
+    )
     enrollments = relationship("CampaignEnrollment", back_populates="campaign", cascade="all, delete-orphan")
     target_segment = relationship("Segment", foreign_keys=[target_segment_id])
 
@@ -94,6 +101,7 @@ class CampaignStep(Base):
     """
     Individual step/message in a campaign sequence.
     """
+
     __tablename__ = "cs_campaign_steps"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -104,8 +112,7 @@ class CampaignStep(Base):
 
     # Step type
     step_type = Column(
-        SQLEnum('email', 'in_app_message', 'sms', 'task', 'wait', 'condition', name='cs_step_type_enum'),
-        nullable=False
+        SQLEnum("email", "in_app_message", "sms", "task", "wait", "condition", name="cs_step_type_enum"), nullable=False
     )
 
     # Order in sequence
@@ -154,6 +161,7 @@ class CampaignEnrollment(Base):
     """
     Customer enrollment in a campaign.
     """
+
     __tablename__ = "cs_campaign_enrollments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -162,8 +170,10 @@ class CampaignEnrollment(Base):
 
     # Status
     status = Column(
-        SQLEnum('active', 'paused', 'completed', 'converted', 'unsubscribed', 'exited', name='cs_enrollment_status_enum'),
-        default='active'
+        SQLEnum(
+            "active", "paused", "completed", "converted", "unsubscribed", "exited", name="cs_enrollment_status_enum"
+        ),
+        default="active",
     )
 
     # Progress tracking
@@ -204,6 +214,7 @@ class CampaignStepExecution(Base):
     """
     Record of a campaign step being executed for a customer.
     """
+
     __tablename__ = "cs_campaign_step_executions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -212,8 +223,8 @@ class CampaignStepExecution(Base):
 
     # Execution status
     status = Column(
-        SQLEnum('pending', 'sent', 'delivered', 'opened', 'clicked', 'failed', 'skipped', name='cs_exec_status_enum'),
-        default='pending'
+        SQLEnum("pending", "sent", "delivered", "opened", "clicked", "failed", "skipped", name="cs_exec_status_enum"),
+        default="pending",
     )
 
     # Delivery tracking

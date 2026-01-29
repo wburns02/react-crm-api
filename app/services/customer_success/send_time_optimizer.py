@@ -63,9 +63,7 @@ class SendTimeOptimizer:
             Dict containing best_hour, open_rate_by_hour, confidence, sample_size
         """
         # Verify customer exists
-        customer_result = await self.db.execute(
-            select(Customer).where(Customer.id == customer_id)
-        )
+        customer_result = await self.db.execute(select(Customer).where(Customer.id == customer_id))
         customer = customer_result.scalar_one_or_none()
         if not customer:
             return {"error": "Customer not found", "customer_id": customer_id}
@@ -122,9 +120,7 @@ class SendTimeOptimizer:
 
         # Update or create profile
         profile_result = await self.db.execute(
-            select(CustomerSendTimeProfile).where(
-                CustomerSendTimeProfile.customer_id == customer_id
-            )
+            select(CustomerSendTimeProfile).where(CustomerSendTimeProfile.customer_id == customer_id)
         )
         profile = profile_result.scalar_one_or_none()
 
@@ -143,8 +139,7 @@ class SendTimeOptimizer:
         await self.db.refresh(profile)
 
         logger.info(
-            f"Calculated send time profile for customer {customer_id}: "
-            f"best_hour={best_hour}, confidence={confidence}%"
+            f"Calculated send time profile for customer {customer_id}: best_hour={best_hour}, confidence={confidence}%"
         )
 
         return {
@@ -173,9 +168,7 @@ class SendTimeOptimizer:
             datetime representing the next optimal send time
         """
         result = await self.db.execute(
-            select(CustomerSendTimeProfile).where(
-                CustomerSendTimeProfile.customer_id == customer_id
-            )
+            select(CustomerSendTimeProfile).where(CustomerSendTimeProfile.customer_id == customer_id)
         )
         profile = result.scalar_one_or_none()
 
@@ -190,7 +183,8 @@ class SendTimeOptimizer:
 
         # Use profile's best hour based on channel
         best_hour = (
-            profile.best_hour_sms if channel == "sms" and profile.best_hour_sms
+            profile.best_hour_sms
+            if channel == "sms" and profile.best_hour_sms
             else profile.best_hour_email or self.DEFAULT_SEND_HOUR
         )
 
@@ -211,9 +205,7 @@ class SendTimeOptimizer:
             Dict with profile data or None if no profile exists
         """
         result = await self.db.execute(
-            select(CustomerSendTimeProfile).where(
-                CustomerSendTimeProfile.customer_id == customer_id
-            )
+            select(CustomerSendTimeProfile).where(CustomerSendTimeProfile.customer_id == customer_id)
         )
         profile = result.scalar_one_or_none()
 
@@ -321,9 +313,7 @@ class SendTimeOptimizer:
 
         # Store or update analysis
         analysis_result = await self.db.execute(
-            select(CampaignSendTimeAnalysis).where(
-                CampaignSendTimeAnalysis.campaign_id == campaign_id
-            )
+            select(CampaignSendTimeAnalysis).where(CampaignSendTimeAnalysis.campaign_id == campaign_id)
         )
         analysis = analysis_result.scalar_one_or_none()
 
@@ -342,8 +332,7 @@ class SendTimeOptimizer:
         await self.db.commit()
 
         logger.info(
-            f"Analyzed campaign {campaign_id} timing: "
-            f"recommended_hour={best_hour}, total_messages={len(executions)}"
+            f"Analyzed campaign {campaign_id} timing: recommended_hour={best_hour}, total_messages={len(executions)}"
         )
 
         return {
@@ -391,9 +380,11 @@ class SendTimeOptimizer:
             except Exception as e:
                 logger.error(f"Error calculating profile for customer {customer_id}: {e}")
                 results["errors"] += 1
-                results["profiles"].append({
-                    "customer_id": customer_id,
-                    "error": str(e),
-                })
+                results["profiles"].append(
+                    {
+                        "customer_id": customer_id,
+                        "error": str(e),
+                    }
+                )
 
         return results

@@ -1,6 +1,7 @@
 """
 SMS Consent API - TCPA compliance management.
 """
+
 from fastapi import APIRouter, HTTPException, status, Query, Request
 from sqlalchemy import select, func
 from typing import Optional
@@ -96,10 +97,9 @@ async def get_consent_stats(
 
     # Double opt-in rate
     double_opt_in_result = await db.execute(
-        select(func.count()).select_from(SMSConsent).where(
-            SMSConsent.consent_status == "opted_in",
-            SMSConsent.double_opt_in_confirmed == True
-        )
+        select(func.count())
+        .select_from(SMSConsent)
+        .where(SMSConsent.consent_status == "opted_in", SMSConsent.double_opt_in_confirmed == True)
     )
     double_opt_in_count = double_opt_in_result.scalar() or 0
     double_opt_in_rate = (double_opt_in_count / opted_in * 100) if opted_in > 0 else 0
@@ -143,8 +143,7 @@ async def record_opt_in(
     # Check if consent already exists for this customer/phone
     existing = await db.execute(
         select(SMSConsent).where(
-            SMSConsent.customer_id == consent_data.customer_id,
-            SMSConsent.phone_number == consent_data.phone_number
+            SMSConsent.customer_id == consent_data.customer_id, SMSConsent.phone_number == consent_data.phone_number
         )
     )
     existing_consent = existing.scalar_one_or_none()
@@ -174,11 +173,11 @@ async def record_opt_in(
 
     # Create new consent
     data = consent_data.model_dump()
-    data['consent_status'] = "opted_in"
-    data['opt_in_timestamp'] = datetime.utcnow()
-    data['opt_in_ip_address'] = request.client.host if request.client else None
-    data['tcpa_disclosure_version'] = TCPA_DISCLOSURE_VERSION
-    data['tcpa_disclosure_accepted'] = True
+    data["consent_status"] = "opted_in"
+    data["opt_in_timestamp"] = datetime.utcnow()
+    data["opt_in_ip_address"] = request.client.host if request.client else None
+    data["tcpa_disclosure_version"] = TCPA_DISCLOSURE_VERSION
+    data["tcpa_disclosure_accepted"] = True
 
     consent = SMSConsent(**data)
     db.add(consent)
@@ -212,10 +211,7 @@ async def record_opt_out(
     """Record an SMS opt-out (STOP keyword processing)."""
     # Find existing consent
     result = await db.execute(
-        select(SMSConsent).where(
-            SMSConsent.customer_id == customer_id,
-            SMSConsent.phone_number == phone_number
-        )
+        select(SMSConsent).where(SMSConsent.customer_id == customer_id, SMSConsent.phone_number == phone_number)
     )
     consent = result.scalar_one_or_none()
 

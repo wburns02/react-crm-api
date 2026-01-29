@@ -5,10 +5,7 @@ Tracks customer health metrics, component scores, and health events
 for predictive churn analysis and proactive engagement.
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, Enum as SQLEnum, JSON
-)
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -25,6 +22,7 @@ class HealthScore(Base):
     - Financial (20%)
     - Support (10%)
     """
+
     __tablename__ = "cs_health_scores"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -33,8 +31,7 @@ class HealthScore(Base):
     # Overall score (0-100)
     overall_score = Column(Integer, nullable=False, default=50)
     health_status = Column(
-        SQLEnum('healthy', 'at_risk', 'critical', 'churned', name='cs_health_status_enum'),
-        default='at_risk'
+        SQLEnum("healthy", "at_risk", "critical", "churned", name="cs_health_status_enum"), default="at_risk"
     )
 
     # Component scores (0-100 each)
@@ -60,10 +57,7 @@ class HealthScore(Base):
     feature_adoption_pct = Column(Float, default=0.0)
 
     # Trend analysis
-    score_trend = Column(
-        SQLEnum('improving', 'stable', 'declining', name='cs_score_trend_enum'),
-        default='stable'
-    )
+    score_trend = Column(SQLEnum("improving", "stable", "declining", name="cs_score_trend_enum"), default="stable")
     score_change_7d = Column(Integer, default=0)
     score_change_30d = Column(Integer, default=0)
 
@@ -74,7 +68,7 @@ class HealthScore(Base):
 
     # Calculation metadata
     calculated_at = Column(DateTime(timezone=True), server_default=func.now())
-    calculation_version = Column(String(20), default='1.0')
+    calculation_version = Column(String(20), default="1.0")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -94,6 +88,7 @@ class HealthScoreEvent(Base):
 
     Used for audit trail and understanding health trends.
     """
+
     __tablename__ = "cs_health_score_events"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -111,12 +106,18 @@ class HealthScoreEvent(Base):
     # Event details
     event_type = Column(
         SQLEnum(
-            'score_calculated', 'manual_override', 'component_change',
-            'escalation_opened', 'escalation_closed', 'champion_change',
-            'renewal_update', 'support_issue', 'engagement_change',
-            name='cs_health_event_type_enum'
+            "score_calculated",
+            "manual_override",
+            "component_change",
+            "escalation_opened",
+            "escalation_closed",
+            "champion_change",
+            "renewal_update",
+            "support_issue",
+            "engagement_change",
+            name="cs_health_event_type_enum",
         ),
-        nullable=False
+        nullable=False,
     )
     event_source = Column(String(100))  # e.g., 'system', 'user:123', 'integration:salesforce'
 

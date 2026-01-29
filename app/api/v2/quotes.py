@@ -1,6 +1,7 @@
 """
 Quotes API - Manage customer quotes and estimates.
 """
+
 from fastapi import APIRouter, HTTPException, status, Query
 from fastapi.responses import Response
 from sqlalchemy import select, func
@@ -22,6 +23,7 @@ from app.schemas.quote import (
 # PDF Generation imports
 try:
     from weasyprint import HTML
+
     WEASYPRINT_AVAILABLE = True
 except (ImportError, OSError):
     WEASYPRINT_AVAILABLE = False
@@ -54,9 +56,7 @@ def build_customer_address(customer: Customer) -> str:
 async def enrich_quote_with_customer(quote: Quote, db: DbSession) -> dict:
     """Enrich a quote with customer details."""
     # Fetch customer data
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == quote.customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == quote.customer_id))
     customer = customer_result.scalar_one_or_none()
 
     # Build response dict from quote
@@ -173,7 +173,7 @@ async def create_quote(
 ):
     """Create a new quote."""
     data = quote_data.model_dump()
-    data['quote_number'] = generate_quote_number()
+    data["quote_number"] = generate_quote_number()
 
     quote = Quote(**data)
 
@@ -209,7 +209,7 @@ async def update_quote(
         setattr(quote, field, value)
 
     # Recalculate totals if line_items changed
-    if 'line_items' in update_data:
+    if "line_items" in update_data:
         quote.calculate_totals()
 
     await db.commit()
@@ -315,7 +315,7 @@ async def convert_quote_to_work_order(
             detail="Quote not found",
         )
 
-    if quote.status not in ['sent', 'accepted']:
+    if quote.status not in ["sent", "accepted"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only sent or accepted quotes can be converted",
@@ -668,5 +668,5 @@ async def generate_quote_pdf(
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Type": "application/pdf",
-        }
+        },
     )

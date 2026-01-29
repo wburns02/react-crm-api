@@ -81,6 +81,7 @@ def hash_token(token: str) -> str:
 # OAuth2 Token Endpoints
 # ============================================================================
 
+
 @router.post(
     "/oauth/token",
     response_model=TokenResponse,
@@ -129,9 +130,7 @@ async def get_token(
         )
 
     # Find the client
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
 
     if not client:
@@ -228,7 +227,7 @@ async def _handle_client_credentials(
 
     logger.info(
         f"Access token issued for client: {client.client_id}",
-        extra={"client_id": client.client_id, "scopes": granted_scopes}
+        extra={"client_id": client.client_id, "scopes": granted_scopes},
     )
 
     return TokenResponse(
@@ -324,10 +323,7 @@ async def _handle_refresh_token(
 
     await db.commit()
 
-    logger.info(
-        f"Token refreshed for client: {client.client_id}",
-        extra={"client_id": client.client_id}
-    )
+    logger.info(f"Token refreshed for client: {client.client_id}", extra={"client_id": client.client_id})
 
     return TokenResponse(
         access_token=access_token,
@@ -361,9 +357,7 @@ async def revoke_token(
     rate_limit_by_ip(request, requests_per_minute=30)
 
     # Verify client credentials
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
 
     if not client or not verify_secret(client_secret, client.client_secret_hash):
@@ -428,9 +422,7 @@ async def introspect_token(
     rate_limit_by_ip(request, requests_per_minute=60)
 
     # Verify client credentials
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
 
     if not client or not verify_secret(client_secret, client.client_secret_hash):
@@ -438,9 +430,7 @@ async def introspect_token(
 
     # Find the token
     token_hash = hash_token(token)
-    result = await db.execute(
-        select(APIToken).where(APIToken.token_hash == token_hash)
-    )
+    result = await db.execute(select(APIToken).where(APIToken.token_hash == token_hash))
     api_token = result.scalar_one_or_none()
 
     if not api_token:
@@ -465,6 +455,7 @@ async def introspect_token(
 # ============================================================================
 # Client Management Endpoints (Admin Only)
 # ============================================================================
+
 
 @router.post(
     "/clients",
@@ -502,9 +493,7 @@ async def create_client(
     await db.commit()
     await db.refresh(client)
 
-    logger.info(
-        f"API client created: {client.name} ({client.client_id}) by user {current_user.id}"
-    )
+    logger.info(f"API client created: {client.name} ({client.client_id}) by user {current_user.id}")
 
     # Return with secret (only time it's visible)
     return APIClientWithSecretResponse(
@@ -550,9 +539,7 @@ async def get_client(
     current_user: CurrentUser,
 ):
     """Get a specific API client by client_id."""
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
 
     if not client:
@@ -577,9 +564,7 @@ async def update_client(
     current_user: CurrentUser,
 ):
     """Update an API client."""
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
 
     if not client:
@@ -614,9 +599,7 @@ async def delete_client(
     current_user: CurrentUser,
 ):
     """Delete an API client."""
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
 
     if not client:
@@ -643,9 +626,7 @@ async def rotate_client_secret(
     current_user: CurrentUser,
 ):
     """Rotate the client secret."""
-    result = await db.execute(
-        select(APIClient).where(APIClient.client_id == client_id)
-    )
+    result = await db.execute(select(APIClient).where(APIClient.client_id == client_id))
     client = result.scalar_one_or_none()
 
     if not client:

@@ -34,6 +34,7 @@ router = APIRouter()
 async def get_twilio_debug_config():
     """DEBUG: Check Twilio configuration values (no auth required)."""
     from app.config import settings
+
     return {
         "account_sid_set": bool(settings.TWILIO_ACCOUNT_SID),
         "account_sid_len": len(settings.TWILIO_ACCOUNT_SID or ""),
@@ -110,13 +111,9 @@ async def send_sms(
     """
     # RBAC check
     if not has_permission(current_user, Permission.SEND_SMS):
-        logger.warning(
-            "SMS send denied - insufficient permissions",
-            extra={"user_id": current_user.id}
-        )
+        logger.warning("SMS send denied - insufficient permissions", extra={"user_id": current_user.id})
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to send SMS messages"
+            status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to send SMS messages"
         )
 
     # Rate limiting
@@ -124,8 +121,7 @@ async def send_sms(
         rate_limit_sms(current_user, request.to)
     except HTTPException:
         logger.warning(
-            "SMS rate limit exceeded",
-            extra={"user_id": current_user.id, "destination_suffix": request.to[-4:]}
+            "SMS rate limit exceeded", extra={"user_id": current_user.id, "destination_suffix": request.to[-4:]}
         )
         raise
 
@@ -161,10 +157,7 @@ async def send_sms(
         await db.refresh(message)
 
         # SECURITY: Don't log phone numbers or message content
-        logger.info(
-            "SMS sent successfully",
-            extra={"message_id": message.id, "user_id": current_user.id}
-        )
+        logger.info("SMS sent successfully", extra={"message_id": message.id, "user_id": current_user.id})
 
     except Exception as e:
         message.status = MessageStatus.failed
@@ -172,10 +165,7 @@ async def send_sms(
         await db.commit()
         await db.refresh(message)
 
-        logger.error(
-            "SMS send failed",
-            extra={"message_id": message.id, "error_type": type(e).__name__}
-        )
+        logger.error("SMS send failed", extra={"message_id": message.id, "error_type": type(e).__name__})
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -199,14 +189,8 @@ async def send_email(
     """
     # RBAC check
     if not has_permission(current_user, Permission.SEND_EMAIL):
-        logger.warning(
-            "Email send denied - insufficient permissions",
-            extra={"user_id": current_user.id}
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to send emails"
-        )
+        logger.warning("Email send denied - insufficient permissions", extra={"user_id": current_user.id})
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to send emails")
 
     # Create message record
     message = Message(
@@ -230,10 +214,7 @@ async def send_email(
     await db.commit()
     await db.refresh(message)
 
-    logger.info(
-        "Email queued",
-        extra={"message_id": message.id, "user_id": current_user.id}
-    )
+    logger.info("Email queued", extra={"message_id": message.id, "user_id": current_user.id})
 
     return message
 

@@ -22,36 +22,36 @@ async def debug_schema(
 
     # List all tables
     try:
-        tables_result = await db.execute(text(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
-        ))
+        tables_result = await db.execute(
+            text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+        )
         result["tables"] = [row[0] for row in tables_result.fetchall()]
     except Exception as e:
         result["tables_error"] = str(e)
 
     # Check technicians table columns
     try:
-        cols_result = await db.execute(text(
-            "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'technicians'"
-        ))
+        cols_result = await db.execute(
+            text("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'technicians'")
+        )
         result["technicians_columns"] = {row[0]: row[1] for row in cols_result.fetchall()}
     except Exception as e:
         result["technicians_error"] = str(e)
 
     # Check invoices table columns
     try:
-        cols_result = await db.execute(text(
-            "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'invoices'"
-        ))
+        cols_result = await db.execute(
+            text("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'invoices'")
+        )
         result["invoices_columns"] = {row[0]: row[1] for row in cols_result.fetchall()}
     except Exception as e:
         result["invoices_error"] = str(e)
 
     # Check payments table columns
     try:
-        cols_result = await db.execute(text(
-            "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'payments'"
-        ))
+        cols_result = await db.execute(
+            text("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'payments'")
+        )
         result["payments_columns"] = {row[0]: row[1] for row in cols_result.fetchall()}
     except Exception as e:
         result["payments_error"] = str(e)
@@ -75,6 +75,7 @@ async def debug_schema(
 
 class DashboardStats(BaseModel):
     """Dashboard statistics response."""
+
     total_prospects: int
     active_prospects: int
     total_customers: int
@@ -165,9 +166,7 @@ async def get_dashboard_stats(
 
     try:
         # Total customers (won)
-        total_customers_result = await db.execute(
-            select(func.count()).where(Customer.prospect_stage == "won")
-        )
+        total_customers_result = await db.execute(select(func.count()).where(Customer.prospect_stage == "won"))
         total_customers = total_customers_result.scalar() or 0
     except Exception:
         pass
@@ -196,9 +195,7 @@ async def get_dashboard_stats(
         pass
 
     try:
-        today_jobs_result = await db.execute(
-            select(func.count()).where(WorkOrder.scheduled_date == today)
-        )
+        today_jobs_result = await db.execute(select(func.count()).where(WorkOrder.scheduled_date == today))
         today_jobs_count = today_jobs_result.scalar() or 0
     except Exception:
         pass
@@ -216,14 +213,10 @@ async def get_dashboard_stats(
         )
         revenue_mtd = revenue_result.scalar() or 0.0
 
-        pending_result = await db.execute(
-            select(func.count()).where(Invoice.status.in_(["draft", "sent"]))
-        )
+        pending_result = await db.execute(select(func.count()).where(Invoice.status.in_(["draft", "sent"])))
         invoices_pending = pending_result.scalar() or 0
 
-        overdue_result = await db.execute(
-            select(func.count()).where(Invoice.status == "overdue")
-        )
+        overdue_result = await db.execute(select(func.count()).where(Invoice.status == "overdue"))
         invoices_overdue = overdue_result.scalar() or 0
     except Exception:
         pass
@@ -231,10 +224,7 @@ async def get_dashboard_stats(
     # Recent prospects - order by id if created_at is unreliable
     try:
         recent_prospects_result = await db.execute(
-            select(Customer)
-            .where(Customer.prospect_stage.in_(prospect_stages))
-            .order_by(Customer.id.desc())
-            .limit(5)
+            select(Customer).where(Customer.prospect_stage.in_(prospect_stages)).order_by(Customer.id.desc()).limit(5)
         )
         recent_prospects_models = recent_prospects_result.scalars().all()
     except Exception:
@@ -256,10 +246,7 @@ async def get_dashboard_stats(
     # Recent customers - order by id if created_at is unreliable
     try:
         recent_customers_result = await db.execute(
-            select(Customer)
-            .where(Customer.prospect_stage == "won")
-            .order_by(Customer.id.desc())
-            .limit(5)
+            select(Customer).where(Customer.prospect_stage == "won").order_by(Customer.id.desc()).limit(5)
         )
         recent_customers_models = recent_customers_result.scalars().all()
     except Exception:
@@ -280,11 +267,7 @@ async def get_dashboard_stats(
 
     # Today's jobs
     try:
-        today_jobs_query = await db.execute(
-            select(WorkOrder)
-            .where(WorkOrder.scheduled_date == today)
-            .limit(10)
-        )
+        today_jobs_query = await db.execute(select(WorkOrder).where(WorkOrder.scheduled_date == today).limit(10))
         today_jobs_models = today_jobs_query.scalars().all()
     except Exception:
         pass

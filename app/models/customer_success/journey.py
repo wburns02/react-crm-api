@@ -5,10 +5,7 @@ Orchestrates automated customer journeys with multi-step flows,
 branching logic, and human touchpoints.
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, Enum as SQLEnum, JSON
-)
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -21,6 +18,7 @@ class Journey(Base):
     A journey is an automated sequence of steps that guide customers
     through key milestones (onboarding, adoption, renewal, etc.).
     """
+
     __tablename__ = "cs_journeys"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -30,30 +28,34 @@ class Journey(Base):
     # Journey type
     journey_type = Column(
         SQLEnum(
-            'onboarding', 'adoption', 'renewal', 'expansion',
-            'risk_mitigation', 'advocacy', 'win_back', 'custom',
-            name='cs_journey_type_enum'
+            "onboarding",
+            "adoption",
+            "renewal",
+            "expansion",
+            "risk_mitigation",
+            "advocacy",
+            "win_back",
+            "custom",
+            name="cs_journey_type_enum",
         ),
-        default='custom'
+        default="custom",
     )
 
     # Journey status
-    status = Column(
-        SQLEnum(
-            'draft', 'active', 'paused', 'archived',
-            name='cs_journey_status_enum'
-        ),
-        default='draft'
-    )
+    status = Column(SQLEnum("draft", "active", "paused", "archived", name="cs_journey_status_enum"), default="draft")
 
     # Trigger configuration
     trigger_type = Column(
         SQLEnum(
-            'manual', 'segment_entry', 'event', 'scheduled',
-            'health_change', 'renewal_window',
-            name='cs_journey_trigger_enum'
+            "manual",
+            "segment_entry",
+            "event",
+            "scheduled",
+            "health_change",
+            "renewal_window",
+            name="cs_journey_trigger_enum",
         ),
-        default='manual'
+        default="manual",
     )
 
     # Trigger conditions (JSON configuration)
@@ -100,7 +102,9 @@ class Journey(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    steps = relationship("JourneyStep", back_populates="journey", order_by="JourneyStep.step_order", cascade="all, delete-orphan")
+    steps = relationship(
+        "JourneyStep", back_populates="journey", order_by="JourneyStep.step_order", cascade="all, delete-orphan"
+    )
     enrollments = relationship("JourneyEnrollment", back_populates="journey", cascade="all, delete-orphan")
     trigger_segment = relationship("Segment", back_populates="journeys", foreign_keys=[trigger_segment_id])
 
@@ -114,6 +118,7 @@ class JourneyStep(Base):
 
     Supports various step types: emails, tasks, waits, conditions, etc.
     """
+
     __tablename__ = "cs_journey_steps"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -126,12 +131,21 @@ class JourneyStep(Base):
     # Step type
     step_type = Column(
         SQLEnum(
-            'email', 'in_app_message', 'task', 'wait', 'condition',
-            'webhook', 'segment_update', 'health_check', 'human_touchpoint',
-            'sms', 'slack_notification', 'custom',
-            name='cs_journey_step_type_enum'
+            "email",
+            "in_app_message",
+            "task",
+            "wait",
+            "condition",
+            "webhook",
+            "segment_update",
+            "health_check",
+            "human_touchpoint",
+            "sms",
+            "slack_notification",
+            "custom",
+            name="cs_journey_step_type_enum",
         ),
-        nullable=False
+        nullable=False,
     )
 
     # Configuration based on step_type (JSON)
@@ -195,6 +209,7 @@ class JourneyEnrollment(Base):
 
     Tracks progress through journey steps and outcomes.
     """
+
     __tablename__ = "cs_journey_enrollments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -203,11 +218,7 @@ class JourneyEnrollment(Base):
 
     # Current status
     status = Column(
-        SQLEnum(
-            'active', 'paused', 'completed', 'exited', 'failed',
-            name='cs_enrollment_status_enum'
-        ),
-        default='active'
+        SQLEnum("active", "paused", "completed", "exited", "failed", name="cs_enrollment_status_enum"), default="active"
     )
 
     # Progress
@@ -223,9 +234,15 @@ class JourneyEnrollment(Base):
     # Exit details
     exit_reason = Column(
         SQLEnum(
-            'completed', 'goal_achieved', 'manual_exit', 'segment_exit',
-            'health_threshold', 'event_triggered', 'timeout', 'error',
-            name='cs_exit_reason_enum'
+            "completed",
+            "goal_achieved",
+            "manual_exit",
+            "segment_exit",
+            "health_threshold",
+            "event_triggered",
+            "timeout",
+            "error",
+            name="cs_exit_reason_enum",
         )
     )
     exit_notes = Column(Text)
@@ -266,6 +283,7 @@ class JourneyStepExecution(Base):
 
     Provides audit trail and analytics for journey performance.
     """
+
     __tablename__ = "cs_journey_step_executions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -275,10 +293,9 @@ class JourneyStepExecution(Base):
     # Execution status
     status = Column(
         SQLEnum(
-            'pending', 'in_progress', 'completed', 'skipped', 'failed', 'waiting',
-            name='cs_step_execution_status_enum'
+            "pending", "in_progress", "completed", "skipped", "failed", "waiting", name="cs_step_execution_status_enum"
         ),
-        default='pending'
+        default="pending",
     )
 
     # Timing

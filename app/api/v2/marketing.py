@@ -1,4 +1,5 @@
 """Marketing API - Campaigns and automation workflows."""
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 from typing import Optional, List
@@ -7,16 +8,14 @@ from datetime import datetime
 import logging
 
 from app.api.deps import DbSession, CurrentUser
-from app.models.marketing import (
-    MarketingCampaign, MarketingWorkflow, WorkflowEnrollment,
-    EmailTemplate, SMSTemplate
-)
+from app.models.marketing import MarketingCampaign, MarketingWorkflow, WorkflowEnrollment, EmailTemplate, SMSTemplate
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 # Request Models
+
 
 class CampaignCreate(BaseModel):
     name: str
@@ -53,6 +52,7 @@ class SMSTemplateCreate(BaseModel):
 
 
 # Campaign Endpoints
+
 
 @router.get("/campaigns")
 async def list_campaigns(
@@ -119,9 +119,7 @@ async def activate_campaign(
     current_user: CurrentUser,
 ):
     """Activate a campaign."""
-    result = await db.execute(
-        select(MarketingCampaign).where(MarketingCampaign.id == campaign_id)
-    )
+    result = await db.execute(select(MarketingCampaign).where(MarketingCampaign.id == campaign_id))
     campaign = result.scalar_one_or_none()
 
     if not campaign:
@@ -134,6 +132,7 @@ async def activate_campaign(
 
 
 # Workflow Endpoints
+
 
 @router.get("/workflows")
 async def list_workflows(
@@ -195,9 +194,7 @@ async def enroll_customer(
 ):
     """Enroll a customer in a workflow."""
     # Check workflow exists
-    wf_result = await db.execute(
-        select(MarketingWorkflow).where(MarketingWorkflow.id == workflow_id)
-    )
+    wf_result = await db.execute(select(MarketingWorkflow).where(MarketingWorkflow.id == workflow_id))
     workflow = wf_result.scalar_one_or_none()
 
     if not workflow:
@@ -227,6 +224,7 @@ async def enroll_customer(
 
 
 # Template Endpoints
+
 
 @router.get("/templates/email")
 async def list_email_templates(

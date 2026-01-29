@@ -4,6 +4,7 @@ Email Marketing API - Stub endpoints for frontend compatibility.
 Provides email marketing status, subscription, profiles, templates, segments,
 campaigns, and AI features.
 """
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional, List
@@ -15,6 +16,7 @@ router = APIRouter()
 
 
 # Response Models
+
 
 class Subscription(BaseModel):
     tier: str = "free"
@@ -56,6 +58,7 @@ class StatusResponse(BaseModel):
 
 # Status & Subscription Endpoints
 
+
 @router.get("/status")
 async def get_email_marketing_status(current_user: CurrentUser) -> StatusResponse:
     """Get email marketing integration status."""
@@ -76,6 +79,7 @@ async def update_subscription(current_user: CurrentUser, tier: str = "free") -> 
 
 # Profile Endpoints
 
+
 @router.get("/profile")
 async def get_profile(current_user: CurrentUser) -> dict:
     """Get business profile."""
@@ -89,6 +93,7 @@ async def update_profile(current_user: CurrentUser) -> dict:
 
 
 # Template Endpoints
+
 
 @router.get("/templates")
 async def get_templates(
@@ -126,6 +131,7 @@ async def preview_template(template_id: str, current_user: CurrentUser) -> dict:
 
 # Segment Endpoints
 
+
 @router.get("/segments")
 async def get_segments(current_user: CurrentUser) -> List[dict]:
     """Get customer segments."""
@@ -148,6 +154,7 @@ async def get_segment_customers(
 
 
 # Campaign Endpoints
+
 
 @router.get("/campaigns")
 async def get_campaigns(
@@ -183,6 +190,7 @@ async def delete_campaign(campaign_id: str, current_user: CurrentUser) -> dict:
 
 
 # AI Endpoints
+
 
 @router.get("/ai/suggestions")
 async def get_ai_suggestions(current_user: CurrentUser) -> dict:
@@ -234,6 +242,7 @@ async def generate_marketing_plan(current_user: CurrentUser) -> dict:
 
 # Analytics Endpoints
 
+
 @router.get("/analytics")
 async def get_analytics(
     current_user: CurrentUser,
@@ -244,6 +253,7 @@ async def get_analytics(
 
 
 # Onboarding Endpoints
+
 
 @router.post("/onboarding/answers")
 async def submit_onboarding(current_user: CurrentUser) -> dict:

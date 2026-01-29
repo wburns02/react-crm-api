@@ -14,6 +14,7 @@ import secrets
 
 class GeofenceType(str, enum.Enum):
     """Types of geofences"""
+
     CUSTOMER_SITE = "customer_site"
     OFFICE = "office"
     WAREHOUSE = "warehouse"
@@ -23,6 +24,7 @@ class GeofenceType(str, enum.Enum):
 
 class GeofenceAction(str, enum.Enum):
     """Actions to trigger on geofence entry/exit"""
+
     CLOCK_IN = "clock_in"
     CLOCK_OUT = "clock_out"
     NOTIFY_DISPATCH = "notify_dispatch"
@@ -34,6 +36,7 @@ class GeofenceAction(str, enum.Enum):
 
 class TrackingLinkStatus(str, enum.Enum):
     """Status of customer tracking links"""
+
     ACTIVE = "active"
     EXPIRED = "expired"
     VIEWED = "viewed"
@@ -45,6 +48,7 @@ class TechnicianLocation(Base):
     Real-time GPS location for technicians
     Updated frequently from mobile app
     """
+
     __tablename__ = "technician_locations"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -76,8 +80,8 @@ class TechnicianLocation(Base):
     technician = relationship("Technician", backref="current_location")
 
     __table_args__ = (
-        Index('idx_tech_location_tech_id', 'technician_id'),
-        Index('idx_tech_location_coords', 'latitude', 'longitude'),
+        Index("idx_tech_location_tech_id", "technician_id"),
+        Index("idx_tech_location_coords", "latitude", "longitude"),
     )
 
 
@@ -86,6 +90,7 @@ class LocationHistory(Base):
     Historical GPS locations for route verification and analytics
     Stored at configurable intervals (e.g., every 30 seconds)
     """
+
     __tablename__ = "location_history"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -113,8 +118,8 @@ class LocationHistory(Base):
     technician = relationship("Technician")
 
     __table_args__ = (
-        Index('idx_loc_history_tech_date', 'technician_id', 'captured_at'),
-        Index('idx_loc_history_work_order', 'work_order_id'),
+        Index("idx_loc_history_tech_date", "technician_id", "captured_at"),
+        Index("idx_loc_history_work_order", "work_order_id"),
     )
 
 
@@ -123,6 +128,7 @@ class Geofence(Base):
     Geographic boundaries for automatic actions
     Supports circles (center + radius) and polygons
     """
+
     __tablename__ = "geofences"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -168,8 +174,8 @@ class Geofence(Base):
     events = relationship("GeofenceEvent", back_populates="geofence")
 
     __table_args__ = (
-        Index('idx_geofence_coords', 'center_latitude', 'center_longitude'),
-        Index('idx_geofence_customer', 'customer_id'),
+        Index("idx_geofence_coords", "center_latitude", "center_longitude"),
+        Index("idx_geofence_customer", "customer_id"),
     )
 
 
@@ -177,6 +183,7 @@ class GeofenceEvent(Base):
     """
     Log of geofence entry/exit events
     """
+
     __tablename__ = "geofence_events"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -201,9 +208,7 @@ class GeofenceEvent(Base):
     geofence = relationship("Geofence", back_populates="events")
     technician = relationship("Technician")
 
-    __table_args__ = (
-        Index('idx_geofence_event_tech', 'technician_id', 'occurred_at'),
-    )
+    __table_args__ = (Index("idx_geofence_event_tech", "technician_id", "occurred_at"),)
 
 
 class CustomerTrackingLink(Base):
@@ -211,6 +216,7 @@ class CustomerTrackingLink(Base):
     Public tracking links for customers to track technician ETA
     Similar to Uber/DoorDash tracking experience
     """
+
     __tablename__ = "customer_tracking_links"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -254,8 +260,8 @@ class CustomerTrackingLink(Base):
         return secrets.token_urlsafe(32)
 
     __table_args__ = (
-        Index('idx_tracking_link_work_order', 'work_order_id'),
-        Index('idx_tracking_link_expires', 'expires_at'),
+        Index("idx_tracking_link_work_order", "work_order_id"),
+        Index("idx_tracking_link_expires", "expires_at"),
     )
 
 
@@ -264,6 +270,7 @@ class ETACalculation(Base):
     Cached ETA calculations for work orders
     Updated as technician moves
     """
+
     __tablename__ = "eta_calculations"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -300,15 +307,14 @@ class ETACalculation(Base):
     work_order = relationship("WorkOrder", backref="eta_calculation")
     technician = relationship("Technician")
 
-    __table_args__ = (
-        Index('idx_eta_work_order', 'work_order_id'),
-    )
+    __table_args__ = (Index("idx_eta_work_order", "work_order_id"),)
 
 
 class GPSTrackingConfig(Base):
     """
     Configuration for GPS tracking per technician or global
     """
+
     __tablename__ = "gps_tracking_config"
 
     id = Column(Integer, primary_key=True, index=True)

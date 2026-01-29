@@ -90,8 +90,10 @@ class ActionStatus(str, Enum):
 
 # Survey Question Schemas
 
+
 class SurveyQuestionBase(BaseModel):
     """Base survey question schema."""
+
     text: str = Field(..., min_length=1)
     description: Optional[str] = None
     question_type: QuestionType
@@ -106,11 +108,13 @@ class SurveyQuestionBase(BaseModel):
 
 class SurveyQuestionCreate(SurveyQuestionBase):
     """Schema for creating a question."""
+
     pass
 
 
 class SurveyQuestionUpdate(BaseModel):
     """Schema for updating a question."""
+
     text: Optional[str] = None
     description: Optional[str] = None
     question_type: Optional[QuestionType] = None
@@ -125,6 +129,7 @@ class SurveyQuestionUpdate(BaseModel):
 
 class SurveyQuestionResponse(SurveyQuestionBase):
     """Survey question response."""
+
     id: int
     survey_id: int
     created_at: Optional[datetime] = None
@@ -136,8 +141,10 @@ class SurveyQuestionResponse(SurveyQuestionBase):
 
 # Survey Schemas
 
+
 class SurveyBase(BaseModel):
     """Base survey schema."""
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     survey_type: SurveyType = SurveyType.NPS
@@ -159,11 +166,13 @@ class SurveyBase(BaseModel):
 
 class SurveyCreate(SurveyBase):
     """Schema for creating a survey."""
+
     questions: Optional[list[SurveyQuestionCreate]] = None
 
 
 class SurveyUpdate(BaseModel):
     """Schema for updating a survey."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     survey_type: Optional[SurveyType] = None
@@ -186,6 +195,7 @@ class SurveyUpdate(BaseModel):
 
 class SurveyResponse(SurveyBase):
     """Survey response schema."""
+
     id: int
     status: SurveyStatus = SurveyStatus.DRAFT
 
@@ -222,6 +232,7 @@ class SurveyResponse(SurveyBase):
 
 class SurveyListResponse(BaseModel):
     """Paginated survey list response."""
+
     items: list[SurveyResponse]
     total: int
     page: int
@@ -230,8 +241,10 @@ class SurveyListResponse(BaseModel):
 
 # Survey Response (from customer) Schemas
 
+
 class SurveyAnswerCreate(BaseModel):
     """Schema for creating a survey answer."""
+
     question_id: int
     rating_value: Optional[int] = None
     text_value: Optional[str] = None
@@ -240,6 +253,7 @@ class SurveyAnswerCreate(BaseModel):
 
 class SurveySubmissionCreate(BaseModel):
     """Schema for submitting a survey response."""
+
     customer_id: int
     answers: list[SurveyAnswerCreate]
     source: Optional[str] = None
@@ -248,6 +262,7 @@ class SurveySubmissionCreate(BaseModel):
 
 class SurveyAnswerResponse(BaseModel):
     """Survey answer response."""
+
     id: int
     question_id: int
     rating_value: Optional[int] = None
@@ -261,6 +276,7 @@ class SurveyAnswerResponse(BaseModel):
 
 class SurveySubmissionResponse(BaseModel):
     """Survey submission response."""
+
     id: int
     survey_id: int
     customer_id: int
@@ -289,6 +305,7 @@ class SurveySubmissionResponse(BaseModel):
 
 class SurveyResponseListResponse(BaseModel):
     """Paginated survey response list."""
+
     items: list[SurveySubmissionResponse]
     total: int
     page: int
@@ -297,8 +314,10 @@ class SurveyResponseListResponse(BaseModel):
 
 # Survey Analytics
 
+
 class NPSBreakdown(BaseModel):
     """NPS breakdown stats."""
+
     promoters: int = 0
     passives: int = 0
     detractors: int = 0
@@ -308,6 +327,7 @@ class NPSBreakdown(BaseModel):
 
 class SurveyAnalytics(BaseModel):
     """Survey analytics response."""
+
     survey_id: int
     total_responses: int = 0
     avg_score: Optional[float] = None
@@ -321,8 +341,10 @@ class SurveyAnalytics(BaseModel):
 
 # AI Analysis Schemas
 
+
 class UrgentIssue(BaseModel):
     """Individual urgent issue detected by AI."""
+
     text: str
     customer_id: int
     customer_name: Optional[str] = None
@@ -332,6 +354,7 @@ class UrgentIssue(BaseModel):
 
 class ChurnRiskIndicator(BaseModel):
     """Churn risk indicator from AI analysis."""
+
     indicator: str  # e.g., 'competitor_mention', 'low_score', 'negative_feedback'
     weight: float  # 0 to 1
     details: Optional[str] = None
@@ -340,6 +363,7 @@ class ChurnRiskIndicator(BaseModel):
 
 class CompetitorMention(BaseModel):
     """Competitor mention detected in feedback."""
+
     competitor: str
     context: str
     customer_id: int
@@ -349,6 +373,7 @@ class CompetitorMention(BaseModel):
 
 class ActionRecommendation(BaseModel):
     """AI-generated action recommendation."""
+
     type: str  # 'callback', 'task', 'ticket', 'offer', 'escalation'
     customer_id: int
     customer_name: Optional[str] = None
@@ -360,12 +385,14 @@ class ActionRecommendation(BaseModel):
 
 class SurveyAnalysisCreate(BaseModel):
     """Request to trigger AI analysis."""
+
     include_individual_responses: bool = True  # Analyze each response separately
     force_reanalyze: bool = False  # Re-run even if analysis exists
 
 
 class SurveyAnalysisResponse(BaseModel):
     """AI analysis results for a survey."""
+
     id: int
     survey_id: int
     response_id: Optional[int] = None  # null = survey-level analysis
@@ -405,8 +432,10 @@ class SurveyAnalysisResponse(BaseModel):
 
 # Detractor Queue Schemas
 
+
 class DetractorItem(BaseModel):
     """Individual detractor needing attention."""
+
     response_id: int
     survey_id: int
     survey_name: str
@@ -425,6 +454,7 @@ class DetractorItem(BaseModel):
 
 class DetractorQueueResponse(BaseModel):
     """Detractor queue with all detractors needing attention."""
+
     items: list[DetractorItem]
     total: int
     critical_count: int
@@ -434,8 +464,10 @@ class DetractorQueueResponse(BaseModel):
 
 # Trend Analysis Schemas
 
+
 class TrendDataPoint(BaseModel):
     """Single data point in trend analysis."""
+
     date: str  # ISO date string
     responses_count: int
     avg_score: Optional[float] = None
@@ -450,6 +482,7 @@ class TrendDataPoint(BaseModel):
 
 class SurveyTrendResponse(BaseModel):
     """Cross-survey trend data over time."""
+
     period: str  # 'daily', 'weekly', 'monthly'
     start_date: str
     end_date: str
@@ -467,8 +500,10 @@ class SurveyTrendResponse(BaseModel):
 
 # Action Schemas
 
+
 class SurveyActionCreate(BaseModel):
     """Create an action from survey insight."""
+
     response_id: Optional[int] = None
     analysis_id: Optional[int] = None
     customer_id: int
@@ -484,6 +519,7 @@ class SurveyActionCreate(BaseModel):
 
 class SurveyActionUpdate(BaseModel):
     """Update a survey action."""
+
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     priority: Optional[ActionPriority] = None
@@ -495,6 +531,7 @@ class SurveyActionUpdate(BaseModel):
 
 class SurveyActionResponse(BaseModel):
     """Survey action response."""
+
     id: int
     survey_id: int
     response_id: Optional[int] = None
@@ -531,6 +568,7 @@ class SurveyActionResponse(BaseModel):
 
 class SurveyActionListResponse(BaseModel):
     """Paginated list of survey actions."""
+
     items: list[SurveyActionResponse]
     total: int
     page: int
@@ -540,6 +578,7 @@ class SurveyActionListResponse(BaseModel):
 # ============ 2025-2026 Advanced Survey Builder Schemas ============
 
 # Conditional Logic Schemas
+
 
 class LogicOperator(str, Enum):
     EQUALS = "equals"
@@ -563,6 +602,7 @@ class LogicAction(str, Enum):
 
 class ConditionalLogicRule(BaseModel):
     """Single conditional logic rule for survey questions."""
+
     id: str
     source_question_id: str
     operator: LogicOperator
@@ -574,12 +614,14 @@ class ConditionalLogicRule(BaseModel):
 
 class ConditionalLogicConfig(BaseModel):
     """Full conditional logic configuration for a question."""
+
     question_id: str
     rules: list[ConditionalLogicRule] = []
     default_visible: bool = True
 
 
 # A/B Test Schemas
+
 
 class ABTestMetric(str, Enum):
     RESPONSE_RATE = "response_rate"
@@ -590,6 +632,7 @@ class ABTestMetric(str, Enum):
 
 class ABTestVariant(BaseModel):
     """A/B test variant configuration."""
+
     id: str
     name: str
     subject: Optional[str] = None
@@ -599,6 +642,7 @@ class ABTestVariant(BaseModel):
 
 class ABTestConfig(BaseModel):
     """Full A/B test configuration for a survey."""
+
     enabled: bool = False
     variants: list[ABTestVariant] = []
     test_metric: ABTestMetric = ABTestMetric.RESPONSE_RATE
@@ -610,6 +654,7 @@ class ABTestConfig(BaseModel):
 
 class ABTestResults(BaseModel):
     """Results from an A/B test."""
+
     survey_id: int
     variant_results: list[dict] = []  # [{"variant_id": "a", "responses": 100, "score": 8.5}]
     winning_variant_id: Optional[str] = None
@@ -620,6 +665,7 @@ class ABTestResults(BaseModel):
 
 
 # Delivery Settings Schemas
+
 
 class DeliveryChannel(str, Enum):
     EMAIL = "email"
@@ -637,6 +683,7 @@ class DeliveryTimingType(str, Enum):
 
 class ChannelConfig(BaseModel):
     """Configuration for a single delivery channel."""
+
     enabled: bool = False
     # Email specific
     subject: Optional[str] = None
@@ -653,6 +700,7 @@ class ChannelConfig(BaseModel):
 
 class RecurringSchedule(BaseModel):
     """Recurring schedule configuration."""
+
     frequency: str  # 'daily', 'weekly', 'monthly', 'quarterly'
     day_of_week: Optional[int] = None  # 0-6 for weekly
     day_of_month: Optional[int] = None  # 1-31 for monthly
@@ -661,6 +709,7 @@ class RecurringSchedule(BaseModel):
 
 class DeliveryTiming(BaseModel):
     """Survey delivery timing configuration."""
+
     type: DeliveryTimingType = DeliveryTimingType.SCHEDULED
     scheduled_date: Optional[str] = None
     scheduled_time: Optional[str] = None
@@ -673,6 +722,7 @@ class DeliveryTiming(BaseModel):
 
 class ReminderConfig(BaseModel):
     """Survey reminder configuration."""
+
     enabled: bool = True
     max_reminders: int = 2
     reminder_intervals: list[int] = [3, 7]  # Days after initial send
@@ -682,6 +732,7 @@ class ReminderConfig(BaseModel):
 
 class FatigueSettings(BaseModel):
     """Survey fatigue prevention settings."""
+
     enabled: bool = True
     min_days_between_surveys: int = 30
     max_surveys_per_month: int = 2
@@ -692,6 +743,7 @@ class FatigueSettings(BaseModel):
 
 class DeliverySettings(BaseModel):
     """Complete survey delivery configuration."""
+
     channels: dict[str, ChannelConfig] = {}  # Channel name -> config
     timing: DeliveryTiming = DeliveryTiming()
     ab_test: Optional[ABTestConfig] = None
@@ -703,8 +755,10 @@ class DeliverySettings(BaseModel):
 
 # Survey Template Schemas
 
+
 class SurveyTemplateQuestion(BaseModel):
     """Question template for survey templates."""
+
     id: str
     type: QuestionType
     text: str
@@ -720,6 +774,7 @@ class SurveyTemplateQuestion(BaseModel):
 
 class SurveyTemplateCreate(BaseModel):
     """Create a survey template."""
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     survey_type: SurveyType = SurveyType.CUSTOM
@@ -731,6 +786,7 @@ class SurveyTemplateCreate(BaseModel):
 
 class SurveyTemplateUpdate(BaseModel):
     """Update a survey template."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     survey_type: Optional[SurveyType] = None
@@ -742,6 +798,7 @@ class SurveyTemplateUpdate(BaseModel):
 
 class SurveyTemplateResponse(BaseModel):
     """Survey template response."""
+
     id: int
     name: str
     description: Optional[str] = None
@@ -767,6 +824,7 @@ class SurveyTemplateResponse(BaseModel):
 
 class SurveyTemplateListResponse(BaseModel):
     """Paginated list of survey templates."""
+
     items: list[SurveyTemplateResponse]
     total: int
     page: int
@@ -775,8 +833,10 @@ class SurveyTemplateListResponse(BaseModel):
 
 # Survey Eligibility Check Schema
 
+
 class SurveyEligibilityResponse(BaseModel):
     """Response for survey eligibility check."""
+
     eligible: bool
     reason: str
     next_eligible_date: Optional[str] = None

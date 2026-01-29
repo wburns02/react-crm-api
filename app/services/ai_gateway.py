@@ -11,6 +11,7 @@ and 768GB system RAM, running Ollama 0.13.5.
 
 Falls back to OpenAI/Anthropic when local AI is unreachable.
 """
+
 import httpx
 import logging
 from typing import Optional, List, Dict, Any
@@ -26,25 +27,28 @@ logger = logging.getLogger(__name__)
 
 class AIGatewayConfig(BaseModel):
     """Configuration for AI gateway connection."""
+
     base_url: str = "https://localhost-0.tailad2d5f.ts.net/ollama"  # ML workstation via Tailscale
     whisper_url: str = "https://localhost-0.tailad2d5f.ts.net/whisper"  # Whisper API via Tailscale
     api_key: Optional[str] = None  # API key for authentication (not needed for Ollama)
     timeout: float = 300.0  # 70B models need more time
     max_retries: int = 3
     # Ollama model names for R730 (2x RTX 3090, 48GB VRAM, 768GB RAM)
-    default_model: str = "qwen2.5:7b"   # Fast model for quick tasks
-    heavy_model: str = "llama3.1:70b"   # 70B model for complex analysis
+    default_model: str = "qwen2.5:7b"  # Fast model for quick tasks
+    heavy_model: str = "llama3.1:70b"  # 70B model for complex analysis
     embed_model: str = "nomic-embed-text"  # Embedding model
 
 
 class ChatMessage(BaseModel):
     """Chat message format."""
+
     role: str  # system, user, assistant
     content: str
 
 
 class ChatRequest(BaseModel):
     """Request format for chat completion."""
+
     messages: List[ChatMessage]
     max_tokens: int = 1024
     temperature: float = 0.7
@@ -53,12 +57,14 @@ class ChatRequest(BaseModel):
 
 class EmbeddingRequest(BaseModel):
     """Request format for embeddings."""
+
     texts: List[str]
     model: str = "embed"
 
 
 class TranscribeRequest(BaseModel):
     """Request format for audio transcription."""
+
     audio_url: str  # URL to audio file
     language: Optional[str] = "en"
 
@@ -68,8 +74,8 @@ class AIGateway:
 
     def __init__(self, config: Optional[AIGatewayConfig] = None):
         self.config = config or AIGatewayConfig(
-            api_key=getattr(settings, 'AI_SERVER_API_KEY', None),
-            base_url=getattr(settings, 'OLLAMA_BASE_URL', 'https://localhost-0.tailad2d5f.ts.net/ollama')
+            api_key=getattr(settings, "AI_SERVER_API_KEY", None),
+            base_url=getattr(settings, "OLLAMA_BASE_URL", "https://localhost-0.tailad2d5f.ts.net/ollama"),
         )
         self._client: Optional[httpx.AsyncClient] = None
 
@@ -180,7 +186,7 @@ class AIGateway:
             else:
                 logger.warning(f"Unexpected LLM response format: {data}")
                 content = str(data)
-            
+
             return {
                 "content": content,
                 "usage": data.get("usage", {}),
@@ -203,7 +209,7 @@ class AIGateway:
         system_prompt: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Fallback to OpenAI when local AI is unavailable."""
-        openai_key = getattr(settings, 'OPENAI_API_KEY', None) or os.getenv('OPENAI_API_KEY')
+        openai_key = getattr(settings, "OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
 
         if not openai_key:
             logger.error("No OpenAI API key configured for fallback")
@@ -229,7 +235,7 @@ class AIGateway:
                         "messages": messages,
                         "max_tokens": max_tokens,
                         "temperature": temperature,
-                    }
+                    },
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -311,8 +317,7 @@ class AIGateway:
 
                 # Use /transcribe_url endpoint with query parameters
                 response = await whisper_client.post(
-                    f"{self.config.whisper_url}/transcribe_url",
-                    params={"url": audio_url, "language": language}
+                    f"{self.config.whisper_url}/transcribe_url", params={"url": audio_url, "language": language}
                 )
                 response.raise_for_status()
 
@@ -357,9 +362,7 @@ class AIGateway:
                 # Use multipart file upload to /transcribe endpoint
                 files = {"file": (filename, audio_data, "audio/mpeg")}
                 response = await whisper_client.post(
-                    f"{self.config.whisper_url}/transcribe",
-                    files=files,
-                    params={"language": language}
+                    f"{self.config.whisper_url}/transcribe", files=files, params={"language": language}
                 )
                 response.raise_for_status()
 
@@ -427,13 +430,15 @@ class AIGateway:
             Dict with sentiment (positive/negative/neutral) and score
         """
         result = await self.chat_completion(
-            messages=[{
-                "role": "user",
-                "content": f"""Analyze the sentiment of this text. Respond with JSON only:
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Analyze the sentiment of this text. Respond with JSON only:
 {{"sentiment": "positive|negative|neutral", "score": 0.0-1.0, "reason": "brief explanation"}}
 
-Text: {text}"""
-            }],
+Text: {text}""",
+                }
+            ],
             max_tokens=100,
             temperature=0.1,
         )
@@ -542,7 +547,9 @@ Scoring guidelines:
                 "sentiment_score": max(-100, min(100, float(analysis.get("sentiment_score", 0)))),
                 "quality_score": max(0, min(100, float(analysis.get("quality_score", 50)))),
                 "csat_prediction": max(1.0, min(5.0, float(analysis.get("csat_prediction", 3.0)))),
-                "escalation_risk": analysis.get("escalation_risk", "low") if analysis.get("escalation_risk") in ["low", "medium", "high", "critical"] else "low",
+                "escalation_risk": analysis.get("escalation_risk", "low")
+                if analysis.get("escalation_risk") in ["low", "medium", "high", "critical"]
+                else "low",
                 "professionalism_score": max(0, min(100, float(analysis.get("professionalism_score", 50)))),
                 "empathy_score": max(0, min(100, float(analysis.get("empathy_score", 50)))),
                 "clarity_score": max(0, min(100, float(analysis.get("clarity_score", 50)))),

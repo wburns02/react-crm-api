@@ -6,6 +6,7 @@ Provides analytics and AI-driven insights for job profitability:
 - Problem area identification
 - Opportunity recommendations
 """
+
 from fastapi import APIRouter, Query, HTTPException
 from sqlalchemy import select, func
 from typing import Optional, List
@@ -24,6 +25,7 @@ router = APIRouter()
 # ========================
 # Response Schemas
 # ========================
+
 
 class ServiceTypeProfitability(BaseModel):
     service_type: str
@@ -131,6 +133,7 @@ class PricingScenarioResponse(BaseModel):
 # Endpoints
 # ========================
 
+
 @router.get("/profitability/analysis", response_model=JobProfitabilityAnalysis)
 async def get_profitability_analysis(
     db: DbSession,
@@ -155,20 +158,12 @@ async def get_profitability_analysis(
 
         # Query work orders in date range
         wo_result = await db.execute(
-            select(WorkOrder).where(
-                WorkOrder.scheduled_date >= start,
-                WorkOrder.scheduled_date <= end
-            )
+            select(WorkOrder).where(WorkOrder.scheduled_date >= start, WorkOrder.scheduled_date <= end)
         )
         work_orders = wo_result.scalars().all()
 
         # Query job costs in date range
-        cost_result = await db.execute(
-            select(JobCost).where(
-                JobCost.cost_date >= start,
-                JobCost.cost_date <= end
-            )
-        )
+        cost_result = await db.execute(select(JobCost).where(JobCost.cost_date >= start, JobCost.cost_date <= end))
         costs = cost_result.scalars().all()
 
         # Calculate overall metrics
@@ -204,15 +199,17 @@ async def get_profitability_analysis(
             margin_pct = ((revenue - cost_estimate) / revenue * 100) if revenue > 0 else 0
             avg_duration = data["duration"] / count if count > 0 else 0
 
-            by_service_type.append(ServiceTypeProfitability(
-                service_type=job_type.replace("_", " ").title(),
-                revenue=round(revenue, 2),
-                cost=round(cost_estimate, 2),
-                margin_percent=round(margin_pct, 1),
-                job_count=count,
-                avg_duration_hours=round(avg_duration, 2),
-                trend="stable"
-            ))
+            by_service_type.append(
+                ServiceTypeProfitability(
+                    service_type=job_type.replace("_", " ").title(),
+                    revenue=round(revenue, 2),
+                    cost=round(cost_estimate, 2),
+                    margin_percent=round(margin_pct, 1),
+                    job_count=count,
+                    avg_duration_hours=round(avg_duration, 2),
+                    trend="stable",
+                )
+            )
 
         # Sort by revenue descending
         by_service_type.sort(key=lambda x: x.revenue, reverse=True)
@@ -246,18 +243,14 @@ async def get_job_profitability(
     """Get profitability analysis for a specific job/work order."""
     try:
         # Get work order
-        wo_result = await db.execute(
-            select(WorkOrder).where(WorkOrder.id == job_id)
-        )
+        wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == job_id))
         work_order = wo_result.scalar_one_or_none()
 
         if not work_order:
             raise HTTPException(status_code=404, detail="Work order not found")
 
         # Get costs for this work order
-        cost_result = await db.execute(
-            select(JobCost).where(JobCost.work_order_id == job_id)
-        )
+        cost_result = await db.execute(select(JobCost).where(JobCost.work_order_id == job_id))
         costs = cost_result.scalars().all()
 
         revenue = float(work_order.total_amount or 0)
@@ -287,7 +280,7 @@ async def get_job_profitability(
             duration_hours=round(duration, 2),
             profitable=profit > 0,
             efficiency_score=round(efficiency_score, 0),
-            issues=None
+            issues=None,
         )
 
     except HTTPException:
@@ -343,7 +336,7 @@ async def analyze_pricing_scenario(
             current_volume=current_volume,
             projected_volume=projected_volume,
             net_profit_change=round(net_profit_change, 2),
-            recommendation=recommendation
+            recommendation=recommendation,
         )
 
     except Exception as e:

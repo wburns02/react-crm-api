@@ -5,6 +5,7 @@ from typing import Optional
 
 class SMSConsentBase(BaseModel):
     """Base SMS consent schema."""
+
     customer_id: int
     phone_number: str = Field(..., max_length=20)
     consent_status: Optional[str] = Field("pending", max_length=20)
@@ -13,11 +14,13 @@ class SMSConsentBase(BaseModel):
 
 class SMSConsentCreate(SMSConsentBase):
     """Schema for creating SMS consent."""
+
     pass
 
 
 class SMSConsentUpdate(BaseModel):
     """Schema for updating SMS consent."""
+
     consent_status: Optional[str] = None
     consent_source: Optional[str] = None
     double_opt_in_confirmed: Optional[bool] = None
@@ -26,6 +29,7 @@ class SMSConsentUpdate(BaseModel):
 
 class SMSConsentResponse(SMSConsentBase):
     """Schema for SMS consent response."""
+
     id: int
     opt_in_timestamp: Optional[datetime] = None
     opt_in_ip_address: Optional[str] = None
@@ -44,6 +48,7 @@ class SMSConsentResponse(SMSConsentBase):
 
 class SMSConsentListResponse(BaseModel):
     """Paginated SMS consent list response."""
+
     items: list[SMSConsentResponse]
     total: int
     page: int
@@ -52,6 +57,7 @@ class SMSConsentListResponse(BaseModel):
 
 class SMSConsentStats(BaseModel):
     """SMS consent statistics."""
+
     total: int
     opted_in: int
     opted_out: int

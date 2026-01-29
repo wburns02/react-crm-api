@@ -13,15 +13,20 @@ import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
-from app.models.customer_success import (
-    Campaign, CampaignStep, CampaignEnrollment, CampaignStepExecution,
-    Segment
-)
+from app.models.customer_success import Campaign, CampaignStep, CampaignEnrollment, CampaignStepExecution, Segment
 from app.schemas.customer_success.campaign import (
-    CampaignCreate, CampaignUpdate, CampaignResponse, CampaignListResponse,
-    CampaignStepCreate, CampaignStepUpdate, CampaignStepResponse,
-    CampaignEnrollmentCreate, CampaignEnrollmentUpdate, CampaignEnrollmentResponse,
-    EnrollmentListResponse, CampaignAnalytics,
+    CampaignCreate,
+    CampaignUpdate,
+    CampaignResponse,
+    CampaignListResponse,
+    CampaignStepCreate,
+    CampaignStepUpdate,
+    CampaignStepResponse,
+    CampaignEnrollmentCreate,
+    CampaignEnrollmentUpdate,
+    CampaignEnrollmentResponse,
+    EnrollmentListResponse,
+    CampaignAnalytics,
 )
 
 logger = logging.getLogger(__name__)
@@ -29,6 +34,7 @@ router = APIRouter()
 
 
 # Campaign CRUD
+
 
 @router.get("/", response_model=CampaignListResponse)
 async def list_campaigns(
@@ -100,9 +106,7 @@ async def list_campaigns(
             }
 
             if campaign.target_segment_id:
-                seg_result = await db.execute(
-                    select(Segment.name).where(Segment.id == campaign.target_segment_id)
-                )
+                seg_result = await db.execute(select(Segment.name).where(Segment.id == campaign.target_segment_id))
                 campaign_dict["target_segment_name"] = seg_result.scalar_one_or_none()
             else:
                 campaign_dict["target_segment_name"] = None
@@ -118,8 +122,7 @@ async def list_campaigns(
     except Exception as e:
         logger.error(f"Error listing campaigns: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing campaigns: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing campaigns: {str(e)}"
         )
 
 
@@ -130,11 +133,7 @@ async def get_campaign(
     current_user: CurrentUser,
 ):
     """Get a specific campaign with steps."""
-    result = await db.execute(
-        select(Campaign)
-        .options(selectinload(Campaign.steps))
-        .where(Campaign.id == campaign_id)
-    )
+    result = await db.execute(select(Campaign).options(selectinload(Campaign.steps)).where(Campaign.id == campaign_id))
     campaign = result.scalar_one_or_none()
 
     if not campaign:
@@ -176,11 +175,7 @@ async def create_campaign(
     await db.refresh(campaign)
 
     # Load steps
-    result = await db.execute(
-        select(Campaign)
-        .options(selectinload(Campaign.steps))
-        .where(Campaign.id == campaign.id)
-    )
+    result = await db.execute(select(Campaign).options(selectinload(Campaign.steps)).where(Campaign.id == campaign.id))
     return result.scalar_one()
 
 
@@ -192,9 +187,7 @@ async def update_campaign(
     current_user: CurrentUser,
 ):
     """Update a campaign."""
-    result = await db.execute(
-        select(Campaign).where(Campaign.id == campaign_id)
-    )
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
     campaign = result.scalar_one_or_none()
 
     if not campaign:
@@ -214,11 +207,7 @@ async def update_campaign(
     await db.commit()
 
     # Load steps
-    result = await db.execute(
-        select(Campaign)
-        .options(selectinload(Campaign.steps))
-        .where(Campaign.id == campaign.id)
-    )
+    result = await db.execute(select(Campaign).options(selectinload(Campaign.steps)).where(Campaign.id == campaign.id))
     return result.scalar_one()
 
 
@@ -229,9 +218,7 @@ async def delete_campaign(
     current_user: CurrentUser,
 ):
     """Delete a campaign."""
-    result = await db.execute(
-        select(Campaign).where(Campaign.id == campaign_id)
-    )
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
     campaign = result.scalar_one_or_none()
 
     if not campaign:
@@ -252,6 +239,7 @@ async def delete_campaign(
 
 # Campaign Steps
 
+
 @router.post("/{campaign_id}/steps", response_model=CampaignStepResponse, status_code=status.HTTP_201_CREATED)
 async def create_step(
     campaign_id: int,
@@ -260,9 +248,7 @@ async def create_step(
     current_user: CurrentUser,
 ):
     """Add a step to a campaign."""
-    campaign_result = await db.execute(
-        select(Campaign).where(Campaign.id == campaign_id)
-    )
+    campaign_result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
     if not campaign_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -339,6 +325,7 @@ async def delete_step(
 
 # Campaign Enrollments
 
+
 @router.get("/{campaign_id}/enrollments", response_model=EnrollmentListResponse)
 async def list_enrollments(
     campaign_id: int,
@@ -388,9 +375,7 @@ async def list_enrollments(
             "enrolled_at": enrollment.enrolled_at,
             "completed_at": enrollment.completed_at,
         }
-        cust_result = await db.execute(
-            select(Customer.name).where(Customer.id == enrollment.customer_id)
-        )
+        cust_result = await db.execute(select(Customer.name).where(Customer.id == enrollment.customer_id))
         enrollment_dict["customer_name"] = cust_result.scalar_one_or_none()
         items.append(enrollment_dict)
 
@@ -412,9 +397,7 @@ async def enroll_customer(
     """Enroll a customer in a campaign."""
     # Verify campaign exists and is active
     campaign_result = await db.execute(
-        select(Campaign)
-        .options(selectinload(Campaign.steps))
-        .where(Campaign.id == campaign_id)
+        select(Campaign).options(selectinload(Campaign.steps)).where(Campaign.id == campaign_id)
     )
     campaign = campaign_result.scalar_one_or_none()
 
@@ -496,9 +479,7 @@ async def update_enrollment(
 
     # Handle status transitions
     if data.status and data.status != old_status:
-        campaign = await db.execute(
-            select(Campaign).where(Campaign.id == campaign_id)
-        )
+        campaign = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
         campaign = campaign.scalar_one()
 
         if old_status == "active":
@@ -523,6 +504,7 @@ async def update_enrollment(
 
 # Campaign Actions
 
+
 @router.post("/{campaign_id}/launch")
 async def launch_campaign(
     campaign_id: int,
@@ -530,9 +512,7 @@ async def launch_campaign(
     current_user: CurrentUser,
 ):
     """Launch a campaign."""
-    result = await db.execute(
-        select(Campaign).where(Campaign.id == campaign_id)
-    )
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
     campaign = result.scalar_one_or_none()
 
     if not campaign:
@@ -561,9 +541,7 @@ async def pause_campaign(
     current_user: CurrentUser,
 ):
     """Pause an active campaign."""
-    result = await db.execute(
-        select(Campaign).where(Campaign.id == campaign_id)
-    )
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
     campaign = result.scalar_one_or_none()
 
     if not campaign:
@@ -591,9 +569,7 @@ async def complete_campaign(
     current_user: CurrentUser,
 ):
     """Mark a campaign as completed."""
-    result = await db.execute(
-        select(Campaign).where(Campaign.id == campaign_id)
-    )
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
     campaign = result.scalar_one_or_none()
 
     if not campaign:
@@ -610,6 +586,7 @@ async def complete_campaign(
 
 # Campaign Analytics
 
+
 @router.get("/{campaign_id}/analytics", response_model=CampaignAnalytics)
 async def get_campaign_analytics(
     campaign_id: int,
@@ -617,11 +594,7 @@ async def get_campaign_analytics(
     current_user: CurrentUser,
 ):
     """Get analytics for a campaign."""
-    result = await db.execute(
-        select(Campaign)
-        .options(selectinload(Campaign.steps))
-        .where(Campaign.id == campaign_id)
-    )
+    result = await db.execute(select(Campaign).options(selectinload(Campaign.steps)).where(Campaign.id == campaign_id))
     campaign = result.scalar_one_or_none()
 
     if not campaign:
@@ -691,6 +664,7 @@ async def get_campaign_analytics(
 
 # Send Time Optimization Endpoints
 
+
 @router.get("/{campaign_id}/send-time-analysis")
 async def get_send_time_analysis(
     campaign_id: int,
@@ -706,9 +680,7 @@ async def get_send_time_analysis(
     from app.services.customer_success.send_time_optimizer import SendTimeOptimizer
 
     # Verify campaign exists
-    result = await db.execute(
-        select(Campaign).where(Campaign.id == campaign_id)
-    )
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
     campaign = result.scalar_one_or_none()
 
     if not campaign:

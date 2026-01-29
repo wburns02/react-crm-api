@@ -4,6 +4,7 @@ Availability API endpoints for public lead form scheduling.
 Provides available time slots based on current work order schedule.
 This is a PUBLIC endpoint - no authentication required.
 """
+
 import logging
 from fastapi import APIRouter, Query, HTTPException
 from sqlalchemy import select, and_
@@ -32,6 +33,7 @@ STANDARD_WINDOWS = [
 
 class TimeWindow(BaseModel):
     """A time window with availability status."""
+
     start: str = Field(..., description="Start time in HH:MM format")
     end: str = Field(..., description="End time in HH:MM format")
     available: bool = Field(..., description="Whether this time window is available")
@@ -40,6 +42,7 @@ class TimeWindow(BaseModel):
 
 class DayAvailability(BaseModel):
     """Availability for a single day."""
+
     date: str = Field(..., description="Date in YYYY-MM-DD format")
     day_name: str = Field(..., description="Day of the week")
     is_weekend: bool = Field(default=False)
@@ -49,6 +52,7 @@ class DayAvailability(BaseModel):
 
 class AvailabilityResponse(BaseModel):
     """Response containing availability slots."""
+
     slots: List[DayAvailability] = Field(default_factory=list)
     start_date: str
     end_date: str
@@ -57,6 +61,7 @@ class AvailabilityResponse(BaseModel):
 
 def windows_overlap(start1: str, end1: str, start2: str, end2: str) -> bool:
     """Check if two time windows overlap."""
+
     def to_minutes(time_str: str) -> int:
         if not time_str:
             return 0
@@ -145,7 +150,11 @@ async def get_availability_slots(
     try:
         for wo in work_orders:
             if wo.scheduled_date:
-                date_str = wo.scheduled_date.isoformat() if hasattr(wo.scheduled_date, 'isoformat') else str(wo.scheduled_date)[:10]
+                date_str = (
+                    wo.scheduled_date.isoformat()
+                    if hasattr(wo.scheduled_date, "isoformat")
+                    else str(wo.scheduled_date)[:10]
+                )
                 if date_str not in busy_by_date:
                     busy_by_date[date_str] = []
                 # Format time as HH:MM (handle various time formats)
@@ -156,10 +165,12 @@ async def get_availability_slots(
                     # If time_window is a string, use it directly
                     start_time = str(wo.time_window_start)[:5] if wo.time_window_start else BUSINESS_START
                     end_time = str(wo.time_window_end)[:5] if wo.time_window_end else BUSINESS_END
-                busy_by_date[date_str].append({
-                    "start": start_time,
-                    "end": end_time,
-                })
+                busy_by_date[date_str].append(
+                    {
+                        "start": start_time,
+                        "end": end_time,
+                    }
+                )
     except Exception as e:
         logger.error(f"Error processing work orders: {e}")
         raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
@@ -176,13 +187,9 @@ async def get_availability_slots(
 
         if is_weekend:
             # Weekends not available (unless emergency)
-            slots.append(DayAvailability(
-                date=day_str,
-                day_name=day_name,
-                is_weekend=True,
-                available=False,
-                time_windows=[]
-            ))
+            slots.append(
+                DayAvailability(date=day_str, day_name=day_name, is_weekend=True, available=False, time_windows=[])
+            )
         else:
             # Calculate time window availability
             day_busy = busy_by_date.get(day_str, [])
@@ -191,7 +198,8 @@ async def get_availability_slots(
 
             for window in STANDARD_WINDOWS:
                 overlapping = sum(
-                    1 for busy in day_busy
+                    1
+                    for busy in day_busy
                     if windows_overlap(window["start"], window["end"], busy["start"], busy["end"])
                 )
                 slots_remaining = max(0, MAX_CONCURRENT_JOBS - overlapping)
@@ -200,23 +208,27 @@ async def get_availability_slots(
                 if is_available:
                     any_available = True
 
-                time_windows.append(TimeWindow(
-                    start=window["start"],
-                    end=window["end"],
-                    available=is_available,
-                    slots_remaining=slots_remaining
-                ))
+                time_windows.append(
+                    TimeWindow(
+                        start=window["start"],
+                        end=window["end"],
+                        available=is_available,
+                        slots_remaining=slots_remaining,
+                    )
+                )
 
             if any_available:
                 total_available += 1
 
-            slots.append(DayAvailability(
-                date=day_str,
-                day_name=day_name,
-                is_weekend=False,
-                available=any_available,
-                time_windows=time_windows
-            ))
+            slots.append(
+                DayAvailability(
+                    date=day_str,
+                    day_name=day_name,
+                    is_weekend=False,
+                    available=any_available,
+                    time_windows=time_windows,
+                )
+            )
 
         current += timedelta(days=1)
 
@@ -224,7 +236,7 @@ async def get_availability_slots(
         slots=slots,
         start_date=parsed_start.isoformat(),
         end_date=parsed_end.isoformat(),
-        total_available_days=total_available
+        total_available_days=total_available,
     )
 
 
@@ -239,7 +251,7 @@ async def get_next_available(
         db=db,
         start_date=date.today().isoformat(),
         end_date=(date.today() + timedelta(days=14)).isoformat(),
-        service_type=service_type
+        service_type=service_type,
     )
 
     # Filter to only available days
@@ -249,5 +261,5 @@ async def get_next_available(
         slots=available_slots,
         start_date=result.start_date,
         end_date=result.end_date,
-        total_available_days=len(available_slots)
+        total_available_days=len(available_slots),
     )

@@ -1,4 +1,5 @@
 """Job Cost model for tracking costs associated with work orders."""
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Float, Boolean, Date
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -18,7 +19,9 @@ class JobCost(Base):
     work_order_id = Column(String(36), nullable=False, index=True)
 
     # Cost identification
-    cost_type = Column(String(50), nullable=False)  # labor, materials, equipment, disposal, travel, subcontractor, other
+    cost_type = Column(
+        String(50), nullable=False
+    )  # labor, materials, equipment, disposal, travel, subcontractor, other
     category = Column(String(100), nullable=True)  # sub-category for detailed tracking
 
     # Description

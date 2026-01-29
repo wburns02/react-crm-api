@@ -61,6 +61,7 @@ router = APIRouter()
 # Bulk Action Request/Response Models
 # ============================================
 
+
 class ExportRequest(BaseModel):
     format: str = "csv"  # csv or excel
     fields: List[str]
@@ -151,6 +152,7 @@ class CreateCallListRequest(BaseModel):
 # SMART SEGMENTS ENDPOINTS
 # =============================================================================
 
+
 @router.get("/smart", response_model=SmartSegmentListResponse)
 async def list_smart_segments(
     db: DbSession,
@@ -232,6 +234,7 @@ async def list_smart_segment_categories(
 # STANDARD SEGMENT CRUD ENDPOINTS
 # =============================================================================
 
+
 @router.get("/", response_model=SegmentListResponse)
 async def list_segments(
     db: DbSession,
@@ -285,9 +288,7 @@ async def get_segment(
     current_user: CurrentUser,
 ):
     """Get a specific segment."""
-    result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    result = await db.execute(select(Segment).where(Segment.id == segment_id))
     segment = result.scalar_one_or_none()
 
     if not segment:
@@ -307,9 +308,7 @@ async def create_segment(
 ):
     """Create a new segment."""
     # Check for duplicate name
-    existing = await db.execute(
-        select(Segment).where(Segment.name == data.name)
-    )
+    existing = await db.execute(select(Segment).where(Segment.name == data.name))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -335,9 +334,7 @@ async def update_segment(
     current_user: CurrentUser,
 ):
     """Update a segment."""
-    result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    result = await db.execute(select(Segment).where(Segment.id == segment_id))
     segment = result.scalar_one_or_none()
 
     if not segment:
@@ -350,9 +347,7 @@ async def update_segment(
 
     # Check for duplicate name if updating name
     if "name" in update_data and update_data["name"] != segment.name:
-        existing = await db.execute(
-            select(Segment).where(Segment.name == update_data["name"])
-        )
+        existing = await db.execute(select(Segment).where(Segment.name == update_data["name"]))
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -377,9 +372,7 @@ async def delete_segment(
 
     System segments (is_system=True) cannot be deleted.
     """
-    result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    result = await db.execute(select(Segment).where(Segment.id == segment_id))
     segment = result.scalar_one_or_none()
 
     if not segment:
@@ -410,9 +403,7 @@ async def list_segment_customers(
 ):
     """List customers in a segment."""
     # Check segment exists
-    segment_result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    segment_result = await db.execute(select(Segment).where(Segment.id == segment_id))
     if not segment_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -454,9 +445,7 @@ async def add_customer_to_segment(
 ):
     """Manually add a customer to a segment."""
     # Check segment exists and is static
-    segment_result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    segment_result = await db.execute(select(Segment).where(Segment.id == segment_id))
     segment = segment_result.scalar_one_or_none()
 
     if not segment:
@@ -531,9 +520,7 @@ async def remove_customer_from_segment(
     membership.exit_reason = reason or "Manual removal"
 
     # Update segment count
-    segment_result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    segment_result = await db.execute(select(Segment).where(Segment.id == segment_id))
     segment = segment_result.scalar_one_or_none()
     if segment:
         segment.customer_count = max(0, (segment.customer_count or 1) - 1)
@@ -555,10 +542,7 @@ async def preview_segment(
     # Convert Pydantic model to dict
     rules_dict = request.rules.model_dump() if request.rules else {}
 
-    preview = await engine.preview_segment(
-        rules=rules_dict,
-        sample_size=min(request.limit, 100)
-    )
+    preview = await engine.preview_segment(rules=rules_dict, sample_size=min(request.limit, 100))
 
     return SegmentPreviewResponse(
         total_matches=preview.estimated_count,
@@ -588,7 +572,7 @@ async def preview_segment_enhanced(
         rules=rules_dict,
         sample_size=request.sample_size,
         include_segments=request.include_segments,
-        exclude_segments=request.exclude_segments
+        exclude_segments=request.exclude_segments,
     )
 
     return SegmentPreviewResponse(
@@ -626,9 +610,7 @@ async def evaluate_segment(
     request: Optional[SegmentEvaluationRequest] = None,
 ):
     """Evaluate/refresh a dynamic segment's membership."""
-    result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    result = await db.execute(select(Segment).where(Segment.id == segment_id))
     segment = result.scalar_one_or_none()
 
     if not segment:
@@ -649,9 +631,7 @@ async def evaluate_segment(
     create_snapshot = request.create_snapshot if request else True
 
     update_result = await engine.update_segment_membership(
-        segment_id,
-        track_history=track_history,
-        create_snapshot=create_snapshot
+        segment_id, track_history=track_history, create_snapshot=create_snapshot
     )
 
     return SegmentEvaluationResponse(
@@ -668,6 +648,7 @@ async def evaluate_segment(
 # SEGMENT MEMBERS WITH DETAILS
 # =============================================================================
 
+
 @router.get("/{segment_id}/members", response_model=SegmentMembersResponse)
 async def list_segment_members(
     segment_id: int,
@@ -678,9 +659,7 @@ async def list_segment_members(
 ):
     """List customers in a segment with full details including health scores."""
     # Check segment exists
-    segment_result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    segment_result = await db.execute(select(Segment).where(Segment.id == segment_id))
     segment = segment_result.scalar_one_or_none()
     if not segment:
         raise HTTPException(
@@ -690,9 +669,7 @@ async def list_segment_members(
 
     # Use engine for real-time evaluation
     engine = SegmentEngine(db)
-    members, total = await engine.get_segment_members_with_details(
-        segment_id, page, page_size
-    )
+    members, total = await engine.get_segment_members_with_details(segment_id, page, page_size)
 
     return SegmentMembersResponse(
         items=[SegmentMemberDetail(**m) for m in members],
@@ -708,6 +685,7 @@ async def list_segment_members(
 # SEGMENT HISTORY AND SNAPSHOTS
 # =============================================================================
 
+
 @router.get("/{segment_id}/history", response_model=SegmentSnapshotListResponse)
 async def get_segment_history(
     segment_id: int,
@@ -718,9 +696,7 @@ async def get_segment_history(
 ):
     """Get segment membership history (snapshots over time)."""
     # Verify segment exists
-    segment_result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    segment_result = await db.execute(select(Segment).where(Segment.id == segment_id))
     if not segment_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -757,9 +733,7 @@ async def create_snapshot(
 ):
     """Manually create a snapshot of current segment membership."""
     # Verify segment exists
-    segment_result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    segment_result = await db.execute(select(Segment).where(Segment.id == segment_id))
     segment = segment_result.scalar_one_or_none()
     if not segment:
         raise HTTPException(
@@ -799,6 +773,7 @@ async def create_snapshot(
 # AI ENDPOINTS
 # =============================================================================
 
+
 @router.post("/ai/parse", response_model=NaturalLanguageQueryResponse)
 async def parse_natural_language_query(
     request: NaturalLanguageQueryRequest,
@@ -815,10 +790,7 @@ async def parse_natural_language_query(
     """
     ai_service = SegmentAIService(db)
 
-    result = await ai_service.parse_natural_language(
-        query=request.query,
-        use_llm=request.use_llm
-    )
+    result = await ai_service.parse_natural_language(query=request.query, use_llm=request.use_llm)
 
     return NaturalLanguageQueryResponse(
         success=result.success,
@@ -839,9 +811,7 @@ async def get_segment_suggestions(
     """Get AI-generated segment suggestions based on data patterns."""
     ai_service = SegmentAIService(db)
 
-    suggestions = await ai_service.get_segment_suggestions(
-        max_suggestions=max_suggestions
-    )
+    suggestions = await ai_service.get_segment_suggestions(max_suggestions=max_suggestions)
 
     return SegmentSuggestionsResponse(
         suggestions=[
@@ -919,6 +889,7 @@ async def get_segment_templates(
 # FIELD AND OPERATOR DEFINITIONS
 # =============================================================================
 
+
 @router.get("/fields", response_model=SegmentFieldsResponse)
 async def get_available_fields(
     db: DbSession,
@@ -957,11 +928,10 @@ async def get_available_fields(
 # BULK ACTION ENDPOINTS
 # =============================================================================
 
+
 async def _get_segment_or_404(segment_id: int, db: DbSession) -> Segment:
     """Helper to get segment or raise 404."""
-    result = await db.execute(
-        select(Segment).where(Segment.id == segment_id)
-    )
+    result = await db.execute(select(Segment).where(Segment.id == segment_id))
     segment = result.scalar_one_or_none()
     if not segment:
         raise HTTPException(

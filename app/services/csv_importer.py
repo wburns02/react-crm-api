@@ -7,6 +7,7 @@ Supports:
 - Equipment import
 - Inventory import
 """
+
 import csv
 import io
 from typing import List, Dict, Any, Optional, Tuple
@@ -38,6 +39,7 @@ class ImportResult(BaseModel):
 # Validation Schemas
 # ========================
 
+
 class CustomerImportRow(BaseModel):
     name: str
     email: Optional[str] = None
@@ -62,10 +64,10 @@ class CustomerImportRow(BaseModel):
     def normalize_phone(cls, v):
         if v:
             # Remove non-numeric chars
-            digits = re.sub(r'\D', '', v)
+            digits = re.sub(r"\D", "", v)
             if len(digits) == 10:
                 return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-            elif len(digits) == 11 and digits[0] == '1':
+            elif len(digits) == 11 and digits[0] == "1":
                 return f"({digits[1:4]}) {digits[4:7]}-{digits[7:]}"
         return v
 
@@ -129,25 +131,49 @@ class InventoryImportRow(BaseModel):
 
 TEMPLATES = {
     ImportType.CUSTOMERS: [
-        "name", "email", "phone", "address", "city", "state", "zip_code",
-        "customer_type", "tags", "notes"
+        "name",
+        "email",
+        "phone",
+        "address",
+        "city",
+        "state",
+        "zip_code",
+        "customer_type",
+        "tags",
+        "notes",
     ],
     ImportType.WORK_ORDERS: [
-        "customer_name", "customer_email", "service_address", "job_type",
-        "scheduled_date", "status", "priority", "description", "notes"
+        "customer_name",
+        "customer_email",
+        "service_address",
+        "job_type",
+        "scheduled_date",
+        "status",
+        "priority",
+        "description",
+        "notes",
     ],
     ImportType.TECHNICIANS: [
-        "first_name", "last_name", "email", "phone", "employee_id",
-        "skills", "hourly_rate", "license_number"
+        "first_name",
+        "last_name",
+        "email",
+        "phone",
+        "employee_id",
+        "skills",
+        "hourly_rate",
+        "license_number",
     ],
     ImportType.EQUIPMENT: [
-        "name", "equipment_type", "serial_number", "model", "manufacturer",
-        "purchase_date", "condition", "notes"
+        "name",
+        "equipment_type",
+        "serial_number",
+        "model",
+        "manufacturer",
+        "purchase_date",
+        "condition",
+        "notes",
     ],
-    ImportType.INVENTORY: [
-        "name", "sku", "category", "quantity", "unit", "unit_cost",
-        "reorder_point", "supplier"
-    ],
+    ImportType.INVENTORY: ["name", "sku", "category", "quantity", "unit", "unit_cost", "reorder_point", "supplier"],
 }
 
 
@@ -163,9 +189,9 @@ def generate_template_with_examples(import_type: ImportType) -> str:
     template = ",".join(headers) + "\n"
 
     examples = {
-        ImportType.CUSTOMERS: "John Doe,john@example.com,(555) 123-4567,123 Main St,Austin,TX,78701,residential,\"septic,regular\",First time customer",
+        ImportType.CUSTOMERS: 'John Doe,john@example.com,(555) 123-4567,123 Main St,Austin,TX,78701,residential,"septic,regular",First time customer',
         ImportType.WORK_ORDERS: "John Doe,john@example.com,123 Main St Austin TX 78701,pumping,2025-01-15,scheduled,normal,Annual pumping service,Access through back gate",
-        ImportType.TECHNICIANS: "Mike,Smith,mike@company.com,(555) 987-6543,EMP001,\"pumping,repair\",25.00,LIC-12345",
+        ImportType.TECHNICIANS: 'Mike,Smith,mike@company.com,(555) 987-6543,EMP001,"pumping,repair",25.00,LIC-12345',
         ImportType.EQUIPMENT: "Vacuum Truck 1,truck,VT-2024-001,ProVac 3000,ProVac Inc,2024-01-15,good,Primary pump truck",
         ImportType.INVENTORY: "4 inch PVC Pipe,PVC-4IN-10,Pipes and Fittings,50,feet,2.50,20,ABC Plumbing Supply",
     }
@@ -177,7 +203,10 @@ def generate_template_with_examples(import_type: ImportType) -> str:
 # Validation Functions
 # ========================
 
-def validate_row(row: Dict[str, str], import_type: ImportType, row_num: int) -> Tuple[bool, Optional[Dict], Optional[str]]:
+
+def validate_row(
+    row: Dict[str, str], import_type: ImportType, row_num: int
+) -> Tuple[bool, Optional[Dict], Optional[str]]:
     """Validate a single row and return (is_valid, validated_data, error_message)."""
     try:
         if import_type == ImportType.CUSTOMERS:
@@ -241,10 +270,7 @@ def validate_headers(headers: List[str], import_type: ImportType) -> Tuple[bool,
     return True, warnings
 
 
-async def validate_csv_file(
-    content: str,
-    import_type: ImportType
-) -> ImportResult:
+async def validate_csv_file(content: str, import_type: ImportType) -> ImportResult:
     """Validate a CSV file without importing."""
     headers, rows = parse_csv_content(content)
 

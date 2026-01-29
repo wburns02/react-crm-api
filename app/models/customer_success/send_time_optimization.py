@@ -20,6 +20,7 @@ class CustomerSendTimeProfile(Base):
     Tracks engagement patterns to predict optimal send times for each customer,
     improving open rates and click-through rates for campaigns.
     """
+
     __tablename__ = "cs_customer_send_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -27,7 +28,7 @@ class CustomerSendTimeProfile(Base):
 
     # Optimal windows (stored as hour of day, 0-23)
     best_hour_email = Column(Integer)  # Best hour for email engagement
-    best_hour_sms = Column(Integer)    # Best hour for SMS engagement
+    best_hour_sms = Column(Integer)  # Best hour for SMS engagement
 
     # Day of week preferences (0=Monday, 6=Sunday)
     best_days = Column(JSON)  # e.g., [0, 1, 2, 3, 4] for weekdays
@@ -42,7 +43,7 @@ class CustomerSendTimeProfile(Base):
     sample_size = Column(Integer, default=0)
 
     # Customer's timezone for send time calculations
-    timezone = Column(String(50), default='America/Chicago')
+    timezone = Column(String(50), default="America/Chicago")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -63,6 +64,7 @@ class CampaignSendTimeAnalysis(Base):
     Aggregates timing performance data across all messages sent in a campaign
     to identify optimal send times for future campaigns.
     """
+
     __tablename__ = "cs_campaign_send_analysis"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -70,7 +72,7 @@ class CampaignSendTimeAnalysis(Base):
 
     # Aggregated optimal times
     recommended_hour = Column(Integer)  # Best hour based on analysis (0-23)
-    recommended_days = Column(JSON)     # Best days [0=Mon, 6=Sun]
+    recommended_days = Column(JSON)  # Best days [0=Mon, 6=Sun]
 
     # Performance by hour: {hour: {sent, opened, clicked, open_rate, click_rate}}
     hourly_performance = Column(JSON)

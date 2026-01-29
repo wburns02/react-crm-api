@@ -6,6 +6,7 @@ Features:
 - Route optimization
 - Real-time updates
 """
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, and_
 from typing import Optional, List
@@ -25,6 +26,7 @@ router = APIRouter()
 
 # Models
 
+
 class LocationUpdate(BaseModel):
     technician_id: str
     latitude: float
@@ -42,6 +44,7 @@ class RouteOptimizeRequest(BaseModel):
 
 # Helper functions
 
+
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance between two points in miles."""
     R = 3959  # Earth's radius in miles
@@ -51,8 +54,8 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     delta_lat = math.radians(lat2 - lat1)
     delta_lon = math.radians(lon2 - lon1)
 
-    a = math.sin(delta_lat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    a = math.sin(delta_lat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     return R * c
 
@@ -71,9 +74,8 @@ def simple_route_optimize(locations: List[dict], start_location: dict) -> List[d
         nearest = min(
             remaining,
             key=lambda loc: haversine_distance(
-                current["latitude"], current["longitude"],
-                loc["latitude"], loc["longitude"]
-            )
+                current["latitude"], current["longitude"], loc["latitude"], loc["longitude"]
+            ),
         )
         route.append(nearest)
         remaining.remove(nearest)
@@ -83,6 +85,7 @@ def simple_route_optimize(locations: List[dict], start_location: dict) -> List[d
 
 
 # Endpoints
+
 
 @router.get("/technicians")
 async def get_technician_locations(
@@ -257,10 +260,7 @@ async def get_job_clusters(
             if other["id"] in used:
                 continue
 
-            distance = haversine_distance(
-                job["latitude"], job["longitude"],
-                other["latitude"], other["longitude"]
-            )
+            distance = haversine_distance(job["latitude"], job["longitude"], other["latitude"], other["longitude"])
 
             if distance <= cluster_radius_miles:
                 cluster["job_count"] += 1
@@ -280,9 +280,7 @@ async def optimize_route(
 ):
     """Optimize route for a technician's jobs."""
     # Get technician home location
-    tech_result = await db.execute(
-        select(Technician).where(Technician.id == request.technician_id)
-    )
+    tech_result = await db.execute(select(Technician).where(Technician.id == request.technician_id))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
@@ -292,9 +290,7 @@ async def optimize_route(
         raise HTTPException(status_code=400, detail="Technician has no home location")
 
     # Get work orders
-    wo_result = await db.execute(
-        select(WorkOrder).where(WorkOrder.id.in_(request.work_order_ids))
-    )
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id.in_(request.work_order_ids)))
     work_orders = wo_result.scalars().all()
 
     # Build location list
@@ -322,10 +318,7 @@ async def optimize_route(
     total_distance = 0.0
     prev = start
     for loc in optimized:
-        total_distance += haversine_distance(
-            prev["latitude"], prev["longitude"],
-            loc["latitude"], loc["longitude"]
-        )
+        total_distance += haversine_distance(prev["latitude"], prev["longitude"], loc["latitude"], loc["longitude"])
         prev = loc
 
     return {
@@ -370,9 +363,7 @@ async def get_map_bounds(
     work_orders = wo_result.scalars().all()
 
     # Get technician locations
-    tech_result = await db.execute(
-        select(Technician).where(Technician.is_active == True)
-    )
+    tech_result = await db.execute(select(Technician).where(Technician.is_active == True))
     technicians = tech_result.scalars().all()
 
     # Collect all coordinates

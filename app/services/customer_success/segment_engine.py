@@ -43,8 +43,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.models.customer import Customer
 from app.models.customer_success import (
-    Segment, CustomerSegment, SegmentRule, SegmentMembership, SegmentSnapshot,
-    HealthScore, Touchpoint
+    Segment,
+    CustomerSegment,
+    SegmentRule,
+    SegmentMembership,
+    SegmentSnapshot,
+    HealthScore,
+    Touchpoint,
 )
 from app.models.work_order import WorkOrder
 
@@ -54,6 +59,7 @@ logger = logging.getLogger(__name__)
 
 class FieldCategory(str, Enum):
     """Categories of fields that can be used in segment rules."""
+
     CUSTOMER = "customer"
     HEALTH = "health"
     BEHAVIORAL = "behavioral"
@@ -65,6 +71,7 @@ class FieldCategory(str, Enum):
 @dataclass
 class FieldDefinition:
     """Definition of a field that can be used in segment rules."""
+
     name: str
     display_name: str
     category: FieldCategory
@@ -80,6 +87,7 @@ class FieldDefinition:
 @dataclass
 class SegmentEvaluationResult:
     """Result of evaluating a segment."""
+
     segment_id: int
     matching_customer_ids: List[int]
     total_count: int
@@ -91,6 +99,7 @@ class SegmentEvaluationResult:
 @dataclass
 class SegmentPreviewResult:
     """Result of previewing a segment before creation."""
+
     estimated_count: int
     sample_customers: List[Dict[str, Any]]
     estimated_arr: Optional[Decimal] = None
@@ -104,6 +113,7 @@ class SegmentPreviewResult:
 @dataclass
 class MembershipUpdateResult:
     """Result of updating segment membership."""
+
     segment_id: int
     customers_added: int
     customers_removed: int
@@ -130,165 +140,306 @@ class SegmentEngine:
     FIELD_DEFINITIONS: Dict[str, FieldDefinition] = {
         # Customer Attributes
         "customer_type": FieldDefinition(
-            "customer_type", "Customer Type", FieldCategory.CUSTOMER,
-            "string", Customer, "customer_type",
-            "Type of customer (residential, commercial, enterprise)"
+            "customer_type",
+            "Customer Type",
+            FieldCategory.CUSTOMER,
+            "string",
+            Customer,
+            "customer_type",
+            "Type of customer (residential, commercial, enterprise)",
         ),
-        "city": FieldDefinition(
-            "city", "City", FieldCategory.CUSTOMER,
-            "string", Customer, "city", "Customer city"
-        ),
+        "city": FieldDefinition("city", "City", FieldCategory.CUSTOMER, "string", Customer, "city", "Customer city"),
         "state": FieldDefinition(
-            "state", "State", FieldCategory.CUSTOMER,
-            "string", Customer, "state", "Customer state"
+            "state", "State", FieldCategory.CUSTOMER, "string", Customer, "state", "Customer state"
         ),
         "postal_code": FieldDefinition(
-            "postal_code", "Postal Code", FieldCategory.CUSTOMER,
-            "string", Customer, "postal_code", "Customer postal/zip code"
+            "postal_code",
+            "Postal Code",
+            FieldCategory.CUSTOMER,
+            "string",
+            Customer,
+            "postal_code",
+            "Customer postal/zip code",
         ),
         "subdivision": FieldDefinition(
-            "subdivision", "Subdivision", FieldCategory.CUSTOMER,
-            "string", Customer, "subdivision", "Customer subdivision/neighborhood"
+            "subdivision",
+            "Subdivision",
+            FieldCategory.CUSTOMER,
+            "string",
+            Customer,
+            "subdivision",
+            "Customer subdivision/neighborhood",
         ),
         "lead_source": FieldDefinition(
-            "lead_source", "Lead Source", FieldCategory.CUSTOMER,
-            "string", Customer, "lead_source", "How the customer was acquired"
+            "lead_source",
+            "Lead Source",
+            FieldCategory.CUSTOMER,
+            "string",
+            Customer,
+            "lead_source",
+            "How the customer was acquired",
         ),
         "prospect_stage": FieldDefinition(
-            "prospect_stage", "Prospect Stage", FieldCategory.CUSTOMER,
-            "string", Customer, "prospect_stage", "Current sales stage"
+            "prospect_stage",
+            "Prospect Stage",
+            FieldCategory.CUSTOMER,
+            "string",
+            Customer,
+            "prospect_stage",
+            "Current sales stage",
         ),
         "created_at": FieldDefinition(
-            "created_at", "Created Date", FieldCategory.CUSTOMER,
-            "date", Customer, "created_at", "When customer was created"
+            "created_at",
+            "Created Date",
+            FieldCategory.CUSTOMER,
+            "date",
+            Customer,
+            "created_at",
+            "When customer was created",
         ),
         "is_active": FieldDefinition(
-            "is_active", "Is Active", FieldCategory.CUSTOMER,
-            "boolean", Customer, "is_active", "Whether customer is active"
+            "is_active",
+            "Is Active",
+            FieldCategory.CUSTOMER,
+            "boolean",
+            Customer,
+            "is_active",
+            "Whether customer is active",
         ),
-        "tags": FieldDefinition(
-            "tags", "Tags", FieldCategory.CUSTOMER,
-            "string", Customer, "tags", "Customer tags"
-        ),
-
+        "tags": FieldDefinition("tags", "Tags", FieldCategory.CUSTOMER, "string", Customer, "tags", "Customer tags"),
         # Health Score Metrics
         "health_score": FieldDefinition(
-            "health_score", "Health Score", FieldCategory.HEALTH,
-            "number", HealthScore, "overall_score",
-            "Overall customer health score (0-100)", True
+            "health_score",
+            "Health Score",
+            FieldCategory.HEALTH,
+            "number",
+            HealthScore,
+            "overall_score",
+            "Overall customer health score (0-100)",
+            True,
         ),
         "health_status": FieldDefinition(
-            "health_status", "Health Status", FieldCategory.HEALTH,
-            "string", HealthScore, "health_status",
-            "Health status (healthy, at_risk, critical, churned)", True
+            "health_status",
+            "Health Status",
+            FieldCategory.HEALTH,
+            "string",
+            HealthScore,
+            "health_status",
+            "Health status (healthy, at_risk, critical, churned)",
+            True,
         ),
         "churn_probability": FieldDefinition(
-            "churn_probability", "Churn Probability", FieldCategory.HEALTH,
-            "number", HealthScore, "churn_probability",
-            "Probability of churn (0-1)", True
+            "churn_probability",
+            "Churn Probability",
+            FieldCategory.HEALTH,
+            "number",
+            HealthScore,
+            "churn_probability",
+            "Probability of churn (0-1)",
+            True,
         ),
         "expansion_probability": FieldDefinition(
-            "expansion_probability", "Expansion Probability", FieldCategory.HEALTH,
-            "number", HealthScore, "expansion_probability",
-            "Probability of expansion (0-1)", True
+            "expansion_probability",
+            "Expansion Probability",
+            FieldCategory.HEALTH,
+            "number",
+            HealthScore,
+            "expansion_probability",
+            "Probability of expansion (0-1)",
+            True,
         ),
         "score_trend": FieldDefinition(
-            "score_trend", "Score Trend", FieldCategory.HEALTH,
-            "string", HealthScore, "score_trend",
-            "Health score trend (improving, stable, declining)", True
+            "score_trend",
+            "Score Trend",
+            FieldCategory.HEALTH,
+            "string",
+            HealthScore,
+            "score_trend",
+            "Health score trend (improving, stable, declining)",
+            True,
         ),
         "adoption_score": FieldDefinition(
-            "adoption_score", "Adoption Score", FieldCategory.HEALTH,
-            "number", HealthScore, "product_adoption_score",
-            "Product adoption score (0-100)", True
+            "adoption_score",
+            "Adoption Score",
+            FieldCategory.HEALTH,
+            "number",
+            HealthScore,
+            "product_adoption_score",
+            "Product adoption score (0-100)",
+            True,
         ),
         "engagement_score": FieldDefinition(
-            "engagement_score", "Engagement Score", FieldCategory.HEALTH,
-            "number", HealthScore, "engagement_score",
-            "Engagement score (0-100)", True
+            "engagement_score",
+            "Engagement Score",
+            FieldCategory.HEALTH,
+            "number",
+            HealthScore,
+            "engagement_score",
+            "Engagement score (0-100)",
+            True,
         ),
         "relationship_score": FieldDefinition(
-            "relationship_score", "Relationship Score", FieldCategory.HEALTH,
-            "number", HealthScore, "relationship_score",
-            "Relationship score (0-100)", True
+            "relationship_score",
+            "Relationship Score",
+            FieldCategory.HEALTH,
+            "number",
+            HealthScore,
+            "relationship_score",
+            "Relationship score (0-100)",
+            True,
         ),
         "financial_score": FieldDefinition(
-            "financial_score", "Financial Score", FieldCategory.HEALTH,
-            "number", HealthScore, "financial_score",
-            "Financial health score (0-100)", True
+            "financial_score",
+            "Financial Score",
+            FieldCategory.HEALTH,
+            "number",
+            HealthScore,
+            "financial_score",
+            "Financial health score (0-100)",
+            True,
         ),
         "support_score": FieldDefinition(
-            "support_score", "Support Score", FieldCategory.HEALTH,
-            "number", HealthScore, "support_score",
-            "Support satisfaction score (0-100)", True
+            "support_score",
+            "Support Score",
+            FieldCategory.HEALTH,
+            "number",
+            HealthScore,
+            "support_score",
+            "Support satisfaction score (0-100)",
+            True,
         ),
-
         # Service History
         "system_type": FieldDefinition(
-            "system_type", "System Type", FieldCategory.SERVICE,
-            "string", Customer, "system_type",
-            "Type of septic system installed"
+            "system_type",
+            "System Type",
+            FieldCategory.SERVICE,
+            "string",
+            Customer,
+            "system_type",
+            "Type of septic system installed",
         ),
         "tank_size_gallons": FieldDefinition(
-            "tank_size_gallons", "Tank Size (Gallons)", FieldCategory.SERVICE,
-            "number", Customer, "tank_size_gallons",
-            "Size of septic tank in gallons"
+            "tank_size_gallons",
+            "Tank Size (Gallons)",
+            FieldCategory.SERVICE,
+            "number",
+            Customer,
+            "tank_size_gallons",
+            "Size of septic tank in gallons",
         ),
         "number_of_tanks": FieldDefinition(
-            "number_of_tanks", "Number of Tanks", FieldCategory.SERVICE,
-            "number", Customer, "number_of_tanks",
-            "Number of septic tanks"
+            "number_of_tanks",
+            "Number of Tanks",
+            FieldCategory.SERVICE,
+            "number",
+            Customer,
+            "number_of_tanks",
+            "Number of septic tanks",
         ),
         "system_issued_date": FieldDefinition(
-            "system_issued_date", "System Install Date", FieldCategory.SERVICE,
-            "date", Customer, "system_issued_date",
-            "When the septic system was installed"
+            "system_issued_date",
+            "System Install Date",
+            FieldCategory.SERVICE,
+            "date",
+            Customer,
+            "system_issued_date",
+            "When the septic system was installed",
         ),
-
         # Financial
         "estimated_value": FieldDefinition(
-            "estimated_value", "Estimated Value", FieldCategory.FINANCIAL,
-            "number", Customer, "estimated_value",
-            "Estimated customer value"
+            "estimated_value",
+            "Estimated Value",
+            FieldCategory.FINANCIAL,
+            "number",
+            Customer,
+            "estimated_value",
+            "Estimated customer value",
         ),
-
         # Behavioral (require subqueries/aggregations)
         "total_work_orders": FieldDefinition(
-            "total_work_orders", "Total Work Orders", FieldCategory.BEHAVIORAL,
-            "number", WorkOrder, "id",
-            "Total number of work orders", True, "count", True
+            "total_work_orders",
+            "Total Work Orders",
+            FieldCategory.BEHAVIORAL,
+            "number",
+            WorkOrder,
+            "id",
+            "Total number of work orders",
+            True,
+            "count",
+            True,
         ),
         "last_service_date": FieldDefinition(
-            "last_service_date", "Last Service Date", FieldCategory.BEHAVIORAL,
-            "date", WorkOrder, "scheduled_date",
-            "Date of most recent service", True, "max", True
+            "last_service_date",
+            "Last Service Date",
+            FieldCategory.BEHAVIORAL,
+            "date",
+            WorkOrder,
+            "scheduled_date",
+            "Date of most recent service",
+            True,
+            "max",
+            True,
         ),
-
         # Engagement (touchpoints)
         "total_touchpoints": FieldDefinition(
-            "total_touchpoints", "Total Touchpoints", FieldCategory.ENGAGEMENT,
-            "number", Touchpoint, "id",
-            "Total customer touchpoints", True, "count", True
+            "total_touchpoints",
+            "Total Touchpoints",
+            FieldCategory.ENGAGEMENT,
+            "number",
+            Touchpoint,
+            "id",
+            "Total customer touchpoints",
+            True,
+            "count",
+            True,
         ),
         "last_touchpoint_date": FieldDefinition(
-            "last_touchpoint_date", "Last Touchpoint Date", FieldCategory.ENGAGEMENT,
-            "date", Touchpoint, "occurred_at",
-            "Date of most recent touchpoint", True, "max", True
+            "last_touchpoint_date",
+            "Last Touchpoint Date",
+            FieldCategory.ENGAGEMENT,
+            "date",
+            Touchpoint,
+            "occurred_at",
+            "Date of most recent touchpoint",
+            True,
+            "max",
+            True,
         ),
         "avg_sentiment": FieldDefinition(
-            "avg_sentiment", "Average Sentiment", FieldCategory.ENGAGEMENT,
-            "number", Touchpoint, "sentiment_score",
-            "Average sentiment score across touchpoints", True, "avg", True
+            "avg_sentiment",
+            "Average Sentiment",
+            FieldCategory.ENGAGEMENT,
+            "number",
+            Touchpoint,
+            "sentiment_score",
+            "Average sentiment score across touchpoints",
+            True,
+            "avg",
+            True,
         ),
         "nps_score": FieldDefinition(
-            "nps_score", "NPS Score", FieldCategory.ENGAGEMENT,
-            "number", Touchpoint, "nps_score",
-            "Most recent NPS score", True, "max", True
+            "nps_score",
+            "NPS Score",
+            FieldCategory.ENGAGEMENT,
+            "number",
+            Touchpoint,
+            "nps_score",
+            "Most recent NPS score",
+            True,
+            "max",
+            True,
         ),
         "csat_score": FieldDefinition(
-            "csat_score", "CSAT Score", FieldCategory.ENGAGEMENT,
-            "number", Touchpoint, "csat_score",
-            "Most recent CSAT score", True, "max", True
+            "csat_score",
+            "CSAT Score",
+            FieldCategory.ENGAGEMENT,
+            "number",
+            Touchpoint,
+            "csat_score",
+            "Most recent CSAT score",
+            True,
+            "max",
+            True,
         ),
     }
 
@@ -301,11 +452,7 @@ class SegmentEngine:
     # CORE EVALUATION METHODS
     # =========================================================================
 
-    async def evaluate_segment(
-        self,
-        segment_id: int,
-        limit: Optional[int] = None
-    ) -> SegmentEvaluationResult:
+    async def evaluate_segment(self, segment_id: int, limit: Optional[int] = None) -> SegmentEvaluationResult:
         """
         Evaluate a segment and return matching customer IDs.
 
@@ -326,9 +473,7 @@ class SegmentEngine:
 
         # Fetch segment with eager loading
         result = await self.db.execute(
-            select(Segment)
-            .options(selectinload(Segment.segment_rules))
-            .where(Segment.id == segment_id)
+            select(Segment).options(selectinload(Segment.segment_rules)).where(Segment.id == segment_id)
         )
         segment = result.scalar_one_or_none()
 
@@ -338,7 +483,7 @@ class SegmentEngine:
                 matching_customer_ids=[],
                 total_count=0,
                 execution_time_ms=0,
-                errors=[f"Segment {segment_id} not found"]
+                errors=[f"Segment {segment_id} not found"],
             )
 
         try:
@@ -357,17 +502,13 @@ class SegmentEngine:
                 segment_id=segment_id,
                 matching_customer_ids=customer_ids,
                 total_count=len(customer_ids),
-                execution_time_ms=execution_time
+                execution_time_ms=execution_time,
             )
 
         except Exception as e:
             logger.exception(f"Error evaluating segment {segment_id}")
             return SegmentEvaluationResult(
-                segment_id=segment_id,
-                matching_customer_ids=[],
-                total_count=0,
-                execution_time_ms=0,
-                errors=[str(e)]
+                segment_id=segment_id, matching_customer_ids=[], total_count=0, execution_time_ms=0, errors=[str(e)]
             )
 
     async def evaluate_rules(
@@ -375,7 +516,7 @@ class SegmentEngine:
         rules: Dict[str, Any],
         limit: Optional[int] = None,
         include_segments: Optional[List[int]] = None,
-        exclude_segments: Optional[List[int]] = None
+        exclude_segments: Optional[List[int]] = None,
     ) -> List[int]:
         """
         Evaluate a set of rules and return matching customer IDs.
@@ -416,7 +557,7 @@ class SegmentEngine:
         rules: Dict[str, Any],
         sample_size: int = 50,
         include_segments: Optional[List[int]] = None,
-        exclude_segments: Optional[List[int]] = None
+        exclude_segments: Optional[List[int]] = None,
     ) -> SegmentPreviewResult:
         """
         Preview a segment before creation with detailed statistics.
@@ -434,9 +575,7 @@ class SegmentEngine:
 
         # Get matching customer IDs
         matching_ids = await self.evaluate_rules(
-            rules,
-            include_segments=include_segments,
-            exclude_segments=exclude_segments
+            rules, include_segments=include_segments, exclude_segments=exclude_segments
         )
 
         total_count = len(matching_ids)
@@ -445,7 +584,7 @@ class SegmentEngine:
             return SegmentPreviewResult(
                 estimated_count=0,
                 sample_customers=[],
-                execution_time_ms=(datetime.utcnow() - start_time).total_seconds() * 1000
+                execution_time_ms=(datetime.utcnow() - start_time).total_seconds() * 1000,
             )
 
         # Get sample customers with health scores
@@ -459,16 +598,18 @@ class SegmentEngine:
 
         sample_customers = []
         for customer, health in sample_result.all():
-            sample_customers.append({
-                "id": customer.id,
-                "name": f"{customer.first_name} {customer.last_name}".strip(),
-                "email": customer.email,
-                "customer_type": customer.customer_type,
-                "city": customer.city,
-                "state": customer.state,
-                "health_score": health.overall_score if health else None,
-                "health_status": health.health_status if health else None,
-            })
+            sample_customers.append(
+                {
+                    "id": customer.id,
+                    "name": f"{customer.first_name} {customer.last_name}".strip(),
+                    "email": customer.email,
+                    "customer_type": customer.customer_type,
+                    "city": customer.city,
+                    "state": customer.state,
+                    "health_score": health.overall_score if health else None,
+                    "health_status": health.health_status if health else None,
+                }
+            )
 
         # Calculate aggregate statistics
         stats_query = (
@@ -484,10 +625,7 @@ class SegmentEngine:
 
         # Health distribution
         health_dist_query = (
-            select(
-                HealthScore.health_status,
-                func.count().label("count")
-            )
+            select(HealthScore.health_status, func.count().label("count"))
             .where(HealthScore.customer_id.in_(matching_ids))
             .group_by(HealthScore.health_status)
         )
@@ -496,10 +634,7 @@ class SegmentEngine:
 
         # Customer type distribution
         type_dist_query = (
-            select(
-                Customer.customer_type,
-                func.count().label("count")
-            )
+            select(Customer.customer_type, func.count().label("count"))
             .where(Customer.id.in_(matching_ids))
             .group_by(Customer.customer_type)
         )
@@ -508,10 +643,7 @@ class SegmentEngine:
 
         # Geographic distribution (by state)
         geo_dist_query = (
-            select(
-                Customer.state,
-                func.count().label("count")
-            )
+            select(Customer.state, func.count().label("count"))
             .where(Customer.id.in_(matching_ids))
             .group_by(Customer.state)
         )
@@ -528,14 +660,14 @@ class SegmentEngine:
             health_distribution=health_distribution,
             customer_type_distribution=type_distribution,
             geographic_distribution=geo_distribution,
-            execution_time_ms=execution_time
+            execution_time_ms=execution_time,
         )
 
     async def estimate_segment_size(
         self,
         rules: Dict[str, Any],
         include_segments: Optional[List[int]] = None,
-        exclude_segments: Optional[List[int]] = None
+        exclude_segments: Optional[List[int]] = None,
     ) -> int:
         """
         Quickly estimate segment size without fetching all IDs.
@@ -569,10 +701,7 @@ class SegmentEngine:
     # =========================================================================
 
     async def update_segment_membership(
-        self,
-        segment_id: int,
-        track_history: bool = True,
-        create_snapshot: bool = True
+        self, segment_id: int, track_history: bool = True, create_snapshot: bool = True
     ) -> MembershipUpdateResult:
         """
         Update segment membership based on current rules.
@@ -595,9 +724,7 @@ class SegmentEngine:
         start_time = datetime.utcnow()
 
         # Get segment
-        result = await self.db.execute(
-            select(Segment).where(Segment.id == segment_id)
-        )
+        result = await self.db.execute(select(Segment).where(Segment.id == segment_id))
         segment = result.scalar_one_or_none()
 
         if not segment:
@@ -609,7 +736,7 @@ class SegmentEngine:
                 customers_added=0,
                 customers_removed=0,
                 total_members=segment.customer_count or 0,
-                execution_time_ms=0
+                execution_time_ms=0,
             )
 
         # Get current members
@@ -690,13 +817,7 @@ class SegmentEngine:
 
         # Create snapshot if enabled
         if create_snapshot and (to_add or to_remove):
-            await self._create_segment_snapshot(
-                segment_id,
-                len(new_members),
-                len(to_add),
-                len(to_remove),
-                "scheduled"
-            )
+            await self._create_segment_snapshot(segment_id, len(new_members), len(to_add), len(to_remove), "scheduled")
 
         await self.db.commit()
 
@@ -709,16 +830,11 @@ class SegmentEngine:
             total_members=len(new_members),
             add_details=add_details,
             remove_details=remove_details,
-            execution_time_ms=execution_time
+            execution_time_ms=execution_time,
         )
 
     async def _create_segment_snapshot(
-        self,
-        segment_id: int,
-        member_count: int,
-        entered: int,
-        exited: int,
-        snapshot_type: str
+        self, segment_id: int, member_count: int, entered: int, exited: int, snapshot_type: str
     ):
         """Create a point-in-time snapshot of segment membership."""
         # Get previous snapshot for comparison
@@ -788,8 +904,7 @@ class SegmentEngine:
             return set()
 
         result = await self.db.execute(
-            select(CustomerSegment.customer_id)
-            .where(
+            select(CustomerSegment.customer_id).where(
                 CustomerSegment.segment_id.in_(segment_ids),
                 CustomerSegment.is_active == True,
             )
@@ -807,10 +922,7 @@ class SegmentEngine:
         Uses CTEs for efficient joins and avoids N+1 queries.
         """
         # Base query with necessary joins
-        query = (
-            select(Customer.id)
-            .outerjoin(HealthScore, Customer.id == HealthScore.customer_id)
-        )
+        query = select(Customer.id).outerjoin(HealthScore, Customer.id == HealthScore.customer_id)
 
         # Build conditions from rules
         conditions = self._build_conditions(rules)
@@ -881,12 +993,7 @@ class SegmentEngine:
         return self._apply_operator(column, operator, value, value2, field_def.data_type)
 
     def _apply_operator(
-        self,
-        column: Any,
-        operator: str,
-        value: Any,
-        value2: Any = None,
-        data_type: str = "string"
+        self, column: Any, operator: str, value: Any, value2: Any = None, data_type: str = "string"
     ) -> Any:
         """Apply an operator to a column with proper type handling."""
 
@@ -971,59 +1078,35 @@ class SegmentEngine:
         elif op == "this_week":
             today = datetime.utcnow().date()
             start_of_week = today - timedelta(days=today.weekday())
-            return and_(
-                func.date(column) >= start_of_week,
-                func.date(column) <= today
-            )
+            return and_(func.date(column) >= start_of_week, func.date(column) <= today)
         elif op == "last_week":
             today = datetime.utcnow().date()
             start_of_last_week = today - timedelta(days=today.weekday() + 7)
             end_of_last_week = start_of_last_week + timedelta(days=6)
-            return and_(
-                func.date(column) >= start_of_last_week,
-                func.date(column) <= end_of_last_week
-            )
+            return and_(func.date(column) >= start_of_last_week, func.date(column) <= end_of_last_week)
         elif op == "this_month":
             today = datetime.utcnow().date()
             start_of_month = today.replace(day=1)
-            return and_(
-                func.date(column) >= start_of_month,
-                func.date(column) <= today
-            )
+            return and_(func.date(column) >= start_of_month, func.date(column) <= today)
         elif op == "last_month":
             today = datetime.utcnow().date()
             first_of_this_month = today.replace(day=1)
             last_of_prev_month = first_of_this_month - timedelta(days=1)
             first_of_prev_month = last_of_prev_month.replace(day=1)
-            return and_(
-                func.date(column) >= first_of_prev_month,
-                func.date(column) <= last_of_prev_month
-            )
+            return and_(func.date(column) >= first_of_prev_month, func.date(column) <= last_of_prev_month)
         elif op == "this_quarter":
             today = datetime.utcnow().date()
             quarter = (today.month - 1) // 3
             start_of_quarter = today.replace(month=quarter * 3 + 1, day=1)
-            return and_(
-                func.date(column) >= start_of_quarter,
-                func.date(column) <= today
-            )
+            return and_(func.date(column) >= start_of_quarter, func.date(column) <= today)
         elif op == "this_year":
             today = datetime.utcnow().date()
             start_of_year = today.replace(month=1, day=1)
-            return and_(
-                func.date(column) >= start_of_year,
-                func.date(column) <= today
-            )
+            return and_(func.date(column) >= start_of_year, func.date(column) <= today)
 
         return None
 
-    def _build_legacy_condition(
-        self,
-        field_name: str,
-        operator: str,
-        value: Any,
-        value2: Any
-    ) -> Any:
+    def _build_legacy_condition(self, field_name: str, operator: str, value: Any, value2: Any) -> Any:
         """Handle legacy field mappings from existing segment evaluator."""
         # Legacy field mapping for backward compatibility
         LEGACY_FIELD_MAPPING = {
@@ -1074,11 +1157,7 @@ class SegmentEngine:
         # AI segments store members like static segments
         return await self._get_static_segment_members(segment_id)
 
-    async def _evaluate_dynamic_segment(
-        self,
-        segment: Segment,
-        limit: Optional[int] = None
-    ) -> List[int]:
+    async def _evaluate_dynamic_segment(self, segment: Segment, limit: Optional[int] = None) -> List[int]:
         """Evaluate a dynamic segment's rules."""
         rules = segment.rules_json or segment.rules
         if not rules:
@@ -1088,14 +1167,11 @@ class SegmentEngine:
             rules,
             limit=limit,
             include_segments=segment.include_segment_ids,
-            exclude_segments=segment.exclude_segment_ids
+            exclude_segments=segment.exclude_segment_ids,
         )
 
     async def get_segment_members_with_details(
-        self,
-        segment_id: int,
-        page: int = 1,
-        page_size: int = 50
+        self, segment_id: int, page: int = 1, page_size: int = 50
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         Get segment members with full customer details.
@@ -1112,7 +1188,7 @@ class SegmentEngine:
 
         # Paginate the IDs
         offset = (page - 1) * page_size
-        page_ids = matching_ids[offset:offset + page_size]
+        page_ids = matching_ids[offset : offset + page_size]
 
         # Get full details
         query = (
@@ -1124,22 +1200,24 @@ class SegmentEngine:
 
         members = []
         for customer, health in result.all():
-            members.append({
-                "id": customer.id,
-                "first_name": customer.first_name,
-                "last_name": customer.last_name,
-                "email": customer.email,
-                "phone": customer.phone,
-                "customer_type": customer.customer_type,
-                "city": customer.city,
-                "state": customer.state,
-                "is_active": customer.is_active,
-                "created_at": customer.created_at.isoformat() if customer.created_at else None,
-                "health_score": health.overall_score if health else None,
-                "health_status": health.health_status if health else None,
-                "churn_probability": health.churn_probability if health else None,
-                "score_trend": health.score_trend if health else None,
-            })
+            members.append(
+                {
+                    "id": customer.id,
+                    "first_name": customer.first_name,
+                    "last_name": customer.last_name,
+                    "email": customer.email,
+                    "phone": customer.phone,
+                    "customer_type": customer.customer_type,
+                    "city": customer.city,
+                    "state": customer.state,
+                    "is_active": customer.is_active,
+                    "created_at": customer.created_at.isoformat() if customer.created_at else None,
+                    "health_score": health.overall_score if health else None,
+                    "health_status": health.health_status if health else None,
+                    "churn_probability": health.churn_probability if health else None,
+                    "score_trend": health.score_trend if health else None,
+                }
+            )
 
         return members, total
 

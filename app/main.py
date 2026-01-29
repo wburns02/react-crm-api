@@ -21,48 +21,101 @@ from app.webhooks.twilio import twilio_router
 from app.config import settings
 from app.database import init_db
 from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
+
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
     # Core models
-    Customer, WorkOrder, Message, User, Technician,
-    Invoice, Payment, Quote, SMSConsent, SMSConsentAudit, Activity,
-    Ticket, Equipment, InventoryItem,
+    Customer,
+    WorkOrder,
+    Message,
+    User,
+    Technician,
+    Invoice,
+    Payment,
+    Quote,
+    SMSConsent,
+    SMSConsentAudit,
+    Activity,
+    Ticket,
+    Equipment,
+    InventoryItem,
     # Phase 1: AI
-    AIEmbedding, AIConversation, AIMessage,
+    AIEmbedding,
+    AIConversation,
+    AIMessage,
     # Phase 2: RingCentral
-    CallLog, CallDisposition,
+    CallLog,
+    CallDisposition,
     # Phase 3: E-Signatures
-    SignatureRequest, Signature, SignedDocument,
+    SignatureRequest,
+    Signature,
+    SignedDocument,
     # Phase 4: Pricing
-    ServiceCatalog, PricingZone, PricingRule, CustomerPricingTier,
+    ServiceCatalog,
+    PricingZone,
+    PricingRule,
+    CustomerPricingTier,
     # Phase 5: AI Agents
-    AIAgent, AgentConversation, AgentMessage, AgentTask,
+    AIAgent,
+    AgentConversation,
+    AgentMessage,
+    AgentTask,
     # Phase 6: Predictions
-    LeadScore, ChurnPrediction, RevenueForecast, DealHealth, PredictionModel,
+    LeadScore,
+    ChurnPrediction,
+    RevenueForecast,
+    DealHealth,
+    PredictionModel,
     # Phase 7: Marketing
-    MarketingCampaign, MarketingWorkflow, WorkflowEnrollment, EmailTemplate, SMSTemplate,
+    MarketingCampaign,
+    MarketingWorkflow,
+    WorkflowEnrollment,
+    EmailTemplate,
+    SMSTemplate,
     # Phase 10: Payroll
-    PayrollPeriod, TimeEntry, Commission, TechnicianPayRate,
+    PayrollPeriod,
+    TimeEntry,
+    Commission,
+    TechnicianPayRate,
     # Phase 11: Compliance
-    License, Certification, Inspection,
+    License,
+    Certification,
+    Inspection,
     # Phase 12: Contracts
-    Contract, ContractTemplate,
+    Contract,
+    ContractTemplate,
     # Phase 13: Job Costing
     JobCost,
     # Enterprise Customer Success Platform
-    HealthScore, HealthScoreEvent,
-    Segment, CustomerSegment,
-    Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution,
-    Playbook, PlaybookStep, PlaybookExecution,
-    CSTask, Touchpoint,
+    HealthScore,
+    HealthScoreEvent,
+    Segment,
+    CustomerSegment,
+    Journey,
+    JourneyStep,
+    JourneyEnrollment,
+    JourneyStepExecution,
+    Playbook,
+    PlaybookStep,
+    PlaybookExecution,
+    CSTask,
+    Touchpoint,
     # Demo Mode Role Switching
-    RoleView, UserRoleSession,
+    RoleView,
+    UserRoleSession,
     # Work Order Photos
     WorkOrderPhoto,
     # National Septic OCR Permit System
-    State, County, SepticSystemType, SourcePortal,
-    SepticPermit, PermitVersion, PermitDuplicate, PermitImportBatch,
+    State,
+    County,
+    SepticSystemType,
+    SourcePortal,
+    SepticPermit,
+    PermitVersion,
+    PermitDuplicate,
+    PermitImportBatch,
 )
+
 # OAuth models for public API
 from app.models.oauth import APIClient, APIToken
 
@@ -147,12 +200,14 @@ allowed_origins = [
 
 # Allow localhost origins for development/testing
 # These are safe to include since they can only be accessed locally
-allowed_origins.extend([
-    "http://localhost:5173",  # Vite dev server
-    "http://localhost:5174",  # Vite dev server (alternate port)
-    "http://localhost:5175",  # Vite dev server (alternate port)
-    "http://localhost:3000",  # Alternative dev port
-])
+allowed_origins.extend(
+    [
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:5174",  # Vite dev server (alternate port)
+        "http://localhost:5175",  # Vite dev server (alternate port)
+        "http://localhost:3000",  # Alternative dev port
+    ]
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -191,7 +246,15 @@ async def health_check():
         "status": "healthy",
         "version": "2.7.1",  # Fixed deployment
         "environment": settings.ENVIRONMENT,
-        "features": ["public_api", "oauth2", "demo_roles", "cs_platform", "journey_status", "technician_performance", "call_intelligence"],
+        "features": [
+            "public_api",
+            "oauth2",
+            "demo_roles",
+            "cs_platform",
+            "journey_status",
+            "technician_performance",
+            "call_intelligence",
+        ],
     }
 
 
@@ -207,13 +270,20 @@ async def database_health_check():
         "api_users_columns": [],
         "all_tables": [],
         "core_tables_missing": [],
-        "errors": []
+        "errors": [],
     }
 
     # Core tables that should exist
     core_tables = [
-        "api_users", "customers", "work_orders", "invoices", "technicians",
-        "payments", "quotes", "messages", "activities"
+        "api_users",
+        "customers",
+        "work_orders",
+        "invoices",
+        "technicians",
+        "payments",
+        "quotes",
+        "messages",
+        "activities",
     ]
 
     try:
@@ -223,11 +293,13 @@ async def database_health_check():
             checks["database_connected"] = True
 
             # Get all tables
-            result = await session.execute(text("""
+            result = await session.execute(
+                text("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public'
                 ORDER BY table_name
-            """))
+            """)
+            )
             checks["all_tables"] = [row[0] for row in result.fetchall()]
 
             # Check core tables
@@ -240,11 +312,13 @@ async def database_health_check():
                 checks["api_users_table_exists"] = True
 
                 # Get columns
-                result = await session.execute(text("""
+                result = await session.execute(
+                    text("""
                     SELECT column_name FROM information_schema.columns
                     WHERE table_name = 'api_users'
                     ORDER BY ordinal_position
-                """))
+                """)
+                )
                 checks["api_users_columns"] = [row[0] for row in result.fetchall()]
             else:
                 checks["errors"].append("api_users table does not exist")
@@ -263,21 +337,17 @@ async def run_database_migrations():
     import subprocess
     import os
 
-    results = {
-        "alembic_reset": False,
-        "alembic_run": False,
-        "tables_before": [],
-        "tables_after": [],
-        "errors": []
-    }
+    results = {"alembic_reset": False, "alembic_run": False, "tables_before": [], "tables_after": [], "errors": []}
 
     try:
         # Get tables before
         async with async_session_maker() as session:
-            result = await session.execute(text("""
+            result = await session.execute(
+                text("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public' ORDER BY table_name
-            """))
+            """)
+            )
             results["tables_before"] = [row[0] for row in result.fetchall()]
 
             # Get current alembic version
@@ -294,12 +364,7 @@ async def run_database_migrations():
 
         # Run alembic upgrade head
         os.chdir("/app")
-        proc = subprocess.run(
-            ["alembic", "upgrade", "head"],
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
+        proc = subprocess.run(["alembic", "upgrade", "head"], capture_output=True, text=True, timeout=300)
         results["alembic_run"] = proc.returncode == 0
         if proc.stdout:
             results["alembic_stdout"] = proc.stdout[-2000:]  # Last 2000 chars
@@ -308,10 +373,12 @@ async def run_database_migrations():
 
         # Get tables after
         async with async_session_maker() as session:
-            result = await session.execute(text("""
+            result = await session.execute(
+                text("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public' ORDER BY table_name
-            """))
+            """)
+            )
             results["tables_after"] = [row[0] for row in result.fetchall()]
 
         results["new_tables"] = [t for t in results["tables_after"] if t not in results["tables_before"]]
@@ -330,29 +397,33 @@ async def create_admin_user():
     import bcrypt
 
     password = "admin123"  # nosec B105 - Test password for development only
-    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     try:
         async with async_session_maker() as session:
             # Check if user exists
-            result = await session.execute(text(
-                "SELECT id FROM api_users WHERE email = 'admin@macseptic.com'"
-            ))
+            result = await session.execute(text("SELECT id FROM api_users WHERE email = 'admin@macseptic.com'"))
             user_id = result.scalar()
 
             if user_id:
                 # Update existing user's password
-                await session.execute(text("""
+                await session.execute(
+                    text("""
                     UPDATE api_users SET hashed_password = :hashed WHERE email = 'admin@macseptic.com'
-                """), {"hashed": hashed})
+                """),
+                    {"hashed": hashed},
+                )
                 await session.commit()
                 return {"status": "password_reset", "email": "admin@macseptic.com", "password": password}
 
             # Create user
-            await session.execute(text("""
+            await session.execute(
+                text("""
                 INSERT INTO api_users (email, hashed_password, first_name, last_name, is_active, is_superuser, created_at)
                 VALUES ('admin@macseptic.com', :hashed, 'Admin', 'User', TRUE, TRUE, NOW())
-            """), {"hashed": hashed})
+            """),
+                {"hashed": hashed},
+            )
             await session.commit()
 
             return {"status": "created", "email": "admin@macseptic.com", "password": password}
@@ -372,14 +443,16 @@ async def fix_invoices_table():
         async with async_session_maker() as session:
             # Create invoice_status_enum if not exists
             try:
-                await session.execute(text("""
+                await session.execute(
+                    text("""
                     DO $$
                     BEGIN
                         CREATE TYPE invoice_status_enum AS ENUM ('draft', 'sent', 'paid', 'overdue', 'void', 'partial');
                     EXCEPTION
                         WHEN duplicate_object THEN NULL;
                     END $$;
-                """))
+                """)
+                )
                 results["actions"].append("invoice_status_enum: created or already exists")
             except Exception as e:
                 results["errors"].append(f"invoice_status_enum: {str(e)}")
@@ -387,7 +460,8 @@ async def fix_invoices_table():
             # Drop old invoices table and recreate with UUID types
             try:
                 await session.execute(text("DROP TABLE IF EXISTS invoices CASCADE"))
-                await session.execute(text("""
+                await session.execute(
+                    text("""
                     CREATE TABLE invoices (
                         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                         customer_id UUID NOT NULL,
@@ -411,20 +485,26 @@ async def fix_invoices_table():
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                         updated_at TIMESTAMP WITH TIME ZONE
                     )
-                """))
-                await session.execute(text("CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON invoices(customer_id)"))
-                await session.execute(text("CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number)"))
+                """)
+                )
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON invoices(customer_id)")
+                )
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number)")
+                )
                 results["actions"].append("invoices table: recreated with UUID types")
             except Exception as e:
                 results["errors"].append(f"invoices table: {str(e)}")
 
             # Create job_costs table
             try:
-                result = await session.execute(text(
-                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'job_costs')"
-                ))
+                result = await session.execute(
+                    text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'job_costs')")
+                )
                 if not result.scalar():
-                    await session.execute(text("""
+                    await session.execute(
+                        text("""
                         CREATE TABLE job_costs (
                             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                             work_order_id VARCHAR(36) NOT NULL,
@@ -451,9 +531,14 @@ async def fix_invoices_table():
                             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                             updated_at TIMESTAMP WITH TIME ZONE
                         )
-                    """))
-                    await session.execute(text("CREATE INDEX IF NOT EXISTS idx_job_costs_work_order_id ON job_costs(work_order_id)"))
-                    await session.execute(text("CREATE INDEX IF NOT EXISTS idx_job_costs_cost_date ON job_costs(cost_date)"))
+                    """)
+                    )
+                    await session.execute(
+                        text("CREATE INDEX IF NOT EXISTS idx_job_costs_work_order_id ON job_costs(work_order_id)")
+                    )
+                    await session.execute(
+                        text("CREATE INDEX IF NOT EXISTS idx_job_costs_cost_date ON job_costs(cost_date)")
+                    )
                     results["actions"].append("job_costs table: created")
                 else:
                     results["actions"].append("job_costs table: already exists")
@@ -481,7 +566,8 @@ async def fix_activities_table():
             # Drop old activities table and recreate with UUID id
             try:
                 await session.execute(text("DROP TABLE IF EXISTS activities CASCADE"))
-                await session.execute(text("""
+                await session.execute(
+                    text("""
                     CREATE TABLE activities (
                         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                         customer_id INTEGER NOT NULL,
@@ -492,10 +578,17 @@ async def fix_activities_table():
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                         updated_at TIMESTAMP WITH TIME ZONE
                     )
-                """))
-                await session.execute(text("CREATE INDEX IF NOT EXISTS idx_activities_customer_id ON activities(customer_id)"))
-                await session.execute(text("CREATE INDEX IF NOT EXISTS idx_activities_activity_type ON activities(activity_type)"))
-                await session.execute(text("CREATE INDEX IF NOT EXISTS idx_activities_activity_date ON activities(activity_date DESC)"))
+                """)
+                )
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS idx_activities_customer_id ON activities(customer_id)")
+                )
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS idx_activities_activity_type ON activities(activity_type)")
+                )
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS idx_activities_activity_date ON activities(activity_date DESC)")
+                )
                 results["actions"].append("activities table: recreated with UUID id")
             except Exception as e:
                 results["errors"].append(f"activities table: {str(e)}")
@@ -586,10 +679,12 @@ async def fix_table_schema():
                 for col_name, col_type in columns:
                     try:
                         # Check if column exists
-                        result = await session.execute(text(f"""
+                        result = await session.execute(
+                            text(f"""
                             SELECT 1 FROM information_schema.columns
                             WHERE table_name = '{table_name}' AND column_name = '{col_name}'
-                        """))
+                        """)
+                        )
                         if not result.scalar():
                             await session.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"))
                             results["columns_added"].append(f"{table_name}.{col_name}")
@@ -610,11 +705,7 @@ async def create_core_tables():
     from sqlalchemy import text
     from app.database import async_session_maker
 
-    results = {
-        "tables_created": [],
-        "tables_skipped": [],
-        "errors": []
-    }
+    results = {"tables_created": [], "tables_skipped": [], "errors": []}
 
     # SQL to create all core tables
     table_definitions = {
@@ -920,20 +1011,36 @@ async def create_core_tables():
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 updated_at TIMESTAMP WITH TIME ZONE
             )
-        """
+        """,
     }
 
     try:
         async with async_session_maker() as session:
             # Get existing tables
-            result = await session.execute(text("""
+            result = await session.execute(
+                text("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public'
-            """))
+            """)
+            )
             existing_tables = {row[0] for row in result.fetchall()}
 
             # Create tables in order (respecting foreign key dependencies)
-            table_order = ["customers", "technicians", "work_orders", "invoices", "payments", "quotes", "messages", "activities", "payroll_periods", "time_entries", "commissions", "technician_pay_rates", "dump_sites"]
+            table_order = [
+                "customers",
+                "technicians",
+                "work_orders",
+                "invoices",
+                "payments",
+                "quotes",
+                "messages",
+                "activities",
+                "payroll_periods",
+                "time_entries",
+                "commissions",
+                "technician_pay_rates",
+                "dump_sites",
+            ]
 
             for table_name in table_order:
                 if table_name in existing_tables:
@@ -948,10 +1055,12 @@ async def create_core_tables():
             await session.commit()
 
             # Get final table list
-            result = await session.execute(text("""
+            result = await session.execute(
+                text("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public' ORDER BY table_name
-            """))
+            """)
+            )
             results["all_tables"] = [row[0] for row in result.fetchall()]
 
     except Exception as e:

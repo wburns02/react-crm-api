@@ -44,6 +44,7 @@ async def list_tasks(
 ):
     """List CS tasks with filtering."""
     import logging
+
     logger = logging.getLogger(__name__)
 
     try:
@@ -87,6 +88,7 @@ async def list_tasks(
 
         # Order by priority then due date
         from sqlalchemy import case
+
         priority_order = case(
             (CSTask.priority == TaskPriority.CRITICAL.value, 1),
             (CSTask.priority == TaskPriority.HIGH.value, 2),
@@ -95,9 +97,13 @@ async def list_tasks(
             else_=5,
         )
 
-        query = query.offset(offset).limit(page_size).order_by(
-            priority_order,
-            CSTask.due_date.asc().nullslast(),
+        query = (
+            query.offset(offset)
+            .limit(page_size)
+            .order_by(
+                priority_order,
+                CSTask.due_date.asc().nullslast(),
+            )
         )
 
         result = await db.execute(query)
@@ -113,10 +119,7 @@ async def list_tasks(
         )
     except Exception as e:
         logger.error(f"Error listing tasks: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error listing tasks: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error listing tasks: {str(e)}")
 
 
 @router.get("/overdue")
@@ -175,9 +178,7 @@ async def get_task(
     current_user: CurrentUser,
 ):
     """Get a specific task."""
-    result = await db.execute(
-        select(CSTask).where(CSTask.id == task_id)
-    )
+    result = await db.execute(select(CSTask).where(CSTask.id == task_id))
     task = result.scalar_one_or_none()
 
     if not task:
@@ -197,9 +198,7 @@ async def create_task(
 ):
     """Create a new CS task."""
     # Check customer exists
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == data.customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == data.customer_id))
     if not customer_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -226,9 +225,7 @@ async def update_task(
     current_user: CurrentUser,
 ):
     """Update a task."""
-    result = await db.execute(
-        select(CSTask).where(CSTask.id == task_id)
-    )
+    result = await db.execute(select(CSTask).where(CSTask.id == task_id))
     task = result.scalar_one_or_none()
 
     if not task:
@@ -269,9 +266,7 @@ async def delete_task(
     current_user: CurrentUser,
 ):
     """Delete a task."""
-    result = await db.execute(
-        select(CSTask).where(CSTask.id == task_id)
-    )
+    result = await db.execute(select(CSTask).where(CSTask.id == task_id))
     task = result.scalar_one_or_none()
 
     if not task:
@@ -292,9 +287,7 @@ async def complete_task(
     current_user: CurrentUser,
 ):
     """Complete a task with outcome."""
-    result = await db.execute(
-        select(CSTask).where(CSTask.id == task_id)
-    )
+    result = await db.execute(select(CSTask).where(CSTask.id == task_id))
     task = result.scalar_one_or_none()
 
     if not task:
@@ -331,9 +324,7 @@ async def assign_task(
     current_user: CurrentUser,
 ):
     """Assign or reassign a task."""
-    result = await db.execute(
-        select(CSTask).where(CSTask.id == task_id)
-    )
+    result = await db.execute(select(CSTask).where(CSTask.id == task_id))
     task = result.scalar_one_or_none()
 
     if not task:
@@ -359,9 +350,7 @@ async def snooze_task(
     snooze_until: datetime = Query(...),
 ):
     """Snooze a task until a specific time."""
-    result = await db.execute(
-        select(CSTask).where(CSTask.id == task_id)
-    )
+    result = await db.execute(select(CSTask).where(CSTask.id == task_id))
     task = result.scalar_one_or_none()
 
     if not task:
@@ -386,9 +375,7 @@ async def bulk_update_tasks(
 ):
     """Bulk update tasks."""
     # Get all tasks
-    result = await db.execute(
-        select(CSTask).where(CSTask.id.in_(request.task_ids))
-    )
+    result = await db.execute(select(CSTask).where(CSTask.id.in_(request.task_ids)))
     tasks = result.scalars().all()
 
     if not tasks:
@@ -511,5 +498,6 @@ async def get_task_summary(
         "overdue_count": overdue_count,
         "due_today_count": due_today_count,
         "high_priority_count": high_priority_count,
-        "total_open": status_counts.get(TaskStatus.PENDING.value, 0) + status_counts.get(TaskStatus.IN_PROGRESS.value, 0),
+        "total_open": status_counts.get(TaskStatus.PENDING.value, 0)
+        + status_counts.get(TaskStatus.IN_PROGRESS.value, 0),
     }

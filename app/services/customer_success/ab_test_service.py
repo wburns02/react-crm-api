@@ -27,12 +27,7 @@ class ABTestService:
         self.db = db
 
     @staticmethod
-    def calculate_chi_square(
-        a_success: int,
-        a_total: int,
-        b_success: int,
-        b_total: int
-    ) -> Dict[str, Any]:
+    def calculate_chi_square(a_success: int, a_total: int, b_success: int, b_total: int) -> Dict[str, Any]:
         """
         Calculate chi-square test for A/B comparison.
 
@@ -49,12 +44,7 @@ class ABTestService:
             Dictionary with chi_square, p_value, confidence, and is_significant
         """
         if a_total == 0 or b_total == 0:
-            return {
-                "chi_square": 0,
-                "p_value": 1,
-                "confidence": 0,
-                "is_significant": False
-            }
+            return {"chi_square": 0, "p_value": 1, "confidence": 0, "is_significant": False}
 
         # Total values
         total = a_total + b_total
@@ -62,12 +52,7 @@ class ABTestService:
         total_failure = total - total_success
 
         if total_success == 0 or total_failure == 0:
-            return {
-                "chi_square": 0,
-                "p_value": 1,
-                "confidence": 0,
-                "is_significant": False
-            }
+            return {"chi_square": 0, "p_value": 1, "confidence": 0, "is_significant": False}
 
         # Expected values under null hypothesis (no difference)
         expected_a_success = (a_total * total_success) / total
@@ -107,16 +92,11 @@ class ABTestService:
             "chi_square": round(chi_square, 4),
             "p_value": round(p_value, 4),
             "confidence": round(confidence, 2),
-            "is_significant": confidence >= 95
+            "is_significant": confidence >= 95,
         }
 
     @staticmethod
-    def calculate_z_score(
-        a_success: int,
-        a_total: int,
-        b_success: int,
-        b_total: int
-    ) -> Dict[str, Any]:
+    def calculate_z_score(a_success: int, a_total: int, b_success: int, b_total: int) -> Dict[str, Any]:
         """
         Calculate z-score for proportion comparison.
 
@@ -132,13 +112,7 @@ class ABTestService:
             Dictionary with z_score, p_value, confidence, is_significant, and direction
         """
         if a_total == 0 or b_total == 0:
-            return {
-                "z_score": 0,
-                "p_value": 1,
-                "confidence": 0,
-                "is_significant": False,
-                "direction": None
-            }
+            return {"z_score": 0, "p_value": 1, "confidence": 0, "is_significant": False, "direction": None}
 
         p_a = a_success / a_total
         p_b = b_success / b_total
@@ -147,25 +121,13 @@ class ABTestService:
         p_pooled = (a_success + b_success) / (a_total + b_total)
 
         if p_pooled == 0 or p_pooled == 1:
-            return {
-                "z_score": 0,
-                "p_value": 1,
-                "confidence": 0,
-                "is_significant": False,
-                "direction": None
-            }
+            return {"z_score": 0, "p_value": 1, "confidence": 0, "is_significant": False, "direction": None}
 
         # Standard error
-        se = math.sqrt(p_pooled * (1 - p_pooled) * (1/a_total + 1/b_total))
+        se = math.sqrt(p_pooled * (1 - p_pooled) * (1 / a_total + 1 / b_total))
 
         if se == 0:
-            return {
-                "z_score": 0,
-                "p_value": 1,
-                "confidence": 0,
-                "is_significant": False,
-                "direction": None
-            }
+            return {"z_score": 0, "p_value": 1, "confidence": 0, "is_significant": False, "direction": None}
 
         # Z-score
         z = (p_b - p_a) / se
@@ -179,14 +141,12 @@ class ABTestService:
             "p_value": round(p_value, 4),
             "confidence": round(confidence, 2),
             "is_significant": confidence >= 95,
-            "direction": "b_wins" if z > 0 else "a_wins" if z < 0 else None
+            "direction": "b_wins" if z > 0 else "a_wins" if z < 0 else None,
         }
 
     async def get_test_by_id(self, test_id: int) -> Optional[ABTest]:
         """Get an A/B test by ID."""
-        result = await self.db.execute(
-            select(ABTest).where(ABTest.id == test_id)
-        )
+        result = await self.db.execute(select(ABTest).where(ABTest.id == test_id))
         return result.scalar_one_or_none()
 
     async def get_test_results(self, test_id: int) -> Optional[Dict[str, Any]]:
@@ -204,14 +164,14 @@ class ABTestService:
             return None
 
         # Calculate rates based on primary metric
-        primary_metric = test.primary_metric or 'conversion'
+        primary_metric = test.primary_metric or "conversion"
 
         # Get appropriate success metrics
-        if primary_metric == 'conversion':
+        if primary_metric == "conversion":
             a_success, b_success = test.variant_a_converted or 0, test.variant_b_converted or 0
-        elif primary_metric == 'open':
+        elif primary_metric == "open":
             a_success, b_success = test.variant_a_opened or 0, test.variant_b_opened or 0
-        elif primary_metric == 'click':
+        elif primary_metric == "click":
             a_success, b_success = test.variant_a_clicked or 0, test.variant_b_clicked or 0
         else:
             a_success, b_success = test.variant_a_converted or 0, test.variant_b_converted or 0
@@ -243,7 +203,7 @@ class ABTestService:
         relative_improvement = {
             "value": round(lift, 2),
             "direction": "increase" if lift > 0 else "decrease" if lift < 0 else "none",
-            "variant_b_vs_a": f"{'+' if lift > 0 else ''}{round(lift, 1)}%"
+            "variant_b_vs_a": f"{'+' if lift > 0 else ''}{round(lift, 1)}%",
         }
 
         return {
@@ -262,7 +222,7 @@ class ABTestService:
                 "open_rate": round(test.variant_a_open_rate, 2),
                 "click_rate": round(test.variant_a_click_rate, 2),
                 "conversion_rate": round(test.variant_a_conversion_rate, 2),
-                "primary_metric_rate": round(a_rate, 2)
+                "primary_metric_rate": round(a_rate, 2),
             },
             "variant_b": {
                 "name": test.variant_b_name,
@@ -274,7 +234,7 @@ class ABTestService:
                 "open_rate": round(test.variant_b_open_rate, 2),
                 "click_rate": round(test.variant_b_click_rate, 2),
                 "conversion_rate": round(test.variant_b_conversion_rate, 2),
-                "primary_metric_rate": round(b_rate, 2)
+                "primary_metric_rate": round(b_rate, 2),
             },
             "statistics": {
                 "chi_square": chi_stats,
@@ -284,7 +244,7 @@ class ABTestService:
                 "significance_threshold": test.significance_threshold,
                 "min_sample_size": test.min_sample_size,
                 "current_sample_size": test.total_sample_size,
-                "has_min_sample": test.has_min_sample
+                "has_min_sample": test.has_min_sample,
             },
             "winner": winner,
             "lift": relative_improvement,
@@ -292,19 +252,13 @@ class ABTestService:
             "timestamps": {
                 "created_at": test.created_at.isoformat() if test.created_at else None,
                 "started_at": test.started_at.isoformat() if test.started_at else None,
-                "completed_at": test.completed_at.isoformat() if test.completed_at else None
-            }
+                "completed_at": test.completed_at.isoformat() if test.completed_at else None,
+            },
         }
 
-    def _generate_recommendation(
-        self,
-        test: ABTest,
-        stats: Dict[str, Any],
-        winner: Optional[str],
-        lift: float
-    ) -> str:
+    def _generate_recommendation(self, test: ABTest, stats: Dict[str, Any], winner: Optional[str], lift: float) -> str:
         """Generate a human-readable recommendation based on test results."""
-        if test.status == 'draft':
+        if test.status == "draft":
             return "Start the test to begin collecting data."
 
         if not test.has_min_sample:
@@ -321,13 +275,7 @@ class ABTestService:
         else:
             return "Test completed but no clear winner determined."
 
-    async def update_metrics(
-        self,
-        test_id: int,
-        variant: str,
-        metric: str,
-        increment: int = 1
-    ) -> Optional[ABTest]:
+    async def update_metrics(self, test_id: int, variant: str, metric: str, increment: int = 1) -> Optional[ABTest]:
         """
         Update test metrics for a specific variant.
 
@@ -345,9 +293,9 @@ class ABTestService:
             return None
 
         # Validate inputs
-        if variant not in ('a', 'b'):
+        if variant not in ("a", "b"):
             raise ValueError("Variant must be 'a' or 'b'")
-        if metric not in ('sent', 'opened', 'clicked', 'converted'):
+        if metric not in ("sent", "opened", "clicked", "converted"):
             raise ValueError("Metric must be 'sent', 'opened', 'clicked', or 'converted'")
 
         # Update the appropriate field
@@ -356,7 +304,7 @@ class ABTestService:
         setattr(test, field, current + increment)
 
         # Check for auto-winner if enabled
-        if test.auto_winner and test.status == 'running':
+        if test.auto_winner and test.status == "running":
             await self._check_auto_winner(test)
 
         await self.db.commit()
@@ -373,21 +321,18 @@ class ABTestService:
             return
 
         # Calculate statistics based on primary metric
-        primary_metric = test.primary_metric or 'conversion'
+        primary_metric = test.primary_metric or "conversion"
 
-        if primary_metric == 'conversion':
+        if primary_metric == "conversion":
             a_success, b_success = test.variant_a_converted or 0, test.variant_b_converted or 0
-        elif primary_metric == 'open':
+        elif primary_metric == "open":
             a_success, b_success = test.variant_a_opened or 0, test.variant_b_opened or 0
-        elif primary_metric == 'click':
+        elif primary_metric == "click":
             a_success, b_success = test.variant_a_clicked or 0, test.variant_b_clicked or 0
         else:
             a_success, b_success = test.variant_a_converted or 0, test.variant_b_converted or 0
 
-        stats = self.calculate_chi_square(
-            a_success, test.variant_a_sent or 0,
-            b_success, test.variant_b_sent or 0
-        )
+        stats = self.calculate_chi_square(a_success, test.variant_a_sent or 0, b_success, test.variant_b_sent or 0)
 
         # Check if significant at the configured threshold
         if stats["confidence"] >= (test.significance_threshold or 95):
@@ -411,7 +356,7 @@ class ABTestService:
         if not test:
             return None
 
-        if test.status != 'draft':
+        if test.status != "draft":
             raise ValueError(f"Can only start tests in 'draft' status, current: {test.status}")
 
         test.status = "running"
@@ -427,7 +372,7 @@ class ABTestService:
         if not test:
             return None
 
-        if test.status != 'running':
+        if test.status != "running":
             raise ValueError(f"Can only pause tests in 'running' status, current: {test.status}")
 
         test.status = "paused"
@@ -442,7 +387,7 @@ class ABTestService:
         if not test:
             return None
 
-        if test.status != 'paused':
+        if test.status != "paused":
             raise ValueError(f"Can only resume tests in 'paused' status, current: {test.status}")
 
         test.status = "running"
@@ -451,11 +396,7 @@ class ABTestService:
         await self.db.refresh(test)
         return test
 
-    async def complete_test(
-        self,
-        test_id: int,
-        winner: Optional[str] = None
-    ) -> Optional[ABTest]:
+    async def complete_test(self, test_id: int, winner: Optional[str] = None) -> Optional[ABTest]:
         """
         Complete an A/B test and optionally declare a winner.
 
@@ -470,7 +411,7 @@ class ABTestService:
         if not test:
             return None
 
-        if test.status not in ('running', 'paused'):
+        if test.status not in ("running", "paused"):
             raise ValueError(f"Can only complete tests in 'running' or 'paused' status, current: {test.status}")
 
         test.status = "completed"
@@ -478,7 +419,7 @@ class ABTestService:
 
         # Set winner if provided manually
         if winner:
-            if winner not in ('a', 'b'):
+            if winner not in ("a", "b"):
                 raise ValueError("Winner must be 'a' or 'b'")
             test.winning_variant = winner
         elif not test.winning_variant:
@@ -504,20 +445,19 @@ class ABTestService:
             'a' or 'b' based on traffic split, or None if test not found/not running
         """
         test = await self.get_test_by_id(test_id)
-        if not test or test.status != 'running':
+        if not test or test.status != "running":
             return None
 
         import random
+
         # traffic_split is the percentage going to variant B
         if random.random() * 100 < (test.traffic_split or 50):
-            return 'b'
-        return 'a'
+            return "b"
+        return "a"
 
     async def get_campaign_tests(self, campaign_id: int) -> list[ABTest]:
         """Get all A/B tests for a campaign."""
         result = await self.db.execute(
-            select(ABTest)
-            .where(ABTest.campaign_id == campaign_id)
-            .order_by(ABTest.created_at.desc())
+            select(ABTest).where(ABTest.campaign_id == campaign_id).order_by(ABTest.created_at.desc())
         )
         return list(result.scalars().all())

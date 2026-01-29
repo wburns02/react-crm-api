@@ -64,8 +64,8 @@ async def websocket_endpoint(
 
     # Get user role for role-based messaging
     user_role = None
-    if hasattr(user, 'is_superuser') and user.is_superuser:
-        user_role = 'admin'
+    if hasattr(user, "is_superuser") and user.is_superuser:
+        user_role = "admin"
     # Add more role detection logic as needed
 
     # Register the connection
@@ -76,21 +76,25 @@ async def websocket_endpoint(
 
     try:
         # Send connection confirmation
-        await websocket.send_json({
-            "type": "connected",
-            "user_id": user.id,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "user_id": user.id,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         # Message handling loop
         while True:
             try:
                 data = await websocket.receive_json()
             except json.JSONDecodeError:
-                await websocket.send_json({
-                    "type": "error",
-                    "message": "Invalid JSON format",
-                })
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "message": "Invalid JSON format",
+                    }
+                )
                 continue
 
             message_type = data.get("type")
@@ -98,50 +102,62 @@ async def websocket_endpoint(
             if message_type == "ping":
                 # Heartbeat response
                 manager.update_heartbeat(websocket)
-                await websocket.send_json({
-                    "type": "pong",
-                    "timestamp": datetime.utcnow().isoformat(),
-                })
+                await websocket.send_json(
+                    {
+                        "type": "pong",
+                        "timestamp": datetime.utcnow().isoformat(),
+                    }
+                )
 
             elif message_type == "subscribe":
                 # Subscribe to event types
                 events = data.get("events", [])
                 if isinstance(events, list):
                     subscriptions.update(events)
-                    await websocket.send_json({
-                        "type": "subscribed",
-                        "events": list(subscriptions),
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "subscribed",
+                            "events": list(subscriptions),
+                        }
+                    )
 
             elif message_type == "unsubscribe":
                 # Unsubscribe from event types
                 events = data.get("events", [])
                 if isinstance(events, list):
                     subscriptions -= set(events)
-                    await websocket.send_json({
-                        "type": "unsubscribed",
-                        "events": events,
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "unsubscribed",
+                            "events": events,
+                        }
+                    )
 
             elif message_type == "get_stats":
                 # Admin only: get connection stats
-                if user_role == 'admin':
+                if user_role == "admin":
                     stats = manager.get_connection_stats()
-                    await websocket.send_json({
-                        "type": "stats",
-                        "data": stats,
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "stats",
+                            "data": stats,
+                        }
+                    )
                 else:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Permission denied",
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Permission denied",
+                        }
+                    )
 
             else:
-                await websocket.send_json({
-                    "type": "error",
-                    "message": f"Unknown message type: {message_type}",
-                })
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "message": f"Unknown message type: {message_type}",
+                    }
+                )
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: user_id={user.id}")

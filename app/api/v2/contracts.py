@@ -6,6 +6,7 @@ Features:
 - Expiring contracts dashboard
 - Contract analytics
 """
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 from typing import Optional, List
@@ -25,6 +26,7 @@ router = APIRouter()
 # ========================
 # Pydantic Schemas
 # ========================
+
 
 # Contract Schemas
 class ContractCreate(BaseModel):
@@ -159,15 +161,18 @@ class GenerateContractRequest(BaseModel):
 # Helper Functions
 # ========================
 
+
 def generate_contract_number():
     """Generate unique contract number."""
     from datetime import datetime
+
     return f"CTR-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
 
 
 # ========================
 # Contract Endpoints
 # ========================
+
 
 @router.get("", response_model=ListResponse)
 async def list_contracts(
@@ -192,10 +197,7 @@ async def list_contracts(
             query = query.where(Contract.contract_type == contract_type)
         if expiring_within_days:
             expiry_threshold = date.today() + timedelta(days=expiring_within_days)
-            query = query.where(
-                Contract.end_date <= expiry_threshold,
-                Contract.status == "active"
-            )
+            query = query.where(Contract.end_date <= expiry_threshold, Contract.status == "active")
 
         # Count
         count_query = select(func.count()).select_from(query.subquery())
@@ -247,11 +249,7 @@ async def create_contract(
         if data.get("template_id"):
             data["template_id"] = uuid.UUID(data["template_id"])
 
-        contract = Contract(
-            contract_number=generate_contract_number(),
-            created_by=current_user.email,
-            **data
-        )
+        contract = Contract(contract_number=generate_contract_number(), created_by=current_user.email, **data)
         db.add(contract)
         await db.commit()
         await db.refresh(contract)
@@ -409,10 +407,7 @@ async def activate_contract(
             raise HTTPException(status_code=404, detail="Contract not found")
 
         if contract.requires_signature and not contract.is_fully_signed:
-            raise HTTPException(
-                status_code=400,
-                detail="Contract requires signature before activation"
-            )
+            raise HTTPException(status_code=400, detail="Contract requires signature before activation")
 
         contract.status = "active"
         await db.commit()
@@ -428,6 +423,7 @@ async def activate_contract(
 # ========================
 # Template Endpoints
 # ========================
+
 
 @router.get("/templates/list", response_model=ListResponse)
 async def list_templates(
@@ -490,10 +486,7 @@ async def create_template(
 ):
     """Create a new contract template."""
     try:
-        template = ContractTemplate(
-            created_by=current_user.email,
-            **template_data.model_dump()
-        )
+        template = ContractTemplate(created_by=current_user.email, **template_data.model_dump())
         db.add(template)
         await db.commit()
         await db.refresh(template)
@@ -524,9 +517,7 @@ async def get_template(
 ):
     """Get a specific template."""
     try:
-        result = await db.execute(
-            select(ContractTemplate).where(ContractTemplate.id == uuid.UUID(template_id))
-        )
+        result = await db.execute(select(ContractTemplate).where(ContractTemplate.id == uuid.UUID(template_id)))
         template = result.scalar_one_or_none()
 
         if not template:
@@ -561,9 +552,7 @@ async def update_template(
 ):
     """Update a template."""
     try:
-        result = await db.execute(
-            select(ContractTemplate).where(ContractTemplate.id == uuid.UUID(template_id))
-        )
+        result = await db.execute(select(ContractTemplate).where(ContractTemplate.id == uuid.UUID(template_id)))
         template = result.scalar_one_or_none()
 
         if not template:
@@ -608,9 +597,7 @@ async def delete_template(
 ):
     """Delete a template."""
     try:
-        result = await db.execute(
-            select(ContractTemplate).where(ContractTemplate.id == uuid.UUID(template_id))
-        )
+        result = await db.execute(select(ContractTemplate).where(ContractTemplate.id == uuid.UUID(template_id)))
         template = result.scalar_one_or_none()
 
         if not template:
@@ -634,9 +621,7 @@ async def generate_contract_from_template(
     """Generate a new contract from a template."""
     try:
         # Get template
-        result = await db.execute(
-            select(ContractTemplate).where(ContractTemplate.id == uuid.UUID(request.template_id))
-        )
+        result = await db.execute(select(ContractTemplate).where(ContractTemplate.id == uuid.UUID(request.template_id)))
         template = result.scalar_one_or_none()
 
         if not template:
@@ -701,6 +686,7 @@ async def generate_contract_from_template(
 # Dashboard Endpoint
 # ========================
 
+
 @router.get("/dashboard/summary")
 async def get_contracts_summary(
     db: DbSession,
@@ -714,17 +700,14 @@ async def get_contracts_summary(
 
         # Counts
         total_contracts = (await db.execute(select(func.count(Contract.id)))).scalar() or 0
-        active_contracts = (await db.execute(
-            select(func.count(Contract.id)).where(Contract.status == "active")
-        )).scalar() or 0
+        active_contracts = (
+            await db.execute(select(func.count(Contract.id)).where(Contract.status == "active"))
+        ).scalar() or 0
 
         # Expiring soon
         expiring_result = await db.execute(
             select(Contract)
-            .where(
-                Contract.end_date <= expiry_threshold,
-                Contract.status == "active"
-            )
+            .where(Contract.end_date <= expiry_threshold, Contract.status == "active")
             .order_by(Contract.end_date)
             .limit(10)
         )
@@ -741,18 +724,18 @@ async def get_contracts_summary(
         ]
 
         # Pending signature
-        pending_signature = (await db.execute(
-            select(func.count(Contract.id)).where(
-                Contract.requires_signature == True,
-                Contract.customer_signed == False,
-                Contract.status.in_(["draft", "pending"])
+        pending_signature = (
+            await db.execute(
+                select(func.count(Contract.id)).where(
+                    Contract.requires_signature == True,
+                    Contract.customer_signed == False,
+                    Contract.status.in_(["draft", "pending"]),
+                )
             )
-        )).scalar() or 0
+        ).scalar() or 0
 
         # Total contract value
-        total_value_result = await db.execute(
-            select(func.sum(Contract.total_value)).where(Contract.status == "active")
-        )
+        total_value_result = await db.execute(select(func.sum(Contract.total_value)).where(Contract.status == "active"))
         total_active_value = total_value_result.scalar() or 0
 
         return {

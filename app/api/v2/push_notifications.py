@@ -30,7 +30,7 @@ router = APIRouter()
 # Generate with: npx web-push generate-vapid-keys
 VAPID_PUBLIC_KEY = os.getenv(
     "VAPID_PUBLIC_KEY",
-    "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U"  # Demo key
+    "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U",  # Demo key
 )
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 VAPID_CLAIMS_EMAIL = os.getenv("VAPID_CLAIMS_EMAIL", "mailto:admin@ecbtx.com")
@@ -40,14 +40,17 @@ VAPID_CLAIMS_EMAIL = os.getenv("VAPID_CLAIMS_EMAIL", "mailto:admin@ecbtx.com")
 # Pydantic Schemas
 # =============================================================================
 
+
 class PushSubscription(BaseModel):
     """Browser push subscription."""
+
     endpoint: str
     keys: dict  # Contains p256dh and auth
 
 
 class SubscriptionCreate(BaseModel):
     """Request to create push subscription."""
+
     subscription: PushSubscription
     device_name: Optional[str] = None
     device_type: str = "web"  # web, mobile, desktop
@@ -55,6 +58,7 @@ class SubscriptionCreate(BaseModel):
 
 class SubscriptionResponse(BaseModel):
     """Push subscription response."""
+
     id: str
     user_id: str
     device_name: Optional[str] = None
@@ -66,6 +70,7 @@ class SubscriptionResponse(BaseModel):
 
 class SendNotificationRequest(BaseModel):
     """Request to send a push notification."""
+
     title: str
     body: str
     icon: Optional[str] = None
@@ -81,6 +86,7 @@ class SendNotificationRequest(BaseModel):
 
 class NotificationPreferences(BaseModel):
     """User notification preferences."""
+
     new_work_order: bool = True
     work_order_assigned: bool = True
     work_order_status_change: bool = True
@@ -94,6 +100,7 @@ class NotificationPreferences(BaseModel):
 
 class NotificationLog(BaseModel):
     """Notification log entry."""
+
     id: str
     title: str
     body: str
@@ -108,6 +115,7 @@ class NotificationLog(BaseModel):
 # VAPID Key Endpoints
 # =============================================================================
 
+
 @router.get("/vapid-key")
 async def get_vapid_public_key() -> dict:
     """Get VAPID public key for push subscription."""
@@ -117,6 +125,7 @@ async def get_vapid_public_key() -> dict:
 # =============================================================================
 # Subscription Management
 # =============================================================================
+
 
 @router.post("/subscribe")
 async def create_subscription(
@@ -134,7 +143,7 @@ async def create_subscription(
         device_name=request.device_name,
         device_type=request.device_type,
         created_at=datetime.utcnow().isoformat(),
-        is_active=True
+        is_active=True,
     )
 
 
@@ -164,7 +173,7 @@ async def get_user_subscriptions(
             device_type="web",
             created_at=(datetime.utcnow()).isoformat(),
             last_used=(datetime.utcnow()).isoformat(),
-            is_active=True
+            is_active=True,
         ),
     ]
 
@@ -175,6 +184,7 @@ async def get_user_subscriptions(
 # Send Notifications
 # =============================================================================
 
+
 @router.post("/send")
 async def send_push_notification(
     request: SendNotificationRequest,
@@ -183,10 +193,7 @@ async def send_push_notification(
 ) -> dict:
     """Send push notifications to users."""
     if not VAPID_PRIVATE_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="Push notifications not configured (missing VAPID private key)"
-        )
+        raise HTTPException(status_code=503, detail="Push notifications not configured (missing VAPID private key)")
 
     # In production:
     # 1. Get subscriptions for target users
@@ -213,7 +220,7 @@ async def send_push_notification(
         "title": request.title,
         "delivered": delivered,
         "failed": failed,
-        "sent_at": datetime.utcnow().isoformat()
+        "sent_at": datetime.utcnow().isoformat(),
     }
 
 
@@ -227,13 +234,14 @@ async def send_test_notification(
         "success": True,
         "message": "Test notification sent",
         "title": "Test Notification",
-        "body": "This is a test notification from ECBTX CRM"
+        "body": "This is a test notification from ECBTX CRM",
     }
 
 
 # =============================================================================
 # Notification Templates
 # =============================================================================
+
 
 @router.get("/templates")
 async def get_notification_templates(
@@ -247,28 +255,28 @@ async def get_notification_templates(
             "name": "New Work Order",
             "title": "New Work Order Assigned",
             "body": "You have been assigned a new work order for {{customer_name}}",
-            "variables": ["customer_name", "job_type", "scheduled_date"]
+            "variables": ["customer_name", "job_type", "scheduled_date"],
         },
         {
             "id": "schedule_reminder",
             "name": "Schedule Reminder",
             "title": "Upcoming Appointment",
             "body": "Reminder: {{job_type}} appointment at {{time}} for {{customer_name}}",
-            "variables": ["customer_name", "job_type", "time", "address"]
+            "variables": ["customer_name", "job_type", "time", "address"],
         },
         {
             "id": "payment_received",
             "name": "Payment Received",
             "title": "Payment Received",
             "body": "Payment of ${{amount}} received from {{customer_name}}",
-            "variables": ["customer_name", "amount", "invoice_number"]
+            "variables": ["customer_name", "amount", "invoice_number"],
         },
         {
             "id": "invoice_overdue",
             "name": "Invoice Overdue",
             "title": "Invoice Overdue",
             "body": "Invoice #{{invoice_number}} for {{customer_name}} is {{days_overdue}} days overdue",
-            "variables": ["customer_name", "invoice_number", "amount", "days_overdue"]
+            "variables": ["customer_name", "invoice_number", "amount", "days_overdue"],
         },
     ]
 
@@ -278,6 +286,7 @@ async def get_notification_templates(
 # =============================================================================
 # User Preferences
 # =============================================================================
+
 
 @router.get("/preferences")
 async def get_notification_preferences(
@@ -304,6 +313,7 @@ async def update_notification_preferences(
 # Notification History
 # =============================================================================
 
+
 @router.get("/history")
 async def get_notification_history(
     db: DbSession,
@@ -321,7 +331,7 @@ async def get_notification_history(
             delivered_count=1,
             failed_count=0,
             click_count=1,
-            sent_by="system"
+            sent_by="system",
         ),
         NotificationLog(
             id="notif_002",
@@ -331,16 +341,11 @@ async def get_notification_history(
             delivered_count=3,
             failed_count=0,
             click_count=2,
-            sent_by="system"
+            sent_by="system",
         ),
     ]
 
-    return {
-        "notifications": [n.model_dump() for n in logs],
-        "total": len(logs),
-        "page": page,
-        "page_size": page_size
-    }
+    return {"notifications": [n.model_dump() for n in logs], "total": len(logs), "page": page, "page_size": page_size}
 
 
 @router.get("/stats")
@@ -356,18 +361,14 @@ async def get_notification_stats(
         "delivery_rate": 0.97,
         "click_rate": 0.42,
         "active_subscriptions": 85,
-        "by_type": {
-            "work_order": 150,
-            "payment": 80,
-            "schedule": 120,
-            "system": 45
-        }
+        "by_type": {"work_order": 150, "payment": 80, "schedule": 120, "system": 45},
     }
 
 
 # =============================================================================
 # Scheduled Notifications
 # =============================================================================
+
 
 @router.post("/schedule")
 async def schedule_notification(
@@ -386,7 +387,7 @@ async def schedule_notification(
         "title": title,
         "scheduled_for": scheduled_for,
         "target_users": len(user_ids) if user_ids else "all",
-        "status": "scheduled"
+        "status": "scheduled",
     }
 
 
@@ -396,10 +397,7 @@ async def get_scheduled_notifications(
     current_user: CurrentUser,
 ) -> dict:
     """Get pending scheduled notifications."""
-    return {
-        "scheduled": [],
-        "count": 0
-    }
+    return {"scheduled": [], "count": 0}
 
 
 @router.delete("/scheduled/{schedule_id}")

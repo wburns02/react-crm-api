@@ -1,4 +1,5 @@
 """Certification model for tracking technician certifications."""
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -57,6 +58,7 @@ class Certification(Base):
     @property
     def is_expired(self):
         from datetime import date
+
         if not self.expiry_date:
             return False
         return self.expiry_date < date.today()
@@ -64,6 +66,7 @@ class Certification(Base):
     @property
     def days_until_expiry(self):
         from datetime import date
+
         if not self.expiry_date:
             return None
         return (self.expiry_date - date.today()).days

@@ -29,9 +29,7 @@ class RoleViewService:
     async def ensure_default_roles_exist(self) -> None:
         """Ensure all default roles exist in the database."""
         for role_data in DEFAULT_ROLES:
-            result = await self.db.execute(
-                select(RoleView).where(RoleView.role_key == role_data["role_key"])
-            )
+            result = await self.db.execute(select(RoleView).where(RoleView.role_key == role_data["role_key"]))
             existing = result.scalar_one_or_none()
 
             if not existing:
@@ -43,26 +41,17 @@ class RoleViewService:
 
     async def get_all_roles(self) -> List[RoleView]:
         """Get all active roles ordered by sort_order."""
-        result = await self.db.execute(
-            select(RoleView)
-            .where(RoleView.is_active == True)
-            .order_by(RoleView.sort_order)
-        )
+        result = await self.db.execute(select(RoleView).where(RoleView.is_active == True).order_by(RoleView.sort_order))
         return list(result.scalars().all())
 
     async def get_role_by_key(self, role_key: str) -> Optional[RoleView]:
         """Get a specific role by its key."""
-        result = await self.db.execute(
-            select(RoleView).where(RoleView.role_key == role_key)
-        )
+        result = await self.db.execute(select(RoleView).where(RoleView.role_key == role_key))
         return result.scalar_one_or_none()
 
     async def get_current_role_session(self, user_id: int) -> Optional[UserRoleSession]:
         """Get the current role session for a user."""
-        result = await self.db.execute(
-            select(UserRoleSession)
-            .where(UserRoleSession.user_id == user_id)
-        )
+        result = await self.db.execute(select(UserRoleSession).where(UserRoleSession.user_id == user_id))
         return result.scalar_one_or_none()
 
     async def get_current_role(self, user: User) -> Optional[RoleView]:
@@ -103,13 +92,11 @@ class RoleViewService:
             # Update existing session
             session.current_role_key = role_key
             from datetime import datetime
+
             session.switched_at = datetime.utcnow()
         else:
             # Create new session
-            session = UserRoleSession(
-                user_id=user.id,
-                current_role_key=role_key
-            )
+            session = UserRoleSession(user_id=user.id, current_role_key=role_key)
             self.db.add(session)
 
         await self.db.commit()
@@ -131,10 +118,7 @@ class RoleViewService:
         # Get or create session with default admin role
         session = await self.get_current_role_session(user.id)
         if not session:
-            session = UserRoleSession(
-                user_id=user.id,
-                current_role_key="admin"
-            )
+            session = UserRoleSession(user_id=user.id, current_role_key="admin")
             self.db.add(session)
             await self.db.commit()
 

@@ -7,6 +7,7 @@ Features:
 - Price calculation with all adjustments
 - Customer pricing tiers
 """
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func
 from typing import Optional, List
@@ -22,6 +23,7 @@ router = APIRouter()
 
 
 # Request/Response Models
+
 
 class ServiceCreate(BaseModel):
     code: str = Field(..., min_length=1, max_length=50)
@@ -94,6 +96,7 @@ class PriceBreakdown(BaseModel):
 
 
 # Helper functions
+
 
 def service_to_response(svc: ServiceCatalog) -> dict:
     return {
@@ -202,6 +205,7 @@ def evaluate_rule_conditions(rule: PricingRule, context: dict) -> bool:
 
 # Service Catalog Endpoints
 
+
 @router.get("/services")
 async def list_services(
     db: DbSession,
@@ -218,10 +222,7 @@ async def list_services(
     if is_active is not None:
         query = query.where(ServiceCatalog.is_active == is_active)
     if search:
-        query = query.where(
-            (ServiceCatalog.name.ilike(f"%{search}%")) |
-            (ServiceCatalog.code.ilike(f"%{search}%"))
-        )
+        query = query.where((ServiceCatalog.name.ilike(f"%{search}%")) | (ServiceCatalog.code.ilike(f"%{search}%")))
 
     query = query.order_by(ServiceCatalog.category, ServiceCatalog.name)
     result = await db.execute(query)
@@ -238,9 +239,7 @@ async def create_service(
 ):
     """Create a new service in the catalog."""
     # Check for duplicate code
-    existing = await db.execute(
-        select(ServiceCatalog).where(ServiceCatalog.code == request.code)
-    )
+    existing = await db.execute(select(ServiceCatalog).where(ServiceCatalog.code == request.code))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -262,9 +261,7 @@ async def get_service(
     current_user: CurrentUser,
 ):
     """Get a service by ID."""
-    result = await db.execute(
-        select(ServiceCatalog).where(ServiceCatalog.id == service_id)
-    )
+    result = await db.execute(select(ServiceCatalog).where(ServiceCatalog.id == service_id))
     service = result.scalar_one_or_none()
 
     if not service:
@@ -277,6 +274,7 @@ async def get_service(
 
 
 # Pricing Zone Endpoints
+
 
 @router.get("/zones")
 async def list_zones(
@@ -304,9 +302,7 @@ async def create_zone(
     current_user: CurrentUser,
 ):
     """Create a new pricing zone."""
-    existing = await db.execute(
-        select(PricingZone).where(PricingZone.code == request.code)
-    )
+    existing = await db.execute(select(PricingZone).where(PricingZone.code == request.code))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -338,6 +334,7 @@ async def lookup_zone(
 
 # Pricing Rule Endpoints
 
+
 @router.get("/rules")
 async def list_rules(
     db: DbSession,
@@ -367,9 +364,7 @@ async def create_rule(
     current_user: CurrentUser,
 ):
     """Create a new pricing rule."""
-    existing = await db.execute(
-        select(PricingRule).where(PricingRule.code == request.code)
-    )
+    existing = await db.execute(select(PricingRule).where(PricingRule.code == request.code))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -386,6 +381,7 @@ async def create_rule(
 
 # Price Calculation
 
+
 @router.post("/calculate")
 async def calculate_price(
     request: PriceCalculationRequest,
@@ -394,9 +390,7 @@ async def calculate_price(
 ):
     """Calculate price with all adjustments applied."""
     # Get service
-    svc_result = await db.execute(
-        select(ServiceCatalog).where(ServiceCatalog.code == request.service_code)
-    )
+    svc_result = await db.execute(select(ServiceCatalog).where(ServiceCatalog.code == request.service_code))
     service = svc_result.scalar_one_or_none()
 
     if not service:
@@ -424,9 +418,7 @@ async def calculate_price(
 
     # Apply pricing rules
     rules_result = await db.execute(
-        select(PricingRule)
-        .where(PricingRule.is_active == True)
-        .order_by(PricingRule.priority.desc())
+        select(PricingRule).where(PricingRule.is_active == True).order_by(PricingRule.priority.desc())
     )
     rules = rules_result.scalars().all()
 
@@ -457,13 +449,15 @@ async def calculate_price(
         if rule.max_adjustment and abs(adjustment) > rule.max_adjustment:
             adjustment = rule.max_adjustment if adjustment > 0 else -rule.max_adjustment
 
-        rule_adjustments.append({
-            "rule_code": rule.code,
-            "rule_name": rule.name,
-            "adjustment_type": rule.adjustment_type,
-            "adjustment_value": rule.adjustment_value,
-            "calculated_adjustment": adjustment,
-        })
+        rule_adjustments.append(
+            {
+                "rule_code": rule.code,
+                "rule_name": rule.name,
+                "adjustment_type": rule.adjustment_type,
+                "adjustment_value": rule.adjustment_value,
+                "calculated_adjustment": adjustment,
+            }
+        )
 
         if rule.stackable:
             running_total += adjustment
@@ -519,11 +513,7 @@ async def get_service_categories(
     current_user: CurrentUser,
 ):
     """Get list of unique service categories."""
-    result = await db.execute(
-        select(ServiceCatalog.category)
-        .where(ServiceCatalog.category.isnot(None))
-        .distinct()
-    )
+    result = await db.execute(select(ServiceCatalog.category).where(ServiceCatalog.category.isnot(None)).distinct())
     categories = [row[0] for row in result.fetchall() if row[0]]
 
     return {"categories": sorted(categories)}

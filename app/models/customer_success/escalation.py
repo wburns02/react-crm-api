@@ -8,10 +8,7 @@ Enables escalation management and tracking:
 - Stakeholder notifications
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, Enum as SQLEnum, JSON
-)
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -21,6 +18,7 @@ class Escalation(Base):
     """
     Customer escalation record.
     """
+
     __tablename__ = "cs_escalations"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -31,22 +29,36 @@ class Escalation(Base):
 
     # Escalation type
     escalation_type = Column(
-        SQLEnum('technical', 'billing', 'service', 'product', 'relationship', 'executive', 'custom', name='cs_escalation_type_enum'),
-        default='service'
+        SQLEnum(
+            "technical",
+            "billing",
+            "service",
+            "product",
+            "relationship",
+            "executive",
+            "custom",
+            name="cs_escalation_type_enum",
+        ),
+        default="service",
     )
 
     # Severity/Priority
-    severity = Column(
-        SQLEnum('low', 'medium', 'high', 'critical', name='cs_severity_enum'),
-        default='medium'
-    )
+    severity = Column(SQLEnum("low", "medium", "high", "critical", name="cs_severity_enum"), default="medium")
 
     priority = Column(Integer, default=50)  # 1-100, higher = more urgent
 
     # Status
     status = Column(
-        SQLEnum('open', 'in_progress', 'pending_customer', 'pending_internal', 'resolved', 'closed', name='cs_escalation_status_enum'),
-        default='open'
+        SQLEnum(
+            "open",
+            "in_progress",
+            "pending_customer",
+            "pending_internal",
+            "resolved",
+            "closed",
+            name="cs_escalation_status_enum",
+        ),
+        default="open",
     )
 
     # Source
@@ -94,8 +106,18 @@ class Escalation(Base):
     assigned_to = relationship("User", foreign_keys=[assigned_to_user_id], backref="assigned_escalations")
     escalated_by = relationship("User", foreign_keys=[escalated_by_user_id])
     escalated_to = relationship("User", foreign_keys=[escalated_to_user_id])
-    notes = relationship("EscalationNote", back_populates="escalation", cascade="all, delete-orphan", order_by="EscalationNote.created_at.desc()")
-    activities = relationship("EscalationActivity", back_populates="escalation", cascade="all, delete-orphan", order_by="EscalationActivity.created_at.desc()")
+    notes = relationship(
+        "EscalationNote",
+        back_populates="escalation",
+        cascade="all, delete-orphan",
+        order_by="EscalationNote.created_at.desc()",
+    )
+    activities = relationship(
+        "EscalationActivity",
+        back_populates="escalation",
+        cascade="all, delete-orphan",
+        order_by="EscalationActivity.created_at.desc()",
+    )
 
     def __repr__(self):
         return f"<Escalation id={self.id} title='{self.title[:30]}...' severity={self.severity}>"
@@ -105,6 +127,7 @@ class EscalationNote(Base):
     """
     Internal notes on an escalation.
     """
+
     __tablename__ = "cs_escalation_notes"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -114,8 +137,8 @@ class EscalationNote(Base):
 
     # Note type
     note_type = Column(
-        SQLEnum('update', 'internal', 'customer_communication', 'resolution', name='cs_note_type_enum'),
-        default='update'
+        SQLEnum("update", "internal", "customer_communication", "resolution", name="cs_note_type_enum"),
+        default="update",
     )
 
     # Visibility
@@ -140,6 +163,7 @@ class EscalationActivity(Base):
     """
     Activity log for escalation tracking.
     """
+
     __tablename__ = "cs_escalation_activities"
 
     id = Column(Integer, primary_key=True, index=True)

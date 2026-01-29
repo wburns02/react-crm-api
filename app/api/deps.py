@@ -37,10 +37,7 @@ def verify_password(plain_password: str, hashed_password: str | None) -> bool:
     if not hashed_password:
         return False
     try:
-        return bcrypt.checkpw(
-            plain_password.encode('utf-8'),
-            hashed_password.encode('utf-8')
-        )
+        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
     except Exception:
         # Handle invalid hash format gracefully
         return False
@@ -48,10 +45,7 @@ def verify_password(plain_password: str, hashed_password: str | None) -> bool:
 
 def get_password_hash(password: str) -> str:
     """Hash a password."""
-    return bcrypt.hashpw(
-        password.encode('utf-8'),
-        bcrypt.gensalt()
-    ).decode('utf-8')
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -127,17 +121,12 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
 
     # Log successful auth without sensitive details
-    logger.debug(
-        "User authenticated",
-        extra={"user_id": user.id, "auth_method": auth_method}
-    )
+    logger.debug("User authenticated", extra={"user_id": user.id, "auth_method": auth_method})
 
     return user
 
 
-async def get_current_active_user(
-    current_user: Annotated[User, Depends(get_current_user)]
-) -> User:
+async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """Get current active user."""
     if not current_user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")

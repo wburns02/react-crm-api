@@ -38,9 +38,11 @@ async def list_work_order_photos(
         )
 
     # Get photos
-    query = select(WorkOrderPhoto).where(
-        WorkOrderPhoto.work_order_id == work_order_id
-    ).order_by(WorkOrderPhoto.created_at.desc())
+    query = (
+        select(WorkOrderPhoto)
+        .where(WorkOrderPhoto.work_order_id == work_order_id)
+        .order_by(WorkOrderPhoto.created_at.desc())
+    )
 
     result = await db.execute(query)
     photos = result.scalars().all()

@@ -3,6 +3,7 @@ Estimates API - Alias for Quotes API.
 The frontend uses /estimates for listing while /quotes is used for CRUD.
 This provides compatibility for the estimates listing endpoint.
 """
+
 from fastapi import APIRouter, Query, HTTPException, status
 from sqlalchemy import select, func
 from typing import Optional
@@ -70,9 +71,7 @@ async def get_estimate(
     current_user: CurrentUser,
 ):
     """Get a single estimate/quote by ID with customer details."""
-    result = await db.execute(
-        select(Quote).where(Quote.id == estimate_id)
-    )
+    result = await db.execute(select(Quote).where(Quote.id == estimate_id))
     quote = result.scalar_one_or_none()
 
     if not quote:

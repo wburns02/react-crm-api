@@ -8,6 +8,7 @@ Features:
 - Presence/availability status
 - Automatic background sync every 15 minutes
 """
+
 from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy import select, func, or_
 from typing import Optional, List
@@ -70,9 +71,7 @@ async def _perform_sync(hours_back: int = 2) -> dict:
                 rc_call_id = record.get("id")
 
                 # Check if already exists
-                existing = await db.execute(
-                    select(CallLog).where(CallLog.ringcentral_call_id == rc_call_id)
-                )
+                existing = await db.execute(select(CallLog).where(CallLog.ringcentral_call_id == rc_call_id))
                 if existing.scalar_one_or_none():
                     skipped += 1
                     continue
@@ -114,7 +113,7 @@ async def _perform_sync(hours_back: int = 2) -> dict:
             "synced": synced,
             "skipped": skipped,
             "total_records": len(records),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
 
         _last_sync_time = datetime.utcnow()
@@ -168,6 +167,7 @@ def stop_auto_sync():
 
 # Request/Response Models
 
+
 class MakeCallRequest(BaseModel):
     to_number: str = Field(..., description="Phone number to call")
     from_number: Optional[str] = Field(None, description="Extension or number to call from")
@@ -203,6 +203,7 @@ class SyncCallsRequest(BaseModel):
 
 
 # Helper functions
+
 
 def call_log_to_response(call: CallLog) -> dict:
     """Convert CallLog model to response dict.
@@ -256,19 +257,15 @@ async def find_customer_by_phone(db: DbSession, phone: str) -> Optional[Customer
     """Look up customer by phone number."""
     try:
         # Normalize phone number (remove non-digits)
-        normalized = ''.join(c for c in phone if c.isdigit())
-        if len(normalized) == 11 and normalized.startswith('1'):
+        normalized = "".join(c for c in phone if c.isdigit())
+        if len(normalized) == 11 and normalized.startswith("1"):
             normalized = normalized[1:]  # Remove leading 1
 
         if len(normalized) < 7:
             return None  # Phone number too short
 
         # Search customers by phone (just use main phone column)
-        result = await db.execute(
-            select(Customer).where(
-                Customer.phone.contains(normalized[-10:])
-            ).limit(1)
-        )
+        result = await db.execute(select(Customer).where(Customer.phone.contains(normalized[-10:])).limit(1))
         return result.scalar_one_or_none()
     except Exception as e:
         logger.warning(f"Error finding customer by phone {phone}: {e}")
@@ -326,9 +323,7 @@ async def analyze_single_call(call_id: int):
     async with async_session_maker() as db:
         try:
             # Load the call record
-            result = await db.execute(
-                select(CallLog).where(CallLog.id == call_id)
-            )
+            result = await db.execute(select(CallLog).where(CallLog.id == call_id))
             call = result.scalar_one_or_none()
 
             if not call:
@@ -350,7 +345,8 @@ async def analyze_single_call(call_id: int):
 
             # Extract recording ID from URL
             import re
-            match = re.search(r'/recording/(\d+)/content', recording_url)
+
+            match = re.search(r"/recording/(\d+)/content", recording_url)
             if not match:
                 logger.error(f"Could not extract recording ID from URL: {recording_url}")
                 call.transcription_status = "failed"
@@ -370,9 +366,7 @@ async def analyze_single_call(call_id: int):
 
             # Step 2: Transcribe the recording using audio bytes
             transcription_result = await ai_gateway.transcribe_audio_bytes(
-                audio_data=audio_data,
-                filename=f"call_{call_id}.mp3",
-                language="en"
+                audio_data=audio_data, filename=f"call_{call_id}.mp3", language="en"
             )
 
             if transcription_result.get("error"):
@@ -422,11 +416,14 @@ async def analyze_single_call(call_id: int):
             call.analyzed_at = datetime.utcnow()
 
             await db.commit()
-            logger.info(f"Analysis complete for call {call_id}: sentiment={call.sentiment}, quality={call.quality_score}")
+            logger.info(
+                f"Analysis complete for call {call_id}: sentiment={call.sentiment}, quality={call.quality_score}"
+            )
 
         except Exception as e:
             logger.error(f"Error analyzing call {call_id}: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             # Try to mark as failed
             try:
@@ -437,6 +434,7 @@ async def analyze_single_call(call_id: int):
 
 
 # Endpoints
+
 
 @router.get("/status")
 async def get_ringcentral_status():
@@ -449,8 +447,13 @@ async def get_ringcentral_status():
 async def debug_database(db: DbSession):
     """DEBUG: Check call_logs table schema."""
     from sqlalchemy import text
+
     try:
-        result = await db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'call_logs' ORDER BY ordinal_position"))
+        result = await db.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'call_logs' ORDER BY ordinal_position"
+            )
+        )
         columns = [row[0] for row in result.fetchall()]
         return {"table_exists": len(columns) > 0, "columns": columns}
     except Exception as e:
@@ -462,21 +465,30 @@ async def get_debug_config():
     """DEBUG: Check RingCentral configuration values."""
     try:
         from app.config import settings
+
         return {
             "client_id_set": bool(settings.RINGCENTRAL_CLIENT_ID),
             "client_id_len": len(settings.RINGCENTRAL_CLIENT_ID or ""),
-            "client_id_preview": (settings.RINGCENTRAL_CLIENT_ID or "")[:4] + "..." if settings.RINGCENTRAL_CLIENT_ID else None,
+            "client_id_preview": (settings.RINGCENTRAL_CLIENT_ID or "")[:4] + "..."
+            if settings.RINGCENTRAL_CLIENT_ID
+            else None,
             "client_secret_set": bool(settings.RINGCENTRAL_CLIENT_SECRET),
             "client_secret_len": len(settings.RINGCENTRAL_CLIENT_SECRET or ""),
             "server_url": settings.RINGCENTRAL_SERVER_URL,
             "jwt_token_set": bool(settings.RINGCENTRAL_JWT_TOKEN),
             "jwt_token_len": len(settings.RINGCENTRAL_JWT_TOKEN or ""),
-            "jwt_token_preview": (settings.RINGCENTRAL_JWT_TOKEN or "")[:20] + "..." if settings.RINGCENTRAL_JWT_TOKEN else None,
+            "jwt_token_preview": (settings.RINGCENTRAL_JWT_TOKEN or "")[:20] + "..."
+            if settings.RINGCENTRAL_JWT_TOKEN
+            else None,
             "service_configured": ringcentral_service.is_configured,
             "service_client_id_len": len(ringcentral_service.config.client_id or ""),
-            "service_client_id_preview": (ringcentral_service.config.client_id or "")[:4] + "..." if ringcentral_service.config.client_id else None,
+            "service_client_id_preview": (ringcentral_service.config.client_id or "")[:4] + "..."
+            if ringcentral_service.config.client_id
+            else None,
             "service_jwt_token_len": len(ringcentral_service.config.jwt_token or ""),
-            "service_jwt_token_preview": (ringcentral_service.config.jwt_token or "")[:20] + "..." if ringcentral_service.config.jwt_token else None,
+            "service_jwt_token_preview": (ringcentral_service.config.jwt_token or "")[:20] + "..."
+            if ringcentral_service.config.jwt_token
+            else None,
         }
     except Exception as e:
         return {"error": str(e), "type": type(e).__name__}
@@ -512,11 +524,7 @@ async def create_test_data(db: DbSession):
 
         await db.commit()
 
-        return {
-            "success": True,
-            "created_calls": len(test_calls),
-            "message": "Test call data created successfully"
-        }
+        return {"success": True, "created_calls": len(test_calls), "message": "Test call data created successfully"}
 
     except Exception as e:
         logger.error(f"Error creating test data: {e}")
@@ -545,8 +553,7 @@ async def get_sync_status(db: DbSession):
     most_recent_call = None
     if most_recent and most_recent.call_date:
         most_recent_call = datetime.combine(
-            most_recent.call_date,
-            most_recent.call_time or datetime.min.time()
+            most_recent.call_date, most_recent.call_time or datetime.min.time()
         ).isoformat()
 
     # Get total call count
@@ -597,9 +604,7 @@ async def debug_sync_calls(
         rc_call_id = record.get("id")
 
         # Check if already exists
-        existing = await db.execute(
-            select(CallLog).where(CallLog.ringcentral_call_id == rc_call_id)
-        )
+        existing = await db.execute(select(CallLog).where(CallLog.ringcentral_call_id == rc_call_id))
         if existing.scalar_one_or_none():
             skipped += 1
             continue
@@ -641,7 +646,7 @@ async def debug_sync_calls(
         "synced": synced,
         "skipped": skipped,
         "total_records": len(records),
-        "message": f"Synced {synced} calls from RingCentral"
+        "message": f"Synced {synced} calls from RingCentral",
     }
 
 
@@ -681,7 +686,7 @@ async def make_call(
             )
 
         # Default from number to user's extension
-        from_number = request.from_number or getattr(current_user, 'phone_extension', None)
+        from_number = request.from_number or getattr(current_user, "phone_extension", None)
         if not from_number:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -851,7 +856,7 @@ async def get_call_intelligence_analytics(
                 select(CallLog).where(
                     CallLog.call_date.isnot(None),
                     CallLog.call_date >= date_from.date(),
-                    CallLog.call_date <= date_to.date()
+                    CallLog.call_date <= date_to.date(),
                 )
             )
             calls = result.scalars().all()
@@ -923,36 +928,32 @@ async def get_call_intelligence_analytics(
         volume_trend = []
 
         for i in range(7):  # Last 7 days
-            day = date_to - timedelta(days=6-i)
+            day = date_to - timedelta(days=6 - i)
             day_calls = [c for c in calls if c.call_date and c.call_date == day.date()]
             day_responses = [call_log_to_response(c) for c in day_calls]
 
-            volume_trend.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": len(day_calls)
-            })
+            volume_trend.append({"date": day.strftime("%Y-%m-%d"), "value": len(day_calls)})
 
             # Real sentiment distribution for the day
             day_positive = len([c for c in day_responses if c["sentiment"] == "positive"])
             day_neutral = len([c for c in day_responses if c["sentiment"] == "neutral"])
             day_negative = len([c for c in day_responses if c["sentiment"] == "negative"])
 
-            sentiment_trend.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": len(day_calls),
-                "positive": day_positive,
-                "neutral": day_neutral,
-                "negative": day_negative
-            })
+            sentiment_trend.append(
+                {
+                    "date": day.strftime("%Y-%m-%d"),
+                    "value": len(day_calls),
+                    "positive": day_positive,
+                    "neutral": day_neutral,
+                    "negative": day_negative,
+                }
+            )
 
             # Real quality score average for the day
             day_quality_scores = [c["quality_score"] for c in day_responses if c["quality_score"] is not None]
             day_avg_quality = round(sum(day_quality_scores) / len(day_quality_scores), 1) if day_quality_scores else 0
 
-            quality_trend_data.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": day_avg_quality
-            })
+            quality_trend_data.append({"date": day.strftime("%Y-%m-%d"), "value": day_avg_quality})
 
         # Calculate quality trend (compare this week vs last week)
         quality_trend = round((avg_quality_score - 75) / 75 * 100, 1) if avg_quality_score else 0
@@ -987,6 +988,7 @@ async def get_call_intelligence_analytics(
 
     except Exception as e:
         import traceback
+
         error_detail = f"{type(e).__name__}: {str(e)}"
         tb = traceback.format_exc()
         logger.error(f"Error getting call intelligence analytics: {error_detail}\n{tb}")
@@ -996,6 +998,7 @@ async def get_call_intelligence_analytics(
 # =====================================================
 # NOTE: Static routes MUST come before /calls/{call_id}
 # =====================================================
+
 
 @router.post("/calls/analyze-batch")
 async def analyze_calls_batch(
@@ -1015,10 +1018,7 @@ async def analyze_calls_batch(
         if force:
             # Re-analyze all calls with recordings
             result = await db.execute(
-                select(CallLog)
-                .where(CallLog.recording_url.isnot(None))
-                .order_by(CallLog.call_date.desc())
-                .limit(limit)
+                select(CallLog).where(CallLog.recording_url.isnot(None)).order_by(CallLog.call_date.desc()).limit(limit)
             )
         else:
             # Only get calls that haven't been analyzed yet
@@ -1082,7 +1082,9 @@ async def get_analysis_status(
 
         # Count calls with transcriptions
         transcribed_result = await db.execute(
-            select(func.count()).select_from(CallLog).where(
+            select(func.count())
+            .select_from(CallLog)
+            .where(
                 CallLog.recording_url.isnot(None),
                 CallLog.transcription.isnot(None),
             )
@@ -1091,7 +1093,9 @@ async def get_analysis_status(
 
         # Count calls with full AI analysis
         analyzed_result = await db.execute(
-            select(func.count()).select_from(CallLog).where(
+            select(func.count())
+            .select_from(CallLog)
+            .where(
                 CallLog.recording_url.isnot(None),
                 CallLog.quality_score.isnot(None),
             )
@@ -1326,9 +1330,7 @@ async def sync_call_logs(
         rc_call_id = record.get("id")
 
         # Check if already exists (using actual DB column name)
-        existing = await db.execute(
-            select(CallLog).where(CallLog.ringcentral_call_id == rc_call_id)
-        )
+        existing = await db.execute(select(CallLog).where(CallLog.ringcentral_call_id == rc_call_id))
         if existing.scalar_one_or_none():
             skipped += 1
             continue
@@ -1523,7 +1525,7 @@ async def get_call_recording(
             "recording_id": recording_id,
             "content_type": recording_meta.get("contentType", "audio/mpeg"),
             "duration": recording_meta.get("duration"),
-            "secure_url": f"/api/v2/ringcentral/recording/{recording_id}/content"
+            "secure_url": f"/api/v2/ringcentral/recording/{recording_id}/content",
         }
 
     except HTTPException:
@@ -1556,13 +1558,14 @@ async def stream_recording_content(
             )
 
         from fastapi.responses import Response
+
         return Response(
             content=content,
             media_type="audio/mpeg",
             headers={
                 "Cache-Control": "private, max-age=3600",
-                "Content-Disposition": f"inline; filename=\"recording-{recording_id}.mp3\"",
-            }
+                "Content-Disposition": f'inline; filename="recording-{recording_id}.mp3"',
+            },
         )
 
     except HTTPException:
@@ -1601,29 +1604,23 @@ async def get_call_transcript(
             "has_transcript": bool(call.transcription),
             "has_analysis": bool(call.quality_score is not None),
             "transcription_status": call.transcription_status,
-
             # Transcript data
             "transcript": call.transcription,
             "ai_summary": call.ai_summary,
-
             # Sentiment analysis
             "sentiment": call.sentiment,
             "sentiment_score": call.sentiment_score,
-
             # Quality metrics
             "quality_score": call.quality_score,
             "csat_prediction": call.csat_prediction,
             "escalation_risk": call.escalation_risk,
-
             # Detailed scores
             "professionalism_score": call.professionalism_score,
             "empathy_score": call.empathy_score,
             "clarity_score": call.clarity_score,
             "resolution_score": call.resolution_score,
-
             # Topics/keywords
             "topics": call.topics,
-
             # Metadata
             "analyzed_at": call.analyzed_at.isoformat() if call.analyzed_at else None,
             "call_date": call.call_date.isoformat() if call.call_date else None,
@@ -1634,7 +1631,9 @@ async def get_call_transcript(
         # Add guidance if transcript doesn't exist
         if not call.transcription and call.recording_url:
             response["transcription_available"] = True
-            response["transcription_hint"] = "POST /api/v2/ringcentral/calls/{call_id}/transcribe to generate transcript"
+            response["transcription_hint"] = (
+                "POST /api/v2/ringcentral/calls/{call_id}/transcribe to generate transcript"
+            )
         elif not call.recording_url:
             response["transcription_available"] = False
             response["transcription_hint"] = "No recording available for this call"
@@ -1682,7 +1681,7 @@ async def get_db_auth_test(
             select(CallLog).where(
                 CallLog.call_date.isnot(None),
                 CallLog.call_date >= date_from.date(),
-                CallLog.call_date <= date_to.date()
+                CallLog.call_date <= date_to.date(),
             )
         )
         calls = result.scalars().all()
@@ -1696,6 +1695,7 @@ async def get_db_auth_test(
         negative_calls = total_calls - positive_calls - neutral_calls
 
         import random
+
         random.seed(total_calls)
 
         sentiment_trend = []
@@ -1703,30 +1703,26 @@ async def get_db_auth_test(
         volume_trend = []
 
         for i in range(7):
-            day = date_to - timedelta(days=6-i)
+            day = date_to - timedelta(days=6 - i)
             day_calls = [c for c in calls if c.call_date and c.call_date == day.date()]
 
-            volume_trend.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": len(day_calls)
-            })
+            volume_trend.append({"date": day.strftime("%Y-%m-%d"), "value": len(day_calls)})
 
             day_positive = max(0, int(len(day_calls) * 0.6))
             day_neutral = max(0, int(len(day_calls) * 0.3))
             day_negative = max(0, len(day_calls) - day_positive - day_neutral)
 
-            sentiment_trend.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": len(day_calls),
-                "positive": day_positive,
-                "neutral": day_neutral,
-                "negative": day_negative
-            })
+            sentiment_trend.append(
+                {
+                    "date": day.strftime("%Y-%m-%d"),
+                    "value": len(day_calls),
+                    "positive": day_positive,
+                    "neutral": day_neutral,
+                    "negative": day_negative,
+                }
+            )
 
-            quality_trend_data.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": random.randint(75, 90)
-            })
+            quality_trend_data.append({"date": day.strftime("%Y-%m-%d"), "value": random.randint(75, 90)})
 
         return {
             "metrics": {
@@ -1750,10 +1746,11 @@ async def get_db_auth_test(
                 "volume_trend": volume_trend,
             },
             "updated_at": datetime.utcnow().isoformat(),
-            "test_user_id": current_user.id
+            "test_user_id": current_user.id,
         }
     except Exception as e:
         import traceback
+
         return {"error": str(e), "traceback": traceback.format_exc()}
 
 
@@ -1776,7 +1773,7 @@ async def get_debug_analytics(
             select(CallLog).where(
                 CallLog.call_date.isnot(None),
                 CallLog.call_date >= date_from.date(),
-                CallLog.call_date <= date_to.date()
+                CallLog.call_date <= date_to.date(),
             )
         )
         calls = result.scalars().all()
@@ -1805,7 +1802,7 @@ async def get_debug_analytics(
                     "volume_trend": [],
                 },
                 "updated_at": datetime.utcnow().isoformat(),
-                "debug_info": f"No calls found in date range {date_from.date()} to {date_to.date()}"
+                "debug_info": f"No calls found in date range {date_from.date()} to {date_to.date()}",
             }
 
         # Calculate basic metrics
@@ -1814,11 +1811,12 @@ async def get_debug_analytics(
 
         # Since we don't have real AI analysis, simulate realistic metrics based on call patterns
         positive_calls = max(1, int(total_calls * 0.6))  # 60% positive
-        neutral_calls = max(1, int(total_calls * 0.3))   # 30% neutral
+        neutral_calls = max(1, int(total_calls * 0.3))  # 30% neutral
         negative_calls = total_calls - positive_calls - neutral_calls  # remaining negative
 
         # Generate realistic sentiment and quality data
         import random
+
         random.seed(total_calls)  # Consistent results based on data
 
         sentiment_trend = []
@@ -1826,31 +1824,32 @@ async def get_debug_analytics(
         volume_trend = []
 
         for i in range(7):  # Last 7 days
-            day = date_to - timedelta(days=6-i)
+            day = date_to - timedelta(days=6 - i)
             day_calls = [c for c in calls if c.call_date and c.call_date == day.date()]
 
-            volume_trend.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": len(day_calls)
-            })
+            volume_trend.append({"date": day.strftime("%Y-%m-%d"), "value": len(day_calls)})
 
             # Realistic sentiment distribution for the day
             day_positive = max(0, int(len(day_calls) * 0.6))
             day_neutral = max(0, int(len(day_calls) * 0.3))
             day_negative = max(0, len(day_calls) - day_positive - day_neutral)
 
-            sentiment_trend.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": len(day_calls),
-                "positive": day_positive,
-                "neutral": day_neutral,
-                "negative": day_negative
-            })
+            sentiment_trend.append(
+                {
+                    "date": day.strftime("%Y-%m-%d"),
+                    "value": len(day_calls),
+                    "positive": day_positive,
+                    "neutral": day_neutral,
+                    "negative": day_negative,
+                }
+            )
 
-            quality_trend_data.append({
-                "date": day.strftime("%Y-%m-%d"),
-                "value": random.randint(75, 90)  # Quality score 75-90
-            })
+            quality_trend_data.append(
+                {
+                    "date": day.strftime("%Y-%m-%d"),
+                    "value": random.randint(75, 90),  # Quality score 75-90
+                }
+            )
 
         return {
             "metrics": {
@@ -1874,7 +1873,7 @@ async def get_debug_analytics(
                 "volume_trend": volume_trend,
             },
             "updated_at": datetime.utcnow().isoformat(),
-            "debug_info": f"Found {total_calls} calls in date range {date_from.date()} to {date_to.date()}"
+            "debug_info": f"Found {total_calls} calls in date range {date_from.date()} to {date_to.date()}",
         }
 
     except Exception as e:
@@ -1890,9 +1889,7 @@ async def get_agent_performance(
     """Get agent performance metrics."""
     try:
         # Get all calls with assigned agents
-        result = await db.execute(
-            select(CallLog).where(CallLog.assigned_to.isnot(None))
-        )
+        result = await db.execute(select(CallLog).where(CallLog.assigned_to.isnot(None)))
         calls = result.scalars().all()
 
         # Group by agent and calculate metrics
@@ -1905,7 +1902,7 @@ async def get_agent_performance(
                     "agent_id": agent_id,
                     "agent_name": f"Agent {agent_id}",  # TODO: Join with users table
                     "total_calls": 0,
-                    "calls": []
+                    "calls": [],
                 }
 
             agents_data[agent_id]["total_calls"] += 1
@@ -1913,6 +1910,7 @@ async def get_agent_performance(
 
         # Convert to response format with simulated metrics
         import random
+
         agents = []
 
         for agent_data in agents_data.values():
@@ -1921,19 +1919,21 @@ async def get_agent_performance(
             # Simulate realistic agent metrics
             random.seed(hash(agent_data["agent_id"]))  # Consistent per agent
 
-            agents.append({
-                "agent_id": agent_data["agent_id"],
-                "agent_name": agent_data["agent_name"],
-                "total_calls": total_calls,
-                "answered_calls": max(0, total_calls - random.randint(0, 2)),
-                "avg_call_duration": random.randint(180, 600),  # 3-10 minutes
-                "quality_score": random.randint(75, 95),
-                "sentiment_score": round(random.uniform(65, 85), 1),
-                "resolution_rate": round(random.uniform(0.8, 0.95), 2),
-                "escalation_rate": round(random.uniform(0.05, 0.2), 2),
-                "csat_prediction": round(random.uniform(3.5, 4.8), 1),
-                "recent_trend": random.choice(["improving", "stable", "declining"]),
-            })
+            agents.append(
+                {
+                    "agent_id": agent_data["agent_id"],
+                    "agent_name": agent_data["agent_name"],
+                    "total_calls": total_calls,
+                    "answered_calls": max(0, total_calls - random.randint(0, 2)),
+                    "avg_call_duration": random.randint(180, 600),  # 3-10 minutes
+                    "quality_score": random.randint(75, 95),
+                    "sentiment_score": round(random.uniform(65, 85), 1),
+                    "resolution_rate": round(random.uniform(0.8, 0.95), 2),
+                    "escalation_rate": round(random.uniform(0.05, 0.2), 2),
+                    "csat_prediction": round(random.uniform(3.5, 4.8), 1),
+                    "recent_trend": random.choice(["improving", "stable", "declining"]),
+                }
+            )
 
         return {
             "agents": agents,
@@ -1941,7 +1941,7 @@ async def get_agent_performance(
                 "total_agents": len(agents),
                 "avg_quality_score": sum(a["quality_score"] for a in agents) / len(agents) if agents else 0,
                 "total_calls": sum(a["total_calls"] for a in agents),
-            }
+            },
         }
 
     except Exception as e:
@@ -1971,25 +1971,25 @@ async def get_coaching_insights(
                 "top_strengths": [
                     {"name": "Active Listening", "count": 45, "percentage": 78},
                     {"name": "Problem Resolution", "count": 38, "percentage": 65},
-                    {"name": "Clear Communication", "count": 32, "percentage": 55}
+                    {"name": "Clear Communication", "count": 32, "percentage": 55},
                 ],
                 "top_improvements": [
                     {"name": "Technical Knowledge", "count": 15, "percentage": 26},
                     {"name": "Call Efficiency", "count": 12, "percentage": 21},
-                    {"name": "Product Knowledge", "count": 8, "percentage": 14}
+                    {"name": "Product Knowledge", "count": 8, "percentage": 14},
                 ],
                 "trending_topics": [
                     {"topic": "Billing Questions", "count": 28, "trend": "up"},
                     {"topic": "Service Issues", "count": 22, "trend": "stable"},
-                    {"topic": "New Customer Setup", "count": 18, "trend": "up"}
+                    {"topic": "New Customer Setup", "count": 18, "trend": "up"},
                 ],
                 "recommended_training": [
                     {"module": "Technical Troubleshooting", "priority": "high", "agents_affected": 5},
                     {"module": "Product Knowledge Deep Dive", "priority": "medium", "agents_affected": 3},
-                    {"module": "Call Efficiency Best Practices", "priority": "low", "agents_affected": 2}
-                ]
+                    {"module": "Call Efficiency Best Practices", "priority": "low", "agents_affected": 2},
+                ],
             },
-            "period": "last_7_days"
+            "period": "last_7_days",
         }
 
     except Exception as e:
@@ -2009,10 +2009,7 @@ async def get_quality_heatmap(
         date_from = datetime.utcnow() - timedelta(days=days)
 
         result = await db.execute(
-            select(CallLog).where(
-                CallLog.call_date >= date_from.date(),
-                CallLog.assigned_to.isnot(None)
-            )
+            select(CallLog).where(CallLog.call_date >= date_from.date(), CallLog.assigned_to.isnot(None))
         )
         calls = result.scalars().all()
 
@@ -2026,26 +2023,28 @@ async def get_quality_heatmap(
             agent_calls = [call for call in calls if call.assigned_to == agent_id]
 
             for i in range(days):
-                date = (datetime.utcnow() - timedelta(days=days-1-i)).date()
+                date = (datetime.utcnow() - timedelta(days=days - 1 - i)).date()
                 day_calls = [call for call in agent_calls if call.call_date == date]
 
                 # Simulate quality score based on call count
                 random.seed(hash(f"{agent_id}-{date}"))
                 quality_score = random.randint(70, 95) if day_calls else 0
 
-                heatmap_data.append({
-                    "agent_id": agent_id,
-                    "agent_name": f"Agent {agent_id}",
-                    "date": date.strftime("%Y-%m-%d"),
-                    "quality_score": quality_score,
-                    "call_count": len(day_calls)
-                })
+                heatmap_data.append(
+                    {
+                        "agent_id": agent_id,
+                        "agent_name": f"Agent {agent_id}",
+                        "date": date.strftime("%Y-%m-%d"),
+                        "quality_score": quality_score,
+                        "call_count": len(day_calls),
+                    }
+                )
 
         return {
             "heatmap": heatmap_data,
             "date_range": {
-                "start": (datetime.utcnow() - timedelta(days=days-1)).strftime("%Y-%m-%d"),
-                "end": datetime.utcnow().strftime("%Y-%m-%d")
+                "start": (datetime.utcnow() - timedelta(days=days - 1)).strftime("%Y-%m-%d"),
+                "end": datetime.utcnow().strftime("%Y-%m-%d"),
             },
             "agents": list(agents),
             "updated_at": datetime.utcnow().isoformat(),

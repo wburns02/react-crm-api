@@ -76,12 +76,9 @@ class TwilioSignatureValidator:
         if not signature:
             logger.warning(
                 "Twilio webhook request missing X-Twilio-Signature header",
-                extra={"path": request.url.path, "client": request.client.host if request.client else "unknown"}
+                extra={"path": request.url.path, "client": request.client.host if request.client else "unknown"},
             )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Missing Twilio signature"
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing Twilio signature")
 
         # Get form data for validation
         form_data = await request.form()
@@ -95,10 +92,7 @@ class TwilioSignatureValidator:
             is_valid = self.validator.validate(url, params, signature)
         except Exception as e:
             logger.error(f"Error validating Twilio signature: {type(e).__name__}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Signature validation error"
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Signature validation error")
 
         if not is_valid:
             logger.warning(
@@ -106,13 +100,10 @@ class TwilioSignatureValidator:
                 extra={
                     "path": request.url.path,
                     "url_used": url,
-                    "client": request.client.host if request.client else "unknown"
-                }
+                    "client": request.client.host if request.client else "unknown",
+                },
             )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid Twilio signature"
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Twilio signature")
 
         logger.debug("Twilio signature validated successfully")
         return True
@@ -147,8 +138,10 @@ def twilio_webhook_validator(func):
         async def handle_incoming(request: Request):
             ...
     """
+
     @wraps(func)
     async def wrapper(request: Request, *args, **kwargs):
         await _twilio_validator.validate(request)
         return await func(request, *args, **kwargs)
+
     return wrapper

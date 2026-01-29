@@ -7,6 +7,7 @@ Features:
 - Customer signatures
 - Offline sync support
 """
+
 from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File
 from sqlalchemy import select, func, and_
 from typing import Optional, List
@@ -23,6 +24,7 @@ router = APIRouter()
 
 
 # Models
+
 
 class ClockInRequest(BaseModel):
     latitude: float
@@ -71,6 +73,7 @@ class OfflineSyncRequest(BaseModel):
 
 # Endpoints
 
+
 @router.get("/dashboard")
 async def get_employee_dashboard(
     db: DbSession,
@@ -78,9 +81,7 @@ async def get_employee_dashboard(
 ):
     """Get employee dashboard stats."""
     # Find technician
-    tech_result = await db.execute(
-        select(Technician).where(Technician.email == current_user.email)
-    )
+    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
@@ -95,7 +96,9 @@ async def get_employee_dashboard(
 
     # Jobs today
     jobs_result = await db.execute(
-        select(func.count()).select_from(WorkOrder).where(
+        select(func.count())
+        .select_from(WorkOrder)
+        .where(
             WorkOrder.technician_id == str(technician.id),
             WorkOrder.scheduled_date == today,
         )
@@ -104,7 +107,9 @@ async def get_employee_dashboard(
 
     # Completed jobs today
     completed_result = await db.execute(
-        select(func.count()).select_from(WorkOrder).where(
+        select(func.count())
+        .select_from(WorkOrder)
+        .where(
             WorkOrder.technician_id == str(technician.id),
             WorkOrder.scheduled_date == today,
             WorkOrder.status == "completed",
@@ -123,7 +128,9 @@ async def get_employee_dashboard(
 
     # Check if clocked in
     clocked_in_result = await db.execute(
-        select(func.count()).select_from(WorkOrder).where(
+        select(func.count())
+        .select_from(WorkOrder)
+        .where(
             WorkOrder.technician_id == str(technician.id),
             WorkOrder.is_clocked_in == True,
         )
@@ -144,9 +151,7 @@ async def get_employee_profile(
     current_user: CurrentUser,
 ):
     """Get employee profile."""
-    tech_result = await db.execute(
-        select(Technician).where(Technician.email == current_user.email)
-    )
+    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
@@ -162,7 +167,9 @@ async def get_employee_profile(
     return {
         "id": str(technician.id),
         "first_name": technician.name.split()[0] if technician.name else "",
-        "last_name": " ".join(technician.name.split()[1:]) if technician.name and len(technician.name.split()) > 1 else "",
+        "last_name": " ".join(technician.name.split()[1:])
+        if technician.name and len(technician.name.split()) > 1
+        else "",
         "email": technician.email,
         "role": "technician",
         "is_active": technician.is_active,
@@ -177,9 +184,7 @@ async def get_employee_jobs(
     date_filter: Optional[str] = Query(None, alias="date"),
 ):
     """Get jobs assigned to current technician (frontend-compatible)."""
-    tech_result = await db.execute(
-        select(Technician).where(Technician.email == current_user.email)
-    )
+    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
@@ -231,9 +236,7 @@ async def get_employee_job(
     current_user: CurrentUser,
 ):
     """Get a single job."""
-    wo_result = await db.execute(
-        select(WorkOrder).where(WorkOrder.id == job_id)
-    )
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == job_id))
     work_order = wo_result.scalar_one_or_none()
 
     if not work_order:
@@ -272,9 +275,7 @@ async def get_job_checklist(
     current_user: CurrentUser,
 ):
     """Get checklist items for a job."""
-    wo_result = await db.execute(
-        select(WorkOrder).where(WorkOrder.id == job_id)
-    )
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == job_id))
     work_order = wo_result.scalar_one_or_none()
 
     if not work_order:
@@ -291,9 +292,7 @@ async def patch_employee_job(
     current_user: CurrentUser,
 ):
     """Update a job (status, notes, etc)."""
-    wo_result = await db.execute(
-        select(WorkOrder).where(WorkOrder.id == job_id)
-    )
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == job_id))
     work_order = wo_result.scalar_one_or_none()
 
     if not work_order:
@@ -323,9 +322,7 @@ async def start_job(
     current_user: CurrentUser = None,
 ):
     """Start a job (mark as en_route or in_progress)."""
-    wo_result = await db.execute(
-        select(WorkOrder).where(WorkOrder.id == job_id)
-    )
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == job_id))
     work_order = wo_result.scalar_one_or_none()
 
     if not work_order:
@@ -361,9 +358,7 @@ async def complete_job(
     current_user: CurrentUser = None,
 ):
     """Complete a job."""
-    wo_result = await db.execute(
-        select(WorkOrder).where(WorkOrder.id == job_id)
-    )
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == job_id))
     work_order = wo_result.scalar_one_or_none()
 
     if not work_order:
@@ -401,9 +396,7 @@ async def get_timeclock_status(
     current_user: CurrentUser,
 ):
     """Get current time clock status."""
-    tech_result = await db.execute(
-        select(Technician).where(Technician.email == current_user.email)
-    )
+    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
@@ -411,10 +404,12 @@ async def get_timeclock_status(
 
     # Check for any clocked-in work order
     clocked_in_result = await db.execute(
-        select(WorkOrder).where(
+        select(WorkOrder)
+        .where(
             WorkOrder.technician_id == str(technician.id),
             WorkOrder.is_clocked_in == True,
-        ).limit(1)
+        )
+        .limit(1)
     )
     clocked_in_wo = clocked_in_result.scalar_one_or_none()
 
@@ -459,9 +454,7 @@ async def get_timeclock_history(
     end_date: Optional[str] = None,
 ):
     """Get time clock history."""
-    tech_result = await db.execute(
-        select(Technician).where(Technician.email == current_user.email)
-    )
+    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
@@ -503,9 +496,7 @@ async def get_my_jobs(
 ):
     """Get jobs assigned to current technician."""
     # Find technician by email
-    tech_result = await db.execute(
-        select(Technician).where(Technician.email == current_user.email)
-    )
+    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
@@ -556,9 +547,7 @@ async def clock_in(
 ):
     """Clock in to start work (GPS verified)."""
     # Find technician
-    tech_result = await db.execute(
-        select(Technician).where(Technician.email == current_user.email)
-    )
+    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
@@ -566,9 +555,7 @@ async def clock_in(
 
     # If work order specified, clock into that job
     if request.work_order_id:
-        wo_result = await db.execute(
-            select(WorkOrder).where(WorkOrder.id == request.work_order_id)
-        )
+        wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == request.work_order_id))
         work_order = wo_result.scalar_one_or_none()
 
         if not work_order:
@@ -607,9 +594,7 @@ async def clock_out(
 ):
     """Clock out from work (GPS verified)."""
     if request.work_order_id:
-        wo_result = await db.execute(
-            select(WorkOrder).where(WorkOrder.id == request.work_order_id)
-        )
+        wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == request.work_order_id))
         work_order = wo_result.scalar_one_or_none()
 
         if not work_order:
@@ -648,9 +633,7 @@ async def update_job_status(
     current_user: CurrentUser,
 ):
     """Update job status from the field."""
-    wo_result = await db.execute(
-        select(WorkOrder).where(WorkOrder.id == work_order_id)
-    )
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
     work_order = wo_result.scalar_one_or_none()
 
     if not work_order:
@@ -676,9 +659,7 @@ async def update_checklist(
     current_user: CurrentUser,
 ):
     """Update job checklist items."""
-    wo_result = await db.execute(
-        select(WorkOrder).where(WorkOrder.id == work_order_id)
-    )
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
     work_order = wo_result.scalar_one_or_none()
 
     if not work_order:
@@ -728,9 +709,7 @@ async def capture_customer_signature(
     current_user: CurrentUser,
 ):
     """Capture customer signature for job completion."""
-    wo_result = await db.execute(
-        select(WorkOrder).where(WorkOrder.id == work_order_id)
-    )
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
     work_order = wo_result.scalar_one_or_none()
 
     if not work_order:
@@ -799,9 +778,7 @@ async def get_my_stats(
     period: str = Query("week"),  # day, week, month
 ):
     """Get technician's performance stats."""
-    tech_result = await db.execute(
-        select(Technician).where(Technician.email == current_user.email)
-    )
+    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
@@ -818,7 +795,9 @@ async def get_my_stats(
 
     # Get completed jobs
     completed_result = await db.execute(
-        select(func.count()).select_from(WorkOrder).where(
+        select(func.count())
+        .select_from(WorkOrder)
+        .where(
             WorkOrder.technician_id == str(technician.id),
             WorkOrder.status == "completed",
             WorkOrder.scheduled_date >= start_date,

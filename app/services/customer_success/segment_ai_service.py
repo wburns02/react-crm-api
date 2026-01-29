@@ -29,9 +29,7 @@ from sqlalchemy import select, func, and_, or_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
-from app.models.customer_success import (
-    Segment, CustomerSegment, HealthScore, Touchpoint
-)
+from app.models.customer_success import Segment, CustomerSegment, HealthScore, Touchpoint
 from app.models.work_order import WorkOrder
 
 
@@ -41,6 +39,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ParsedSegmentQuery:
     """Result of parsing a natural language query."""
+
     success: bool
     rules: Optional[Dict[str, Any]] = None
     confidence: float = 0.0
@@ -52,6 +51,7 @@ class ParsedSegmentQuery:
 @dataclass
 class SegmentSuggestion:
     """AI-generated segment suggestion."""
+
     name: str
     description: str
     rules: Dict[str, Any]
@@ -66,6 +66,7 @@ class SegmentSuggestion:
 @dataclass
 class RevenueOpportunity:
     """Revenue opportunity analysis for a segment."""
+
     segment_id: int
     segment_name: str
     total_customers: int
@@ -80,6 +81,7 @@ class RevenueOpportunity:
 
 class LLMProvider(str, Enum):
     """Supported LLM providers."""
+
     NONE = "none"  # Rule-based only
     OLLAMA = "ollama"
     VLLM = "vllm"
@@ -106,41 +108,33 @@ class SegmentAIService:
         "health score": "health_score",
         "healthscore": "health_score",
         "score": "health_score",
-
         # Status variations
         "status": "health_status",
         "health status": "health_status",
-
         # Churn variations
         "churn": "churn_probability",
         "churn risk": "churn_probability",
         "churn probability": "churn_probability",
         "risk": "churn_probability",
-
         # Customer type variations
         "type": "customer_type",
         "customer type": "customer_type",
-
         # Location variations
         "location": "city",
         "city": "city",
         "state": "state",
-
         # Date variations
         "created": "created_at",
         "created date": "created_at",
         "signup": "created_at",
         "signup date": "created_at",
         "joined": "created_at",
-
         # Activity variations
         "active": "is_active",
         "inactive": "is_active",
-
         # Engagement variations
         "engagement": "engagement_score",
         "engaged": "engagement_score",
-
         # Financial
         "value": "estimated_value",
         "worth": "estimated_value",
@@ -155,56 +149,44 @@ class SegmentAIService:
         (r"(?:is )?above (\d+)", "greater_than"),
         (r"(?:is )?over (\d+)", "greater_than"),
         (r"> ?(\d+)", "greater_than"),
-
         (r"(?:is )?less than (\d+)", "less_than"),
         (r"(?:is )?under (\d+)", "less_than"),
         (r"(?:is )?below (\d+)", "less_than"),
         (r"< ?(\d+)", "less_than"),
-
         (r"(?:is )?at least (\d+)", "greater_than_or_equals"),
         (r">= ?(\d+)", "greater_than_or_equals"),
-
         (r"(?:is )?at most (\d+)", "less_than_or_equals"),
         (r"<= ?(\d+)", "less_than_or_equals"),
-
         (r"between (\d+) and (\d+)", "between"),
         (r"from (\d+) to (\d+)", "between"),
-
         # Equality
         (r"(?:is )?equal(?:s)? (?:to )?['\"]?([^'\"]+)['\"]?", "equals"),
         (r"(?:is )?exactly ['\"]?([^'\"]+)['\"]?", "equals"),
         (r"= ?['\"]?([^'\"]+)['\"]?", "equals"),
-
         # Contains
         (r"contains ['\"]?([^'\"]+)['\"]?", "contains"),
         (r"includes ['\"]?([^'\"]+)['\"]?", "contains"),
         (r"has ['\"]?([^'\"]+)['\"]?", "contains"),
-
         # List
         (r"(?:is )?(?:one of|in) \[([^\]]+)\]", "in_list"),
         (r"(?:is )?(?:one of|in) \(([^\)]+)\)", "in_list"),
-
         # Date relative
         (r"in (?:the )?last (\d+) days?", "in_last_n_days"),
         (r"within (\d+) days?", "in_last_n_days"),
         (r"past (\d+) days?", "in_last_n_days"),
-
         (r"in (?:the )?last (\d+) weeks?", "in_last_n_weeks"),
         (r"in (?:the )?last (\d+) months?", "in_last_n_months"),
-
         (r"this week", "this_week"),
         (r"last week", "last_week"),
         (r"this month", "this_month"),
         (r"last month", "last_month"),
         (r"this quarter", "this_quarter"),
         (r"this year", "this_year"),
-
         # Status keywords
         (r"(?:is |are )?at[- ]risk", "at_risk_status"),
         (r"(?:is |are )?healthy", "healthy_status"),
         (r"(?:is |are )?critical", "critical_status"),
         (r"(?:is |are )?churned", "churned_status"),
-
         # Empty/null
         (r"(?:is )?empty", "is_empty"),
         (r"(?:is )?null", "is_empty"),
@@ -224,8 +206,8 @@ class SegmentAIService:
                     {"field": "health_status", "operator": "equals", "value": "at_risk"},
                     {"field": "churn_probability", "operator": "greater_than", "value": 0.5},
                     {"field": "score_trend", "operator": "equals", "value": "declining"},
-                ]
-            }
+                ],
+            },
         },
         "high_value_customers": {
             "name": "High Value Customers",
@@ -235,8 +217,8 @@ class SegmentAIService:
                 "rules": [
                     {"field": "customer_type", "operator": "in_list", "value": ["enterprise", "vip"]},
                     {"field": "estimated_value", "operator": "greater_than", "value": 10000},
-                ]
-            }
+                ],
+            },
         },
         "new_customers": {
             "name": "New Customers",
@@ -245,8 +227,8 @@ class SegmentAIService:
                 "logic": "and",
                 "rules": [
                     {"field": "created_at", "operator": "in_last_n_days", "value": 30},
-                ]
-            }
+                ],
+            },
         },
         "inactive_customers": {
             "name": "Inactive Customers",
@@ -256,8 +238,8 @@ class SegmentAIService:
                 "rules": [
                     {"field": "is_active", "operator": "equals", "value": True},
                     {"field": "engagement_score", "operator": "less_than", "value": 30},
-                ]
-            }
+                ],
+            },
         },
         "expansion_ready": {
             "name": "Expansion Ready",
@@ -267,16 +249,13 @@ class SegmentAIService:
                 "rules": [
                     {"field": "health_status", "operator": "equals", "value": "healthy"},
                     {"field": "expansion_probability", "operator": "greater_than", "value": 0.5},
-                ]
-            }
+                ],
+            },
         },
     }
 
     def __init__(
-        self,
-        db: AsyncSession,
-        llm_provider: LLMProvider = LLMProvider.NONE,
-        llm_endpoint: Optional[str] = None
+        self, db: AsyncSession, llm_provider: LLMProvider = LLMProvider.NONE, llm_endpoint: Optional[str] = None
     ):
         """
         Initialize the AI service.
@@ -294,11 +273,7 @@ class SegmentAIService:
     # NATURAL LANGUAGE PARSING
     # =========================================================================
 
-    async def parse_natural_language(
-        self,
-        query: str,
-        use_llm: bool = False
-    ) -> ParsedSegmentQuery:
+    async def parse_natural_language(self, query: str, use_llm: bool = False) -> ParsedSegmentQuery:
         """
         Parse a natural language query into segment rules.
 
@@ -350,7 +325,7 @@ class SegmentAIService:
                     rules=template["rules"],
                     confidence=0.9,
                     explanation=f"Matched template: {template['name']}",
-                    parsed_entities={"template": template_key}
+                    parsed_entities={"template": template_key},
                 )
 
         # Check for status keywords
@@ -381,7 +356,7 @@ class SegmentAIService:
             return ParsedSegmentQuery(
                 success=False,
                 explanation="Could not parse query into segment rules",
-                suggestions=self._generate_query_suggestions(query)
+                suggestions=self._generate_query_suggestions(query),
             )
 
         # Determine logic (AND vs OR)
@@ -392,7 +367,7 @@ class SegmentAIService:
             rules={"logic": logic, "rules": rules},
             confidence=min(confidence, 0.95),
             explanation=f"Parsed {len(rules)} rule(s) with {logic.upper()} logic",
-            parsed_entities=entities
+            parsed_entities=entities,
         )
 
     def _parse_status_keywords(self, query: str) -> List[Dict[str, Any]]:
@@ -432,25 +407,26 @@ class SegmentAIService:
                 field = self._find_field_in_query(query, match.start())
                 if field:
                     if operator == "between" and len(match.groups()) >= 2:
-                        rules.append({
-                            "field": field,
-                            "operator": operator,
-                            "value": int(match.group(1)),
-                            "value2": int(match.group(2))
-                        })
+                        rules.append(
+                            {
+                                "field": field,
+                                "operator": operator,
+                                "value": int(match.group(1)),
+                                "value2": int(match.group(2)),
+                            }
+                        )
                     elif operator in ("at_risk_status", "healthy_status", "critical_status", "churned_status"):
                         status_value = operator.replace("_status", "").replace("_", "-")
-                        rules.append({
-                            "field": "health_status",
-                            "operator": "equals",
-                            "value": status_value
-                        })
-                    elif operator in ("this_week", "last_week", "this_month", "last_month", "this_quarter", "this_year"):
-                        rules.append({
-                            "field": field,
-                            "operator": operator,
-                            "value": None
-                        })
+                        rules.append({"field": "health_status", "operator": "equals", "value": status_value})
+                    elif operator in (
+                        "this_week",
+                        "last_week",
+                        "this_month",
+                        "last_month",
+                        "this_quarter",
+                        "this_year",
+                    ):
+                        rules.append({"field": field, "operator": operator, "value": None})
                     elif match.groups():
                         value = match.group(1)
                         # Try to convert to number
@@ -458,11 +434,7 @@ class SegmentAIService:
                             value = float(value) if "." in value else int(value)
                         except ValueError:
                             pass  # Keep as string
-                        rules.append({
-                            "field": field,
-                            "operator": operator,
-                            "value": value
-                        })
+                        rules.append({"field": field, "operator": operator, "value": value})
 
         return rules
 
@@ -576,12 +548,7 @@ class SegmentAIService:
             # Parse LLM response
             rules = self._parse_llm_response(response)
             if rules:
-                return ParsedSegmentQuery(
-                    success=True,
-                    rules=rules,
-                    confidence=0.85,
-                    explanation="Parsed using LLM"
-                )
+                return ParsedSegmentQuery(success=True, rules=rules, confidence=0.85, explanation="Parsed using LLM")
 
         except Exception as e:
             logger.exception(f"LLM parsing failed: {e}")
@@ -618,14 +585,7 @@ JSON output only, no explanation:"""
         endpoint = self.llm_endpoint or "http://localhost:11434/api/generate"
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                endpoint,
-                json={
-                    "model": "llama2",
-                    "prompt": prompt,
-                    "stream": False
-                }
-            ) as response:
+            async with session.post(endpoint, json={"model": "llama2", "prompt": prompt, "stream": False}) as response:
                 result = await response.json()
                 return result.get("response", "")
 
@@ -637,12 +597,7 @@ JSON output only, no explanation:"""
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                endpoint,
-                json={
-                    "prompt": prompt,
-                    "max_tokens": 500,
-                    "temperature": 0.1
-                }
+                endpoint, json={"prompt": prompt, "max_tokens": 500, "temperature": 0.1}
             ) as response:
                 result = await response.json()
                 return result.get("choices", [{}])[0].get("text", "")
@@ -651,7 +606,7 @@ JSON output only, no explanation:"""
         """Parse JSON from LLM response."""
         try:
             # Find JSON in response
-            json_match = re.search(r'\{[\s\S]*\}', response)
+            json_match = re.search(r"\{[\s\S]*\}", response)
             if json_match:
                 return json.loads(json_match.group())
         except json.JSONDecodeError:
@@ -662,10 +617,7 @@ JSON output only, no explanation:"""
     # SEGMENT SUGGESTIONS
     # =========================================================================
 
-    async def get_segment_suggestions(
-        self,
-        max_suggestions: int = 5
-    ) -> List[SegmentSuggestion]:
+    async def get_segment_suggestions(self, max_suggestions: int = 5) -> List[SegmentSuggestion]:
         """
         Generate intelligent segment suggestions based on data patterns.
 
@@ -711,12 +663,8 @@ JSON output only, no explanation:"""
         """Suggest segment for at-risk customers."""
         # Count at-risk customers
         result = await self.db.execute(
-            select(func.count(HealthScore.id))
-            .where(
-                or_(
-                    HealthScore.health_status == "at_risk",
-                    HealthScore.churn_probability > 0.5
-                )
+            select(func.count(HealthScore.id)).where(
+                or_(HealthScore.health_status == "at_risk", HealthScore.churn_probability > 0.5)
             )
         )
         count = result.scalar() or 0
@@ -730,25 +678,21 @@ JSON output only, no explanation:"""
                     "rules": [
                         {"field": "health_status", "operator": "equals", "value": "at_risk"},
                         {"field": "churn_probability", "operator": "greater_than", "value": 0.5},
-                    ]
+                    ],
                 },
                 reasoning=f"Found {count} customers at risk of churning. Proactive engagement can help retain them.",
                 estimated_count=count,
                 priority=9,
                 category="retention",
-                tags=["at-risk", "churn-prevention", "urgent"]
+                tags=["at-risk", "churn-prevention", "urgent"],
             )
         return None
 
     async def _suggest_high_value_segment(self) -> Optional[SegmentSuggestion]:
         """Suggest segment for high-value customers."""
         result = await self.db.execute(
-            select(func.count(Customer.id))
-            .where(
-                or_(
-                    Customer.customer_type.in_(["enterprise", "vip"]),
-                    Customer.estimated_value > 10000
-                )
+            select(func.count(Customer.id)).where(
+                or_(Customer.customer_type.in_(["enterprise", "vip"]), Customer.estimated_value > 10000)
             )
         )
         count = result.scalar() or 0
@@ -756,12 +700,8 @@ JSON output only, no explanation:"""
         if count > 0:
             # Calculate total value
             value_result = await self.db.execute(
-                select(func.sum(Customer.estimated_value))
-                .where(
-                    or_(
-                        Customer.customer_type.in_(["enterprise", "vip"]),
-                        Customer.estimated_value > 10000
-                    )
+                select(func.sum(Customer.estimated_value)).where(
+                    or_(Customer.customer_type.in_(["enterprise", "vip"]), Customer.estimated_value > 10000)
                 )
             )
             total_value = value_result.scalar() or 0
@@ -774,23 +714,20 @@ JSON output only, no explanation:"""
                     "rules": [
                         {"field": "customer_type", "operator": "in_list", "value": ["enterprise", "vip"]},
                         {"field": "estimated_value", "operator": "greater_than", "value": 10000},
-                    ]
+                    ],
                 },
                 reasoning=f"Your {count} high-value customers represent ${total_value:,.0f} in potential value.",
                 estimated_count=count,
                 revenue_opportunity=Decimal(str(total_value * 0.1)),  # 10% expansion potential
                 priority=8,
                 category="value",
-                tags=["high-value", "vip", "enterprise"]
+                tags=["high-value", "vip", "enterprise"],
             )
         return None
 
     async def _suggest_low_engagement_segment(self) -> Optional[SegmentSuggestion]:
         """Suggest segment for customers with low engagement."""
-        result = await self.db.execute(
-            select(func.count(HealthScore.id))
-            .where(HealthScore.engagement_score < 30)
-        )
+        result = await self.db.execute(select(func.count(HealthScore.id)).where(HealthScore.engagement_score < 30))
         count = result.scalar() or 0
 
         if count > 0:
@@ -802,13 +739,13 @@ JSON output only, no explanation:"""
                     "rules": [
                         {"field": "is_active", "operator": "equals", "value": True},
                         {"field": "engagement_score", "operator": "less_than", "value": 30},
-                    ]
+                    ],
                 },
                 reasoning=f"{count} customers have low engagement scores. Re-engagement campaigns could improve retention.",
                 estimated_count=count,
                 priority=7,
                 category="engagement",
-                tags=["low-engagement", "re-engage", "outreach"]
+                tags=["low-engagement", "re-engage", "outreach"],
             )
         return None
 
@@ -830,23 +767,20 @@ JSON output only, no explanation:"""
                     "logic": "and",
                     "rules": [
                         {"field": "state", "operator": "equals", "value": top_state.state},
-                    ]
+                    ],
                 },
                 reasoning=f"{top_state.state} has {top_state.count} customers - your largest geographic concentration. Consider localized campaigns.",
                 estimated_count=top_state.count,
                 priority=5,
                 category="geographic",
-                tags=["regional", top_state.state.lower(), "market-focus"]
+                tags=["regional", top_state.state.lower(), "market-focus"],
             )
         return None
 
     async def _suggest_new_customer_segment(self) -> Optional[SegmentSuggestion]:
         """Suggest segment for new customer onboarding."""
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-        result = await self.db.execute(
-            select(func.count(Customer.id))
-            .where(Customer.created_at >= thirty_days_ago)
-        )
+        result = await self.db.execute(select(func.count(Customer.id)).where(Customer.created_at >= thirty_days_ago))
         count = result.scalar() or 0
 
         if count > 0:
@@ -857,13 +791,13 @@ JSON output only, no explanation:"""
                     "logic": "and",
                     "rules": [
                         {"field": "created_at", "operator": "in_last_n_days", "value": 30},
-                    ]
+                    ],
                 },
                 reasoning=f"{count} new customers joined in the last 30 days. Ensure they have a great first experience.",
                 estimated_count=count,
                 priority=6,
                 category="lifecycle",
-                tags=["new", "onboarding", "welcome"]
+                tags=["new", "onboarding", "welcome"],
             )
         return None
 
@@ -871,10 +805,7 @@ JSON output only, no explanation:"""
     # REVENUE OPPORTUNITY SCORING
     # =========================================================================
 
-    async def score_revenue_opportunity(
-        self,
-        segment_id: int
-    ) -> RevenueOpportunity:
+    async def score_revenue_opportunity(self, segment_id: int) -> RevenueOpportunity:
         """
         Calculate revenue opportunity for a segment.
 
@@ -885,9 +816,7 @@ JSON output only, no explanation:"""
         - Expansion probability
         """
         # Get segment
-        result = await self.db.execute(
-            select(Segment).where(Segment.id == segment_id)
-        )
+        result = await self.db.execute(select(Segment).where(Segment.id == segment_id))
         segment = result.scalar_one_or_none()
 
         if not segment:
@@ -895,10 +824,8 @@ JSON output only, no explanation:"""
 
         # Get member IDs
         members_result = await self.db.execute(
-            select(CustomerSegment.customer_id)
-            .where(
-                CustomerSegment.segment_id == segment_id,
-                CustomerSegment.is_active == True
+            select(CustomerSegment.customer_id).where(
+                CustomerSegment.segment_id == segment_id, CustomerSegment.is_active == True
             )
         )
         member_ids = [row[0] for row in members_result.all()]
@@ -914,7 +841,7 @@ JSON output only, no explanation:"""
                 at_risk_revenue=Decimal("0"),
                 expansion_probability=0,
                 recommended_actions=[],
-                reasoning="Segment has no members"
+                reasoning="Segment has no members",
             )
 
         # Calculate metrics
@@ -923,18 +850,16 @@ JSON output only, no explanation:"""
                 func.count(Customer.id).label("count"),
                 func.sum(Customer.estimated_value).label("total_value"),
                 func.avg(Customer.estimated_value).label("avg_value"),
-            )
-            .where(Customer.id.in_(member_ids))
+            ).where(Customer.id.in_(member_ids))
         )
         stats = stats_result.first()
 
         # Get expansion candidates (healthy with high expansion probability)
         expansion_result = await self.db.execute(
-            select(func.count(HealthScore.id), func.avg(HealthScore.expansion_probability))
-            .where(
+            select(func.count(HealthScore.id), func.avg(HealthScore.expansion_probability)).where(
                 HealthScore.customer_id.in_(member_ids),
                 HealthScore.health_status == "healthy",
-                HealthScore.expansion_probability > 0.5
+                HealthScore.expansion_probability > 0.5,
             )
         )
         expansion_stats = expansion_result.first()
@@ -947,10 +872,7 @@ JSON output only, no explanation:"""
             .outerjoin(HealthScore, Customer.id == HealthScore.customer_id)
             .where(
                 Customer.id.in_(member_ids),
-                or_(
-                    HealthScore.health_status == "at_risk",
-                    HealthScore.churn_probability > 0.5
-                )
+                or_(HealthScore.health_status == "at_risk", HealthScore.churn_probability > 0.5),
             )
         )
         at_risk_revenue = at_risk_result.scalar() or 0
@@ -981,7 +903,7 @@ JSON output only, no explanation:"""
             expansion_probability=float(avg_expansion_prob),
             recommended_actions=actions,
             reasoning=f"Segment contains {total_customers} customers with ${total_value:,.0f} in potential value. "
-                      f"{upsell_candidates} are ready for expansion."
+            f"{upsell_candidates} are ready for expansion.",
         )
 
     # =========================================================================
@@ -998,36 +920,23 @@ JSON output only, no explanation:"""
         seen = set()
         for alias, field in self.FIELD_ALIASES.items():
             if field not in seen:
-                fields.append({
-                    "field": field,
-                    "aliases": [a for a, f in self.FIELD_ALIASES.items() if f == field],
-                    "examples": self._get_field_examples(field)
-                })
+                fields.append(
+                    {
+                        "field": field,
+                        "aliases": [a for a, f in self.FIELD_ALIASES.items() if f == field],
+                        "examples": self._get_field_examples(field),
+                    }
+                )
                 seen.add(field)
         return fields
 
     def _get_field_examples(self, field: str) -> List[str]:
         """Get example queries for a field."""
         examples = {
-            "health_score": [
-                "health score below 50",
-                "score greater than 80"
-            ],
-            "health_status": [
-                "at-risk customers",
-                "healthy customers"
-            ],
-            "customer_type": [
-                "enterprise customers",
-                "residential customers"
-            ],
-            "created_at": [
-                "created in the last 30 days",
-                "customers who joined last month"
-            ],
-            "churn_probability": [
-                "high churn risk",
-                "churn probability above 0.5"
-            ],
+            "health_score": ["health score below 50", "score greater than 80"],
+            "health_status": ["at-risk customers", "healthy customers"],
+            "customer_type": ["enterprise customers", "residential customers"],
+            "created_at": ["created in the last 30 days", "customers who joined last month"],
+            "churn_probability": ["high churn risk", "churn probability above 0.5"],
         }
         return examples.get(field, [])

@@ -3,6 +3,7 @@ Marketing Hub API - Stub endpoints for frontend compatibility.
 
 Provides marketing overview, ads, SEO, leads, and reviews endpoints.
 """
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
@@ -14,6 +15,7 @@ router = APIRouter()
 
 
 # Response Models
+
 
 class MarketingOverview(BaseModel):
     success: bool = True
@@ -85,6 +87,7 @@ class IntegrationSettings(BaseModel):
 
 # Overview Endpoints
 
+
 @router.get("/overview")
 async def get_overview(
     current_user: CurrentUser,
@@ -95,6 +98,7 @@ async def get_overview(
 
 
 # Ads Endpoints
+
 
 @router.get("/ads/performance")
 async def get_ads_performance(
@@ -112,6 +116,7 @@ async def get_ads_status(current_user: CurrentUser) -> AdsStatus:
 
 
 # SEO Endpoints
+
 
 @router.get("/seo/overview")
 async def get_seo_overview(current_user: CurrentUser) -> SEOOverview:
@@ -138,6 +143,7 @@ async def generate_blog(
 
 # Leads Endpoints
 
+
 @router.get("/leads/pipeline")
 async def get_lead_pipeline(current_user: CurrentUser) -> LeadPipeline:
     """Get lead pipeline metrics."""
@@ -151,6 +157,7 @@ async def get_hot_leads(current_user: CurrentUser) -> dict:
 
 
 # Reviews Endpoints
+
 
 @router.get("/reviews/pending")
 async def get_pending_reviews(current_user: CurrentUser) -> PendingReviews:
@@ -170,6 +177,7 @@ async def reply_to_review(
 
 # Campaigns Endpoints
 
+
 @router.get("/campaigns")
 async def get_campaigns(current_user: CurrentUser) -> dict:
     """Get marketing campaigns."""
@@ -185,6 +193,7 @@ async def create_campaign(
 
 
 # AI Endpoints
+
 
 @router.get("/ai/recommendations")
 async def get_ai_recommendations(current_user: CurrentUser) -> dict:
@@ -212,6 +221,7 @@ async def generate_landing_page(
 
 
 # Settings Endpoints
+
 
 @router.get("/settings")
 async def get_settings(current_user: CurrentUser) -> IntegrationSettings:

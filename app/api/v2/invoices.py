@@ -28,7 +28,7 @@ def generate_invoice_number() -> str:
 
 # Namespace for deterministic customer UUID generation
 # This allows converting integer customer IDs to UUIDs consistently
-CUSTOMER_UUID_NAMESPACE = uuid.UUID('12345678-1234-5678-1234-567812345678')
+CUSTOMER_UUID_NAMESPACE = uuid.UUID("12345678-1234-5678-1234-567812345678")
 
 
 def customer_id_to_uuid(customer_id: int) -> uuid.UUID:
@@ -218,19 +218,12 @@ async def list_invoices(
                 matching_customer_ids = [row[0] for row in customer_result.fetchall()]
 
                 # Convert matching customer IDs to UUIDs
-                matching_customer_uuids = [
-                    customer_id_to_uuid(cid) for cid in matching_customer_ids
-                ]
+                matching_customer_uuids = [customer_id_to_uuid(cid) for cid in matching_customer_ids]
 
                 # Apply search filter: invoice_number OR matching customer
                 invoice_number_filter = Invoice.invoice_number.ilike(f"%{search_term}%")
                 if matching_customer_uuids:
-                    query = query.where(
-                        or_(
-                            invoice_number_filter,
-                            Invoice.customer_id.in_(matching_customer_uuids)
-                        )
-                    )
+                    query = query.where(or_(invoice_number_filter, Invoice.customer_id.in_(matching_customer_uuids)))
                 else:
                     # No customer matches, only search invoice number
                     query = query.where(invoice_number_filter)
@@ -267,8 +260,7 @@ async def list_invoices(
     except Exception as e:
         logger.error(f"Error listing invoices: {type(e).__name__}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {type(e).__name__}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
 
 
@@ -280,9 +272,7 @@ async def get_invoice(
 ):
     """Get a single invoice by ID with customer data."""
     try:
-        result = await db.execute(
-            select(Invoice).where(Invoice.id == uuid.UUID(invoice_id))
-        )
+        result = await db.execute(select(Invoice).where(Invoice.id == uuid.UUID(invoice_id)))
         invoice = result.scalar_one_or_none()
 
         if not invoice:
@@ -302,8 +292,7 @@ async def get_invoice(
     except Exception as e:
         logger.error(f"Error getting invoice: {type(e).__name__}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {type(e).__name__}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
 
 
@@ -353,8 +342,7 @@ async def create_invoice(
     except Exception as e:
         logger.error(f"Error creating invoice: {type(e).__name__}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {type(e).__name__}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
 
 
@@ -367,9 +355,7 @@ async def update_invoice(
 ):
     """Update an invoice."""
     try:
-        result = await db.execute(
-            select(Invoice).where(Invoice.id == uuid.UUID(invoice_id))
-        )
+        result = await db.execute(select(Invoice).where(Invoice.id == uuid.UUID(invoice_id)))
         invoice = result.scalar_one_or_none()
 
         if not invoice:
@@ -400,8 +386,7 @@ async def update_invoice(
     except Exception as e:
         logger.error(f"Error updating invoice: {type(e).__name__}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {type(e).__name__}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
 
 
@@ -413,9 +398,7 @@ async def delete_invoice(
 ):
     """Delete an invoice."""
     try:
-        result = await db.execute(
-            select(Invoice).where(Invoice.id == uuid.UUID(invoice_id))
-        )
+        result = await db.execute(select(Invoice).where(Invoice.id == uuid.UUID(invoice_id)))
         invoice = result.scalar_one_or_none()
 
         if not invoice:
@@ -431,8 +414,7 @@ async def delete_invoice(
     except Exception as e:
         logger.error(f"Error deleting invoice: {type(e).__name__}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {type(e).__name__}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
 
 
@@ -444,9 +426,7 @@ async def send_invoice(
 ):
     """Mark invoice as sent."""
     try:
-        result = await db.execute(
-            select(Invoice).where(Invoice.id == uuid.UUID(invoice_id))
-        )
+        result = await db.execute(select(Invoice).where(Invoice.id == uuid.UUID(invoice_id)))
         invoice = result.scalar_one_or_none()
 
         if not invoice:
@@ -467,8 +447,7 @@ async def send_invoice(
     except Exception as e:
         logger.error(f"Error sending invoice: {type(e).__name__}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {type(e).__name__}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {type(e).__name__}: {str(e)}"
         )
 
 
@@ -480,9 +459,7 @@ async def mark_invoice_paid(
 ):
     """Mark invoice as paid."""
     try:
-        result = await db.execute(
-            select(Invoice).where(Invoice.id == uuid.UUID(invoice_id))
-        )
+        result = await db.execute(select(Invoice).where(Invoice.id == uuid.UUID(invoice_id)))
         invoice = result.scalar_one_or_none()
 
         if not invoice:
@@ -503,6 +480,5 @@ async def mark_invoice_paid(
     except Exception as e:
         logger.error(f"Error marking invoice paid: {type(e).__name__}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {type(e).__name__}: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {type(e).__name__}: {str(e)}"
         )

@@ -6,6 +6,7 @@ from decimal import Decimal
 
 class PaymentBase(BaseModel):
     """Base payment schema - matches Flask database."""
+
     customer_id: int
     work_order_id: Optional[str] = None  # Flask uses work_order_id not invoice_id
     amount: Decimal = Field(..., decimal_places=2)
@@ -22,11 +23,13 @@ class PaymentBase(BaseModel):
 
 class PaymentCreate(PaymentBase):
     """Schema for creating a payment."""
+
     pass
 
 
 class PaymentUpdate(BaseModel):
     """Schema for updating a payment."""
+
     amount: Optional[Decimal] = None
     payment_method: Optional[str] = None
     status: Optional[str] = None
@@ -36,6 +39,7 @@ class PaymentUpdate(BaseModel):
 
 class PaymentResponse(PaymentBase):
     """Schema for payment response."""
+
     id: int
     receipt_url: Optional[str] = None
     failure_reason: Optional[str] = None
@@ -54,6 +58,7 @@ class PaymentResponse(PaymentBase):
 
 class PaymentListResponse(BaseModel):
     """Paginated payment list response."""
+
     items: list[PaymentResponse]
     total: int
     page: int

@@ -1,4 +1,5 @@
 """Inventory model for tracking parts, materials, and supplies."""
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Float, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func

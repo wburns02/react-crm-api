@@ -10,9 +10,7 @@ from datetime import datetime, timedelta, date
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.customer_success import (
-    Playbook, PlaybookStep, PlaybookExecution, CSTask, HealthScore
-)
+from app.models.customer_success import Playbook, PlaybookStep, PlaybookExecution, CSTask, HealthScore
 
 
 class PlaybookRunner:
@@ -52,9 +50,7 @@ class PlaybookRunner:
             The created PlaybookExecution
         """
         # Get playbook with steps
-        result = await self.db.execute(
-            select(Playbook).where(Playbook.id == playbook_id)
-        )
+        result = await self.db.execute(select(Playbook).where(Playbook.id == playbook_id))
         playbook = result.scalar_one_or_none()
 
         if not playbook:
@@ -65,13 +61,9 @@ class PlaybookRunner:
 
         # Check cooldown
         if playbook.cooldown_days:
-            recent = await self._check_recent_execution(
-                playbook_id, customer_id, playbook.cooldown_days
-            )
+            recent = await self._check_recent_execution(playbook_id, customer_id, playbook.cooldown_days)
             if recent:
-                raise ValueError(
-                    f"Playbook cooldown not elapsed. Last run: {recent.started_at}"
-                )
+                raise ValueError(f"Playbook cooldown not elapsed. Last run: {recent.started_at}")
 
         # Check max active executions
         if not playbook.allow_parallel_execution:
@@ -91,9 +83,7 @@ class PlaybookRunner:
         steps = steps_result.scalars().all()
 
         # Get customer's current health score
-        health_result = await self.db.execute(
-            select(HealthScore).where(HealthScore.customer_id == customer_id)
-        )
+        health_result = await self.db.execute(select(HealthScore).where(HealthScore.customer_id == customer_id))
         health = health_result.scalar_one_or_none()
 
         # Create execution
@@ -109,7 +99,8 @@ class PlaybookRunner:
             health_score_at_start=health.overall_score if health else None,
             target_completion_date=(
                 datetime.utcnow() + timedelta(days=playbook.target_completion_days)
-                if playbook.target_completion_days else None
+                if playbook.target_completion_days
+                else None
             ),
         )
         self.db.add(execution)
@@ -117,9 +108,7 @@ class PlaybookRunner:
 
         # Create tasks for steps
         for step in steps:
-            task = await self._create_task_for_step(
-                execution, step, customer_id, assigned_to_user_id, playbook
-            )
+            task = await self._create_task_for_step(execution, step, customer_id, assigned_to_user_id, playbook)
             self.db.add(task)
 
         # Update playbook metrics
@@ -146,9 +135,7 @@ class PlaybookRunner:
         errors = []
 
         # Get active executions
-        result = await self.db.execute(
-            select(PlaybookExecution).where(PlaybookExecution.status == "active")
-        )
+        result = await self.db.execute(select(PlaybookExecution).where(PlaybookExecution.status == "active"))
         executions = result.scalars().all()
 
         for execution in executions:
@@ -160,10 +147,12 @@ class PlaybookRunner:
                     completed += 1
                 processed += 1
             except Exception as e:
-                errors.append({
-                    "execution_id": execution.id,
-                    "error": str(e),
-                })
+                errors.append(
+                    {
+                        "execution_id": execution.id,
+                        "error": str(e),
+                    }
+                )
 
         await self.db.commit()
 
@@ -183,9 +172,7 @@ class PlaybookRunner:
         Returns:
             Updated progress info
         """
-        result = await self.db.execute(
-            select(PlaybookExecution).where(PlaybookExecution.id == execution_id)
-        )
+        result = await self.db.execute(select(PlaybookExecution).where(PlaybookExecution.id == execution_id))
         execution = result.scalar_one_or_none()
 
         if not execution:
@@ -265,12 +252,14 @@ class PlaybookRunner:
                         f"system:{playbook.trigger_type}",
                         f"Automatic trigger: {playbook.trigger_type}",
                     )
-                    triggered.append({
-                        "playbook_id": playbook.id,
-                        "playbook_name": playbook.name,
-                        "customer_id": customer_id,
-                        "execution_id": execution.id,
-                    })
+                    triggered.append(
+                        {
+                            "playbook_id": playbook.id,
+                            "playbook_name": playbook.name,
+                            "customer_id": customer_id,
+                            "execution_id": execution.id,
+                        }
+                    )
                 except ValueError:
                     # Cooldown or max executions reached
                     pass
@@ -310,10 +299,10 @@ class PlaybookRunner:
             playbook_step_id=step.id,
             title=step.name,
             description=step.description,
-            task_type=step.step_type if step.step_type in [
-                "call", "email", "meeting", "review", "escalation",
-                "training", "product_demo", "custom"
-            ] else "custom",
+            task_type=step.step_type
+            if step.step_type
+            in ["call", "email", "meeting", "review", "escalation", "training", "product_demo", "custom"]
+            else "custom",
             priority=priority,
             status="pending",
             assigned_to_user_id=assigned_to_user_id,
@@ -339,9 +328,7 @@ class PlaybookRunner:
         )
         return result.scalar_one_or_none()
 
-    async def _count_active_executions(
-        self, playbook_id: int, customer_id: int
-    ) -> int:
+    async def _count_active_executions(self, playbook_id: int, customer_id: int) -> int:
         """Count active executions for a playbook/customer."""
         result = await self.db.execute(
             select(func.count(PlaybookExecution.id)).where(
@@ -382,16 +369,12 @@ class PlaybookRunner:
 
         # Calculate total time spent
         time_result = await self.db.execute(
-            select(func.sum(CSTask.time_spent_minutes)).where(
-                CSTask.playbook_execution_id == execution.id
-            )
+            select(func.sum(CSTask.time_spent_minutes)).where(CSTask.playbook_execution_id == execution.id)
         )
         execution.total_time_spent_minutes = time_result.scalar() or 0
 
         # Evaluate success criteria
-        playbook_result = await self.db.execute(
-            select(Playbook).where(Playbook.id == execution.playbook_id)
-        )
+        playbook_result = await self.db.execute(select(Playbook).where(Playbook.id == execution.playbook_id))
         playbook = playbook_result.scalar_one_or_none()
 
         if playbook:
@@ -406,23 +389,17 @@ class PlaybookRunner:
 
             # Update success rate
             if playbook.times_completed > 0:
-                playbook.success_rate = (
-                    playbook.times_successful / playbook.times_completed * 100
-                )
+                playbook.success_rate = playbook.times_successful / playbook.times_completed * 100
 
             # Update average completion days
             if execution.started_at:
                 days = (datetime.utcnow() - execution.started_at).days
                 if playbook.avg_completion_days:
-                    playbook.avg_completion_days = (
-                        playbook.avg_completion_days * 0.9 + days * 0.1
-                    )
+                    playbook.avg_completion_days = playbook.avg_completion_days * 0.9 + days * 0.1
                 else:
                     playbook.avg_completion_days = float(days)
 
-    async def _evaluate_success_criteria(
-        self, execution: PlaybookExecution, playbook: Playbook
-    ) -> bool:
+    async def _evaluate_success_criteria(self, execution: PlaybookExecution, playbook: Playbook) -> bool:
         """Evaluate if playbook success criteria were met."""
         criteria = playbook.success_criteria
         if not criteria:
@@ -463,9 +440,7 @@ class PlaybookRunner:
         # Success if all criteria met
         return all(result.values()) if result else True
 
-    async def _find_customers_for_trigger(
-        self, playbook: Playbook
-    ) -> list[int]:
+    async def _find_customers_for_trigger(self, playbook: Playbook) -> list[int]:
         """Find customers that should have a playbook triggered."""
         customer_ids = []
 
@@ -486,6 +461,7 @@ class PlaybookRunner:
         elif playbook.trigger_type == "segment_entry":
             if playbook.trigger_segment_id:
                 from app.models.customer_success import CustomerSegment
+
                 result = await self.db.execute(
                     select(CustomerSegment.customer_id).where(
                         CustomerSegment.segment_id == playbook.trigger_segment_id,
@@ -498,9 +474,7 @@ class PlaybookRunner:
         filtered = []
         for cid in customer_ids:
             if playbook.cooldown_days:
-                recent = await self._check_recent_execution(
-                    playbook.id, cid, playbook.cooldown_days
-                )
+                recent = await self._check_recent_execution(playbook.id, cid, playbook.cooldown_days)
                 if not recent:
                     filtered.append(cid)
             else:

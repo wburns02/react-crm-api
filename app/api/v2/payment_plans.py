@@ -20,8 +20,10 @@ router = APIRouter()
 # Pydantic Schemas
 # =============================================================================
 
+
 class PaymentPlan(BaseModel):
     """Customer payment plan."""
+
     id: int
     customer_name: str
     customer_id: int
@@ -39,6 +41,7 @@ class PaymentPlan(BaseModel):
 
 class PaymentPlanListResponse(BaseModel):
     """Paginated payment plans response."""
+
     items: list[PaymentPlan]
     total: int
     page: int
@@ -47,6 +50,7 @@ class PaymentPlanListResponse(BaseModel):
 
 class PaymentPlanCreate(BaseModel):
     """Create payment plan request."""
+
     customer_id: int
     invoice_id: int
     total_amount: float
@@ -56,6 +60,7 @@ class PaymentPlanCreate(BaseModel):
 
 class RecordPaymentRequest(BaseModel):
     """Record a payment against a payment plan."""
+
     amount: float
     payment_method: str = "cash"
     payment_date: str
@@ -65,6 +70,7 @@ class RecordPaymentRequest(BaseModel):
 # =============================================================================
 # Mock Data
 # =============================================================================
+
 
 def _get_mock_payment_plans() -> list[PaymentPlan]:
     """Generate mock payment plans for demo."""
@@ -148,6 +154,7 @@ def _get_mock_payment_plans() -> list[PaymentPlan]:
 # Endpoints
 # =============================================================================
 
+
 @router.get("/", response_model=PaymentPlanListResponse)
 async def list_payment_plans(
     db: DbSession,
@@ -200,6 +207,7 @@ async def get_payment_plan(
             return plan
 
     from fastapi import HTTPException
+
     raise HTTPException(status_code=404, detail="Payment plan not found")
 
 

@@ -7,6 +7,7 @@ Features:
 - Generate signed PDFs
 - Audit trail
 """
+
 from fastapi import APIRouter, HTTPException, status, Query, Request
 from sqlalchemy import select, func
 from typing import Optional, List
@@ -25,6 +26,7 @@ router = APIRouter()
 
 
 # Request/Response Models
+
 
 class CreateSignatureRequest(BaseModel):
     document_type: str = Field(..., description="quote, contract, work_order")
@@ -63,6 +65,7 @@ class SignatureRequestResponse(BaseModel):
 
 # Helper functions
 
+
 def sig_request_to_response(req: SignatureRequest, include_url: bool = False) -> dict:
     """Convert SignatureRequest model to response dict."""
     response = {
@@ -92,6 +95,7 @@ def sig_request_to_response(req: SignatureRequest, include_url: bool = False) ->
 
 
 # Endpoints
+
 
 @router.post("")
 async def create_signature_request(
@@ -172,9 +176,7 @@ async def get_signature_request(
     current_user: CurrentUser,
 ):
     """Get a signature request by ID."""
-    result = await db.execute(
-        select(SignatureRequest).where(SignatureRequest.id == request_id)
-    )
+    result = await db.execute(select(SignatureRequest).where(SignatureRequest.id == request_id))
     sig_request = result.scalar_one_or_none()
 
     if not sig_request:
@@ -193,9 +195,7 @@ async def send_signature_request(
     current_user: CurrentUser,
 ):
     """Send signature request via email."""
-    result = await db.execute(
-        select(SignatureRequest).where(SignatureRequest.id == request_id)
-    )
+    result = await db.execute(select(SignatureRequest).where(SignatureRequest.id == request_id))
     sig_request = result.scalar_one_or_none()
 
     if not sig_request:
@@ -224,9 +224,7 @@ async def send_reminder(
     current_user: CurrentUser,
 ):
     """Send a reminder for unsigned document."""
-    result = await db.execute(
-        select(SignatureRequest).where(SignatureRequest.id == request_id)
-    )
+    result = await db.execute(select(SignatureRequest).where(SignatureRequest.id == request_id))
     sig_request = result.scalar_one_or_none()
 
     if not sig_request:
@@ -259,9 +257,7 @@ async def cancel_signature_request(
     current_user: CurrentUser,
 ):
     """Cancel a signature request."""
-    result = await db.execute(
-        select(SignatureRequest).where(SignatureRequest.id == request_id)
-    )
+    result = await db.execute(select(SignatureRequest).where(SignatureRequest.id == request_id))
     sig_request = result.scalar_one_or_none()
 
     if not sig_request:
@@ -284,6 +280,7 @@ async def cancel_signature_request(
 
 # Public signing endpoints (no auth required)
 
+
 @router.get("/sign/{token}")
 async def get_signing_page(
     token: str,
@@ -291,9 +288,7 @@ async def get_signing_page(
     db: DbSession,
 ):
     """Get document for signing (public, no auth)."""
-    result = await db.execute(
-        select(SignatureRequest).where(SignatureRequest.access_token == token)
-    )
+    result = await db.execute(select(SignatureRequest).where(SignatureRequest.access_token == token))
     sig_request = result.scalar_one_or_none()
 
     if not sig_request:
@@ -334,9 +329,7 @@ async def get_signing_page(
     # TODO: Load actual document content based on document_type/document_id
     document_content = None
     if sig_request.document_type == "quote":
-        quote_result = await db.execute(
-            select(Quote).where(Quote.id == sig_request.document_id)
-        )
+        quote_result = await db.execute(select(Quote).where(Quote.id == sig_request.document_id))
         quote = quote_result.scalar_one_or_none()
         if quote:
             document_content = {
@@ -364,9 +357,7 @@ async def capture_signature(
     db: DbSession,
 ):
     """Capture signature (public, no auth)."""
-    result = await db.execute(
-        select(SignatureRequest).where(SignatureRequest.access_token == token)
-    )
+    result = await db.execute(select(SignatureRequest).where(SignatureRequest.access_token == token))
     sig_request = result.scalar_one_or_none()
 
     if not sig_request:
@@ -406,14 +397,19 @@ async def capture_signature(
     sig_request.signed_at = datetime.utcnow()
 
     # Create audit log
-    audit_log = json.dumps({
-        "events": [
-            {"event": "created", "timestamp": sig_request.created_at.isoformat() if sig_request.created_at else None},
-            {"event": "sent", "timestamp": sig_request.sent_at.isoformat() if sig_request.sent_at else None},
-            {"event": "viewed", "timestamp": sig_request.viewed_at.isoformat() if sig_request.viewed_at else None},
-            {"event": "signed", "timestamp": datetime.utcnow().isoformat(), "ip": signature.ip_address},
-        ]
-    })
+    audit_log = json.dumps(
+        {
+            "events": [
+                {
+                    "event": "created",
+                    "timestamp": sig_request.created_at.isoformat() if sig_request.created_at else None,
+                },
+                {"event": "sent", "timestamp": sig_request.sent_at.isoformat() if sig_request.sent_at else None},
+                {"event": "viewed", "timestamp": sig_request.viewed_at.isoformat() if sig_request.viewed_at else None},
+                {"event": "signed", "timestamp": datetime.utcnow().isoformat(), "ip": signature.ip_address},
+            ]
+        }
+    )
 
     # Create signed document record
     signed_doc = SignedDocument(
@@ -445,9 +441,7 @@ async def get_signed_document(
     current_user: CurrentUser,
 ):
     """Get a signed document by ID."""
-    result = await db.execute(
-        select(SignedDocument).where(SignedDocument.id == document_id)
-    )
+    result = await db.execute(select(SignedDocument).where(SignedDocument.id == document_id))
     signed_doc = result.scalar_one_or_none()
 
     if not signed_doc:

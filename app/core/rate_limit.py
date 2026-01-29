@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SlidingWindow:
     """Sliding window counter for rate limiting."""
+
     current_count: int = 0
     previous_count: int = 0
     current_window_start: float = field(default_factory=time.time)
@@ -48,12 +49,8 @@ class PublicAPIRateLimiter:
         self.redis_client = redis_client
 
         # In-memory storage: client_id -> (minute_window, hour_window)
-        self._minute_windows: Dict[str, SlidingWindow] = defaultdict(
-            lambda: SlidingWindow(window_size_seconds=60)
-        )
-        self._hour_windows: Dict[str, SlidingWindow] = defaultdict(
-            lambda: SlidingWindow(window_size_seconds=3600)
-        )
+        self._minute_windows: Dict[str, SlidingWindow] = defaultdict(lambda: SlidingWindow(window_size_seconds=60))
+        self._hour_windows: Dict[str, SlidingWindow] = defaultdict(lambda: SlidingWindow(window_size_seconds=3600))
 
     def _get_sliding_window_count(self, window: SlidingWindow) -> float:
         """
@@ -132,10 +129,7 @@ class PublicAPIRateLimiter:
         # Check minute limit
         if minute_count >= minute_limit:
             retry_after = 60 - (time.time() - minute_window.current_window_start)
-            logger.warning(
-                f"Rate limit exceeded for client {client_id}: "
-                f"{minute_count:.0f}/{minute_limit} per minute"
-            )
+            logger.warning(f"Rate limit exceeded for client {client_id}: {minute_count:.0f}/{minute_limit} per minute")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={
@@ -154,10 +148,7 @@ class PublicAPIRateLimiter:
         # Check hour limit
         if hour_count >= hour_limit:
             retry_after = 3600 - (time.time() - hour_window.current_window_start)
-            logger.warning(
-                f"Rate limit exceeded for client {client_id}: "
-                f"{hour_count:.0f}/{hour_limit} per hour"
-            )
+            logger.warning(f"Rate limit exceeded for client {client_id}: {hour_count:.0f}/{hour_limit} per hour")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={

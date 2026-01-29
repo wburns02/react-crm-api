@@ -5,6 +5,7 @@ Features:
 - CSV validation before import
 - Bulk data import with error handling
 """
+
 from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from typing import Optional
@@ -31,6 +32,7 @@ router = APIRouter()
 # Schemas
 # ========================
 
+
 class ImportRequest(BaseModel):
     skip_errors: bool = False  # Continue importing even if some rows fail
 
@@ -38,6 +40,7 @@ class ImportRequest(BaseModel):
 # ========================
 # Template Endpoints
 # ========================
+
 
 @router.get("/templates/{import_type}")
 async def download_template(
@@ -50,8 +53,7 @@ async def download_template(
         enum_type = ImportType(import_type)
     except ValueError:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid import type. Must be one of: {', '.join([t.value for t in ImportType])}"
+            status_code=400, detail=f"Invalid import type. Must be one of: {', '.join([t.value for t in ImportType])}"
         )
 
     if include_examples:
@@ -62,9 +64,7 @@ async def download_template(
     return StreamingResponse(
         io.BytesIO(content.encode()),
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f"attachment; filename={import_type}_template.csv"
-        }
+        headers={"Content-Disposition": f"attachment; filename={import_type}_template.csv"},
     )
 
 
@@ -89,6 +89,7 @@ async def list_available_templates(
 # Validation Endpoints
 # ========================
 
+
 @router.post("/validate/{import_type}", response_model=ImportResult)
 async def validate_import_file(
     import_type: str,
@@ -100,8 +101,7 @@ async def validate_import_file(
         enum_type = ImportType(import_type)
     except ValueError:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid import type. Must be one of: {', '.join([t.value for t in ImportType])}"
+            status_code=400, detail=f"Invalid import type. Must be one of: {', '.join([t.value for t in ImportType])}"
         )
 
     # Read file content
@@ -114,7 +114,7 @@ async def validate_import_file(
         except Exception:
             raise HTTPException(
                 status_code=400,
-                detail="Could not decode file. Please ensure it's a valid CSV file with UTF-8 encoding."
+                detail="Could not decode file. Please ensure it's a valid CSV file with UTF-8 encoding.",
             )
 
     # Validate
@@ -125,6 +125,7 @@ async def validate_import_file(
 # ========================
 # Import Endpoints
 # ========================
+
 
 @router.post("/upload/{import_type}", response_model=ImportResult)
 async def import_csv_file(
@@ -139,8 +140,7 @@ async def import_csv_file(
         enum_type = ImportType(import_type)
     except ValueError:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid import type. Must be one of: {', '.join([t.value for t in ImportType])}"
+            status_code=400, detail=f"Invalid import type. Must be one of: {', '.join([t.value for t in ImportType])}"
         )
 
     # Read file content
@@ -153,7 +153,7 @@ async def import_csv_file(
         except Exception:
             raise HTTPException(
                 status_code=400,
-                detail="Could not decode file. Please ensure it's a valid CSV file with UTF-8 encoding."
+                detail="Could not decode file. Please ensure it's a valid CSV file with UTF-8 encoding.",
             )
 
     # Process import
@@ -168,15 +168,13 @@ async def import_csv_file(
         return result
     except Exception as e:
         logger.error(f"Import error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Import failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
 # ========================
 # Utility Endpoints
 # ========================
+
 
 @router.get("/status")
 async def get_import_status(

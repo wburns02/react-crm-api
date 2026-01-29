@@ -15,15 +15,29 @@ from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
 from app.models.user import User
 from app.models.customer_success import (
-    CSResource, CSResourceLike, CSResourceComment,
-    CSTeamNote, CSTeamNoteComment, CSActivity
+    CSResource,
+    CSResourceLike,
+    CSResourceComment,
+    CSTeamNote,
+    CSTeamNoteComment,
+    CSActivity,
 )
 from app.schemas.customer_success.collaboration import (
-    ResourceCreate, ResourceUpdate, ResourceResponse, ResourceListResponse,
-    ResourceCommentCreate, ResourceCommentResponse,
-    TeamNoteCreate, TeamNoteUpdate, TeamNoteResponse, TeamNoteListResponse,
-    TeamNoteCommentCreate, TeamNoteCommentResponse,
-    ActivityCreate, ActivityResponse, ActivityListResponse,
+    ResourceCreate,
+    ResourceUpdate,
+    ResourceResponse,
+    ResourceListResponse,
+    ResourceCommentCreate,
+    ResourceCommentResponse,
+    TeamNoteCreate,
+    TeamNoteUpdate,
+    TeamNoteResponse,
+    TeamNoteListResponse,
+    TeamNoteCommentCreate,
+    TeamNoteCommentResponse,
+    ActivityCreate,
+    ActivityResponse,
+    ActivityListResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,6 +72,7 @@ async def log_activity(
 
 # ============ Resources ============
 
+
 @router.get("/resources", response_model=ResourceListResponse)
 async def list_resources(
     db: DbSession,
@@ -72,10 +87,14 @@ async def list_resources(
 ):
     """List resources with filtering."""
     try:
-        query = select(CSResource).options(
-            selectinload(CSResource.likes),
-            selectinload(CSResource.comments),
-        ).where(CSResource.is_active == True, CSResource.is_archived == False)
+        query = (
+            select(CSResource)
+            .options(
+                selectinload(CSResource.likes),
+                selectinload(CSResource.comments),
+            )
+            .where(CSResource.is_active == True, CSResource.is_archived == False)
+        )
 
         if resource_type:
             query = query.where(CSResource.resource_type == resource_type)
@@ -96,9 +115,7 @@ async def list_resources(
         # Apply pagination
         offset = (page - 1) * page_size
         query = (
-            query.offset(offset)
-            .limit(page_size)
-            .order_by(CSResource.is_pinned.desc(), CSResource.views_count.desc())
+            query.offset(offset).limit(page_size).order_by(CSResource.is_pinned.desc(), CSResource.views_count.desc())
         )
 
         result = await db.execute(query)
@@ -139,17 +156,13 @@ async def list_resources(
 
             # Get creator name
             if res.created_by_user_id:
-                user_result = await db.execute(
-                    select(User.name).where(User.id == res.created_by_user_id)
-                )
+                user_result = await db.execute(select(User.name).where(User.id == res.created_by_user_id))
                 res_dict["created_by_name"] = user_result.scalar_one_or_none()
             else:
                 res_dict["created_by_name"] = None
 
             # Check if current user liked
-            res_dict["is_liked_by_current_user"] = any(
-                like.user_id == current_user.id for like in res.likes
-            )
+            res_dict["is_liked_by_current_user"] = any(like.user_id == current_user.id for like in res.likes)
 
             items.append(res_dict)
 
@@ -162,8 +175,7 @@ async def list_resources(
     except Exception as e:
         logger.error(f"Error listing resources: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing resources: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing resources: {str(e)}"
         )
 
 
@@ -235,9 +247,7 @@ async def update_resource(
     current_user: CurrentUser,
 ):
     """Update a resource."""
-    result = await db.execute(
-        select(CSResource).where(CSResource.id == resource_id)
-    )
+    result = await db.execute(select(CSResource).where(CSResource.id == resource_id))
     resource = result.scalar_one_or_none()
 
     if not resource:
@@ -262,9 +272,7 @@ async def delete_resource(
     current_user: CurrentUser,
 ):
     """Delete a resource."""
-    result = await db.execute(
-        select(CSResource).where(CSResource.id == resource_id)
-    )
+    result = await db.execute(select(CSResource).where(CSResource.id == resource_id))
     resource = result.scalar_one_or_none()
 
     if not resource:
@@ -285,9 +293,7 @@ async def like_resource(
 ):
     """Like a resource."""
     # Check resource exists
-    res_result = await db.execute(
-        select(CSResource).where(CSResource.id == resource_id)
-    )
+    res_result = await db.execute(select(CSResource).where(CSResource.id == resource_id))
     resource = res_result.scalar_one_or_none()
 
     if not resource:
@@ -343,9 +349,7 @@ async def unlike_resource(
         )
 
     # Update count
-    res_result = await db.execute(
-        select(CSResource).where(CSResource.id == resource_id)
-    )
+    res_result = await db.execute(select(CSResource).where(CSResource.id == resource_id))
     resource = res_result.scalar_one_or_none()
     if resource:
         resource.likes_count = max(0, (resource.likes_count or 1) - 1)
@@ -355,7 +359,9 @@ async def unlike_resource(
     return {"status": "success", "message": "Like removed"}
 
 
-@router.post("/resources/{resource_id}/comments", response_model=ResourceCommentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/resources/{resource_id}/comments", response_model=ResourceCommentResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_resource_comment(
     resource_id: int,
     data: ResourceCommentCreate,
@@ -364,9 +370,7 @@ async def add_resource_comment(
 ):
     """Add a comment to a resource."""
     # Check resource exists
-    res_result = await db.execute(
-        select(CSResource).where(CSResource.id == resource_id)
-    )
+    res_result = await db.execute(select(CSResource).where(CSResource.id == resource_id))
     if not res_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -418,6 +422,7 @@ async def delete_resource_comment(
 
 # ============ Team Notes ============
 
+
 @router.get("/notes", response_model=TeamNoteListResponse)
 async def list_notes(
     db: DbSession,
@@ -450,9 +455,7 @@ async def list_notes(
         # Apply pagination
         offset = (page - 1) * page_size
         query = (
-            query.offset(offset)
-            .limit(page_size)
-            .order_by(CSTeamNote.is_pinned.desc(), CSTeamNote.created_at.desc())
+            query.offset(offset).limit(page_size).order_by(CSTeamNote.is_pinned.desc(), CSTeamNote.created_at.desc())
         )
 
         result = await db.execute(query)
@@ -479,17 +482,13 @@ async def list_notes(
 
             # Get customer name
             if note.customer_id:
-                cust_result = await db.execute(
-                    select(Customer.name).where(Customer.id == note.customer_id)
-                )
+                cust_result = await db.execute(select(Customer.name).where(Customer.id == note.customer_id))
                 note_dict["customer_name"] = cust_result.scalar_one_or_none()
             else:
                 note_dict["customer_name"] = None
 
             # Get creator name
-            user_result = await db.execute(
-                select(User.name).where(User.id == note.created_by_user_id)
-            )
+            user_result = await db.execute(select(User.name).where(User.id == note.created_by_user_id))
             note_dict["created_by_name"] = user_result.scalar_one_or_none()
 
             items.append(note_dict)
@@ -502,10 +501,7 @@ async def list_notes(
         )
     except Exception as e:
         logger.error(f"Error listing notes: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing notes: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing notes: {str(e)}")
 
 
 @router.get("/notes/{note_id}", response_model=TeamNoteResponse)
@@ -516,9 +512,7 @@ async def get_note(
 ):
     """Get a specific note."""
     result = await db.execute(
-        select(CSTeamNote)
-        .options(selectinload(CSTeamNote.comments))
-        .where(CSTeamNote.id == note_id)
+        select(CSTeamNote).options(selectinload(CSTeamNote.comments)).where(CSTeamNote.id == note_id)
     )
     note = result.scalar_one_or_none()
 
@@ -569,9 +563,7 @@ async def update_note(
     current_user: CurrentUser,
 ):
     """Update a team note."""
-    result = await db.execute(
-        select(CSTeamNote).where(CSTeamNote.id == note_id)
-    )
+    result = await db.execute(select(CSTeamNote).where(CSTeamNote.id == note_id))
     note = result.scalar_one_or_none()
 
     if not note:
@@ -603,9 +595,7 @@ async def delete_note(
     current_user: CurrentUser,
 ):
     """Delete a team note."""
-    result = await db.execute(
-        select(CSTeamNote).where(CSTeamNote.id == note_id)
-    )
+    result = await db.execute(select(CSTeamNote).where(CSTeamNote.id == note_id))
     note = result.scalar_one_or_none()
 
     if not note:
@@ -634,9 +624,7 @@ async def add_note_comment(
 ):
     """Add a comment to a note."""
     # Check note exists
-    note_result = await db.execute(
-        select(CSTeamNote).where(CSTeamNote.id == note_id)
-    )
+    note_result = await db.execute(select(CSTeamNote).where(CSTeamNote.id == note_id))
     if not note_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -688,6 +676,7 @@ async def delete_note_comment(
 
 # ============ Activity Feed ============
 
+
 @router.get("/activity", response_model=ActivityListResponse)
 async def list_activity(
     db: DbSession,
@@ -738,16 +727,12 @@ async def list_activity(
             }
 
             # Get user name
-            user_result = await db.execute(
-                select(User.name).where(User.id == activity.user_id)
-            )
+            user_result = await db.execute(select(User.name).where(User.id == activity.user_id))
             activity_dict["user_name"] = user_result.scalar_one_or_none()
 
             # Get customer name if applicable
             if activity.customer_id:
-                cust_result = await db.execute(
-                    select(Customer.name).where(Customer.id == activity.customer_id)
-                )
+                cust_result = await db.execute(select(Customer.name).where(Customer.id == activity.customer_id))
                 activity_dict["customer_name"] = cust_result.scalar_one_or_none()
             else:
                 activity_dict["customer_name"] = None
@@ -763,6 +748,5 @@ async def list_activity(
     except Exception as e:
         logger.error(f"Error listing activity: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing activity: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing activity: {str(e)}"
         )

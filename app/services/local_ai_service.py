@@ -18,17 +18,20 @@ from app.config import settings
 
 class BatchJobStatus(str, Enum):
     """Status of a batch processing job."""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
 
+
 logger = logging.getLogger(__name__)
 
 
 class LocalAIError(Exception):
     """Custom exception for local AI service errors."""
+
     pass
 
 
@@ -41,24 +44,22 @@ class LocalAIService:
     def __init__(self):
         """Initialize local AI service with R730 endpoints."""
         # R730 ML Workstation endpoints via Tailscale Funnel
-        self.ollama_base_url = getattr(settings, 'OLLAMA_BASE_URL', 'https://localhost-0.tailad2d5f.ts.net/ollama')
-        self.whisper_base_url = getattr(settings, 'WHISPER_BASE_URL', 'https://localhost-0.tailad2d5f.ts.net/whisper')
-        self.model = getattr(settings, 'OLLAMA_MODEL', 'llama3.2:3b')
-        self.whisper_model = getattr(settings, 'LOCAL_WHISPER_MODEL', 'medium')
+        self.ollama_base_url = getattr(settings, "OLLAMA_BASE_URL", "https://localhost-0.tailad2d5f.ts.net/ollama")
+        self.whisper_base_url = getattr(settings, "WHISPER_BASE_URL", "https://localhost-0.tailad2d5f.ts.net/whisper")
+        self.model = getattr(settings, "OLLAMA_MODEL", "llama3.2:3b")
+        self.whisper_model = getattr(settings, "LOCAL_WHISPER_MODEL", "medium")
         self.timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout
 
         # Additional AI servers
-        self.llava_model = getattr(settings, 'LLAVA_MODEL', 'llava:13b')
-        self.hctg_ai_url = getattr(settings, 'HCTG_AI_URL', 'https://hctg-ai.tailad2d5f.ts.net')
-        self.hctg_ai_model = getattr(settings, 'HCTG_AI_MODEL', 'qwen2.5:32b')
+        self.llava_model = getattr(settings, "LLAVA_MODEL", "llava:13b")
+        self.hctg_ai_url = getattr(settings, "HCTG_AI_URL", "https://hctg-ai.tailad2d5f.ts.net")
+        self.hctg_ai_model = getattr(settings, "HCTG_AI_MODEL", "qwen2.5:32b")
 
         # Batch job storage (in-memory, could migrate to Redis)
         self._batch_jobs: Dict[str, Dict[str, Any]] = {}
 
     async def start_batch_ocr(
-        self,
-        documents: List[Dict[str, str]],
-        document_type: str = "service_record"
+        self, documents: List[Dict[str, str]], document_type: str = "service_record"
     ) -> Dict[str, Any]:
         """
         Start a batch OCR processing job.
@@ -84,7 +85,7 @@ class LocalAIService:
             "errors": [],
             "started_at": datetime.utcnow().isoformat(),
             "completed_at": None,
-            "processing_time_seconds": None
+            "processing_time_seconds": None,
         }
 
         # Start processing in background
@@ -94,15 +95,10 @@ class LocalAIService:
             "job_id": job_id,
             "status": BatchJobStatus.PENDING,
             "total_documents": len(documents),
-            "message": "Batch OCR job started"
+            "message": "Batch OCR job started",
         }
 
-    async def _process_batch_ocr(
-        self,
-        job_id: str,
-        documents: List[Dict[str, str]],
-        document_type: str
-    ):
+    async def _process_batch_ocr(self, job_id: str, documents: List[Dict[str, str]], document_type: str):
         """Background task to process batch OCR."""
         start_time = time.time()
         job = self._batch_jobs[job_id]
@@ -111,27 +107,24 @@ class LocalAIService:
         for doc in documents:
             doc_id = doc.get("id", str(uuid.uuid4()))
             try:
-                result = await self.extract_document_data(
-                    image_base64=doc["image_base64"],
-                    document_type=document_type
-                )
+                result = await self.extract_document_data(image_base64=doc["image_base64"], document_type=document_type)
 
-                job["results"].append({
-                    "document_id": doc_id,
-                    "filename": doc.get("filename", "unknown"),
-                    "status": "success",
-                    "extraction": result.get("extraction", result.get("raw_text")),
-                    "processing_time": result.get("processing_time_seconds", 0)
-                })
+                job["results"].append(
+                    {
+                        "document_id": doc_id,
+                        "filename": doc.get("filename", "unknown"),
+                        "status": "success",
+                        "extraction": result.get("extraction", result.get("raw_text")),
+                        "processing_time": result.get("processing_time_seconds", 0),
+                    }
+                )
                 job["processed"] += 1
 
             except Exception as e:
                 logger.error(f"Batch OCR error for doc {doc_id}: {e}")
-                job["errors"].append({
-                    "document_id": doc_id,
-                    "filename": doc.get("filename", "unknown"),
-                    "error": str(e)
-                })
+                job["errors"].append(
+                    {"document_id": doc_id, "filename": doc.get("filename", "unknown"), "error": str(e)}
+                )
                 job["failed"] += 1
                 job["processed"] += 1
 
@@ -160,7 +153,7 @@ class LocalAIService:
             "errors": job["errors"],
             "started_at": job["started_at"],
             "completed_at": job["completed_at"],
-            "processing_time_seconds": job["processing_time_seconds"]
+            "processing_time_seconds": job["processing_time_seconds"],
         }
 
     def list_batch_jobs(self, limit: int = 50) -> List[Dict[str, Any]]:
@@ -168,24 +161,22 @@ class LocalAIService:
         jobs = list(self._batch_jobs.values())
         # Sort by started_at descending
         jobs.sort(key=lambda x: x.get("started_at", ""), reverse=True)
-        return [{
-            "job_id": j["job_id"],
-            "status": j["status"],
-            "total_documents": j["total_documents"],
-            "processed": j["processed"],
-            "failed": j["failed"],
-            "started_at": j["started_at"],
-            "completed_at": j["completed_at"]
-        } for j in jobs[:limit]]
+        return [
+            {
+                "job_id": j["job_id"],
+                "status": j["status"],
+                "total_documents": j["total_documents"],
+                "processed": j["processed"],
+                "failed": j["failed"],
+                "started_at": j["started_at"],
+                "completed_at": j["completed_at"],
+            }
+            for j in jobs[:limit]
+        ]
 
     async def health_check(self) -> Dict[str, Any]:
         """Check if local AI services are available."""
-        results = {
-            "ollama": False,
-            "whisper": False,
-            "ollama_models": [],
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        results = {"ollama": False, "whisper": False, "ollama_models": [], "timestamp": datetime.utcnow().isoformat()}
 
         async with aiohttp.ClientSession(timeout=self.timeout) as session:
             # Check Ollama
@@ -211,9 +202,7 @@ class LocalAIService:
         return results
 
     async def analyze_call_transcript(
-        self,
-        transcript: str,
-        call_metadata: Optional[Dict[str, Any]] = None
+        self, transcript: str, call_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Analyze a call transcript using Ollama LLM.
@@ -232,17 +221,9 @@ class LocalAIService:
 
         try:
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                payload = {
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "format": "json"
-                }
+                payload = {"model": self.model, "prompt": prompt, "stream": False, "format": "json"}
 
-                async with session.post(
-                    f"{self.ollama_base_url}/api/generate",
-                    json=payload
-                ) as resp:
+                async with session.post(f"{self.ollama_base_url}/api/generate", json=payload) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
                         raise LocalAIError(f"Ollama request failed: {resp.status} - {error_text}")
@@ -255,10 +236,7 @@ class LocalAIService:
                         analysis = json.loads(response_text)
                     except json.JSONDecodeError:
                         # If not valid JSON, wrap in structure
-                        analysis = {
-                            "raw_analysis": response_text,
-                            "parse_error": True
-                        }
+                        analysis = {"raw_analysis": response_text, "parse_error": True}
 
                     processing_time = time.time() - start_time
 
@@ -269,8 +247,8 @@ class LocalAIService:
                         "processing_time_seconds": processing_time,
                         "tokens": {
                             "prompt": result.get("prompt_eval_count", 0),
-                            "response": result.get("eval_count", 0)
-                        }
+                            "response": result.get("eval_count", 0),
+                        },
                     }
 
         except aiohttp.ClientError as e:
@@ -280,20 +258,16 @@ class LocalAIService:
             logger.error(f"Analysis error: {e}")
             raise LocalAIError(f"Analysis failed: {str(e)}")
 
-    def _build_analysis_prompt(
-        self,
-        transcript: str,
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> str:
+    def _build_analysis_prompt(self, transcript: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """Build the analysis prompt for Ollama."""
         context = ""
         if metadata:
             context = f"""
 Call Information:
-- Direction: {metadata.get('direction', 'unknown')}
-- Duration: {metadata.get('duration_seconds', 0)} seconds
-- From: {metadata.get('from_number', 'unknown')}
-- To: {metadata.get('to_number', 'unknown')}
+- Direction: {metadata.get("direction", "unknown")}
+- Duration: {metadata.get("duration_seconds", 0)} seconds
+- From: {metadata.get("from_number", "unknown")}
+- To: {metadata.get("to_number", "unknown")}
 """
 
         return f"""You are a CRM call analysis assistant for an HVAC service company. Analyze the following call transcript and provide a structured JSON response.
@@ -334,11 +308,7 @@ Provide your analysis in the following JSON format:
 
 Respond ONLY with valid JSON, no additional text."""
 
-    async def transcribe_audio(
-        self,
-        audio_url: str,
-        language: str = "en"
-    ) -> Dict[str, Any]:
+    async def transcribe_audio(self, audio_url: str, language: str = "en") -> Dict[str, Any]:
         """
         Transcribe audio using local Whisper on R730.
 
@@ -356,10 +326,7 @@ Respond ONLY with valid JSON, no additional text."""
                 # Use the URL transcription endpoint
                 params = {"url": audio_url, "language": language}
 
-                async with session.post(
-                    f"{self.whisper_base_url}/transcribe_url",
-                    params=params
-                ) as resp:
+                async with session.post(f"{self.whisper_base_url}/transcribe_url", params=params) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
                         raise LocalAIError(f"Whisper request failed: {resp.status} - {error_text}")
@@ -373,7 +340,7 @@ Respond ONLY with valid JSON, no additional text."""
                         "language": result.get("language", language),
                         "segments": result.get("segments", []),
                         "processing_time_seconds": processing_time,
-                        "model": self.whisper_model
+                        "model": self.whisper_model,
                     }
 
         except aiohttp.ClientError as e:
@@ -383,11 +350,7 @@ Respond ONLY with valid JSON, no additional text."""
             logger.error(f"Transcription error: {e}")
             raise LocalAIError(f"Transcription failed: {str(e)}")
 
-    async def transcribe_audio_file(
-        self,
-        file_path: str,
-        language: str = "en"
-    ) -> Dict[str, Any]:
+    async def transcribe_audio_file(self, file_path: str, language: str = "en") -> Dict[str, Any]:
         """
         Transcribe a local audio file using Whisper on R730.
 
@@ -403,15 +366,12 @@ Respond ONLY with valid JSON, no additional text."""
         try:
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
                 # Read file and upload
-                with open(file_path, 'rb') as f:
+                with open(file_path, "rb") as f:
                     data = aiohttp.FormData()
-                    data.add_field('file', f, filename=file_path.split('/')[-1])
-                    data.add_field('language', language)
+                    data.add_field("file", f, filename=file_path.split("/")[-1])
+                    data.add_field("language", language)
 
-                    async with session.post(
-                        f"{self.whisper_base_url}/transcribe",
-                        data=data
-                    ) as resp:
+                    async with session.post(f"{self.whisper_base_url}/transcribe", data=data) as resp:
                         if resp.status != 200:
                             error_text = await resp.text()
                             raise LocalAIError(f"Whisper request failed: {resp.status} - {error_text}")
@@ -425,7 +385,7 @@ Respond ONLY with valid JSON, no additional text."""
                             "language": result.get("language", language),
                             "segments": result.get("segments", []),
                             "processing_time_seconds": processing_time,
-                            "model": self.whisper_model
+                            "model": self.whisper_model,
                         }
 
         except FileNotFoundError:
@@ -435,10 +395,7 @@ Respond ONLY with valid JSON, no additional text."""
             raise LocalAIError(f"Transcription failed: {str(e)}")
 
     async def transcribe_audio_base64(
-        self,
-        audio_base64: str,
-        language: str = "en",
-        filename: str = "recording.webm"
+        self, audio_base64: str, language: str = "en", filename: str = "recording.webm"
     ) -> Dict[str, Any]:
         """
         Transcribe audio from base64-encoded data using Whisper on R730.
@@ -452,6 +409,7 @@ Respond ONLY with valid JSON, no additional text."""
             Dict with transcription results including text and segments
         """
         import base64
+
         start_time = time.time()
 
         try:
@@ -459,32 +417,24 @@ Respond ONLY with valid JSON, no additional text."""
             audio_bytes = base64.b64decode(audio_base64)
 
             # Determine content type from filename
-            ext = filename.split('.')[-1].lower() if '.' in filename else 'webm'
+            ext = filename.split(".")[-1].lower() if "." in filename else "webm"
             content_types = {
-                'wav': 'audio/wav',
-                'mp3': 'audio/mpeg',
-                'webm': 'audio/webm',
-                'm4a': 'audio/mp4',
-                'mp4': 'audio/mp4',
-                'ogg': 'audio/ogg',
+                "wav": "audio/wav",
+                "mp3": "audio/mpeg",
+                "webm": "audio/webm",
+                "m4a": "audio/mp4",
+                "mp4": "audio/mp4",
+                "ogg": "audio/ogg",
             }
-            content_type = content_types.get(ext, 'audio/webm')
+            content_type = content_types.get(ext, "audio/webm")
 
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
                 # Create form data with audio bytes
                 data = aiohttp.FormData()
-                data.add_field(
-                    'file',
-                    audio_bytes,
-                    filename=filename,
-                    content_type=content_type
-                )
-                data.add_field('language', language)
+                data.add_field("file", audio_bytes, filename=filename, content_type=content_type)
+                data.add_field("language", language)
 
-                async with session.post(
-                    f"{self.whisper_base_url}/transcribe",
-                    data=data
-                ) as resp:
+                async with session.post(f"{self.whisper_base_url}/transcribe", data=data) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
                         raise LocalAIError(f"Whisper request failed: {resp.status} - {error_text}")
@@ -500,7 +450,7 @@ Respond ONLY with valid JSON, no additional text."""
                         "segments": result.get("segments", []),
                         "duration_seconds": result.get("duration", 0),
                         "processing_time_seconds": processing_time,
-                        "model_used": self.whisper_model
+                        "model_used": self.whisper_model,
                     }
 
         except Exception as e:
@@ -517,16 +467,9 @@ Summary:"""
 
         try:
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                payload = {
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False
-                }
+                payload = {"model": self.model, "prompt": prompt, "stream": False}
 
-                async with session.post(
-                    f"{self.ollama_base_url}/api/generate",
-                    json=payload
-                ) as resp:
+                async with session.post(f"{self.ollama_base_url}/api/generate", json=payload) as resp:
                     if resp.status == 200:
                         result = await resp.json()
                         return result.get("response", "").strip()
@@ -537,11 +480,7 @@ Summary:"""
             logger.error(f"Summary generation error: {e}")
             return "Unable to generate summary"
 
-    async def suggest_disposition(
-        self,
-        transcript: str,
-        available_dispositions: List[str]
-    ) -> Dict[str, Any]:
+    async def suggest_disposition(self, transcript: str, available_dispositions: List[str]) -> Dict[str, Any]:
         """
         Suggest the best disposition for a call.
 
@@ -571,47 +510,27 @@ Respond in JSON format:
 
         try:
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                payload = {
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "format": "json"
-                }
+                payload = {"model": self.model, "prompt": prompt, "stream": False, "format": "json"}
 
-                async with session.post(
-                    f"{self.ollama_base_url}/api/generate",
-                    json=payload
-                ) as resp:
+                async with session.post(f"{self.ollama_base_url}/api/generate", json=payload) as resp:
                     if resp.status == 200:
                         result = await resp.json()
                         try:
                             return json.loads(result.get("response", "{}"))
                         except json.JSONDecodeError:
-                            return {
-                                "disposition": None,
-                                "confidence": 0,
-                                "reasoning": "Failed to parse response"
-                            }
+                            return {"disposition": None, "confidence": 0, "reasoning": "Failed to parse response"}
                     else:
-                        return {
-                            "disposition": None,
-                            "confidence": 0,
-                            "reasoning": f"Request failed: {resp.status}"
-                        }
+                        return {"disposition": None, "confidence": 0, "reasoning": f"Request failed: {resp.status}"}
 
         except Exception as e:
             logger.error(f"Disposition suggestion error: {e}")
-            return {
-                "disposition": None,
-                "confidence": 0,
-                "reasoning": str(e)
-            }
+            return {"disposition": None, "confidence": 0, "reasoning": str(e)}
 
     async def analyze_image(
         self,
         image_base64: str,
         prompt: str = "Describe this image in detail. If it's a septic system or plumbing equipment, identify any issues or equipment visible.",
-        context: Optional[str] = None
+        context: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Analyze an image using LLaVA vision model.
@@ -632,17 +551,9 @@ Respond in JSON format:
 
         try:
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                payload = {
-                    "model": self.llava_model,
-                    "prompt": full_prompt,
-                    "images": [image_base64],
-                    "stream": False
-                }
+                payload = {"model": self.llava_model, "prompt": full_prompt, "images": [image_base64], "stream": False}
 
-                async with session.post(
-                    f"{self.ollama_base_url}/api/generate",
-                    json=payload
-                ) as resp:
+                async with session.post(f"{self.ollama_base_url}/api/generate", json=payload) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
                         raise LocalAIError(f"LLaVA request failed: {resp.status} - {error_text}")
@@ -654,7 +565,7 @@ Respond in JSON format:
                         "status": "success",
                         "analysis": result.get("response", ""),
                         "model": self.llava_model,
-                        "processing_time_seconds": processing_time
+                        "processing_time_seconds": processing_time,
                     }
 
         except aiohttp.ClientError as e:
@@ -664,11 +575,7 @@ Respond in JSON format:
             logger.error(f"Image analysis error: {e}")
             raise LocalAIError(f"Image analysis failed: {str(e)}")
 
-    async def analyze_work_order_photo(
-        self,
-        image_base64: str,
-        work_order_type: str = "septic"
-    ) -> Dict[str, Any]:
+    async def analyze_work_order_photo(self, image_base64: str, work_order_type: str = "septic") -> Dict[str, Any]:
         """
         Analyze a work order photo for equipment issues and recommendations.
 
@@ -704,7 +611,7 @@ Respond ONLY with valid JSON."""
                         "structured_analysis": analysis,
                         "raw_response": result["analysis"],
                         "model": result["model"],
-                        "processing_time_seconds": result["processing_time_seconds"]
+                        "processing_time_seconds": result["processing_time_seconds"],
                     }
                 except json.JSONDecodeError:
                     return {
@@ -713,7 +620,7 @@ Respond ONLY with valid JSON."""
                         "raw_response": result["analysis"],
                         "model": result["model"],
                         "processing_time_seconds": result["processing_time_seconds"],
-                        "parse_warning": "Response was not valid JSON"
+                        "parse_warning": "Response was not valid JSON",
                     }
             else:
                 return result
@@ -722,11 +629,7 @@ Respond ONLY with valid JSON."""
             logger.error(f"Work order photo analysis error: {e}")
             raise LocalAIError(f"Photo analysis failed: {str(e)}")
 
-    async def extract_document_data(
-        self,
-        image_base64: str,
-        document_type: str = "service_record"
-    ) -> Dict[str, Any]:
+    async def extract_document_data(self, image_base64: str, document_type: str = "service_record") -> Dict[str, Any]:
         """
         Extract structured data from a scanned document using LLaVA OCR.
 
@@ -774,7 +677,7 @@ Respond ONLY with valid JSON."""
                         "status": "success",
                         "extraction": extracted,
                         "model": result["model"],
-                        "processing_time_seconds": result["processing_time_seconds"]
+                        "processing_time_seconds": result["processing_time_seconds"],
                     }
                 except json.JSONDecodeError:
                     return {
@@ -783,7 +686,7 @@ Respond ONLY with valid JSON."""
                         "extraction": None,
                         "model": result["model"],
                         "processing_time_seconds": result["processing_time_seconds"],
-                        "error": "Could not parse structured data"
+                        "error": "Could not parse structured data",
                     }
             else:
                 return result
@@ -792,11 +695,7 @@ Respond ONLY with valid JSON."""
             logger.error(f"Document extraction error: {e}")
             raise LocalAIError(f"Document extraction failed: {str(e)}")
 
-    async def heavy_analysis(
-        self,
-        prompt: str,
-        context: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def heavy_analysis(self, prompt: str, context: Optional[str] = None) -> Dict[str, Any]:
         """
         Use the heavy qwen2.5:32b model on hctg-ai for complex reasoning tasks.
 
@@ -815,16 +714,9 @@ Respond ONLY with valid JSON."""
 
         try:
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                payload = {
-                    "model": self.hctg_ai_model,
-                    "prompt": full_prompt,
-                    "stream": False
-                }
+                payload = {"model": self.hctg_ai_model, "prompt": full_prompt, "stream": False}
 
-                async with session.post(
-                    f"{self.hctg_ai_url}/api/generate",
-                    json=payload
-                ) as resp:
+                async with session.post(f"{self.hctg_ai_url}/api/generate", json=payload) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
                         raise LocalAIError(f"Heavy analysis request failed: {resp.status} - {error_text}")
@@ -837,7 +729,7 @@ Respond ONLY with valid JSON."""
                         "response": result.get("response", ""),
                         "model": self.hctg_ai_model,
                         "server": "hctg-ai",
-                        "processing_time_seconds": processing_time
+                        "processing_time_seconds": processing_time,
                     }
 
         except aiohttp.ClientError as e:
@@ -848,10 +740,7 @@ Respond ONLY with valid JSON."""
             raise LocalAIError(f"Heavy analysis failed: {str(e)}")
 
     async def rag_query(
-        self,
-        question: str,
-        context: Optional[str] = None,
-        collection: str = "septic_knowledge"
+        self, question: str, context: Optional[str] = None, collection: str = "septic_knowledge"
     ) -> Dict[str, Any]:
         """
         Query the RAG knowledge base on R730.
@@ -867,10 +756,7 @@ Respond ONLY with valid JSON."""
         start_time = time.time()
 
         # Build the query payload
-        query_data = {
-            "question": question,
-            "collection": collection
-        }
+        query_data = {"question": question, "collection": collection}
         if context:
             query_data["context"] = context
 
@@ -892,7 +778,7 @@ Respond ONLY with valid JSON."""
                         "answer": result.get("answer", result.get("response", "")),
                         "sources": result.get("sources", []),
                         "confidence": result.get("confidence", 0.0),
-                        "processing_time_seconds": processing_time
+                        "processing_time_seconds": processing_time,
                     }
 
         except aiohttp.ClientError as e:
@@ -902,11 +788,7 @@ Respond ONLY with valid JSON."""
             logger.error(f"RAG query error: {e}")
             raise LocalAIError(f"RAG query failed: {str(e)}")
 
-    async def chat(
-        self,
-        message: str,
-        context: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def chat(self, message: str, context: Optional[str] = None) -> Dict[str, Any]:
         """
         Simple chat using local Ollama.
 
@@ -925,16 +807,9 @@ Respond ONLY with valid JSON."""
 
         try:
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                payload = {
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False
-                }
+                payload = {"model": self.model, "prompt": prompt, "stream": False}
 
-                async with session.post(
-                    f"{self.ollama_base_url}/api/generate",
-                    json=payload
-                ) as resp:
+                async with session.post(f"{self.ollama_base_url}/api/generate", json=payload) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
                         raise LocalAIError(f"Ollama chat failed: {resp.status} - {error_text}")
@@ -946,7 +821,7 @@ Respond ONLY with valid JSON."""
                         "response": result.get("response", ""),
                         "content": result.get("response", ""),  # Alias
                         "model": self.model,
-                        "processing_time_seconds": processing_time
+                        "processing_time_seconds": processing_time,
                     }
 
         except aiohttp.ClientError as e:

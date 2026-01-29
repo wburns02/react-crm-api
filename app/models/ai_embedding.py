@@ -2,6 +2,7 @@
 
 Uses pgvector extension for PostgreSQL to store and search embeddings.
 """
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Index, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -35,9 +36,7 @@ class AIEmbedding(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Composite index for entity lookups
-    __table_args__ = (
-        Index('ix_ai_embeddings_entity', 'entity_type', 'entity_id'),
-    )
+    __table_args__ = (Index("ix_ai_embeddings_entity", "entity_type", "entity_id"),)
 
     def __repr__(self):
         return f"<AIEmbedding {self.entity_type}:{self.entity_id}>"

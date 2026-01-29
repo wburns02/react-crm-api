@@ -1,4 +1,5 @@
 """Inspection model for tracking system inspections and compliance checks."""
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Boolean, Float, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -91,6 +92,7 @@ class Inspection(Base):
     @property
     def is_overdue(self):
         from datetime import date
+
         if not self.scheduled_date or self.status == "completed":
             return False
         return self.scheduled_date < date.today() and self.status != "completed"

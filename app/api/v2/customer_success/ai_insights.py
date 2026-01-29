@@ -22,23 +22,26 @@ router = APIRouter()
 
 # Request/Response Models
 
+
 class SubjectLineRequest(BaseModel):
     """Request for generating subject line variants."""
+
     subject: str = Field(..., description="Original subject line to generate variants for")
     campaign_goal: str = Field(
-        default="engagement",
-        description="Campaign goal: engagement, conversion, retention, etc."
+        default="engagement", description="Campaign goal: engagement, conversion, retention, etc."
     )
 
 
 class SubjectLineVariant(BaseModel):
     """A subject line variant with its strategy."""
+
     subject: str
     strategy: str
 
 
 class SubjectLineSuggestions(BaseModel):
     """Response containing subject line suggestions."""
+
     original: str
     variants: List[SubjectLineVariant]
     recommended_test: str
@@ -46,6 +49,7 @@ class SubjectLineSuggestions(BaseModel):
 
 class CampaignStepConfig(BaseModel):
     """Configuration for a campaign step."""
+
     name: str
     type: str = Field(..., description="Step type: email, in_app_message, sms, task, wait, condition")
     delay_days: int = 0
@@ -55,8 +59,11 @@ class CampaignStepConfig(BaseModel):
 
 class CampaignConfigRequest(BaseModel):
     """Request for predicting campaign success."""
+
     name: str = Field(..., description="Campaign name")
-    type: str = Field(..., description="Campaign type: nurture, onboarding, adoption, renewal, expansion, winback, custom")
+    type: str = Field(
+        ..., description="Campaign type: nurture, onboarding, adoption, renewal, expansion, winback, custom"
+    )
     goal: str = Field(..., description="Campaign goal: engagement, conversion, retention")
     target_segment: str = Field(..., description="Target audience segment")
     steps: List[CampaignStepConfig] = Field(..., description="Campaign steps/sequence")
@@ -64,6 +71,7 @@ class CampaignConfigRequest(BaseModel):
 
 class CampaignRecommendation(BaseModel):
     """A recommendation for campaign improvement."""
+
     priority: str
     action: str
     expected_impact: str
@@ -71,6 +79,7 @@ class CampaignRecommendation(BaseModel):
 
 class CampaignAnalysis(BaseModel):
     """AI-generated campaign analysis."""
+
     overall_health: str
     health_score: int
     key_insights: List[str]
@@ -81,6 +90,7 @@ class CampaignAnalysis(BaseModel):
 
 class CampaignAnalysisResponse(BaseModel):
     """Response containing campaign analysis."""
+
     campaign_id: int
     campaign_name: str
     analysis: CampaignAnalysis
@@ -89,6 +99,7 @@ class CampaignAnalysisResponse(BaseModel):
 
 class StrategicInsight(BaseModel):
     """A strategic insight about the campaign portfolio."""
+
     category: str
     insight: str
     action: str
@@ -96,6 +107,7 @@ class StrategicInsight(BaseModel):
 
 class PortfolioInsights(BaseModel):
     """Portfolio-wide campaign insights."""
+
     portfolio_health: str
     top_performer: str
     needs_attention: List[str]
@@ -106,6 +118,7 @@ class PortfolioInsights(BaseModel):
 
 class PortfolioInsightsResponse(BaseModel):
     """Response containing portfolio insights."""
+
     campaign_count: int
     insights: PortfolioInsights
     generated_at: str
@@ -113,6 +126,7 @@ class PortfolioInsightsResponse(BaseModel):
 
 class ExpectedMetrics(BaseModel):
     """Expected performance metrics."""
+
     open_rate_estimate: str
     click_rate_estimate: str
     conversion_rate_estimate: str
@@ -120,6 +134,7 @@ class ExpectedMetrics(BaseModel):
 
 class CampaignPrediction(BaseModel):
     """AI prediction for campaign success."""
+
     predicted_success_score: int
     confidence: str
     strengths: List[str]
@@ -130,6 +145,7 @@ class CampaignPrediction(BaseModel):
 
 class SendTimeRecommendation(BaseModel):
     """A send time recommendation."""
+
     day: str
     hour: str
     reason: str
@@ -137,6 +153,7 @@ class SendTimeRecommendation(BaseModel):
 
 class SendTimeRecommendations(BaseModel):
     """Send time optimization recommendations."""
+
     recommended_times: List[SendTimeRecommendation]
     avoid_times: List[str]
     timezone_considerations: str
@@ -145,6 +162,7 @@ class SendTimeRecommendations(BaseModel):
 
 class SendTimeResponse(BaseModel):
     """Response containing send time recommendations."""
+
     campaign_id: int
     campaign_name: str
     recommendations: SendTimeRecommendations
@@ -152,6 +170,7 @@ class SendTimeResponse(BaseModel):
 
 
 # API Endpoints
+
 
 @router.get("/campaigns/{campaign_id}/ai-analysis")
 async def get_campaign_ai_analysis(
@@ -174,10 +193,7 @@ async def get_campaign_ai_analysis(
         analysis = await optimizer.analyze_campaign_performance(campaign_id)
 
         if "error" in analysis:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=analysis["error"]
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=analysis["error"])
 
         return analysis
 
@@ -186,8 +202,7 @@ async def get_campaign_ai_analysis(
     except Exception as e:
         logger.error(f"Error analyzing campaign {campaign_id}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error analyzing campaign: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error analyzing campaign: {str(e)}"
         )
 
 
@@ -209,17 +224,13 @@ async def get_subject_suggestions(
     """
     try:
         optimizer = AICampaignOptimizer(db)
-        suggestions = await optimizer.suggest_subject_lines(
-            request.subject,
-            request.campaign_goal
-        )
+        suggestions = await optimizer.suggest_subject_lines(request.subject, request.campaign_goal)
         return suggestions
 
     except Exception as e:
         logger.error(f"Error generating subject suggestions: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generating subject suggestions: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generating subject suggestions: {str(e)}"
         )
 
 
@@ -246,8 +257,7 @@ async def get_portfolio_insights(
     except Exception as e:
         logger.error(f"Error generating portfolio insights: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generating portfolio insights: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generating portfolio insights: {str(e)}"
         )
 
 
@@ -277,8 +287,7 @@ async def predict_campaign_success(
     except Exception as e:
         logger.error(f"Error predicting campaign success: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error predicting campaign success: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error predicting campaign success: {str(e)}"
         )
 
 
@@ -301,10 +310,7 @@ async def get_send_time_recommendations(
         recommendations = await optimizer.optimize_send_time(campaign_id)
 
         if "error" in recommendations:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=recommendations["error"]
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=recommendations["error"])
 
         return recommendations
 
@@ -313,8 +319,7 @@ async def get_send_time_recommendations(
     except Exception as e:
         logger.error(f"Error optimizing send time for campaign {campaign_id}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error optimizing send time: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error optimizing send time: {str(e)}"
         )
 
 
@@ -339,14 +344,15 @@ async def ai_insights_health(
             "subject_suggestions",
             "portfolio_insights",
             "success_prediction",
-            "send_time_optimization"
-        ]
+            "send_time_optimization",
+        ],
     }
 
 
 # ============================================
 # Missing CS AI Endpoints (Added for AI Assistant)
 # ============================================
+
 
 @router.get("/customers/{customer_id}/insight")
 async def get_customer_insight(
@@ -360,19 +366,12 @@ async def get_customer_insight(
         "customer_name": f"Customer {customer_id}",
         "risk_level": "low",
         "engagement_trend": "stable",
-        "key_findings": [
-            "Customer engagement is consistent",
-            "Recent activity within normal range"
-        ],
+        "key_findings": ["Customer engagement is consistent", "Recent activity within normal range"],
         "recommended_actions": [
-            {
-                "action": "Schedule quarterly review",
-                "priority": "medium",
-                "rationale": "Maintain relationship health"
-            }
+            {"action": "Schedule quarterly review", "priority": "medium", "rationale": "Maintain relationship health"}
         ],
         "next_best_action": "Send personalized check-in email",
-        "analyzed_at": "2026-01-14T00:00:00Z"
+        "analyzed_at": "2026-01-14T00:00:00Z",
     }
 
 
@@ -394,13 +393,14 @@ async def get_ai_recommendations(
             "suggested_action": "Adjust campaign schedules to 10 AM local time",
             "created_at": "2026-01-14T00:00:00Z",
             "dismissed": False,
-            "applied": False
+            "applied": False,
         }
     ]
 
 
 class ContentSuggestionRequest(BaseModel):
     """Request for content suggestions."""
+
     content_type: str = Field(..., description="Type: email, sms, in_app")
     context: str = Field(..., description="Context for the content")
     tone: Optional[str] = None
@@ -419,7 +419,7 @@ async def get_content_suggestions(
         "content": f"Sample {request.content_type} content based on: {request.context}",
         "personalization_tags": ["{{first_name}}", "{{company_name}}"],
         "tone": request.tone or "professional",
-        "cta_options": ["Learn More", "Get Started", "Contact Us"]
+        "cta_options": ["Learn More", "Get Started", "Contact Us"],
     }
 
 
@@ -430,11 +430,7 @@ async def dismiss_recommendation(
     current_user: CurrentUser,
 ) -> Dict[str, Any]:
     """Dismiss an AI recommendation."""
-    return {
-        "success": True,
-        "recommendation_id": recommendation_id,
-        "status": "dismissed"
-    }
+    return {"success": True, "recommendation_id": recommendation_id, "status": "dismissed"}
 
 
 @router.post("/recommendations/{recommendation_id}/apply")
@@ -444,11 +440,7 @@ async def apply_recommendation(
     current_user: CurrentUser,
 ) -> Dict[str, Any]:
     """Apply an AI recommendation."""
-    return {
-        "success": True,
-        "recommendation_id": recommendation_id,
-        "result": "Recommendation applied successfully"
-    }
+    return {"success": True, "recommendation_id": recommendation_id, "result": "Recommendation applied successfully"}
 
 
 @router.post("/refresh-insights")
@@ -457,7 +449,4 @@ async def refresh_insights(
     current_user: CurrentUser,
 ) -> Dict[str, Any]:
     """Refresh all AI insights."""
-    return {
-        "success": True,
-        "message": "All AI insights have been refreshed"
-    }
+    return {"success": True, "message": "All AI insights have been refreshed"}

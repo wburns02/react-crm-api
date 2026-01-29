@@ -2,6 +2,7 @@
 
 Provides endpoints for fetching and managing user notifications.
 """
+
 from fastapi import APIRouter, Query, Body
 from typing import Optional, List
 from pydantic import BaseModel
@@ -81,6 +82,7 @@ async def mark_all_notifications_read(
 
 class NotificationCreate(BaseModel):
     """Schema for creating a new notification."""
+
     type: str  # work_order, payment, customer, system
     title: str
     message: str
@@ -128,7 +130,7 @@ async def create_notification(
                 "type": "notification.created",
                 "data": notification,
                 "timestamp": now.isoformat(),
-            }
+            },
         )
     elif notification_data.target_role:
         # Send to all users with specific role
@@ -138,7 +140,7 @@ async def create_notification(
                 "type": "notification.created",
                 "data": notification,
                 "timestamp": now.isoformat(),
-            }
+            },
         )
     else:
         # Broadcast to all connected users

@@ -10,9 +10,7 @@ from datetime import datetime
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
-from app.models.customer_success import (
-    Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution
-)
+from app.models.customer_success import Journey, JourneyStep, JourneyEnrollment, JourneyStepExecution
 from app.schemas.customer_success.journey import (
     JourneyCreate,
     JourneyUpdate,
@@ -36,6 +34,7 @@ router = APIRouter()
 
 # Journey CRUD
 
+
 @router.get("/", response_model=JourneyListResponse)
 async def list_journeys(
     db: DbSession,
@@ -48,6 +47,7 @@ async def list_journeys(
 ):
     """List journeys with filtering."""
     import logging
+
     logger = logging.getLogger(__name__)
 
     try:
@@ -56,9 +56,9 @@ async def list_journeys(
         # Filter by is_active instead of status (status column may not exist)
         if status:
             # Map status to is_active boolean
-            if status in ('active', 'draft'):
+            if status in ("active", "draft"):
                 query = query.where(Journey.is_active == True)
-            elif status in ('paused', 'archived'):
+            elif status in ("paused", "archived"):
                 query = query.where(Journey.is_active == False)
         if journey_type:
             query = query.where(Journey.journey_type == journey_type)
@@ -87,10 +87,7 @@ async def list_journeys(
         )
     except Exception as e:
         logger.error(f"Error listing journeys: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error listing journeys: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error listing journeys: {str(e)}")
 
 
 @router.get("/{journey_id}", response_model=JourneyResponse)
@@ -100,11 +97,7 @@ async def get_journey(
     current_user: CurrentUser,
 ):
     """Get a specific journey with steps."""
-    result = await db.execute(
-        select(Journey)
-        .options(selectinload(Journey.steps))
-        .where(Journey.id == journey_id)
-    )
+    result = await db.execute(select(Journey).options(selectinload(Journey.steps)).where(Journey.id == journey_id))
     journey = result.scalar_one_or_none()
 
     if not journey:
@@ -124,9 +117,7 @@ async def create_journey(
 ):
     """Create a new journey."""
     # Check for duplicate name
-    existing = await db.execute(
-        select(Journey).where(Journey.name == data.name)
-    )
+    existing = await db.execute(select(Journey).where(Journey.name == data.name))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -155,11 +146,7 @@ async def create_journey(
     await db.refresh(journey)
 
     # Load steps
-    result = await db.execute(
-        select(Journey)
-        .options(selectinload(Journey.steps))
-        .where(Journey.id == journey.id)
-    )
+    result = await db.execute(select(Journey).options(selectinload(Journey.steps)).where(Journey.id == journey.id))
     return result.scalar_one()
 
 
@@ -171,9 +158,7 @@ async def update_journey(
     current_user: CurrentUser,
 ):
     """Update a journey."""
-    result = await db.execute(
-        select(Journey).where(Journey.id == journey_id)
-    )
+    result = await db.execute(select(Journey).where(Journey.id == journey_id))
     journey = result.scalar_one_or_none()
 
     if not journey:
@@ -191,11 +176,7 @@ async def update_journey(
     await db.refresh(journey)
 
     # Load steps
-    result = await db.execute(
-        select(Journey)
-        .options(selectinload(Journey.steps))
-        .where(Journey.id == journey.id)
-    )
+    result = await db.execute(select(Journey).options(selectinload(Journey.steps)).where(Journey.id == journey.id))
     return result.scalar_one()
 
 
@@ -206,9 +187,7 @@ async def delete_journey(
     current_user: CurrentUser,
 ):
     """Delete a journey."""
-    result = await db.execute(
-        select(Journey).where(Journey.id == journey_id)
-    )
+    result = await db.execute(select(Journey).where(Journey.id == journey_id))
     journey = result.scalar_one_or_none()
 
     if not journey:
@@ -236,6 +215,7 @@ async def delete_journey(
 
 # Journey Steps
 
+
 @router.post("/{journey_id}/steps", response_model=JourneyStepResponse, status_code=status.HTTP_201_CREATED)
 async def create_journey_step(
     journey_id: int,
@@ -245,9 +225,7 @@ async def create_journey_step(
 ):
     """Add a step to a journey."""
     # Check journey exists
-    journey_result = await db.execute(
-        select(Journey).where(Journey.id == journey_id)
-    )
+    journey_result = await db.execute(select(Journey).where(Journey.id == journey_id))
     if not journey_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -324,6 +302,7 @@ async def delete_journey_step(
 
 # Enrollments
 
+
 @router.get("/{journey_id}/enrollments", response_model=JourneyEnrollmentListResponse)
 async def list_journey_enrollments(
     journey_id: int,
@@ -368,9 +347,7 @@ async def enroll_customer(
     """Enroll a customer in a journey."""
     # Check journey exists and is active
     journey_result = await db.execute(
-        select(Journey)
-        .options(selectinload(Journey.steps))
-        .where(Journey.id == request.journey_id)
+        select(Journey).options(selectinload(Journey.steps)).where(Journey.id == request.journey_id)
     )
     journey = journey_result.scalar_one_or_none()
 
@@ -387,9 +364,7 @@ async def enroll_customer(
         )
 
     # Check customer exists
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == request.customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == request.customer_id))
     if not customer_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -445,9 +420,7 @@ async def bulk_enroll_customers(
 ):
     """Bulk enroll customers in a journey."""
     # Check journey exists
-    journey_result = await db.execute(
-        select(Journey).where(Journey.id == request.journey_id)
-    )
+    journey_result = await db.execute(select(Journey).where(Journey.id == request.journey_id))
     if not journey_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -471,9 +444,7 @@ async def get_enrollment(
     current_user: CurrentUser,
 ):
     """Get a specific enrollment."""
-    result = await db.execute(
-        select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id)
-    )
+    result = await db.execute(select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id))
     enrollment = result.scalar_one_or_none()
 
     if not enrollment:
@@ -492,9 +463,7 @@ async def pause_enrollment(
     current_user: CurrentUser,
 ):
     """Pause a journey enrollment."""
-    result = await db.execute(
-        select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id)
-    )
+    result = await db.execute(select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id))
     enrollment = result.scalar_one_or_none()
 
     if not enrollment:
@@ -513,9 +482,7 @@ async def pause_enrollment(
     enrollment.paused_at = datetime.utcnow()
 
     # Update journey metrics
-    journey_result = await db.execute(
-        select(Journey).where(Journey.id == enrollment.journey_id)
-    )
+    journey_result = await db.execute(select(Journey).where(Journey.id == enrollment.journey_id))
     journey = journey_result.scalar_one_or_none()
     if journey:
         journey.active_enrolled = max(0, (journey.active_enrolled or 1) - 1)
@@ -531,9 +498,7 @@ async def resume_enrollment(
     current_user: CurrentUser,
 ):
     """Resume a paused journey enrollment."""
-    result = await db.execute(
-        select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id)
-    )
+    result = await db.execute(select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id))
     enrollment = result.scalar_one_or_none()
 
     if not enrollment:
@@ -552,9 +517,7 @@ async def resume_enrollment(
     enrollment.paused_at = None
 
     # Update journey metrics
-    journey_result = await db.execute(
-        select(Journey).where(Journey.id == enrollment.journey_id)
-    )
+    journey_result = await db.execute(select(Journey).where(Journey.id == enrollment.journey_id))
     journey = journey_result.scalar_one_or_none()
     if journey:
         journey.active_enrolled = (journey.active_enrolled or 0) + 1
@@ -571,9 +534,7 @@ async def exit_enrollment(
     reason: Optional[str] = None,
 ):
     """Exit a customer from a journey."""
-    result = await db.execute(
-        select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id)
-    )
+    result = await db.execute(select(JourneyEnrollment).where(JourneyEnrollment.id == enrollment_id))
     enrollment = result.scalar_one_or_none()
 
     if not enrollment:
@@ -593,9 +554,7 @@ async def exit_enrollment(
     enrollment.exit_reason = reason or "Manual exit"
 
     # Update journey metrics
-    journey_result = await db.execute(
-        select(Journey).where(Journey.id == enrollment.journey_id)
-    )
+    journey_result = await db.execute(select(Journey).where(Journey.id == enrollment.journey_id))
     journey = journey_result.scalar_one_or_none()
     if journey and enrollment.status == EnrollmentStatus.ACTIVE.value:
         journey.active_enrolled = max(0, (journey.active_enrolled or 1) - 1)
@@ -625,60 +584,264 @@ async def list_customer_enrollments(
 
 # Journey Step Templates for Seeding
 ONBOARDING_STEPS = [
-    {"name": "Welcome Email", "description": "Send personalized welcome email with next steps", "step_type": "email", "step_order": 1, "action_config": {"template": "welcome", "subject": "Welcome to Mac-Septic!"}},
-    {"name": "Wait 24 Hours", "description": "Allow customer time to explore", "step_type": "wait", "step_order": 2, "wait_duration_hours": 24},
-    {"name": "Account Setup Reminder", "description": "Remind customer to complete profile", "step_type": "email", "step_order": 3, "action_config": {"template": "setup_reminder"}},
-    {"name": "CSM Introduction Call", "description": "Schedule introductory call with assigned CSM", "step_type": "task", "step_order": 4, "action_config": {"task_type": "call", "assignee_role": "csm"}},
-    {"name": "Check Profile Complete", "description": "Verify customer has completed their profile", "step_type": "condition", "step_order": 5, "condition_rules": {"field": "profile_complete", "operator": "eq", "value": True}},
-    {"name": "Schedule First Service", "description": "Help customer schedule their first service", "step_type": "task", "step_order": 6, "action_config": {"task_type": "meeting", "title": "Schedule First Service"}},
-    {"name": "Wait for Service", "description": "Wait for first service to be completed", "step_type": "wait", "step_order": 7, "wait_duration_hours": 168},
-    {"name": "Post-Service Follow-up", "description": "Send satisfaction survey after first service", "step_type": "email", "step_order": 8, "action_config": {"template": "post_service_survey"}},
-    {"name": "NPS Survey", "description": "Request Net Promoter Score feedback", "step_type": "email", "step_order": 9, "action_config": {"template": "nps_survey"}},
-    {"name": "Graduation Check", "description": "Verify customer is fully onboarded", "step_type": "health_check", "step_order": 10, "action_config": {"min_health_score": 70}},
+    {
+        "name": "Welcome Email",
+        "description": "Send personalized welcome email with next steps",
+        "step_type": "email",
+        "step_order": 1,
+        "action_config": {"template": "welcome", "subject": "Welcome to Mac-Septic!"},
+    },
+    {
+        "name": "Wait 24 Hours",
+        "description": "Allow customer time to explore",
+        "step_type": "wait",
+        "step_order": 2,
+        "wait_duration_hours": 24,
+    },
+    {
+        "name": "Account Setup Reminder",
+        "description": "Remind customer to complete profile",
+        "step_type": "email",
+        "step_order": 3,
+        "action_config": {"template": "setup_reminder"},
+    },
+    {
+        "name": "CSM Introduction Call",
+        "description": "Schedule introductory call with assigned CSM",
+        "step_type": "task",
+        "step_order": 4,
+        "action_config": {"task_type": "call", "assignee_role": "csm"},
+    },
+    {
+        "name": "Check Profile Complete",
+        "description": "Verify customer has completed their profile",
+        "step_type": "condition",
+        "step_order": 5,
+        "condition_rules": {"field": "profile_complete", "operator": "eq", "value": True},
+    },
+    {
+        "name": "Schedule First Service",
+        "description": "Help customer schedule their first service",
+        "step_type": "task",
+        "step_order": 6,
+        "action_config": {"task_type": "meeting", "title": "Schedule First Service"},
+    },
+    {
+        "name": "Wait for Service",
+        "description": "Wait for first service to be completed",
+        "step_type": "wait",
+        "step_order": 7,
+        "wait_duration_hours": 168,
+    },
+    {
+        "name": "Post-Service Follow-up",
+        "description": "Send satisfaction survey after first service",
+        "step_type": "email",
+        "step_order": 8,
+        "action_config": {"template": "post_service_survey"},
+    },
+    {
+        "name": "NPS Survey",
+        "description": "Request Net Promoter Score feedback",
+        "step_type": "email",
+        "step_order": 9,
+        "action_config": {"template": "nps_survey"},
+    },
+    {
+        "name": "Graduation Check",
+        "description": "Verify customer is fully onboarded",
+        "step_type": "health_check",
+        "step_order": 10,
+        "action_config": {"min_health_score": 70},
+    },
 ]
 
 RISK_MITIGATION_STEPS = [
-    {"name": "Risk Alert", "description": "Notify CSM of at-risk customer", "step_type": "notification", "step_order": 1, "action_config": {"channel": "slack", "priority": "high"}},
-    {"name": "Health Score Review", "description": "Analyze health score components", "step_type": "health_check", "step_order": 2, "action_config": {"review_type": "detailed"}},
-    {"name": "Immediate Outreach", "description": "CSM calls customer within 24 hours", "step_type": "task", "step_order": 3, "action_config": {"task_type": "call", "priority": "critical", "due_hours": 24}},
-    {"name": "Concern Documentation", "description": "Document customer concerns and issues", "step_type": "task", "step_order": 4, "action_config": {"task_type": "documentation"}},
-    {"name": "Recovery Plan Creation", "description": "Create action plan to address issues", "step_type": "task", "step_order": 5, "action_config": {"task_type": "internal", "title": "Create Recovery Plan"}},
-    {"name": "Executive Escalation Check", "description": "Determine if executive involvement needed", "step_type": "condition", "step_order": 6, "condition_rules": {"field": "health_score", "operator": "lt", "value": 30}},
-    {"name": "Recovery Actions", "description": "Execute recovery plan actions", "step_type": "task", "step_order": 7, "action_config": {"task_type": "follow_up"}},
-    {"name": "Wait 7 Days", "description": "Allow time for recovery actions to take effect", "step_type": "wait", "step_order": 8, "wait_duration_hours": 168},
-    {"name": "Progress Check-in", "description": "Follow up call to assess progress", "step_type": "task", "step_order": 9, "action_config": {"task_type": "call", "title": "Recovery Progress Check"}},
-    {"name": "Health Re-evaluation", "description": "Re-calculate health score after intervention", "step_type": "health_check", "step_order": 10, "action_config": {"target_score": 60}},
+    {
+        "name": "Risk Alert",
+        "description": "Notify CSM of at-risk customer",
+        "step_type": "notification",
+        "step_order": 1,
+        "action_config": {"channel": "slack", "priority": "high"},
+    },
+    {
+        "name": "Health Score Review",
+        "description": "Analyze health score components",
+        "step_type": "health_check",
+        "step_order": 2,
+        "action_config": {"review_type": "detailed"},
+    },
+    {
+        "name": "Immediate Outreach",
+        "description": "CSM calls customer within 24 hours",
+        "step_type": "task",
+        "step_order": 3,
+        "action_config": {"task_type": "call", "priority": "critical", "due_hours": 24},
+    },
+    {
+        "name": "Concern Documentation",
+        "description": "Document customer concerns and issues",
+        "step_type": "task",
+        "step_order": 4,
+        "action_config": {"task_type": "documentation"},
+    },
+    {
+        "name": "Recovery Plan Creation",
+        "description": "Create action plan to address issues",
+        "step_type": "task",
+        "step_order": 5,
+        "action_config": {"task_type": "internal", "title": "Create Recovery Plan"},
+    },
+    {
+        "name": "Executive Escalation Check",
+        "description": "Determine if executive involvement needed",
+        "step_type": "condition",
+        "step_order": 6,
+        "condition_rules": {"field": "health_score", "operator": "lt", "value": 30},
+    },
+    {
+        "name": "Recovery Actions",
+        "description": "Execute recovery plan actions",
+        "step_type": "task",
+        "step_order": 7,
+        "action_config": {"task_type": "follow_up"},
+    },
+    {
+        "name": "Wait 7 Days",
+        "description": "Allow time for recovery actions to take effect",
+        "step_type": "wait",
+        "step_order": 8,
+        "wait_duration_hours": 168,
+    },
+    {
+        "name": "Progress Check-in",
+        "description": "Follow up call to assess progress",
+        "step_type": "task",
+        "step_order": 9,
+        "action_config": {"task_type": "call", "title": "Recovery Progress Check"},
+    },
+    {
+        "name": "Health Re-evaluation",
+        "description": "Re-calculate health score after intervention",
+        "step_type": "health_check",
+        "step_order": 10,
+        "action_config": {"target_score": 60},
+    },
 ]
 
 ADVOCACY_STEPS = [
-    {"name": "Promoter Identification", "description": "Confirm customer is a promoter (NPS 9-10)", "step_type": "condition", "step_order": 1, "condition_rules": {"field": "nps_score", "operator": "gte", "value": 9}},
-    {"name": "Thank You Email", "description": "Send personalized thank you for high NPS", "step_type": "email", "step_order": 2, "action_config": {"template": "promoter_thanks"}},
-    {"name": "Case Study Invitation", "description": "Invite customer to participate in case study", "step_type": "email", "step_order": 3, "action_config": {"template": "case_study_invite"}},
-    {"name": "Wait for Response", "description": "Allow time to consider case study", "step_type": "wait", "step_order": 4, "wait_duration_hours": 72},
-    {"name": "Referral Program Introduction", "description": "Introduce referral rewards program", "step_type": "email", "step_order": 5, "action_config": {"template": "referral_program"}},
-    {"name": "Review Request", "description": "Request online review", "step_type": "email", "step_order": 6, "action_config": {"template": "review_request"}},
-    {"name": "Social Media Engagement", "description": "Invite to follow and engage on social", "step_type": "in_app_message", "step_order": 7, "action_config": {"message_type": "banner"}},
-    {"name": "Advocacy Program Enrollment", "description": "Enroll in formal advocacy program", "step_type": "update_field", "step_order": 8, "action_config": {"field": "is_advocate", "value": True}},
+    {
+        "name": "Promoter Identification",
+        "description": "Confirm customer is a promoter (NPS 9-10)",
+        "step_type": "condition",
+        "step_order": 1,
+        "condition_rules": {"field": "nps_score", "operator": "gte", "value": 9},
+    },
+    {
+        "name": "Thank You Email",
+        "description": "Send personalized thank you for high NPS",
+        "step_type": "email",
+        "step_order": 2,
+        "action_config": {"template": "promoter_thanks"},
+    },
+    {
+        "name": "Case Study Invitation",
+        "description": "Invite customer to participate in case study",
+        "step_type": "email",
+        "step_order": 3,
+        "action_config": {"template": "case_study_invite"},
+    },
+    {
+        "name": "Wait for Response",
+        "description": "Allow time to consider case study",
+        "step_type": "wait",
+        "step_order": 4,
+        "wait_duration_hours": 72,
+    },
+    {
+        "name": "Referral Program Introduction",
+        "description": "Introduce referral rewards program",
+        "step_type": "email",
+        "step_order": 5,
+        "action_config": {"template": "referral_program"},
+    },
+    {
+        "name": "Review Request",
+        "description": "Request online review",
+        "step_type": "email",
+        "step_order": 6,
+        "action_config": {"template": "review_request"},
+    },
+    {
+        "name": "Social Media Engagement",
+        "description": "Invite to follow and engage on social",
+        "step_type": "in_app_message",
+        "step_order": 7,
+        "action_config": {"message_type": "banner"},
+    },
+    {
+        "name": "Advocacy Program Enrollment",
+        "description": "Enroll in formal advocacy program",
+        "step_type": "update_field",
+        "step_order": 8,
+        "action_config": {"field": "is_advocate", "value": True},
+    },
 ]
 
 DEFAULT_STEPS = [
-    {"name": "Journey Start", "description": "Initial entry point for the journey", "step_type": "notification", "step_order": 1, "action_config": {"type": "internal"}},
-    {"name": "Initial Outreach", "description": "First touchpoint with customer", "step_type": "email", "step_order": 2, "action_config": {"template": "generic_outreach"}},
-    {"name": "Wait Period", "description": "Allow time for customer response", "step_type": "wait", "step_order": 3, "wait_duration_hours": 48},
-    {"name": "Follow-up Task", "description": "CSM follow-up action", "step_type": "task", "step_order": 4, "action_config": {"task_type": "follow_up"}},
-    {"name": "Status Check", "description": "Evaluate journey progress", "step_type": "condition", "step_order": 5, "condition_rules": {"field": "engaged", "operator": "eq", "value": True}},
-    {"name": "Journey Complete", "description": "Mark journey as successfully completed", "step_type": "update_field", "step_order": 6, "action_config": {"field": "journey_status", "value": "completed"}},
+    {
+        "name": "Journey Start",
+        "description": "Initial entry point for the journey",
+        "step_type": "notification",
+        "step_order": 1,
+        "action_config": {"type": "internal"},
+    },
+    {
+        "name": "Initial Outreach",
+        "description": "First touchpoint with customer",
+        "step_type": "email",
+        "step_order": 2,
+        "action_config": {"template": "generic_outreach"},
+    },
+    {
+        "name": "Wait Period",
+        "description": "Allow time for customer response",
+        "step_type": "wait",
+        "step_order": 3,
+        "wait_duration_hours": 48,
+    },
+    {
+        "name": "Follow-up Task",
+        "description": "CSM follow-up action",
+        "step_type": "task",
+        "step_order": 4,
+        "action_config": {"task_type": "follow_up"},
+    },
+    {
+        "name": "Status Check",
+        "description": "Evaluate journey progress",
+        "step_type": "condition",
+        "step_order": 5,
+        "condition_rules": {"field": "engaged", "operator": "eq", "value": True},
+    },
+    {
+        "name": "Journey Complete",
+        "description": "Mark journey as successfully completed",
+        "step_type": "update_field",
+        "step_order": 6,
+        "action_config": {"field": "journey_status", "value": "completed"},
+    },
 ]
 
 
 def get_steps_for_journey(journey_name: str) -> list:
     """Determine which steps template to use based on journey name."""
     name_lower = journey_name.lower()
-    if 'onboarding' in name_lower:
+    if "onboarding" in name_lower:
         return ONBOARDING_STEPS
-    elif 'risk' in name_lower or 'mitigation' in name_lower:
+    elif "risk" in name_lower or "mitigation" in name_lower:
         return RISK_MITIGATION_STEPS
-    elif 'advocacy' in name_lower:
+    elif "advocacy" in name_lower:
         return ADVOCACY_STEPS
     else:
         return DEFAULT_STEPS
@@ -691,12 +854,11 @@ async def seed_journey_steps(
 ):
     """Seed all empty journeys with default steps based on journey type."""
     import logging
+
     logger = logging.getLogger(__name__)
 
     # Get all journeys with their steps
-    result = await db.execute(
-        select(Journey).options(selectinload(Journey.steps))
-    )
+    result = await db.execute(select(Journey).options(selectinload(Journey.steps)))
     journeys = result.scalars().unique().all()
 
     seeded_journeys = []
@@ -726,11 +888,9 @@ async def seed_journey_steps(
             )
             db.add(step)
 
-        seeded_journeys.append({
-            "journey_id": journey.id,
-            "journey_name": journey.name,
-            "steps_added": len(steps_to_add)
-        })
+        seeded_journeys.append(
+            {"journey_id": journey.id, "journey_name": journey.name, "steps_added": len(steps_to_add)}
+        )
         logger.info(f"Added {len(steps_to_add)} steps to journey: {journey.name}")
 
     await db.commit()
@@ -738,5 +898,5 @@ async def seed_journey_steps(
     return {
         "status": "success",
         "message": f"Seeded {len(seeded_journeys)} journeys with steps",
-        "journeys": seeded_journeys
+        "journeys": seeded_journeys,
     }

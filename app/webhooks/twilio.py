@@ -47,26 +47,20 @@ async def handle_incoming_sms(
     # SECURITY: Don't log message content or full phone numbers
     logger.info(
         "Incoming SMS received",
-        extra={"message_sid": message_sid, "from_suffix": from_number[-4:] if from_number else None}
+        extra={"message_sid": message_sid, "from_suffix": from_number[-4:] if from_number else None},
     )
 
     # Try to find if this is a reply to an existing conversation
     async with async_session_maker() as db:
         # Look for recent messages to this phone number
         result = await db.execute(
-            select(Message)
-            .where(Message.to_address == from_number)
-            .order_by(Message.created_at.desc())
-            .limit(1)
+            select(Message).where(Message.to_address == from_number).order_by(Message.created_at.desc()).limit(1)
         )
         last_message = result.scalar_one_or_none()
 
         if last_message and last_message.source == "react":
             # This is a reply to a React message - handle it
-            logger.info(
-                "Processing React reply",
-                extra={"customer_id": last_message.customer_id}
-            )
+            logger.info("Processing React reply", extra={"customer_id": last_message.customer_id})
 
             # Create incoming message record
             incoming = Message(
@@ -133,16 +127,11 @@ async def handle_status_callback(
     error_message = form_data.get("ErrorMessage")
 
     # SECURITY: Don't log error messages which might contain PII
-    logger.info(
-        "Status callback received",
-        extra={"message_sid": message_sid, "status": message_status}
-    )
+    logger.info("Status callback received", extra={"message_sid": message_sid, "status": message_status})
 
     async with async_session_maker() as db:
         # Find the message
-        result = await db.execute(
-            select(Message).where(Message.twilio_sid == message_sid)
-        )
+        result = await db.execute(select(Message).where(Message.twilio_sid == message_sid))
         message = result.scalar_one_or_none()
 
         if message:
@@ -167,8 +156,7 @@ async def handle_status_callback(
 
                 await db.commit()
                 logger.info(
-                    "Message status updated",
-                    extra={"message_id": message.id, "new_status": message.status.value}
+                    "Message status updated", extra={"message_id": message.id, "new_status": message.status.value}
                 )
             else:
                 # Forward to legacy

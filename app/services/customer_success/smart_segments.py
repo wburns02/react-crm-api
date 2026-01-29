@@ -19,6 +19,7 @@ from app.models.customer_success import Segment
 
 class SmartSegmentCategory:
     """Segment category constants."""
+
     LIFECYCLE = "lifecycle"
     VALUE = "value"
     SERVICE = "service"
@@ -43,16 +44,16 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "created_at", "operator": "gte", "value": "NOW - INTERVAL '30 days'"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "New customers are in their critical onboarding phase. First impressions matter - ensure excellent service delivery and proactive communication to build loyalty.",
         "recommended_actions": [
             {"action": "send_welcome_email", "label": "Send Welcome Email", "priority": "high"},
             {"action": "schedule_onboarding_call", "label": "Schedule Onboarding Call", "priority": "high"},
             {"action": "assign_csm", "label": "Assign Customer Success Manager", "priority": "medium"},
-            {"action": "setup_service_reminders", "label": "Set Up Service Reminders", "priority": "medium"}
-        ]
+            {"action": "setup_service_reminders", "label": "Set Up Service Reminders", "priority": "medium"},
+        ],
     },
     {
         "name": "Loyal Customers",
@@ -65,16 +66,16 @@ SMART_SEGMENTS = [
             "rules": [
                 {"field": "created_at", "operator": "lte", "value": "NOW - INTERVAL '3 years'"},
                 {"field": "health_score", "operator": "gte", "value": 70},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "These long-term customers are your brand advocates. They've demonstrated loyalty and satisfaction. Nurture these relationships for referrals and case studies.",
         "recommended_actions": [
             {"action": "request_referral", "label": "Request Referral", "priority": "high"},
             {"action": "offer_loyalty_discount", "label": "Offer Loyalty Discount", "priority": "medium"},
             {"action": "invite_to_loyalty_program", "label": "Invite to VIP Program", "priority": "medium"},
-            {"action": "request_testimonial", "label": "Request Testimonial", "priority": "low"}
-        ]
+            {"action": "request_testimonial", "label": "Request Testimonial", "priority": "low"},
+        ],
     },
     {
         "name": "Dormant Customers",
@@ -86,16 +87,16 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "last_service_date", "operator": "lte", "value": "NOW - INTERVAL '12 months'"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Dormant customers haven't engaged in over a year. They may have found alternative services or forgotten about regular maintenance. Re-engage before they churn.",
         "recommended_actions": [
             {"action": "send_reengagement_campaign", "label": "Send Re-engagement Campaign", "priority": "high"},
             {"action": "offer_service_discount", "label": "Offer Service Discount", "priority": "high"},
             {"action": "call_to_check_in", "label": "Call to Check In", "priority": "medium"},
-            {"action": "send_maintenance_reminder", "label": "Send Maintenance Reminder", "priority": "medium"}
-        ]
+            {"action": "send_maintenance_reminder", "label": "Send Maintenance Reminder", "priority": "medium"},
+        ],
     },
     {
         "name": "At-Risk Customers",
@@ -107,8 +108,8 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "health_score", "operator": "lt", "value": 50},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "At-risk customers show warning signs of potential churn. Immediate intervention is needed to address concerns, resolve issues, and restore satisfaction.",
         "recommended_actions": [
@@ -116,8 +117,8 @@ SMART_SEGMENTS = [
             {"action": "schedule_urgent_call", "label": "Schedule Urgent Call", "priority": "critical"},
             {"action": "review_recent_interactions", "label": "Review Recent Interactions", "priority": "high"},
             {"action": "offer_service_recovery", "label": "Offer Service Recovery", "priority": "high"},
-            {"action": "assign_senior_csm", "label": "Assign Senior CSM", "priority": "medium"}
-        ]
+            {"action": "assign_senior_csm", "label": "Assign Senior CSM", "priority": "medium"},
+        ],
     },
     {
         "name": "Churned Customers",
@@ -125,21 +126,15 @@ SMART_SEGMENTS = [
         "category": SmartSegmentCategory.LIFECYCLE,
         "color": "#6B7280",  # Gray
         "priority": 70,
-        "rules": {
-            "logic": "and",
-            "rules": [
-                {"field": "is_active", "operator": "eq", "value": False}
-            ]
-        },
+        "rules": {"logic": "and", "rules": [{"field": "is_active", "operator": "eq", "value": False}]},
         "ai_insight": "Churned customers have ended their relationship. Analyze churn reasons to improve retention and consider win-back campaigns for recoverable accounts.",
         "recommended_actions": [
             {"action": "analyze_churn_reason", "label": "Analyze Churn Reason", "priority": "high"},
             {"action": "send_win_back_campaign", "label": "Send Win-Back Campaign", "priority": "medium"},
             {"action": "request_exit_feedback", "label": "Request Exit Feedback", "priority": "medium"},
-            {"action": "add_to_nurture_sequence", "label": "Add to Nurture Sequence", "priority": "low"}
-        ]
+            {"action": "add_to_nurture_sequence", "label": "Add to Nurture Sequence", "priority": "low"},
+        ],
     },
-
     # =============================================================================
     # VALUE SEGMENTS
     # =============================================================================
@@ -153,8 +148,8 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "lifetime_value", "operator": "gte", "value": 5000},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "VIP customers are your most valuable accounts, contributing significantly to revenue. They deserve white-glove service and exclusive benefits to maintain their loyalty.",
         "recommended_actions": [
@@ -162,8 +157,8 @@ SMART_SEGMENTS = [
             {"action": "offer_vip_benefits", "label": "Offer VIP Benefits", "priority": "high"},
             {"action": "priority_scheduling", "label": "Enable Priority Scheduling", "priority": "high"},
             {"action": "quarterly_business_review", "label": "Schedule QBR", "priority": "medium"},
-            {"action": "executive_sponsor", "label": "Assign Executive Sponsor", "priority": "medium"}
-        ]
+            {"action": "executive_sponsor", "label": "Assign Executive Sponsor", "priority": "medium"},
+        ],
     },
     {
         "name": "High Value Customers",
@@ -176,16 +171,16 @@ SMART_SEGMENTS = [
             "rules": [
                 {"field": "lifetime_value", "operator": "gte", "value": 2000},
                 {"field": "lifetime_value", "operator": "lt", "value": 5000},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "High-value customers have strong spending history. Focus on expanding their service portfolio and nurturing them toward VIP status through excellent experiences.",
         "recommended_actions": [
             {"action": "upsell_contract", "label": "Upsell Service Contract", "priority": "high"},
             {"action": "cross_sell_services", "label": "Cross-Sell Additional Services", "priority": "medium"},
             {"action": "loyalty_program_invite", "label": "Invite to Loyalty Program", "priority": "medium"},
-            {"action": "referral_request", "label": "Request Referrals", "priority": "low"}
-        ]
+            {"action": "referral_request", "label": "Request Referrals", "priority": "low"},
+        ],
     },
     {
         "name": "Medium Value Customers",
@@ -198,16 +193,16 @@ SMART_SEGMENTS = [
             "rules": [
                 {"field": "lifetime_value", "operator": "gte", "value": 500},
                 {"field": "lifetime_value", "operator": "lt", "value": 2000},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Medium-value customers represent growth opportunities. Understand their needs better and identify ways to increase engagement and service adoption.",
         "recommended_actions": [
             {"action": "promote_service_bundles", "label": "Promote Service Bundles", "priority": "medium"},
             {"action": "schedule_checkup", "label": "Schedule System Checkup", "priority": "medium"},
             {"action": "send_educational_content", "label": "Send Educational Content", "priority": "low"},
-            {"action": "offer_contract_upgrade", "label": "Offer Contract Upgrade", "priority": "low"}
-        ]
+            {"action": "offer_contract_upgrade", "label": "Offer Contract Upgrade", "priority": "low"},
+        ],
     },
     {
         "name": "Low Value Customers",
@@ -219,17 +214,16 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "lifetime_value", "operator": "lt", "value": 500},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Low-value customers may be new or have limited service needs. Use automated engagement to cost-effectively nurture them toward higher value.",
         "recommended_actions": [
             {"action": "automated_nurture", "label": "Add to Automated Nurture", "priority": "medium"},
             {"action": "send_service_education", "label": "Send Service Education", "priority": "low"},
-            {"action": "offer_first_time_discount", "label": "Offer First-Time Discount", "priority": "low"}
-        ]
+            {"action": "offer_first_time_discount", "label": "Offer First-Time Discount", "priority": "low"},
+        ],
     },
-
     # =============================================================================
     # SERVICE SEGMENTS
     # =============================================================================
@@ -243,16 +237,16 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "system_type", "operator": "eq", "value": "aerobic"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Aerobic systems require more frequent maintenance than conventional systems. These customers need quarterly inspections and regular maintenance reminders.",
         "recommended_actions": [
             {"action": "setup_quarterly_maintenance", "label": "Set Up Quarterly Maintenance", "priority": "high"},
             {"action": "send_aerobic_tips", "label": "Send Aerobic System Tips", "priority": "medium"},
             {"action": "schedule_inspection", "label": "Schedule Inspection", "priority": "medium"},
-            {"action": "offer_maintenance_contract", "label": "Offer Maintenance Contract", "priority": "high"}
-        ]
+            {"action": "offer_maintenance_contract", "label": "Offer Maintenance Contract", "priority": "high"},
+        ],
     },
     {
         "name": "Conventional System Owners",
@@ -264,15 +258,15 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "system_type", "operator": "in", "value": ["conventional", "standard", "gravity"]},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Conventional systems typically need pumping every 3-5 years. Educate these customers on proper maintenance to extend system life.",
         "recommended_actions": [
             {"action": "schedule_pumping_reminder", "label": "Schedule Pumping Reminder", "priority": "medium"},
             {"action": "send_maintenance_guide", "label": "Send Maintenance Guide", "priority": "low"},
-            {"action": "offer_inspection", "label": "Offer System Inspection", "priority": "medium"}
-        ]
+            {"action": "offer_inspection", "label": "Offer System Inspection", "priority": "medium"},
+        ],
     },
     {
         "name": "Contract Customers",
@@ -284,16 +278,16 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "has_active_contract", "operator": "eq", "value": True},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Contract customers provide predictable recurring revenue. Ensure contract obligations are met and identify opportunities for contract upgrades at renewal.",
         "recommended_actions": [
             {"action": "review_contract_compliance", "label": "Review Contract Compliance", "priority": "high"},
             {"action": "schedule_contracted_services", "label": "Schedule Contracted Services", "priority": "high"},
             {"action": "prepare_renewal_offer", "label": "Prepare Renewal Offer", "priority": "medium"},
-            {"action": "upsell_contract_tier", "label": "Upsell Contract Tier", "priority": "low"}
-        ]
+            {"action": "upsell_contract_tier", "label": "Upsell Contract Tier", "priority": "low"},
+        ],
     },
     {
         "name": "One-Time Customers",
@@ -305,16 +299,16 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "has_active_contract", "operator": "eq", "value": False},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "One-time customers represent untapped recurring revenue. Focus on demonstrating the value of service contracts for peace of mind and cost savings.",
         "recommended_actions": [
             {"action": "promote_contracts", "label": "Promote Service Contracts", "priority": "high"},
             {"action": "send_contract_benefits", "label": "Send Contract Benefits Info", "priority": "medium"},
             {"action": "offer_contract_trial", "label": "Offer Contract Trial", "priority": "medium"},
-            {"action": "calculate_savings_analysis", "label": "Calculate Savings Analysis", "priority": "low"}
-        ]
+            {"action": "calculate_savings_analysis", "label": "Calculate Savings Analysis", "priority": "low"},
+        ],
     },
     {
         "name": "Service Due This Month",
@@ -327,16 +321,16 @@ SMART_SEGMENTS = [
             "rules": [
                 {"field": "next_service_date", "operator": "gte", "value": "FIRST_DAY_OF_MONTH"},
                 {"field": "next_service_date", "operator": "lte", "value": "LAST_DAY_OF_MONTH"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "These customers need service attention this month. Ensure timely scheduling and communication to maintain service intervals and satisfaction.",
         "recommended_actions": [
             {"action": "confirm_appointment", "label": "Confirm Appointment", "priority": "high"},
             {"action": "send_service_reminder", "label": "Send Service Reminder", "priority": "high"},
             {"action": "optimize_route", "label": "Optimize Routing", "priority": "medium"},
-            {"action": "prepare_service_checklist", "label": "Prepare Service Checklist", "priority": "medium"}
-        ]
+            {"action": "prepare_service_checklist", "label": "Prepare Service Checklist", "priority": "medium"},
+        ],
     },
     {
         "name": "Service Overdue",
@@ -348,18 +342,17 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "service_overdue", "operator": "eq", "value": True},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Overdue customers are past their recommended service interval. This increases risk of system issues and potential health score decline. Urgent outreach needed.",
         "recommended_actions": [
             {"action": "urgent_scheduling_call", "label": "Urgent Scheduling Call", "priority": "critical"},
             {"action": "send_overdue_notice", "label": "Send Overdue Notice", "priority": "high"},
             {"action": "offer_priority_scheduling", "label": "Offer Priority Scheduling", "priority": "high"},
-            {"action": "flag_for_csm_review", "label": "Flag for CSM Review", "priority": "medium"}
-        ]
+            {"action": "flag_for_csm_review", "label": "Flag for CSM Review", "priority": "medium"},
+        ],
     },
-
     # =============================================================================
     # ENGAGEMENT SEGMENTS
     # =============================================================================
@@ -373,16 +366,16 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "last_email_open", "operator": "gte", "value": "NOW - INTERVAL '90 days'"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Engaged email subscribers are receptive to communication. They're good candidates for promotions, educational content, and surveys.",
         "recommended_actions": [
             {"action": "include_in_campaigns", "label": "Include in Campaigns", "priority": "high"},
             {"action": "send_exclusive_offers", "label": "Send Exclusive Offers", "priority": "medium"},
             {"action": "request_survey_feedback", "label": "Request Survey Feedback", "priority": "medium"},
-            {"action": "share_educational_content", "label": "Share Educational Content", "priority": "low"}
-        ]
+            {"action": "share_educational_content", "label": "Share Educational Content", "priority": "low"},
+        ],
     },
     {
         "name": "Email Unengaged",
@@ -394,16 +387,16 @@ SMART_SEGMENTS = [
             "logic": "or",
             "rules": [
                 {"field": "last_email_open", "operator": "lte", "value": "NOW - INTERVAL '90 days'"},
-                {"field": "last_email_open", "operator": "is_null", "value": None}
-            ]
+                {"field": "last_email_open", "operator": "is_null", "value": None},
+            ],
         },
         "ai_insight": "Unengaged subscribers may have email deliverability issues or simply ignore emails. Consider alternative channels like SMS or phone for important communications.",
         "recommended_actions": [
             {"action": "verify_email_address", "label": "Verify Email Address", "priority": "high"},
             {"action": "try_alternative_channels", "label": "Try Alternative Channels", "priority": "high"},
             {"action": "send_reengagement_email", "label": "Send Re-engagement Email", "priority": "medium"},
-            {"action": "consider_email_sunset", "label": "Consider Email Sunset", "priority": "low"}
-        ]
+            {"action": "consider_email_sunset", "label": "Consider Email Sunset", "priority": "low"},
+        ],
     },
     {
         "name": "NPS Promoters",
@@ -415,16 +408,16 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "nps_score", "operator": "gte", "value": 9},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Promoters are highly satisfied customers likely to recommend your services. Leverage their enthusiasm for referrals, reviews, and case studies.",
         "recommended_actions": [
             {"action": "request_online_review", "label": "Request Online Review", "priority": "high"},
             {"action": "request_referral", "label": "Request Referral", "priority": "high"},
             {"action": "invite_to_referral_program", "label": "Invite to Referral Program", "priority": "medium"},
-            {"action": "feature_in_case_study", "label": "Feature in Case Study", "priority": "low"}
-        ]
+            {"action": "feature_in_case_study", "label": "Feature in Case Study", "priority": "low"},
+        ],
     },
     {
         "name": "NPS Passives",
@@ -437,16 +430,16 @@ SMART_SEGMENTS = [
             "rules": [
                 {"field": "nps_score", "operator": "gte", "value": 7},
                 {"field": "nps_score", "operator": "lte", "value": 8},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Passive customers are satisfied but not enthusiastic. They're vulnerable to competitive offers. Focus on delighting them to convert to promoters.",
         "recommended_actions": [
             {"action": "understand_gaps", "label": "Understand Experience Gaps", "priority": "high"},
             {"action": "offer_surprise_delight", "label": "Offer Surprise & Delight", "priority": "medium"},
             {"action": "personalized_followup", "label": "Personalized Follow-up", "priority": "medium"},
-            {"action": "invite_feedback", "label": "Invite Feedback", "priority": "low"}
-        ]
+            {"action": "invite_feedback", "label": "Invite Feedback", "priority": "low"},
+        ],
     },
     {
         "name": "NPS Detractors",
@@ -459,8 +452,8 @@ SMART_SEGMENTS = [
             "rules": [
                 {"field": "nps_score", "operator": "lte", "value": 6},
                 {"field": "nps_score", "operator": "is_not_null", "value": None},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Detractors are unhappy and may spread negative word-of-mouth. Prioritize resolving their issues to prevent churn and reputation damage.",
         "recommended_actions": [
@@ -468,10 +461,9 @@ SMART_SEGMENTS = [
             {"action": "create_escalation", "label": "Create Escalation", "priority": "critical"},
             {"action": "document_issues", "label": "Document Issues", "priority": "high"},
             {"action": "service_recovery", "label": "Initiate Service Recovery", "priority": "high"},
-            {"action": "manager_followup", "label": "Manager Follow-up", "priority": "medium"}
-        ]
+            {"action": "manager_followup", "label": "Manager Follow-up", "priority": "medium"},
+        ],
     },
-
     # =============================================================================
     # GEOGRAPHIC SEGMENTS
     # =============================================================================
@@ -485,15 +477,15 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "city", "operator": "eq", "value": "San Marcos"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "San Marcos customers form a concentrated service area. Optimize routing and consider area-specific promotions to maximize efficiency.",
         "recommended_actions": [
             {"action": "route_optimization", "label": "Optimize Service Routes", "priority": "medium"},
             {"action": "local_event_invite", "label": "Invite to Local Events", "priority": "low"},
-            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"}
-        ]
+            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"},
+        ],
     },
     {
         "name": "Wimberley Customers",
@@ -505,15 +497,15 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "city", "operator": "eq", "value": "Wimberley"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Wimberley area customers often have unique septic needs due to local geology. Consider specialized service offerings.",
         "recommended_actions": [
             {"action": "route_optimization", "label": "Optimize Service Routes", "priority": "medium"},
             {"action": "terrain_specific_tips", "label": "Send Terrain-Specific Tips", "priority": "low"},
-            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"}
-        ]
+            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"},
+        ],
     },
     {
         "name": "New Braunfels Customers",
@@ -525,15 +517,15 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "city", "operator": "eq", "value": "New Braunfels"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "New Braunfels is a growing market. Focus on capturing referrals from satisfied customers to expand presence.",
         "recommended_actions": [
             {"action": "route_optimization", "label": "Optimize Service Routes", "priority": "medium"},
             {"action": "referral_program_focus", "label": "Focus Referral Program", "priority": "medium"},
-            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"}
-        ]
+            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"},
+        ],
     },
     {
         "name": "Comal County Customers",
@@ -545,15 +537,15 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "county", "operator": "eq", "value": "Comal"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Comal County customers span a wide geographic area. Consider dedicated service days for efficiency.",
         "recommended_actions": [
             {"action": "dedicated_service_day", "label": "Schedule Dedicated Service Day", "priority": "medium"},
             {"action": "county_regulations_update", "label": "Send Regulations Update", "priority": "low"},
-            {"action": "route_optimization", "label": "Optimize Service Routes", "priority": "medium"}
-        ]
+            {"action": "route_optimization", "label": "Optimize Service Routes", "priority": "medium"},
+        ],
     },
     {
         "name": "Kyle Customers",
@@ -565,15 +557,15 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "city", "operator": "eq", "value": "Kyle"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Kyle is a rapidly growing area with new construction. Good opportunity for new customer acquisition through builder partnerships.",
         "recommended_actions": [
             {"action": "route_optimization", "label": "Optimize Service Routes", "priority": "medium"},
             {"action": "new_construction_outreach", "label": "New Construction Outreach", "priority": "medium"},
-            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"}
-        ]
+            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"},
+        ],
     },
     {
         "name": "Buda Customers",
@@ -585,15 +577,15 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "city", "operator": "eq", "value": "Buda"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Buda is experiencing significant growth. Establish strong presence with excellent service to capture market share.",
         "recommended_actions": [
             {"action": "route_optimization", "label": "Optimize Service Routes", "priority": "medium"},
             {"action": "growth_market_strategy", "label": "Implement Growth Market Strategy", "priority": "medium"},
-            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"}
-        ]
+            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"},
+        ],
     },
     {
         "name": "Dripping Springs Customers",
@@ -605,15 +597,15 @@ SMART_SEGMENTS = [
             "logic": "and",
             "rules": [
                 {"field": "city", "operator": "eq", "value": "Dripping Springs"},
-                {"field": "is_active", "operator": "eq", "value": True}
-            ]
+                {"field": "is_active", "operator": "eq", "value": True},
+            ],
         },
         "ai_insight": "Dripping Springs customers often have larger properties with unique septic requirements. Consider premium service offerings.",
         "recommended_actions": [
             {"action": "route_optimization", "label": "Optimize Service Routes", "priority": "medium"},
             {"action": "premium_service_offer", "label": "Offer Premium Services", "priority": "medium"},
-            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"}
-        ]
+            {"action": "area_specific_promotion", "label": "Send Area-Specific Promotion", "priority": "low"},
+        ],
     },
 ]
 
@@ -650,12 +642,7 @@ class SmartSegmentService:
 
         await self.db.commit()
 
-        return {
-            "created": created,
-            "updated": updated,
-            "skipped": skipped,
-            "total": len(SMART_SEGMENTS)
-        }
+        return {"created": created, "updated": updated, "skipped": skipped, "total": len(SMART_SEGMENTS)}
 
     async def _create_or_update_segment(self, segment_def: dict) -> str:
         """
@@ -665,10 +652,7 @@ class SmartSegmentService:
         """
         # Check if segment already exists
         result = await self.db.execute(
-            select(Segment).where(
-                Segment.name == segment_def["name"],
-                Segment.is_system == True
-            )
+            select(Segment).where(Segment.name == segment_def["name"], Segment.is_system == True)
         )
         existing = result.scalar_one_or_none()
 
@@ -697,7 +681,7 @@ class SmartSegmentService:
                 is_system=True,
                 is_active=True,
                 auto_refresh=True,
-                refresh_interval_hours=24
+                refresh_interval_hours=24,
             )
             self.db.add(segment)
             return "created"
@@ -718,12 +702,7 @@ class SmartSegmentService:
 
     async def get_segment_by_name(self, name: str) -> Optional[Segment]:
         """Get a smart segment by name."""
-        result = await self.db.execute(
-            select(Segment).where(
-                Segment.name == name,
-                Segment.is_system == True
-            )
-        )
+        result = await self.db.execute(select(Segment).where(Segment.name == name, Segment.is_system == True))
         return result.scalar_one_or_none()
 
     async def get_segment_categories(self) -> list[dict]:
@@ -731,20 +710,33 @@ class SmartSegmentService:
         Get list of segment categories with counts.
         """
         categories = [
-            {"code": SmartSegmentCategory.LIFECYCLE, "label": "Lifecycle", "description": "Based on customer journey stage"},
+            {
+                "code": SmartSegmentCategory.LIFECYCLE,
+                "label": "Lifecycle",
+                "description": "Based on customer journey stage",
+            },
             {"code": SmartSegmentCategory.VALUE, "label": "Value", "description": "Based on customer lifetime value"},
-            {"code": SmartSegmentCategory.SERVICE, "label": "Service", "description": "Based on service type and status"},
-            {"code": SmartSegmentCategory.ENGAGEMENT, "label": "Engagement", "description": "Based on communication engagement"},
-            {"code": SmartSegmentCategory.GEOGRAPHIC, "label": "Geographic", "description": "Based on customer location"},
+            {
+                "code": SmartSegmentCategory.SERVICE,
+                "label": "Service",
+                "description": "Based on service type and status",
+            },
+            {
+                "code": SmartSegmentCategory.ENGAGEMENT,
+                "label": "Engagement",
+                "description": "Based on communication engagement",
+            },
+            {
+                "code": SmartSegmentCategory.GEOGRAPHIC,
+                "label": "Geographic",
+                "description": "Based on customer location",
+            },
         ]
 
         # Get counts per category
         for cat in categories:
             result = await self.db.execute(
-                select(Segment).where(
-                    Segment.is_system == True,
-                    Segment.category == cat["code"]
-                )
+                select(Segment).where(Segment.is_system == True, Segment.category == cat["code"])
             )
             cat["count"] = len(result.scalars().all())
 
@@ -757,9 +749,7 @@ class SmartSegmentService:
         This will recreate all system segments with default settings.
         """
         # Delete all existing system segments
-        result = await self.db.execute(
-            select(Segment).where(Segment.is_system == True)
-        )
+        result = await self.db.execute(select(Segment).where(Segment.is_system == True))
         existing = result.scalars().all()
 
         for segment in existing:

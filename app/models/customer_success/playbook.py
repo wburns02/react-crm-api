@@ -5,10 +5,7 @@ Defines repeatable, best-practice workflows for common CS scenarios
 like onboarding, risk response, renewal, and expansion.
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, Enum as SQLEnum, JSON
-)
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -21,6 +18,7 @@ class Playbook(Base):
     Playbooks are triggered by specific conditions and create
     a series of tasks for CSMs to execute.
     """
+
     __tablename__ = "cs_playbooks"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -30,22 +28,35 @@ class Playbook(Base):
     # Playbook category
     category = Column(
         SQLEnum(
-            'onboarding', 'adoption', 'renewal', 'churn_risk',
-            'expansion', 'escalation', 'qbr', 'executive_sponsor',
-            'champion_change', 'implementation', 'training', 'custom',
-            name='cs_playbook_category_enum'
+            "onboarding",
+            "adoption",
+            "renewal",
+            "churn_risk",
+            "expansion",
+            "escalation",
+            "qbr",
+            "executive_sponsor",
+            "champion_change",
+            "implementation",
+            "training",
+            "custom",
+            name="cs_playbook_category_enum",
         ),
-        default='custom'
+        default="custom",
     )
 
     # Trigger conditions
     trigger_type = Column(
         SQLEnum(
-            'manual', 'health_threshold', 'segment_entry', 'event',
-            'days_to_renewal', 'scheduled',
-            name='cs_playbook_trigger_enum'
+            "manual",
+            "health_threshold",
+            "segment_entry",
+            "event",
+            "days_to_renewal",
+            "scheduled",
+            name="cs_playbook_trigger_enum",
         ),
-        default='manual'
+        default="manual",
     )
 
     # Health-based trigger
@@ -65,10 +76,7 @@ class Playbook(Base):
     trigger_config = Column(JSON)
 
     # Playbook settings
-    priority = Column(
-        SQLEnum('low', 'medium', 'high', 'critical', name='cs_playbook_priority_enum'),
-        default='medium'
-    )
+    priority = Column(SQLEnum("low", "medium", "high", "critical", name="cs_playbook_priority_enum"), default="medium")
     is_active = Column(Boolean, default=True)
 
     # Assignment
@@ -105,7 +113,9 @@ class Playbook(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    steps = relationship("PlaybookStep", back_populates="playbook", order_by="PlaybookStep.step_order", cascade="all, delete-orphan")
+    steps = relationship(
+        "PlaybookStep", back_populates="playbook", order_by="PlaybookStep.step_order", cascade="all, delete-orphan"
+    )
     executions = relationship("PlaybookExecution", back_populates="playbook", cascade="all, delete-orphan")
     trigger_segment = relationship("Segment", back_populates="playbooks", foreign_keys=[trigger_segment_id])
 
@@ -119,6 +129,7 @@ class PlaybookStep(Base):
 
     Each step typically generates a task for the CSM.
     """
+
     __tablename__ = "cs_playbook_steps"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -131,12 +142,21 @@ class PlaybookStep(Base):
     # Step type
     step_type = Column(
         SQLEnum(
-            'call', 'email', 'meeting', 'internal_task', 'product_demo',
-            'training', 'review', 'escalation', 'documentation',
-            'approval', 'notification', 'custom',
-            name='cs_playbook_step_type_enum'
+            "call",
+            "email",
+            "meeting",
+            "internal_task",
+            "product_demo",
+            "training",
+            "review",
+            "escalation",
+            "documentation",
+            "approval",
+            "notification",
+            "custom",
+            name="cs_playbook_step_type_enum",
         ),
-        nullable=False
+        nullable=False,
     )
 
     # Assignee
@@ -167,8 +187,10 @@ class PlaybookStep(Base):
 
     # Completion criteria
     completion_type = Column(
-        SQLEnum('manual', 'auto_email_sent', 'auto_meeting_scheduled', 'approval_received', name='cs_completion_type_enum'),
-        default='manual'
+        SQLEnum(
+            "manual", "auto_email_sent", "auto_meeting_scheduled", "approval_received", name="cs_completion_type_enum"
+        ),
+        default="manual",
     )
 
     # Settings
@@ -183,7 +205,9 @@ class PlaybookStep(Base):
     playbook = relationship("Playbook", back_populates="steps")
 
     def __repr__(self):
-        return f"<PlaybookStep id={self.id} playbook_id={self.playbook_id} order={self.step_order} type={self.step_type}>"
+        return (
+            f"<PlaybookStep id={self.id} playbook_id={self.playbook_id} order={self.step_order} type={self.step_type}>"
+        )
 
 
 class PlaybookExecution(Base):
@@ -192,6 +216,7 @@ class PlaybookExecution(Base):
 
     Tracks progress through playbook steps and outcomes.
     """
+
     __tablename__ = "cs_playbook_executions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -200,11 +225,8 @@ class PlaybookExecution(Base):
 
     # Status
     status = Column(
-        SQLEnum(
-            'active', 'paused', 'completed', 'cancelled', 'failed',
-            name='cs_playbook_exec_status_enum'
-        ),
-        default='active'
+        SQLEnum("active", "paused", "completed", "cancelled", "failed", name="cs_playbook_exec_status_enum"),
+        default="active",
     )
 
     # Progress
@@ -227,9 +249,7 @@ class PlaybookExecution(Base):
     trigger_reason = Column(Text)
 
     # Outcome
-    outcome = Column(
-        SQLEnum('successful', 'unsuccessful', 'partial', 'cancelled', name='cs_playbook_outcome_enum')
-    )
+    outcome = Column(SQLEnum("successful", "unsuccessful", "partial", "cancelled", name="cs_playbook_outcome_enum"))
     outcome_notes = Column(Text)
 
     # Success criteria evaluation

@@ -5,6 +5,7 @@ Features:
 - Expiring items dashboard
 - Compliance summary reports
 """
+
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, or_, and_
 from typing import Optional, List
@@ -25,6 +26,7 @@ router = APIRouter()
 # ========================
 # Pydantic Schemas
 # ========================
+
 
 # License Schemas
 class LicenseCreate(BaseModel):
@@ -208,6 +210,7 @@ class ComplianceDashboardResponse(BaseModel):
 # ========================
 # License Endpoints
 # ========================
+
 
 @router.get("/licenses", response_model=ListResponse)
 async def list_licenses(
@@ -411,6 +414,7 @@ async def delete_license(
 # ========================
 # Certification Endpoints
 # ========================
+
 
 @router.get("/certifications", response_model=ListResponse)
 async def list_certifications(
@@ -618,9 +622,11 @@ async def delete_certification(
 # Inspection Endpoints
 # ========================
 
+
 def generate_inspection_number():
     """Generate unique inspection number."""
     from datetime import datetime
+
     return f"INS-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
 
 
@@ -699,10 +705,7 @@ async def create_inspection(
 ):
     """Create a new inspection."""
     try:
-        insp = Inspection(
-            inspection_number=generate_inspection_number(),
-            **insp_data.model_dump()
-        )
+        insp = Inspection(inspection_number=generate_inspection_number(), **insp_data.model_dump())
         db.add(insp)
         await db.commit()
         await db.refresh(insp)
@@ -843,6 +846,7 @@ async def delete_inspection(
 # Dashboard Endpoint
 # ========================
 
+
 @router.get("/dashboard", response_model=ComplianceDashboardResponse)
 async def get_compliance_dashboard(
     db: DbSession,
@@ -912,10 +916,7 @@ async def get_compliance_dashboard(
         # Overdue inspections
         overdue_result = await db.execute(
             select(Inspection)
-            .where(
-                Inspection.scheduled_date < today,
-                Inspection.status.in_(["pending", "scheduled"])
-            )
+            .where(Inspection.scheduled_date < today, Inspection.status.in_(["pending", "scheduled"]))
             .order_by(Inspection.scheduled_date)
             .limit(10)
         )
@@ -934,9 +935,9 @@ async def get_compliance_dashboard(
         total_licenses = (await db.execute(select(func.count(License.id)))).scalar() or 0
         total_certs = (await db.execute(select(func.count(Certification.id)))).scalar() or 0
         total_inspections = (await db.execute(select(func.count(Inspection.id)))).scalar() or 0
-        completed_inspections = (await db.execute(
-            select(func.count(Inspection.id)).where(Inspection.status == "completed")
-        )).scalar() or 0
+        completed_inspections = (
+            await db.execute(select(func.count(Inspection.id)).where(Inspection.status == "completed"))
+        ).scalar() or 0
 
         return {
             "expiring_licenses": expiring_licenses,

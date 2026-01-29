@@ -58,8 +58,7 @@ async def get_ai_guidance(
     except Exception as e:
         logger.error(f"Error getting AI guidance: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting AI guidance: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error getting AI guidance: {str(e)}"
         )
 
 
@@ -85,8 +84,7 @@ async def get_ai_alerts(
     except Exception as e:
         logger.error(f"Error getting AI alerts: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting AI alerts: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error getting AI alerts: {str(e)}"
         )
 
 
@@ -117,8 +115,7 @@ async def generate_ai_response(
     except Exception as e:
         logger.error(f"Error generating AI response: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generating AI response: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generating AI response: {str(e)}"
         )
 
 
@@ -155,9 +152,7 @@ async def get_action_queue(
             guidance = await escalation_ai_service.get_guidance(db, esc.id)
 
             # Get customer name
-            cust_result = await db.execute(
-                select(Customer.name).where(Customer.id == esc.customer_id)
-            )
+            cust_result = await db.execute(select(Customer.name).where(Customer.id == esc.customer_id))
             customer_name = cust_result.scalar_one_or_none() or "Unknown"
 
             # Calculate time remaining
@@ -166,20 +161,22 @@ async def get_action_queue(
                 delta = esc.sla_deadline - datetime.utcnow()
                 time_remaining = int(delta.total_seconds() / 60)
 
-            queue_items.append({
-                "escalation_id": esc.id,
-                "customer_name": customer_name,
-                "title": esc.title,
-                "severity": esc.severity,
-                "sentiment_emoji": guidance.get("sentiment", {}).get("emoji", ""),
-                "sentiment_label": guidance.get("sentiment", {}).get("label", "Unknown"),
-                "time_remaining_minutes": time_remaining,
-                "sla_status": guidance.get("sla_status", {}).get("status", "unknown"),
-                "sla_color": guidance.get("sla_status", {}).get("color", "gray"),
-                "recommended_action": guidance.get("recommended_action", {}).get("type", "call"),
-                "big_button_text": guidance.get("recommended_action", {}).get("big_button_text", "TAKE ACTION"),
-                "priority_score": guidance.get("priority_score", 50),
-            })
+            queue_items.append(
+                {
+                    "escalation_id": esc.id,
+                    "customer_name": customer_name,
+                    "title": esc.title,
+                    "severity": esc.severity,
+                    "sentiment_emoji": guidance.get("sentiment", {}).get("emoji", ""),
+                    "sentiment_label": guidance.get("sentiment", {}).get("label", "Unknown"),
+                    "time_remaining_minutes": time_remaining,
+                    "sla_status": guidance.get("sla_status", {}).get("status", "unknown"),
+                    "sla_color": guidance.get("sla_status", {}).get("color", "gray"),
+                    "recommended_action": guidance.get("recommended_action", {}).get("type", "call"),
+                    "big_button_text": guidance.get("recommended_action", {}).get("big_button_text", "TAKE ACTION"),
+                    "priority_score": guidance.get("priority_score", 50),
+                }
+            )
 
             # Count by severity
             if esc.severity in severity_counts:
@@ -199,8 +196,7 @@ async def get_action_queue(
     except Exception as e:
         logger.error(f"Error getting action queue: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting action queue: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error getting action queue: {str(e)}"
         )
 
 
@@ -216,14 +212,16 @@ async def list_playbooks(
     """
     playbooks = []
     for playbook_id, playbook in PLAYBOOKS.items():
-        playbooks.append({
-            "id": playbook_id,
-            "name": playbook["name"],
-            "trigger_keywords": playbook["trigger_keywords"],
-            "success_rate": playbook["success_rate"],
-            "steps_count": len(playbook["steps"]),
-            "steps": playbook["steps"],
-        })
+        playbooks.append(
+            {
+                "id": playbook_id,
+                "name": playbook["name"],
+                "trigger_keywords": playbook["trigger_keywords"],
+                "success_rate": playbook["success_rate"],
+                "steps_count": len(playbook["steps"]),
+                "steps": playbook["steps"],
+            }
+        )
 
     return {
         "playbooks": playbooks,

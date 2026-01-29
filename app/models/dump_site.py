@@ -1,4 +1,5 @@
 """Dump site models for tracking disposal locations and fees."""
+
 from sqlalchemy import Column, String, DateTime, Text, Float, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func

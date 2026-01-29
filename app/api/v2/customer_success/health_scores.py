@@ -79,9 +79,7 @@ async def get_customer_health_score(
     current_user: CurrentUser,
 ):
     """Get health score for a specific customer."""
-    result = await db.execute(
-        select(HealthScore).where(HealthScore.customer_id == customer_id)
-    )
+    result = await db.execute(select(HealthScore).where(HealthScore.customer_id == customer_id))
     score = result.scalar_one_or_none()
 
     if not score:
@@ -101,9 +99,7 @@ async def create_health_score(
 ):
     """Create a health score for a customer."""
     # Check customer exists
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == data.customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == data.customer_id))
     if not customer_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -111,9 +107,7 @@ async def create_health_score(
         )
 
     # Check if health score already exists
-    existing = await db.execute(
-        select(HealthScore).where(HealthScore.customer_id == data.customer_id)
-    )
+    existing = await db.execute(select(HealthScore).where(HealthScore.customer_id == data.customer_id))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -154,9 +148,7 @@ async def update_health_score(
     current_user: CurrentUser,
 ):
     """Update a customer's health score."""
-    result = await db.execute(
-        select(HealthScore).where(HealthScore.customer_id == customer_id)
-    )
+    result = await db.execute(select(HealthScore).where(HealthScore.customer_id == customer_id))
     score = result.scalar_one_or_none()
 
     if not score:
@@ -189,7 +181,9 @@ async def update_health_score(
         score.trend_percentage = ((score.overall_score - old_score) / old_score * 100) if old_score > 0 else 0
 
         # Create event
-        event_type = HealthEventType.MANUAL_OVERRIDE.value if data.is_manually_set else HealthEventType.SCORE_CALCULATED.value
+        event_type = (
+            HealthEventType.MANUAL_OVERRIDE.value if data.is_manually_set else HealthEventType.SCORE_CALCULATED.value
+        )
         event = HealthScoreEvent(
             health_score_id=score.id,
             event_type=event_type,
@@ -216,9 +210,7 @@ async def list_health_score_events(
 ):
     """List health score events for a customer."""
     # Get health score
-    score_result = await db.execute(
-        select(HealthScore).where(HealthScore.customer_id == customer_id)
-    )
+    score_result = await db.execute(select(HealthScore).where(HealthScore.customer_id == customer_id))
     score = score_result.scalar_one_or_none()
 
     if not score:
@@ -258,9 +250,7 @@ async def get_health_score_trend(
 ):
     """Get health score trend data for charts."""
     # Get health score
-    score_result = await db.execute(
-        select(HealthScore).where(HealthScore.customer_id == customer_id)
-    )
+    score_result = await db.execute(select(HealthScore).where(HealthScore.customer_id == customer_id))
     score = score_result.scalar_one_or_none()
 
     if not score:
@@ -290,11 +280,13 @@ async def get_health_score_trend(
     scores = []
     for event in events:
         if event.new_score is not None:
-            data_points.append({
-                "date": event.created_at.isoformat() if event.created_at else None,
-                "score": event.new_score,
-                "status": _calculate_health_status(event.new_score),
-            })
+            data_points.append(
+                {
+                    "date": event.created_at.isoformat() if event.created_at else None,
+                    "score": event.new_score,
+                    "status": _calculate_health_status(event.new_score),
+                }
+            )
             scores.append(event.new_score)
 
     # Calculate statistics
@@ -304,8 +296,8 @@ async def get_health_score_trend(
 
     # Determine trend
     if len(scores) >= 2:
-        first_half_avg = sum(scores[:len(scores)//2]) / (len(scores)//2)
-        second_half_avg = sum(scores[len(scores)//2:]) / (len(scores) - len(scores)//2)
+        first_half_avg = sum(scores[: len(scores) // 2]) / (len(scores) // 2)
+        second_half_avg = sum(scores[len(scores) // 2 :]) / (len(scores) - len(scores) // 2)
         if second_half_avg > first_half_avg + 5:
             trend = ScoreTrend.IMPROVING
         elif second_half_avg < first_half_avg - 5:
@@ -358,9 +350,7 @@ async def get_health_summary(
     # Count by status
     status_counts = {}
     for status_val in HealthStatus:
-        count_result = await db.execute(
-            select(func.count()).where(HealthScore.health_status == status_val.value)
-        )
+        count_result = await db.execute(select(func.count()).where(HealthScore.health_status == status_val.value))
         status_counts[status_val.value] = count_result.scalar()
 
     # Average score
@@ -368,9 +358,7 @@ async def get_health_summary(
     avg_score = avg_result.scalar() or 0
 
     # Scores below threshold (at risk)
-    at_risk_result = await db.execute(
-        select(func.count()).where(HealthScore.overall_score < 50)
-    )
+    at_risk_result = await db.execute(select(func.count()).where(HealthScore.overall_score < 50))
     at_risk_count = at_risk_result.scalar()
 
     # Declining trend count

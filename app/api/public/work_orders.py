@@ -27,8 +27,10 @@ router = APIRouter(prefix="/work-orders", tags=["Public API - Work Orders"])
 # Schemas (Simplified for Public API)
 # ============================================================================
 
+
 class PublicWorkOrderBase(BaseModel):
     """Base work order schema for public API."""
+
     customer_id: int
     technician_id: Optional[str] = None
     job_type: str
@@ -64,11 +66,13 @@ class PublicWorkOrderBase(BaseModel):
 
 class PublicWorkOrderCreate(PublicWorkOrderBase):
     """Schema for creating a work order via public API."""
+
     pass
 
 
 class PublicWorkOrderUpdate(BaseModel):
     """Schema for updating a work order via public API."""
+
     customer_id: Optional[int] = None
     technician_id: Optional[str] = None
     job_type: Optional[str] = None
@@ -99,16 +103,18 @@ class PublicWorkOrderUpdate(BaseModel):
 
 class PublicWorkOrderStatusUpdate(BaseModel):
     """Schema for updating work order status."""
+
     status: str = Field(
         ...,
         description="New status. Valid values: draft, scheduled, confirmed, enroute, "
-                    "on_site, in_progress, completed, canceled, requires_followup"
+        "on_site, in_progress, completed, canceled, requires_followup",
     )
     notes: Optional[str] = Field(None, description="Optional status change notes")
 
 
 class PublicWorkOrderResponse(PublicWorkOrderBase):
     """Schema for work order response in public API."""
+
     id: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -128,6 +134,7 @@ class PublicWorkOrderResponse(PublicWorkOrderBase):
 
 class PublicWorkOrderListResponse(BaseModel):
     """Paginated work order list response."""
+
     items: list[PublicWorkOrderResponse]
     total: int
     page: int
@@ -137,13 +144,26 @@ class PublicWorkOrderListResponse(BaseModel):
 
 # Valid status values for validation
 VALID_STATUSES = {
-    "draft", "scheduled", "confirmed", "enroute", "on_site",
-    "in_progress", "completed", "canceled", "requires_followup"
+    "draft",
+    "scheduled",
+    "confirmed",
+    "enroute",
+    "on_site",
+    "in_progress",
+    "completed",
+    "canceled",
+    "requires_followup",
 }
 
 VALID_JOB_TYPES = {
-    "pumping", "inspection", "repair", "installation",
-    "emergency", "maintenance", "grease_trap", "camera_inspection"
+    "pumping",
+    "inspection",
+    "repair",
+    "installation",
+    "emergency",
+    "maintenance",
+    "grease_trap",
+    "camera_inspection",
 }
 
 VALID_PRIORITIES = {"low", "normal", "high", "urgent", "emergency"}
@@ -152,6 +172,7 @@ VALID_PRIORITIES = {"low", "normal", "high", "urgent", "emergency"}
 # ============================================================================
 # Endpoints
 # ============================================================================
+
 
 @router.get(
     "",
@@ -274,9 +295,7 @@ async def list_work_orders(
     for key, value in headers.items():
         response.headers[key] = value
 
-    logger.debug(
-        f"Work order list request by {client.client_id}: returned {len(work_orders)} of {total}"
-    )
+    logger.debug(f"Work order list request by {client.client_id}: returned {len(work_orders)} of {total}")
 
     return PublicWorkOrderListResponse(
         items=work_orders,
@@ -411,9 +430,7 @@ async def create_work_order(
     for key, value in headers.items():
         response.headers[key] = value
 
-    logger.info(
-        f"Work order created via public API: {work_order.id} by {client.client_id}"
-    )
+    logger.info(f"Work order created via public API: {work_order.id} by {client.client_id}")
 
     return work_order
 
@@ -501,9 +518,7 @@ async def update_work_order(
     for key, value in headers.items():
         response.headers[key] = value
 
-    logger.info(
-        f"Work order updated via public API: {work_order.id} by {client.client_id}"
-    )
+    logger.info(f"Work order updated via public API: {work_order.id} by {client.client_id}")
 
     return work_order
 
@@ -561,7 +576,9 @@ async def update_work_order_status(
     if status_update.notes:
         existing_notes = work_order.notes or ""
         timestamp = datetime.utcnow().isoformat()
-        status_note = f"\n[{timestamp}] Status changed from {old_status} to {status_update.status}: {status_update.notes}"
+        status_note = (
+            f"\n[{timestamp}] Status changed from {old_status} to {status_update.status}: {status_update.notes}"
+        )
         work_order.notes = existing_notes + status_note
 
     await db.commit()
@@ -618,6 +635,4 @@ async def delete_work_order(
     await db.delete(work_order)
     await db.commit()
 
-    logger.info(
-        f"Work order deleted via public API: {work_order_id} by {client.client_id}"
-    )
+    logger.info(f"Work order deleted via public API: {work_order_id} by {client.client_id}")

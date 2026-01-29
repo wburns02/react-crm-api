@@ -6,6 +6,7 @@ from decimal import Decimal
 
 class QuoteLineItem(BaseModel):
     """Schema for quote line item."""
+
     service: str
     description: Optional[str] = None
     quantity: float = 1
@@ -15,6 +16,7 @@ class QuoteLineItem(BaseModel):
 
 class QuoteBase(BaseModel):
     """Base quote schema."""
+
     customer_id: int
     title: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
@@ -30,7 +32,7 @@ class QuoteBase(BaseModel):
     notes: Optional[str] = None
     terms: Optional[str] = None
 
-    @field_validator('valid_until', mode='before')
+    @field_validator("valid_until", mode="before")
     @classmethod
     def parse_valid_until(cls, v):
         """Parse date strings to datetime - accepts 'YYYY-MM-DD' or full ISO datetime."""
@@ -46,13 +48,13 @@ class QuoteBase(BaseModel):
                 return None
             # Try parsing as date first (YYYY-MM-DD from HTML date input)
             try:
-                parsed_date = datetime.strptime(v, '%Y-%m-%d')
+                parsed_date = datetime.strptime(v, "%Y-%m-%d")
                 return parsed_date
             except ValueError:
                 pass
             # Try parsing as ISO datetime
             try:
-                return datetime.fromisoformat(v.replace('Z', '+00:00'))
+                return datetime.fromisoformat(v.replace("Z", "+00:00"))
             except ValueError:
                 pass
             # Try with timezone
@@ -65,11 +67,13 @@ class QuoteBase(BaseModel):
 
 class QuoteCreate(QuoteBase):
     """Schema for creating a quote."""
+
     pass
 
 
 class QuoteUpdate(BaseModel):
     """Schema for updating a quote."""
+
     title: Optional[str] = None
     description: Optional[str] = None
     line_items: Optional[List[Any]] = None
@@ -83,7 +87,7 @@ class QuoteUpdate(BaseModel):
     notes: Optional[str] = None
     terms: Optional[str] = None
 
-    @field_validator('valid_until', mode='before')
+    @field_validator("valid_until", mode="before")
     @classmethod
     def parse_valid_until(cls, v):
         """Parse date strings to datetime - accepts 'YYYY-MM-DD' or full ISO datetime."""
@@ -99,13 +103,13 @@ class QuoteUpdate(BaseModel):
                 return None
             # Try parsing as date first (YYYY-MM-DD from HTML date input)
             try:
-                parsed_date = datetime.strptime(v, '%Y-%m-%d')
+                parsed_date = datetime.strptime(v, "%Y-%m-%d")
                 return parsed_date
             except ValueError:
                 pass
             # Try parsing as ISO datetime
             try:
-                return datetime.fromisoformat(v.replace('Z', '+00:00'))
+                return datetime.fromisoformat(v.replace("Z", "+00:00"))
             except ValueError:
                 pass
             # Try with timezone
@@ -118,6 +122,7 @@ class QuoteUpdate(BaseModel):
 
 class QuoteResponse(QuoteBase):
     """Schema for quote response."""
+
     id: int
     quote_number: Optional[str] = None
     # Customer details (populated from JOIN with customers table)
@@ -144,6 +149,7 @@ class QuoteResponse(QuoteBase):
 
 class QuoteListResponse(BaseModel):
     """Paginated quote list response."""
+
     items: list[QuoteResponse]
     total: int
     page: int

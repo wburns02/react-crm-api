@@ -39,11 +39,7 @@ async def list_roles(
     is_demo = await service.is_demo_user(current_user)
 
     if not is_demo:
-        return RoleViewListResponse(
-            roles=[],
-            current_role=None,
-            is_demo_user=False
-        )
+        return RoleViewListResponse(roles=[], current_role=None, is_demo_user=False)
 
     # Initialize demo mode (creates default roles if needed)
     await service.initialize_demo_mode(current_user)
@@ -56,9 +52,7 @@ async def list_roles(
     current_role_key = current_role.role_key if current_role else "admin"
 
     return RoleViewListResponse(
-        roles=[RoleViewResponse.model_validate(r) for r in roles],
-        current_role=current_role_key,
-        is_demo_user=True
+        roles=[RoleViewResponse.model_validate(r) for r in roles], current_role=current_role_key, is_demo_user=True
     )
 
 
@@ -78,24 +72,17 @@ async def switch_role(
     # Verify demo user
     if not await service.is_demo_user(current_user):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Role switching is only available for demo users"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Role switching is only available for demo users"
         )
 
     # Switch role
     success, message, role = await service.switch_role(current_user, request.role_key)
 
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     return RoleSwitchResponse(
-        success=True,
-        message=message,
-        current_role=RoleViewResponse.model_validate(role),
-        switched_at=datetime.utcnow()
+        success=True, message=message, current_role=RoleViewResponse.model_validate(role), switched_at=datetime.utcnow()
     )
 
 
@@ -114,8 +101,7 @@ async def get_current_role(
 
     if not is_demo:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Role information is only available for demo users"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Role information is only available for demo users"
         )
 
     # Get current role
@@ -131,7 +117,7 @@ async def get_current_role(
         role=RoleViewResponse.model_validate(role),
         is_demo_user=True,
         user_email=current_user.email,
-        switched_at=session.switched_at if session else None
+        switched_at=session.switched_at if session else None,
     )
 
 
@@ -149,12 +135,7 @@ async def get_demo_status(
     is_demo = await service.is_demo_user(current_user)
 
     if not is_demo:
-        return DemoModeStatusResponse(
-            is_demo_mode=False,
-            demo_user_email=None,
-            available_roles=None,
-            current_role=None
-        )
+        return DemoModeStatusResponse(is_demo_mode=False, demo_user_email=None, available_roles=None, current_role=None)
 
     # Get roles and current role
     roles = await service.get_all_roles()
@@ -164,5 +145,5 @@ async def get_demo_status(
         is_demo_mode=True,
         demo_user_email=DEMO_USER_EMAIL,
         available_roles=[r.role_key for r in roles],
-        current_role=current_role.role_key if current_role else "admin"
+        current_role=current_role.role_key if current_role else "admin",
     )

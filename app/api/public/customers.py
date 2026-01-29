@@ -25,8 +25,10 @@ router = APIRouter(prefix="/customers", tags=["Public API - Customers"])
 # Schemas (Simplified for Public API)
 # ============================================================================
 
+
 class PublicCustomerBase(BaseModel):
     """Base customer schema for public API."""
+
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     email: Optional[EmailStr] = None
@@ -42,17 +44,20 @@ class PublicCustomerBase(BaseModel):
 
 class PublicCustomerCreate(PublicCustomerBase):
     """Schema for creating a customer via public API."""
+
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
 
 
 class PublicCustomerUpdate(PublicCustomerBase):
     """Schema for updating a customer via public API."""
+
     pass
 
 
 class PublicCustomerResponse(PublicCustomerBase):
     """Schema for customer response in public API."""
+
     id: int
     is_active: bool = True
     created_at: Optional[datetime] = None
@@ -64,6 +69,7 @@ class PublicCustomerResponse(PublicCustomerBase):
 
 class PublicCustomerListResponse(BaseModel):
     """Paginated customer list response."""
+
     items: list[PublicCustomerResponse]
     total: int
     page: int
@@ -74,6 +80,7 @@ class PublicCustomerListResponse(BaseModel):
 # ============================================================================
 # Endpoints
 # ============================================================================
+
 
 @router.get(
     "",
@@ -147,9 +154,7 @@ async def list_customers(
     for key, value in headers.items():
         response.headers[key] = value
 
-    logger.debug(
-        f"Customer list request by {client.client_id}: returned {len(customers)} of {total}"
-    )
+    logger.debug(f"Customer list request by {client.client_id}: returned {len(customers)} of {total}")
 
     return PublicCustomerListResponse(
         items=customers,
@@ -242,9 +247,7 @@ async def create_customer(
     for key, value in headers.items():
         response.headers[key] = value
 
-    logger.info(
-        f"Customer created via public API: {customer.id} by {client.client_id}"
-    )
+    logger.info(f"Customer created via public API: {customer.id} by {client.client_id}")
 
     return customer
 
@@ -300,9 +303,7 @@ async def update_customer(
     for key, value in headers.items():
         response.headers[key] = value
 
-    logger.info(
-        f"Customer updated via public API: {customer.id} by {client.client_id}"
-    )
+    logger.info(f"Customer updated via public API: {customer.id} by {client.client_id}")
 
     return customer
 
@@ -341,6 +342,4 @@ async def delete_customer(
     await db.delete(customer)
     await db.commit()
 
-    logger.info(
-        f"Customer deleted via public API: {customer_id} by {client.client_id}"
-    )
+    logger.info(f"Customer deleted via public API: {customer_id} by {client.client_id}")

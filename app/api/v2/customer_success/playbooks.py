@@ -15,9 +15,7 @@ from app.api.deps import DbSession, CurrentUser
 
 logger = logging.getLogger(__name__)
 from app.models.customer import Customer
-from app.models.customer_success import (
-    Playbook, PlaybookStep, PlaybookExecution
-)
+from app.models.customer_success import Playbook, PlaybookStep, PlaybookExecution
 from app.services.customer_success.playbook_runner import PlaybookRunner
 from app.schemas.customer_success.playbook import (
     PlaybookCreate,
@@ -39,6 +37,7 @@ router = APIRouter()
 
 
 # Playbook CRUD
+
 
 @router.get("/", response_model=PlaybookListResponse)
 async def list_playbooks(
@@ -91,8 +90,7 @@ async def list_playbooks(
     except Exception as e:
         logger.error(f"Error listing playbooks: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing playbooks: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing playbooks: {str(e)}"
         )
 
 
@@ -103,11 +101,7 @@ async def get_playbook(
     current_user: CurrentUser,
 ):
     """Get a specific playbook with steps."""
-    result = await db.execute(
-        select(Playbook)
-        .options(selectinload(Playbook.steps))
-        .where(Playbook.id == playbook_id)
-    )
+    result = await db.execute(select(Playbook).options(selectinload(Playbook.steps)).where(Playbook.id == playbook_id))
     playbook = result.scalar_one_or_none()
 
     if not playbook:
@@ -127,9 +121,7 @@ async def create_playbook(
 ):
     """Create a new playbook."""
     # Check for duplicate name
-    existing = await db.execute(
-        select(Playbook).where(Playbook.name == data.name)
-    )
+    existing = await db.execute(select(Playbook).where(Playbook.name == data.name))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -158,11 +150,7 @@ async def create_playbook(
     await db.refresh(playbook)
 
     # Load steps
-    result = await db.execute(
-        select(Playbook)
-        .options(selectinload(Playbook.steps))
-        .where(Playbook.id == playbook.id)
-    )
+    result = await db.execute(select(Playbook).options(selectinload(Playbook.steps)).where(Playbook.id == playbook.id))
     return result.scalar_one()
 
 
@@ -174,9 +162,7 @@ async def update_playbook(
     current_user: CurrentUser,
 ):
     """Update a playbook."""
-    result = await db.execute(
-        select(Playbook).where(Playbook.id == playbook_id)
-    )
+    result = await db.execute(select(Playbook).where(Playbook.id == playbook_id))
     playbook = result.scalar_one_or_none()
 
     if not playbook:
@@ -194,11 +180,7 @@ async def update_playbook(
     await db.refresh(playbook)
 
     # Load steps
-    result = await db.execute(
-        select(Playbook)
-        .options(selectinload(Playbook.steps))
-        .where(Playbook.id == playbook.id)
-    )
+    result = await db.execute(select(Playbook).options(selectinload(Playbook.steps)).where(Playbook.id == playbook.id))
     return result.scalar_one()
 
 
@@ -209,9 +191,7 @@ async def delete_playbook(
     current_user: CurrentUser,
 ):
     """Delete a playbook."""
-    result = await db.execute(
-        select(Playbook).where(Playbook.id == playbook_id)
-    )
+    result = await db.execute(select(Playbook).where(Playbook.id == playbook_id))
     playbook = result.scalar_one_or_none()
 
     if not playbook:
@@ -239,6 +219,7 @@ async def delete_playbook(
 
 # Playbook Steps
 
+
 @router.post("/{playbook_id}/steps", response_model=PlaybookStepResponse, status_code=status.HTTP_201_CREATED)
 async def create_playbook_step(
     playbook_id: int,
@@ -248,9 +229,7 @@ async def create_playbook_step(
 ):
     """Add a step to a playbook."""
     # Check playbook exists
-    playbook_result = await db.execute(
-        select(Playbook).where(Playbook.id == playbook_id)
-    )
+    playbook_result = await db.execute(select(Playbook).where(Playbook.id == playbook_id))
     if not playbook_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -326,6 +305,7 @@ async def delete_playbook_step(
 
 
 # Playbook Executions
+
 
 @router.get("/{playbook_id}/executions", response_model=PlaybookExecutionListResponse)
 async def list_playbook_executions(
@@ -437,9 +417,7 @@ async def bulk_trigger_playbook(
 ):
     """Bulk trigger a playbook for multiple customers."""
     # Check playbook exists
-    playbook_result = await db.execute(
-        select(Playbook).where(Playbook.id == request.playbook_id)
-    )
+    playbook_result = await db.execute(select(Playbook).where(Playbook.id == request.playbook_id))
     if not playbook_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -462,9 +440,7 @@ async def get_execution(
     current_user: CurrentUser,
 ):
     """Get a specific playbook execution."""
-    result = await db.execute(
-        select(PlaybookExecution).where(PlaybookExecution.id == execution_id)
-    )
+    result = await db.execute(select(PlaybookExecution).where(PlaybookExecution.id == execution_id))
     execution = result.scalar_one_or_none()
 
     if not execution:
@@ -483,9 +459,7 @@ async def pause_execution(
     current_user: CurrentUser,
 ):
     """Pause a playbook execution."""
-    result = await db.execute(
-        select(PlaybookExecution).where(PlaybookExecution.id == execution_id)
-    )
+    result = await db.execute(select(PlaybookExecution).where(PlaybookExecution.id == execution_id))
     execution = result.scalar_one_or_none()
 
     if not execution:
@@ -513,9 +487,7 @@ async def resume_execution(
     current_user: CurrentUser,
 ):
     """Resume a paused playbook execution."""
-    result = await db.execute(
-        select(PlaybookExecution).where(PlaybookExecution.id == execution_id)
-    )
+    result = await db.execute(select(PlaybookExecution).where(PlaybookExecution.id == execution_id))
     execution = result.scalar_one_or_none()
 
     if not execution:
@@ -544,9 +516,7 @@ async def cancel_execution(
     reason: Optional[str] = None,
 ):
     """Cancel a playbook execution."""
-    result = await db.execute(
-        select(PlaybookExecution).where(PlaybookExecution.id == execution_id)
-    )
+    result = await db.execute(select(PlaybookExecution).where(PlaybookExecution.id == execution_id))
     execution = result.scalar_one_or_none()
 
     if not execution:

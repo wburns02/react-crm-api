@@ -9,10 +9,7 @@ Enables A/B testing of campaign elements:
 - Statistical significance calculation
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, JSON
-)
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -25,6 +22,7 @@ class ABTest(Base):
     Supports testing different variants of campaign elements
     with statistical significance tracking.
     """
+
     __tablename__ = "cs_ab_tests"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -34,17 +32,17 @@ class ABTest(Base):
     description = Column(Text)
 
     # Test type: what element is being tested
-    test_type = Column(String(50), default='subject')  # subject, content, send_time, channel
+    test_type = Column(String(50), default="subject")  # subject, content, send_time, channel
 
     # Status
-    status = Column(String(20), default='draft')  # draft, running, paused, completed
+    status = Column(String(20), default="draft")  # draft, running, paused, completed
 
     # Variant A (Control)
-    variant_a_name = Column(String(200), default='Control')
+    variant_a_name = Column(String(200), default="Control")
     variant_a_config = Column(JSON)  # {subject: "...", content: "...", send_time: "...", etc}
 
     # Variant B (Treatment)
-    variant_b_name = Column(String(200), default='Variant B')
+    variant_b_name = Column(String(200), default="Variant B")
     variant_b_config = Column(JSON)
 
     # Traffic split (percentage to variant B, rest goes to A)
@@ -71,7 +69,7 @@ class ABTest(Base):
     min_sample_size = Column(Integer, default=100)  # Min samples before declaring winner
     significance_threshold = Column(Float, default=95.0)  # Required confidence %
     auto_winner = Column(Boolean, default=True)  # Auto-select winner when significant
-    primary_metric = Column(String(50), default='conversion')  # conversion, open, click
+    primary_metric = Column(String(50), default="conversion")  # conversion, open, click
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

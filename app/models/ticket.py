@@ -1,4 +1,5 @@
 """Ticket model for support/service ticket tracking."""
+
 from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func

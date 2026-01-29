@@ -40,19 +40,23 @@ class Visibility(str, Enum):
 
 # Resource Comment Schemas
 
+
 class ResourceCommentBase(BaseModel):
     """Base resource comment schema."""
+
     content: str = Field(..., min_length=1)
     parent_comment_id: Optional[int] = None
 
 
 class ResourceCommentCreate(ResourceCommentBase):
     """Schema for creating a comment."""
+
     pass
 
 
 class ResourceCommentResponse(ResourceCommentBase):
     """Resource comment response."""
+
     id: int
     resource_id: int
     user_id: int
@@ -67,8 +71,10 @@ class ResourceCommentResponse(ResourceCommentBase):
 
 # Resource Schemas
 
+
 class ResourceBase(BaseModel):
     """Base resource schema."""
+
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
     resource_type: ResourceType
@@ -85,11 +91,13 @@ class ResourceBase(BaseModel):
 
 class ResourceCreate(ResourceBase):
     """Schema for creating a resource."""
+
     pass
 
 
 class ResourceUpdate(BaseModel):
     """Schema for updating a resource."""
+
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     resource_type: Optional[ResourceType] = None
@@ -108,6 +116,7 @@ class ResourceUpdate(BaseModel):
 
 class ResourceResponse(ResourceBase):
     """Resource response schema."""
+
     id: int
     file_path: Optional[str] = None
     file_size: Optional[int] = None
@@ -132,6 +141,7 @@ class ResourceResponse(ResourceBase):
 
 class ResourceListResponse(BaseModel):
     """Paginated resource list response."""
+
     items: list[ResourceResponse]
     total: int
     page: int
@@ -140,18 +150,22 @@ class ResourceListResponse(BaseModel):
 
 # Team Note Comment Schemas
 
+
 class TeamNoteCommentBase(BaseModel):
     """Base team note comment schema."""
+
     content: str = Field(..., min_length=1)
 
 
 class TeamNoteCommentCreate(TeamNoteCommentBase):
     """Schema for creating a note comment."""
+
     pass
 
 
 class TeamNoteCommentResponse(TeamNoteCommentBase):
     """Team note comment response."""
+
     id: int
     note_id: int
     user_id: int
@@ -165,8 +179,10 @@ class TeamNoteCommentResponse(TeamNoteCommentBase):
 
 # Team Note Schemas
 
+
 class TeamNoteBase(BaseModel):
     """Base team note schema."""
+
     title: str = Field(..., min_length=1, max_length=300)
     content: str = Field(..., min_length=1)
     content_html: Optional[str] = None
@@ -178,11 +194,13 @@ class TeamNoteBase(BaseModel):
 
 class TeamNoteCreate(TeamNoteBase):
     """Schema for creating a note."""
+
     customer_id: Optional[int] = None
 
 
 class TeamNoteUpdate(BaseModel):
     """Schema for updating a note."""
+
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     content: Optional[str] = None
     content_html: Optional[str] = None
@@ -194,6 +212,7 @@ class TeamNoteUpdate(BaseModel):
 
 class TeamNoteResponse(TeamNoteBase):
     """Team note response schema."""
+
     id: int
     customer_id: Optional[int] = None
     customer_name: Optional[str] = None
@@ -209,6 +228,7 @@ class TeamNoteResponse(TeamNoteBase):
 
 class TeamNoteListResponse(BaseModel):
     """Paginated team note list response."""
+
     items: list[TeamNoteResponse]
     total: int
     page: int
@@ -217,8 +237,10 @@ class TeamNoteListResponse(BaseModel):
 
 # Activity Schemas
 
+
 class ActivityCreate(BaseModel):
     """Schema for creating an activity."""
+
     activity_type: str
     entity_type: Optional[str] = None
     entity_id: Optional[int] = None
@@ -230,6 +252,7 @@ class ActivityCreate(BaseModel):
 
 class ActivityResponse(BaseModel):
     """Activity response schema."""
+
     id: int
     activity_type: str
     entity_type: Optional[str] = None
@@ -249,6 +272,7 @@ class ActivityResponse(BaseModel):
 
 class ActivityListResponse(BaseModel):
     """Paginated activity list response."""
+
     items: list[ActivityResponse]
     total: int
     page: int

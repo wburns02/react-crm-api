@@ -6,6 +6,7 @@ from app.models.message import MessageType, MessageDirection, MessageStatus
 
 class MessageBase(BaseModel):
     """Base message schema."""
+
     customer_id: Optional[int] = None
     type: MessageType
     direction: MessageDirection
@@ -17,11 +18,13 @@ class MessageBase(BaseModel):
 
 class MessageCreate(MessageBase):
     """Schema for creating a message."""
+
     source: str = "react"
 
 
 class SendSMSRequest(BaseModel):
     """Schema for sending SMS."""
+
     customer_id: Optional[int] = None
     to: str = Field(..., description="Phone number to send to")
     body: str = Field(..., min_length=1, description="Message content")
@@ -34,6 +37,7 @@ class SendEmailRequest(BaseModel):
     Accepts both new field names (to, body) and legacy field names (email, message)
     for backwards compatibility with deployed frontends.
     """
+
     customer_id: Optional[int] = None
     to: Optional[str] = Field(None, description="Email address")
     email: Optional[str] = Field(None, description="Email address (legacy)")
@@ -42,11 +46,11 @@ class SendEmailRequest(BaseModel):
     message: Optional[str] = Field(None, description="Message content (legacy)")
     source: str = "react"
 
-    @field_validator('customer_id', mode='before')
+    @field_validator("customer_id", mode="before")
     @classmethod
     def parse_customer_id(cls, v):
         """Handle empty string as None for customer_id."""
-        if v == '' or v is None:
+        if v == "" or v is None:
             return None
         if isinstance(v, str):
             try:
@@ -55,7 +59,7 @@ class SendEmailRequest(BaseModel):
                 return None
         return v
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def normalize_fields(self):
         """Normalize legacy field names to new ones."""
         # Use 'email' if 'to' is not provided
@@ -74,6 +78,7 @@ class SendEmailRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     """Schema for message response."""
+
     id: int
     customer_id: Optional[int] = None
     type: MessageType
@@ -96,6 +101,7 @@ class MessageResponse(BaseModel):
 
 class MessageListResponse(BaseModel):
     """Paginated message list response."""
+
     items: list[MessageResponse]
     total: int
     page: int
@@ -104,6 +110,7 @@ class MessageListResponse(BaseModel):
 
 class TwilioWebhookPayload(BaseModel):
     """Schema for Twilio webhook payload."""
+
     MessageSid: str
     AccountSid: str
     From: str

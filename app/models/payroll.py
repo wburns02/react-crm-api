@@ -1,4 +1,5 @@
 """Payroll models for time tracking and compensation."""
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Float, Boolean, Date, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func

@@ -22,8 +22,10 @@ router = APIRouter()
 # Pydantic Schemas
 # =============================================================================
 
+
 class FinancingTerm(BaseModel):
     """Financing term option."""
+
     term_months: int
     apr: float
     monthly_payment_per_1000: float
@@ -31,6 +33,7 @@ class FinancingTerm(BaseModel):
 
 class FinancingOffer(BaseModel):
     """Available financing offer."""
+
     id: str
     provider: str  # wisetack, affirm, greensky, internal
     min_amount: float
@@ -42,6 +45,7 @@ class FinancingOffer(BaseModel):
 
 class FinancingApplication(BaseModel):
     """Customer financing application."""
+
     id: str
     customer_id: str
     amount: float
@@ -59,6 +63,7 @@ class FinancingApplication(BaseModel):
 
 class TechnicianEarnings(BaseModel):
     """Technician earnings summary."""
+
     technician_id: str
     period_start: str
     period_end: str
@@ -76,6 +81,7 @@ class TechnicianEarnings(BaseModel):
 
 class TechnicianPayout(BaseModel):
     """Technician payout record."""
+
     id: str
     technician_id: str
     amount: float
@@ -105,7 +111,7 @@ FINANCING_OFFERS = [
             FinancingTerm(term_months=36, apr=17.99, monthly_payment_per_1000=36.15),
         ],
         promo_apr=0.0,
-        promo_term_months=6
+        promo_term_months=6,
     ),
     FinancingOffer(
         id="offer-greensky",
@@ -117,7 +123,7 @@ FINANCING_OFFERS = [
             FinancingTerm(term_months=24, apr=12.99, monthly_payment_per_1000=47.54),
             FinancingTerm(term_months=36, apr=14.99, monthly_payment_per_1000=34.67),
             FinancingTerm(term_months=48, apr=17.99, monthly_payment_per_1000=29.29),
-        ]
+        ],
     ),
 ]
 
@@ -125,6 +131,7 @@ FINANCING_OFFERS = [
 # =============================================================================
 # Financing Endpoints
 # =============================================================================
+
 
 @router.get("/offers")
 async def get_financing_offers(
@@ -155,7 +162,7 @@ async def get_financing_applications(
             term_months=12,
             apr=9.99,
             monthly_payment=439.58,
-            created_at="2024-02-15T00:00:00Z"
+            created_at="2024-02-15T00:00:00Z",
         ),
     ]
     return {"applications": [a.model_dump() for a in applications]}
@@ -178,7 +185,7 @@ async def get_financing_application(
         term_months=12,
         apr=9.99,
         monthly_payment=439.58,
-        created_at="2024-02-15T00:00:00Z"
+        created_at="2024-02-15T00:00:00Z",
     )
     return {"application": application.model_dump()}
 
@@ -200,7 +207,7 @@ async def request_financing(
         provider=provider,
         status="pending",
         application_url=f"https://apply.{provider}.com/{uuid4().hex}",
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.utcnow().isoformat(),
     )
     return {"application": application.model_dump()}
 
@@ -227,13 +234,14 @@ async def generate_financing_link(
     link_id = uuid4().hex[:12]
     return {
         "link": f"https://financing.example.com/apply/{link_id}",
-        "expires_at": (datetime.utcnow() + timedelta(days=7)).isoformat()
+        "expires_at": (datetime.utcnow() + timedelta(days=7)).isoformat(),
     }
 
 
 # =============================================================================
 # Payout Endpoints
 # =============================================================================
+
 
 @router.get("/technicians/{technician_id}/earnings")
 async def get_technician_earnings(
@@ -259,7 +267,7 @@ async def get_technician_earnings(
         available_for_payout=3200.00,
         pending_payout=0.00,
         last_payout_date="2024-02-28",
-        job_count=32
+        job_count=32,
     )
     return {"earnings": earnings.model_dump()}
 
@@ -281,7 +289,7 @@ async def get_technician_payouts(
             method="standard",
             status="completed",
             initiated_at="2024-02-28T00:00:00Z",
-            completed_at="2024-03-01T00:00:00Z"
+            completed_at="2024-03-01T00:00:00Z",
         ),
         TechnicianPayout(
             id="pay-002",
@@ -292,7 +300,7 @@ async def get_technician_payouts(
             method="instant",
             status="completed",
             initiated_at="2024-02-15T00:00:00Z",
-            completed_at="2024-02-15T00:05:00Z"
+            completed_at="2024-02-15T00:05:00Z",
         ),
     ]
     return {"payouts": [p.model_dump() for p in payouts]}
@@ -315,7 +323,7 @@ async def request_instant_payout(
         net_amount=round(amount - fee, 2),
         method="instant",
         status="processing",
-        initiated_at=datetime.utcnow().isoformat()
+        initiated_at=datetime.utcnow().isoformat(),
     )
     return {"payout": payout.model_dump()}
 
@@ -328,7 +336,4 @@ async def get_instant_payout_fee(
 ) -> dict:
     """Get instant payout fee estimate."""
     fee = round(amount * 0.01, 2)  # 1% fee
-    return {
-        "fee": fee,
-        "net_amount": round(amount - fee, 2)
-    }
+    return {"fee": fee, "net_amount": round(amount - fee, 2)}

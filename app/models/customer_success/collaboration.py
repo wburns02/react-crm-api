@@ -7,10 +7,7 @@ Enables internal collaboration for Customer Success teams:
 - Activity tracking
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text,
-    ForeignKey, Enum as SQLEnum, JSON
-)
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -20,6 +17,7 @@ class CSResource(Base):
     """
     Team resource library item (documents, templates, guides, etc.)
     """
+
     __tablename__ = "cs_resources"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -28,14 +26,23 @@ class CSResource(Base):
 
     # Resource type
     resource_type = Column(
-        SQLEnum('document', 'video', 'template', 'checklist', 'guide', 'script', 'link', name='cs_resource_type_enum'),
-        nullable=False
+        SQLEnum("document", "video", "template", "checklist", "guide", "script", "link", name="cs_resource_type_enum"),
+        nullable=False,
     )
 
     # Category
     category = Column(
-        SQLEnum('onboarding', 'training', 'playbooks', 'processes', 'best_practices', 'templates', 'general', name='cs_resource_category_enum'),
-        default='general'
+        SQLEnum(
+            "onboarding",
+            "training",
+            "playbooks",
+            "processes",
+            "best_practices",
+            "templates",
+            "general",
+            name="cs_resource_category_enum",
+        ),
+        default="general",
     )
 
     # Content
@@ -62,13 +69,10 @@ class CSResource(Base):
 
     # Ownership and permissions
     created_by_user_id = Column(Integer, ForeignKey("api_users.id"))
-    visibility = Column(
-        SQLEnum('all', 'team', 'managers', 'admins', name='cs_visibility_enum'),
-        default='all'
-    )
+    visibility = Column(SQLEnum("all", "team", "managers", "admins", name="cs_visibility_enum"), default="all")
 
     # Version tracking
-    version = Column(String(20), default='1.0')
+    version = Column(String(20), default="1.0")
     parent_resource_id = Column(Integer, ForeignKey("cs_resources.id"))  # For versioning
 
     # Timestamps
@@ -89,6 +93,7 @@ class CSResourceLike(Base):
     """
     User like/favorite on a resource.
     """
+
     __tablename__ = "cs_resource_likes"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -109,6 +114,7 @@ class CSResourceComment(Base):
     """
     Comment on a resource.
     """
+
     __tablename__ = "cs_resource_comments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -134,6 +140,7 @@ class CSTeamNote(Base):
     """
     Team note for internal collaboration and knowledge sharing.
     """
+
     __tablename__ = "cs_team_notes"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -151,10 +158,7 @@ class CSTeamNote(Base):
     is_pinned = Column(Boolean, default=False)
 
     # Visibility
-    visibility = Column(
-        SQLEnum('all', 'team', 'managers', 'private', name='cs_note_visibility_enum'),
-        default='team'
-    )
+    visibility = Column(SQLEnum("all", "team", "managers", "private", name="cs_note_visibility_enum"), default="team")
 
     # Author
     created_by_user_id = Column(Integer, ForeignKey("api_users.id"), nullable=False)
@@ -176,6 +180,7 @@ class CSTeamNoteComment(Base):
     """
     Comment on a team note.
     """
+
     __tablename__ = "cs_team_note_comments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -199,6 +204,7 @@ class CSActivity(Base):
     """
     Activity feed for CS team collaboration.
     """
+
     __tablename__ = "cs_activities"
 
     id = Column(Integer, primary_key=True, index=True)

@@ -1,4 +1,5 @@
 """Contract model for customer service agreements."""
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Boolean, Float, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -82,12 +83,14 @@ class Contract(Base):
     @property
     def is_active(self):
         from datetime import date
+
         today = date.today()
         return self.status == "active" and self.start_date <= today <= self.end_date
 
     @property
     def days_until_expiry(self):
         from datetime import date
+
         if not self.end_date:
             return None
         return (self.end_date - date.today()).days
@@ -95,6 +98,7 @@ class Contract(Base):
     @property
     def is_expired(self):
         from datetime import date
+
         return self.end_date < date.today()
 
     @property

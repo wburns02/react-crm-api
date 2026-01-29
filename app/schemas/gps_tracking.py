@@ -36,8 +36,10 @@ class TrackingLinkStatusEnum(str, Enum):
 
 # ==================== Location Updates ====================
 
+
 class LocationUpdate(BaseModel):
     """Incoming GPS location update from mobile app"""
+
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
     accuracy: Optional[float] = Field(None, ge=0, description="GPS accuracy in meters")
@@ -52,11 +54,13 @@ class LocationUpdate(BaseModel):
 
 class LocationUpdateBatch(BaseModel):
     """Batch of location updates (for offline sync)"""
+
     locations: List[LocationUpdate]
 
 
 class TechnicianLocationResponse(BaseModel):
     """Current technician location response"""
+
     technician_id: int
     technician_name: str
     latitude: float
@@ -78,6 +82,7 @@ class TechnicianLocationResponse(BaseModel):
 
 class AllTechniciansLocationResponse(BaseModel):
     """All technicians' locations for dispatch map"""
+
     technicians: List[TechnicianLocationResponse]
     total_online: int
     total_offline: int
@@ -86,8 +91,10 @@ class AllTechniciansLocationResponse(BaseModel):
 
 # ==================== Location History ====================
 
+
 class LocationHistoryPoint(BaseModel):
     """Single point in location history"""
+
     latitude: float
     longitude: float
     accuracy: Optional[float] = None
@@ -103,6 +110,7 @@ class LocationHistoryPoint(BaseModel):
 
 class LocationHistoryResponse(BaseModel):
     """Location history for a technician"""
+
     technician_id: int
     technician_name: str
     date: str
@@ -114,6 +122,7 @@ class LocationHistoryResponse(BaseModel):
 
 class RouteVerification(BaseModel):
     """Route verification for a work order"""
+
     work_order_id: int
     technician_id: int
     expected_route_miles: float
@@ -125,8 +134,10 @@ class RouteVerification(BaseModel):
 
 # ==================== Geofences ====================
 
+
 class GeofenceCreate(BaseModel):
     """Create a new geofence"""
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     geofence_type: GeofenceTypeEnum
@@ -158,6 +169,7 @@ class GeofenceCreate(BaseModel):
 
 class GeofenceUpdate(BaseModel):
     """Update an existing geofence"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     is_active: Optional[bool] = None
@@ -177,6 +189,7 @@ class GeofenceUpdate(BaseModel):
 
 class GeofenceResponse(BaseModel):
     """Geofence response"""
+
     id: int
     name: str
     description: Optional[str] = None
@@ -201,6 +214,7 @@ class GeofenceResponse(BaseModel):
 
 class GeofenceEventResponse(BaseModel):
     """Geofence event log entry"""
+
     id: int
     geofence_id: int
     geofence_name: str
@@ -219,8 +233,10 @@ class GeofenceEventResponse(BaseModel):
 
 # ==================== Customer Tracking Links ====================
 
+
 class TrackingLinkCreate(BaseModel):
     """Create a customer tracking link"""
+
     work_order_id: int
     show_technician_name: bool = True
     show_technician_photo: bool = True
@@ -231,6 +247,7 @@ class TrackingLinkCreate(BaseModel):
 
 class TrackingLinkResponse(BaseModel):
     """Tracking link response (for internal use)"""
+
     id: int
     token: str
     tracking_url: str
@@ -248,6 +265,7 @@ class TrackingLinkResponse(BaseModel):
 
 class PublicTrackingInfo(BaseModel):
     """Public tracking information for customers"""
+
     work_order_id: int
     service_type: str
     scheduled_date: str
@@ -275,14 +293,17 @@ class PublicTrackingInfo(BaseModel):
 
 # ==================== ETA Calculations ====================
 
+
 class ETARequest(BaseModel):
     """Request ETA calculation"""
+
     work_order_id: int
     recalculate: bool = False
 
 
 class ETAResponse(BaseModel):
     """ETA calculation response"""
+
     work_order_id: int
     technician_id: int
     technician_name: str
@@ -311,6 +332,7 @@ class ETAResponse(BaseModel):
 
 class ETANotification(BaseModel):
     """ETA notification to send to customer"""
+
     work_order_id: int
     customer_id: int
     customer_phone: str
@@ -323,8 +345,10 @@ class ETANotification(BaseModel):
 
 # ==================== GPS Config ====================
 
+
 class GPSConfigUpdate(BaseModel):
     """Update GPS tracking configuration"""
+
     active_interval: Optional[int] = Field(None, ge=10, le=300)
     idle_interval: Optional[int] = Field(None, ge=60, le=3600)
     background_interval: Optional[int] = Field(None, ge=60, le=7200)
@@ -343,6 +367,7 @@ class GPSConfigUpdate(BaseModel):
 
 class GPSConfigResponse(BaseModel):
     """GPS configuration response"""
+
     id: int
     technician_id: Optional[int] = None
     active_interval: int
@@ -367,8 +392,10 @@ class GPSConfigResponse(BaseModel):
 
 # ==================== Dispatch Map ====================
 
+
 class DispatchMapTechnician(BaseModel):
     """Technician info for dispatch map"""
+
     id: int
     name: str
     latitude: float
@@ -384,6 +411,7 @@ class DispatchMapTechnician(BaseModel):
 
 class DispatchMapWorkOrder(BaseModel):
     """Work order info for dispatch map"""
+
     id: int
     customer_name: str
     address: str
@@ -399,6 +427,7 @@ class DispatchMapWorkOrder(BaseModel):
 
 class DispatchMapData(BaseModel):
     """Complete dispatch map data"""
+
     technicians: List[DispatchMapTechnician]
     work_orders: List[DispatchMapWorkOrder]
     geofences: List[GeofenceResponse]

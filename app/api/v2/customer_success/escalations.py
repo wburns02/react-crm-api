@@ -14,13 +14,17 @@ import logging
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
 from app.models.user import User
-from app.models.customer_success import (
-    Escalation, EscalationNote, EscalationActivity
-)
+from app.models.customer_success import Escalation, EscalationNote, EscalationActivity
 from app.schemas.customer_success.escalation import (
-    EscalationCreate, EscalationUpdate, EscalationResponse, EscalationListResponse,
-    EscalationNoteCreate, EscalationNoteUpdate, EscalationNoteResponse,
-    EscalationActivityResponse, EscalationAnalytics,
+    EscalationCreate,
+    EscalationUpdate,
+    EscalationResponse,
+    EscalationListResponse,
+    EscalationNoteCreate,
+    EscalationNoteUpdate,
+    EscalationNoteResponse,
+    EscalationActivityResponse,
+    EscalationAnalytics,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,6 +54,7 @@ async def create_activity(
 
 
 # Escalation CRUD
+
 
 @router.get("/", response_model=EscalationListResponse)
 async def list_escalations(
@@ -91,11 +96,7 @@ async def list_escalations(
 
         # Apply pagination
         offset = (page - 1) * page_size
-        query = (
-            query.offset(offset)
-            .limit(page_size)
-            .order_by(Escalation.priority.desc(), Escalation.created_at.desc())
-        )
+        query = query.offset(offset).limit(page_size).order_by(Escalation.priority.desc(), Escalation.created_at.desc())
 
         result = await db.execute(query)
         escalations = result.scalars().unique().all()
@@ -141,32 +142,24 @@ async def list_escalations(
             }
 
             # Get customer name
-            cust_result = await db.execute(
-                select(Customer.name).where(Customer.id == esc.customer_id)
-            )
+            cust_result = await db.execute(select(Customer.name).where(Customer.id == esc.customer_id))
             esc_dict["customer_name"] = cust_result.scalar_one_or_none()
 
             # Get user names
             if esc.assigned_to_user_id:
-                user_result = await db.execute(
-                    select(User.name).where(User.id == esc.assigned_to_user_id)
-                )
+                user_result = await db.execute(select(User.name).where(User.id == esc.assigned_to_user_id))
                 esc_dict["assigned_to_name"] = user_result.scalar_one_or_none()
             else:
                 esc_dict["assigned_to_name"] = None
 
             if esc.escalated_by_user_id:
-                user_result = await db.execute(
-                    select(User.name).where(User.id == esc.escalated_by_user_id)
-                )
+                user_result = await db.execute(select(User.name).where(User.id == esc.escalated_by_user_id))
                 esc_dict["escalated_by_name"] = user_result.scalar_one_or_none()
             else:
                 esc_dict["escalated_by_name"] = None
 
             if esc.escalated_to_user_id:
-                user_result = await db.execute(
-                    select(User.name).where(User.id == esc.escalated_to_user_id)
-                )
+                user_result = await db.execute(select(User.name).where(User.id == esc.escalated_to_user_id))
                 esc_dict["escalated_to_name"] = user_result.scalar_one_or_none()
             else:
                 esc_dict["escalated_to_name"] = None
@@ -182,8 +175,7 @@ async def list_escalations(
     except Exception as e:
         logger.error(f"Error listing escalations: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing escalations: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing escalations: {str(e)}"
         )
 
 
@@ -221,9 +213,7 @@ async def create_escalation(
 ):
     """Create a new escalation."""
     # Verify customer exists
-    cust_result = await db.execute(
-        select(Customer).where(Customer.id == data.customer_id)
-    )
+    cust_result = await db.execute(select(Customer).where(Customer.id == data.customer_id))
     if not cust_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -274,9 +264,7 @@ async def update_escalation(
     current_user: CurrentUser,
 ):
     """Update an escalation."""
-    result = await db.execute(
-        select(Escalation).where(Escalation.id == escalation_id)
-    )
+    result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
     escalation = result.scalar_one_or_none()
 
     if not escalation:
@@ -345,9 +333,7 @@ async def delete_escalation(
     current_user: CurrentUser,
 ):
     """Delete an escalation."""
-    result = await db.execute(
-        select(Escalation).where(Escalation.id == escalation_id)
-    )
+    result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
     escalation = result.scalar_one_or_none()
 
     if not escalation:
@@ -368,6 +354,7 @@ async def delete_escalation(
 
 # Escalation Notes
 
+
 @router.post("/{escalation_id}/notes", response_model=EscalationNoteResponse, status_code=status.HTTP_201_CREATED)
 async def add_note(
     escalation_id: int,
@@ -377,9 +364,7 @@ async def add_note(
 ):
     """Add a note to an escalation."""
     # Verify escalation exists
-    esc_result = await db.execute(
-        select(Escalation).where(Escalation.id == escalation_id)
-    )
+    esc_result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
     if not esc_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -481,6 +466,7 @@ async def delete_note(
 
 # Escalation Actions
 
+
 @router.post("/{escalation_id}/assign")
 async def assign_escalation(
     escalation_id: int,
@@ -489,9 +475,7 @@ async def assign_escalation(
     current_user: CurrentUser,
 ):
     """Assign an escalation to a user."""
-    result = await db.execute(
-        select(Escalation).where(Escalation.id == escalation_id)
-    )
+    result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
     escalation = result.scalar_one_or_none()
 
     if not escalation:
@@ -527,9 +511,7 @@ async def resolve_escalation(
     current_user: CurrentUser,
 ):
     """Resolve an escalation."""
-    result = await db.execute(
-        select(Escalation).where(Escalation.id == escalation_id)
-    )
+    result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
     escalation = result.scalar_one_or_none()
 
     if not escalation:
@@ -574,9 +556,7 @@ async def close_escalation(
     customer_satisfaction: Optional[int] = None,
 ):
     """Close a resolved escalation."""
-    result = await db.execute(
-        select(Escalation).where(Escalation.id == escalation_id)
-    )
+    result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
     escalation = result.scalar_one_or_none()
 
     if not escalation:
@@ -610,6 +590,7 @@ async def close_escalation(
 
 
 # Escalation Analytics
+
 
 @router.get("/analytics/summary", response_model=EscalationAnalytics)
 async def get_escalation_analytics(
@@ -658,8 +639,7 @@ async def get_escalation_analytics(
         select(
             func.count(Escalation.id).label("total"),
             func.sum(case((Escalation.sla_breached == False, 1), else_=0)).label("met"),
-        )
-        .where(
+        ).where(
             Escalation.status.in_(["resolved", "closed"]),
             Escalation.created_at >= start_date,
         )
@@ -672,8 +652,7 @@ async def get_escalation_analytics(
         select(
             func.count(Escalation.id).label("total"),
             func.sum(case((Escalation.first_response_breached == False, 1), else_=0)).label("met"),
-        )
-        .where(
+        ).where(
             Escalation.first_response_at.isnot(None),
             Escalation.created_at >= start_date,
         )
@@ -693,8 +672,7 @@ async def get_escalation_analytics(
         .order_by(func.date(Escalation.created_at))
     )
     trend = [
-        {"date": str(row.date), "opened": row.opened, "resolved": row.resolved or 0}
-        for row in trend_result.fetchall()
+        {"date": str(row.date), "opened": row.opened, "resolved": row.resolved or 0} for row in trend_result.fetchall()
     ]
 
     # Top root causes
@@ -711,10 +689,7 @@ async def get_escalation_analytics(
         .order_by(func.count(Escalation.id).desc())
         .limit(10)
     )
-    top_root_causes = [
-        {"category": row[0], "count": row[1]}
-        for row in root_cause_result.fetchall()
-    ]
+    top_root_causes = [{"category": row[0], "count": row[1]} for row in root_cause_result.fetchall()]
 
     return EscalationAnalytics(
         total_open=status_counts.open or 0,

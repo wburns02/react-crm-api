@@ -87,9 +87,7 @@ async def get_touchpoint(
     current_user: CurrentUser,
 ):
     """Get a specific touchpoint."""
-    result = await db.execute(
-        select(Touchpoint).where(Touchpoint.id == touchpoint_id)
-    )
+    result = await db.execute(select(Touchpoint).where(Touchpoint.id == touchpoint_id))
     touchpoint = result.scalar_one_or_none()
 
     if not touchpoint:
@@ -110,9 +108,7 @@ async def create_touchpoint(
 ):
     """Create a new touchpoint."""
     # Check customer exists
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == data.customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == data.customer_id))
     if not customer_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -150,9 +146,7 @@ async def update_touchpoint(
     current_user: CurrentUser,
 ):
     """Update a touchpoint."""
-    result = await db.execute(
-        select(Touchpoint).where(Touchpoint.id == touchpoint_id)
-    )
+    result = await db.execute(select(Touchpoint).where(Touchpoint.id == touchpoint_id))
     touchpoint = result.scalar_one_or_none()
 
     if not touchpoint:
@@ -178,9 +172,7 @@ async def delete_touchpoint(
     current_user: CurrentUser,
 ):
     """Delete a touchpoint."""
-    result = await db.execute(
-        select(Touchpoint).where(Touchpoint.id == touchpoint_id)
-    )
+    result = await db.execute(select(Touchpoint).where(Touchpoint.id == touchpoint_id))
     touchpoint = result.scalar_one_or_none()
 
     if not touchpoint:
@@ -203,9 +195,7 @@ async def get_customer_timeline(
 ):
     """Get touchpoint timeline for a customer."""
     # Check customer exists
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == customer_id))
     if not customer_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -276,9 +266,7 @@ async def analyze_touchpoint_sentiment(
     current_user: CurrentUser,
 ):
     """Trigger sentiment analysis for a touchpoint."""
-    result = await db.execute(
-        select(Touchpoint).where(Touchpoint.id == touchpoint_id)
-    )
+    result = await db.execute(select(Touchpoint).where(Touchpoint.id == touchpoint_id))
     touchpoint = result.scalar_one_or_none()
 
     if not touchpoint:
@@ -321,9 +309,7 @@ async def get_touchpoint_summary(
         base_filter.append(Touchpoint.customer_id == customer_id)
 
     # Total count
-    total_result = await db.execute(
-        select(func.count()).where(*base_filter)
-    )
+    total_result = await db.execute(select(func.count()).where(*base_filter))
     total = total_result.scalar()
 
     # Count by type
@@ -366,9 +352,7 @@ async def get_touchpoint_summary(
             sentiment_counts[sentiment.value] = count
 
     # Average sentiment score
-    avg_sentiment_result = await db.execute(
-        select(func.avg(Touchpoint.sentiment_score)).where(*base_filter)
-    )
+    avg_sentiment_result = await db.execute(select(func.avg(Touchpoint.sentiment_score)).where(*base_filter))
     avg_sentiment = avg_sentiment_result.scalar()
 
     return {

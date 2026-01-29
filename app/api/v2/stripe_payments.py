@@ -34,14 +34,17 @@ STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "pk_test_placeholde
 # Pydantic Schemas
 # =============================================================================
 
+
 class StripeConfig(BaseModel):
     """Stripe configuration for frontend."""
+
     publishable_key: str
     connected_account_id: Optional[str] = None
 
 
 class CreatePaymentIntentRequest(BaseModel):
     """Request to create a payment intent."""
+
     invoice_id: str
     amount: int  # in cents
     currency: str = "usd"
@@ -51,6 +54,7 @@ class CreatePaymentIntentRequest(BaseModel):
 
 class PaymentIntentResponse(BaseModel):
     """Payment intent response."""
+
     client_secret: str
     payment_intent_id: str
     amount: int
@@ -59,12 +63,14 @@ class PaymentIntentResponse(BaseModel):
 
 class ConfirmPaymentRequest(BaseModel):
     """Request to confirm payment."""
+
     payment_intent_id: str
     invoice_id: str
 
 
 class PaymentResult(BaseModel):
     """Payment result."""
+
     success: bool
     payment_id: str
     invoice_id: str
@@ -75,6 +81,7 @@ class PaymentResult(BaseModel):
 
 class SavedPaymentMethod(BaseModel):
     """Saved payment method."""
+
     id: str
     stripe_payment_method_id: str
     type: str  # card, us_bank_account
@@ -85,6 +92,7 @@ class SavedPaymentMethod(BaseModel):
 
 class SavePaymentMethodRequest(BaseModel):
     """Request to save payment method."""
+
     customer_id: int
     payment_method_id: str
     set_as_default: bool = False
@@ -92,12 +100,14 @@ class SavePaymentMethodRequest(BaseModel):
 
 class SetupACHRequest(BaseModel):
     """Request to set up ACH payment."""
+
     customer_id: int
     email: str
 
 
 class ChargePaymentMethodRequest(BaseModel):
     """Request to charge saved payment method."""
+
     invoice_id: str
     payment_method_id: str
     amount: int  # in cents
@@ -105,6 +115,7 @@ class ChargePaymentMethodRequest(BaseModel):
 
 class PaymentHistoryItem(BaseModel):
     """Payment history item."""
+
     id: str
     amount: int
     status: str
@@ -116,21 +127,20 @@ class PaymentHistoryItem(BaseModel):
 # Configuration Endpoints
 # =============================================================================
 
+
 @router.get("/config")
 async def get_stripe_config(
     db: DbSession,
     current_user: CurrentUser,
 ) -> StripeConfig:
     """Get Stripe publishable key for frontend."""
-    return StripeConfig(
-        publishable_key=STRIPE_PUBLISHABLE_KEY,
-        connected_account_id=None
-    )
+    return StripeConfig(publishable_key=STRIPE_PUBLISHABLE_KEY, connected_account_id=None)
 
 
 # =============================================================================
 # Payment Intent Endpoints
 # =============================================================================
+
 
 @router.post("/create-intent")
 async def create_payment_intent(
@@ -154,7 +164,7 @@ async def create_payment_intent(
         client_secret=client_secret,
         payment_intent_id=payment_intent_id,
         amount=request.amount,
-        currency=request.currency
+        currency=request.currency,
     )
 
 
@@ -177,13 +187,14 @@ async def confirm_payment(
         payment_id=payment_id,
         invoice_id=request.invoice_id,
         amount=0,  # Would come from Stripe
-        status="succeeded"
+        status="succeeded",
     )
 
 
 # =============================================================================
 # Payment Method Endpoints
 # =============================================================================
+
 
 @router.get("/customer/{customer_id}/payment-methods")
 async def get_customer_payment_methods(
@@ -202,7 +213,7 @@ async def get_customer_payment_methods(
             type="card",
             last4="4242",
             brand="visa",
-            is_default=True
+            is_default=True,
         ),
         SavedPaymentMethod(
             id="pm_2",
@@ -210,7 +221,7 @@ async def get_customer_payment_methods(
             type="card",
             last4="1234",
             brand="mastercard",
-            is_default=False
+            is_default=False,
         ),
     ]
 
@@ -234,7 +245,7 @@ async def save_payment_method(
         type="card",
         last4="4242",
         brand="visa",
-        is_default=request.set_as_default
+        is_default=request.set_as_default,
     )
 
 
@@ -264,6 +275,7 @@ async def set_default_payment_method(
 # Charge Endpoints
 # =============================================================================
 
+
 @router.post("/charge")
 async def charge_payment_method(
     request: ChargePaymentMethodRequest,
@@ -279,17 +291,14 @@ async def charge_payment_method(
     payment_id = f"pay_{uuid4().hex[:16]}"
 
     return PaymentResult(
-        success=True,
-        payment_id=payment_id,
-        invoice_id=request.invoice_id,
-        amount=request.amount,
-        status="succeeded"
+        success=True, payment_id=payment_id, invoice_id=request.invoice_id, amount=request.amount, status="succeeded"
     )
 
 
 # =============================================================================
 # ACH/Bank Account Endpoints
 # =============================================================================
+
 
 @router.post("/setup-ach")
 async def setup_ach_payment(
@@ -312,6 +321,7 @@ async def setup_ach_payment(
 # Payment History Endpoints
 # =============================================================================
 
+
 @router.get("/invoice/{invoice_id}/history")
 async def get_invoice_payment_history(
     invoice_id: str,
@@ -326,7 +336,7 @@ async def get_invoice_payment_history(
             amount=15000,  # $150.00 in cents
             status="succeeded",
             created_at=datetime.utcnow().isoformat(),
-            method="card"
+            method="card",
         ),
     ]
 
@@ -336,6 +346,7 @@ async def get_invoice_payment_history(
 # =============================================================================
 # Refund Endpoints
 # =============================================================================
+
 
 @router.post("/refund")
 async def create_refund(
@@ -355,13 +366,14 @@ async def create_refund(
         "payment_id": payment_id,
         "amount": amount,
         "status": "succeeded",
-        "created_at": datetime.utcnow().isoformat()
+        "created_at": datetime.utcnow().isoformat(),
     }
 
 
 # =============================================================================
 # Webhook Endpoint (for Stripe events)
 # =============================================================================
+
 
 @router.post("/webhook")
 async def stripe_webhook(

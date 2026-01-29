@@ -24,8 +24,10 @@ router = APIRouter()
 # Pydantic Schemas
 # =============================================================================
 
+
 class Device(BaseModel):
     """Connected IoT device."""
+
     id: str
     device_type: str  # thermostat, water_heater, septic_monitor, hvac
     provider: str  # ecobee, nest, custom
@@ -43,6 +45,7 @@ class Device(BaseModel):
 
 class DeviceReading(BaseModel):
     """Device telemetry reading."""
+
     id: str
     device_id: str
     timestamp: str
@@ -51,6 +54,7 @@ class DeviceReading(BaseModel):
 
 class DeviceAlert(BaseModel):
     """Device alert."""
+
     id: str
     device_id: str
     device_name: str
@@ -64,6 +68,7 @@ class DeviceAlert(BaseModel):
 
 class AlertRule(BaseModel):
     """Alert rule definition."""
+
     id: str
     name: str
     device_type: Optional[str] = None
@@ -76,6 +81,7 @@ class AlertRule(BaseModel):
 
 class EquipmentHealth(BaseModel):
     """Equipment health score."""
+
     equipment_id: str
     equipment_type: str
     customer_id: str
@@ -90,6 +96,7 @@ class EquipmentHealth(BaseModel):
 
 class MaintenanceRecommendation(BaseModel):
     """Maintenance recommendation."""
+
     id: str
     equipment_id: str
     equipment_type: str
@@ -105,6 +112,7 @@ class MaintenanceRecommendation(BaseModel):
 
 class IoTProviderConnection(BaseModel):
     """IoT provider connection."""
+
     provider: str
     connected: bool
     account_name: Optional[str] = None
@@ -126,7 +134,7 @@ MOCK_DEVICES = [
         equipment_id="equip-hvac-1",
         is_online=True,
         last_reading_at=datetime.utcnow().isoformat(),
-        created_at="2024-01-15T00:00:00Z"
+        created_at="2024-01-15T00:00:00Z",
     ),
     Device(
         id="dev-002",
@@ -137,7 +145,7 @@ MOCK_DEVICES = [
         equipment_id="equip-septic-1",
         is_online=True,
         last_reading_at=datetime.utcnow().isoformat(),
-        created_at="2024-02-01T00:00:00Z"
+        created_at="2024-02-01T00:00:00Z",
     ),
 ]
 
@@ -145,6 +153,7 @@ MOCK_DEVICES = [
 # =============================================================================
 # Device Endpoints
 # =============================================================================
+
 
 @router.get("/devices")
 async def get_devices(
@@ -186,16 +195,18 @@ async def get_device_telemetry(
     readings = []
     now = datetime.utcnow()
     for i in range(24):
-        readings.append(DeviceReading(
-            id=f"reading-{i}",
-            device_id=device_id,
-            timestamp=(now - timedelta(hours=i)).isoformat(),
-            metrics={
-                "temperature": 72 + (i % 5),
-                "humidity": 45 + (i % 10),
-                "level": 65 - (i * 0.5) if "septic" in device_id else None
-            }
-        ))
+        readings.append(
+            DeviceReading(
+                id=f"reading-{i}",
+                device_id=device_id,
+                timestamp=(now - timedelta(hours=i)).isoformat(),
+                metrics={
+                    "temperature": 72 + (i % 5),
+                    "humidity": 45 + (i % 10),
+                    "level": 65 - (i * 0.5) if "septic" in device_id else None,
+                },
+            )
+        )
     return {"readings": [r.model_dump() for r in readings]}
 
 
@@ -210,11 +221,7 @@ async def get_latest_reading(
         id="latest",
         device_id=device_id,
         timestamp=datetime.utcnow().isoformat(),
-        metrics={
-            "temperature": 72,
-            "humidity": 48,
-            "level": 62
-        }
+        metrics={"temperature": 72, "humidity": 48, "level": 62},
     )
     return {"reading": reading.model_dump()}
 
@@ -237,7 +244,7 @@ async def connect_device(
         name=name,
         customer_id=customer_id,
         equipment_id=equipment_id,
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.utcnow().isoformat(),
     )
     return {"device": device.model_dump()}
 
@@ -275,6 +282,7 @@ async def disconnect_device(
 # Alert Endpoints
 # =============================================================================
 
+
 @router.get("/alerts")
 async def get_device_alerts(
     db: DbSession,
@@ -292,7 +300,7 @@ async def get_device_alerts(
             severity="warning",
             message="Tank level at 85% - schedule pumping soon",
             acknowledged=False,
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.utcnow().isoformat(),
         ),
         DeviceAlert(
             id="alert-002",
@@ -303,7 +311,7 @@ async def get_device_alerts(
             message="Device was offline for 2 hours",
             acknowledged=True,
             acknowledged_at=(datetime.utcnow() - timedelta(hours=1)).isoformat(),
-            created_at=(datetime.utcnow() - timedelta(hours=3)).isoformat()
+            created_at=(datetime.utcnow() - timedelta(hours=3)).isoformat(),
         ),
     ]
 
@@ -331,7 +339,7 @@ async def acknowledge_alert(
         message="Alert acknowledged",
         acknowledged=True,
         acknowledged_at=datetime.utcnow().isoformat(),
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.utcnow().isoformat(),
     )
     return {"alert": alert.model_dump()}
 
@@ -350,7 +358,7 @@ async def get_alert_rules(
             condition={"metric": "level", "operator": ">", "threshold": 80},
             severity="warning",
             notification_channels=["email", "sms"],
-            created_at="2024-01-01T00:00:00Z"
+            created_at="2024-01-01T00:00:00Z",
         ),
         AlertRule(
             id="rule-002",
@@ -358,7 +366,7 @@ async def get_alert_rules(
             condition={"metric": "online", "operator": "==", "threshold": False},
             severity="info",
             notification_channels=["email"],
-            created_at="2024-01-01T00:00:00Z"
+            created_at="2024-01-01T00:00:00Z",
         ),
     ]
     return {"rules": [r.model_dump() for r in rules]}
@@ -380,7 +388,7 @@ async def create_alert_rule(
         device_type=device_type,
         condition=condition,
         severity=severity,
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.utcnow().isoformat(),
     )
     return {"rule": rule.model_dump()}
 
@@ -399,7 +407,7 @@ async def update_alert_rule(
         condition={},
         severity="info",
         is_active=is_active if is_active is not None else True,
-        created_at="2024-01-01T00:00:00Z"
+        created_at="2024-01-01T00:00:00Z",
     )
     return {"rule": rule.model_dump()}
 
@@ -418,6 +426,7 @@ async def delete_alert_rule(
 # Health & Maintenance Endpoints
 # =============================================================================
 
+
 @router.get("/health/equipment/{equipment_id}")
 async def get_equipment_health(
     db: DbSession,
@@ -435,7 +444,7 @@ async def get_equipment_health(
         trends={"level": "increasing", "temperature": "stable"},
         issues=["Level trending higher than normal"],
         recommendations=["Schedule pumping within 30 days"],
-        next_maintenance_date="2024-04-15"
+        next_maintenance_date="2024-04-15",
     )
 
 
@@ -454,7 +463,7 @@ async def get_customer_equipment_health(
             health_score=78.5,
             risk_level="medium",
             issues=["Approaching service date"],
-            recommendations=["Schedule pumping"]
+            recommendations=["Schedule pumping"],
         ),
         EquipmentHealth(
             equipment_id="equip-2",
@@ -463,7 +472,7 @@ async def get_customer_equipment_health(
             health_score=92.0,
             risk_level="low",
             issues=[],
-            recommendations=[]
+            recommendations=[],
         ),
     ]
     return {"equipment": [e.model_dump() for e in equipment]}
@@ -490,7 +499,7 @@ async def get_maintenance_recommendations(
             recommendation="Schedule pumping service",
             estimated_cost=350.00,
             status="pending",
-            created_at="2024-03-01T00:00:00Z"
+            created_at="2024-03-01T00:00:00Z",
         ),
         MaintenanceRecommendation(
             id="rec-002",
@@ -503,7 +512,7 @@ async def get_maintenance_recommendations(
             recommendation="Replace air filter",
             estimated_cost=75.00,
             status="pending",
-            created_at="2024-02-28T00:00:00Z"
+            created_at="2024-02-28T00:00:00Z",
         ),
     ]
 
@@ -530,7 +539,7 @@ async def schedule_maintenance(
         "work_order_id": f"wo-{uuid4().hex[:8]}",
         "recommendation_id": recommendation_id,
         "scheduled_date": scheduled_date,
-        "status": "scheduled"
+        "status": "scheduled",
     }
 
 
@@ -549,6 +558,7 @@ async def decline_recommendation(
 # Provider Connection Endpoints
 # =============================================================================
 
+
 @router.get("/providers/connections")
 async def get_provider_connections(
     db: DbSession,
@@ -561,13 +571,9 @@ async def get_provider_connections(
             connected=True,
             account_name="HVAC Pro Account",
             device_count=15,
-            last_sync=datetime.utcnow().isoformat()
+            last_sync=datetime.utcnow().isoformat(),
         ),
-        IoTProviderConnection(
-            provider="nest",
-            connected=False,
-            device_count=0
-        ),
+        IoTProviderConnection(provider="nest", connected=False, device_count=0),
     ]
     return {"connections": [c.model_dump() for c in connections]}
 
@@ -581,7 +587,7 @@ async def connect_provider(
     """Initiate OAuth connection to provider."""
     return {
         "auth_url": f"https://api.{provider}.com/oauth/authorize?client_id=xxx&redirect_uri=xxx",
-        "state": uuid4().hex
+        "state": uuid4().hex,
     }
 
 
@@ -599,7 +605,7 @@ async def complete_provider_connection(
         connected=True,
         account_name=f"{provider.title()} Account",
         device_count=0,
-        last_sync=datetime.utcnow().isoformat()
+        last_sync=datetime.utcnow().isoformat(),
     )
     return {"connection": connection.model_dump()}
 

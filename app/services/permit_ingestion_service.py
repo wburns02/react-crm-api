@@ -19,15 +19,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
 
 from app.models.septic_permit import (
-    SepticPermit, PermitVersion, PermitDuplicate, PermitImportBatch,
-    State, County, SepticSystemType, SourcePortal
+    SepticPermit,
+    PermitVersion,
+    PermitDuplicate,
+    PermitImportBatch,
+    State,
+    County,
+    SepticSystemType,
+    SourcePortal,
 )
-from app.schemas.septic_permit import (
-    PermitCreate, BatchIngestionStats, BatchIngestionResponse
-)
+from app.schemas.septic_permit import PermitCreate, BatchIngestionStats, BatchIngestionResponse
 from app.utils.address_normalization import (
-    normalize_address, normalize_county, normalize_state,
-    normalize_owner_name, compute_address_hash
+    normalize_address,
+    normalize_county,
+    normalize_state,
+    normalize_owner_name,
+    compute_address_hash,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,6 +42,7 @@ logger = logging.getLogger(__name__)
 
 class IngestionError(Exception):
     """Custom exception for ingestion-related errors."""
+
     pass
 
 
@@ -70,9 +78,7 @@ class PermitIngestionService:
         if code in self._state_cache:
             return self._state_cache[code]
 
-        result = await self.db.execute(
-            select(State).where(State.code == code)
-        )
+        result = await self.db.execute(select(State).where(State.code == code))
         state = result.scalar_one_or_none()
         if state:
             self._state_cache[code] = state.id
@@ -94,10 +100,7 @@ class PermitIngestionService:
             return self._county_cache[cache_key]
 
         result = await self.db.execute(
-            select(County).where(
-                County.state_id == state_id,
-                County.normalized_name == normalized
-            )
+            select(County).where(County.state_id == state_id, County.normalized_name == normalized)
         )
         county = result.scalar_one_or_none()
 
@@ -106,12 +109,7 @@ class PermitIngestionService:
             return county.id
 
         # Create new county
-        county = County(
-            state_id=state_id,
-            name=county_name,
-            normalized_name=normalized,
-            is_active=True
-        )
+        county = County(state_id=state_id, name=county_name, normalized_name=normalized, is_active=True)
         self.db.add(county)
         await self.db.flush()
         self._county_cache[cache_key] = county.id
@@ -128,17 +126,13 @@ class PermitIngestionService:
             return self._system_type_cache[normalized]
 
         # Try exact match on code first
-        result = await self.db.execute(
-            select(SepticSystemType).where(SepticSystemType.code == normalized)
-        )
+        result = await self.db.execute(select(SepticSystemType).where(SepticSystemType.code == normalized))
         sys_type = result.scalar_one_or_none()
 
         if not sys_type:
             # Try partial match on name
             result = await self.db.execute(
-                select(SepticSystemType).where(
-                    SepticSystemType.name.ilike(f'%{normalized}%')
-                )
+                select(SepticSystemType).where(SepticSystemType.name.ilike(f"%{normalized}%"))
             )
             sys_type = result.scalar_one_or_none()
 
@@ -147,9 +141,7 @@ class PermitIngestionService:
             return sys_type.id
 
         # Default to UNKNOWN
-        result = await self.db.execute(
-            select(SepticSystemType).where(SepticSystemType.code == 'UNKNOWN')
-        )
+        result = await self.db.execute(select(SepticSystemType).where(SepticSystemType.code == "UNKNOWN"))
         unknown = result.scalar_one_or_none()
         if unknown:
             self._system_type_cache[normalized] = unknown.id
@@ -165,9 +157,7 @@ class PermitIngestionService:
         if portal_code in self._portal_cache:
             return self._portal_cache[portal_code]
 
-        result = await self.db.execute(
-            select(SourcePortal).where(SourcePortal.code == portal_code)
-        )
+        result = await self.db.execute(select(SourcePortal).where(SourcePortal.code == portal_code))
         portal = result.scalar_one_or_none()
 
         if portal:
@@ -176,10 +166,7 @@ class PermitIngestionService:
 
         # Create new portal
         portal = SourcePortal(
-            code=portal_code,
-            name=portal_code.replace('_', ' ').title(),
-            state_id=state_id,
-            is_active=True
+            code=portal_code, name=portal_code.replace("_", " ").title(), state_id=state_id, is_active=True
         )
         self.db.add(portal)
         await self.db.flush()
@@ -187,11 +174,7 @@ class PermitIngestionService:
         return portal.id
 
     async def _find_existing_permit(
-        self,
-        address_hash: Optional[str],
-        permit_number: Optional[str],
-        state_id: int,
-        county_id: Optional[int]
+        self, address_hash: Optional[str], permit_number: Optional[str], state_id: int, county_id: Optional[int]
     ) -> Optional[SepticPermit]:
         """
         Find existing permit by address hash or permit number.
@@ -206,7 +189,7 @@ class PermitIngestionService:
                     SepticPermit.address_hash == address_hash,
                     SepticPermit.state_id == state_id,
                     SepticPermit.county_id == county_id,
-                    SepticPermit.is_active == True
+                    SepticPermit.is_active == True,
                 )
             )
             existing = result.scalar_one_or_none()
@@ -218,7 +201,7 @@ class PermitIngestionService:
                 select(SepticPermit).where(
                     SepticPermit.permit_number == permit_number,
                     SepticPermit.state_id == state_id,
-                    SepticPermit.is_active == True
+                    SepticPermit.is_active == True,
                 )
             )
             existing = result.scalar_one_or_none()
@@ -232,36 +215,33 @@ class PermitIngestionService:
         return SepticPermit.compute_record_hash(permit_data)
 
     async def _create_version(
-        self,
-        permit: SepticPermit,
-        change_source: str = 'scraper',
-        changed_fields: Optional[List[str]] = None
+        self, permit: SepticPermit, change_source: str = "scraper", changed_fields: Optional[List[str]] = None
     ) -> PermitVersion:
         """Create a version history record for a permit."""
         permit_data = {
-            'permit_number': permit.permit_number,
-            'address': permit.address,
-            'address_normalized': permit.address_normalized,
-            'city': permit.city,
-            'zip_code': permit.zip_code,
-            'parcel_number': permit.parcel_number,
-            'latitude': permit.latitude,
-            'longitude': permit.longitude,
-            'owner_name': permit.owner_name,
-            'applicant_name': permit.applicant_name,
-            'contractor_name': permit.contractor_name,
-            'install_date': str(permit.install_date) if permit.install_date else None,
-            'permit_date': str(permit.permit_date) if permit.permit_date else None,
-            'expiration_date': str(permit.expiration_date) if permit.expiration_date else None,
-            'system_type_raw': permit.system_type_raw,
-            'tank_size_gallons': permit.tank_size_gallons,
-            'drainfield_size_sqft': permit.drainfield_size_sqft,
-            'bedrooms': permit.bedrooms,
-            'daily_flow_gpd': permit.daily_flow_gpd,
-            'pdf_url': permit.pdf_url,
-            'permit_url': permit.permit_url,
-            'source_portal_code': permit.source_portal_code,
-            'scraped_at': permit.scraped_at.isoformat() if permit.scraped_at else None,
+            "permit_number": permit.permit_number,
+            "address": permit.address,
+            "address_normalized": permit.address_normalized,
+            "city": permit.city,
+            "zip_code": permit.zip_code,
+            "parcel_number": permit.parcel_number,
+            "latitude": permit.latitude,
+            "longitude": permit.longitude,
+            "owner_name": permit.owner_name,
+            "applicant_name": permit.applicant_name,
+            "contractor_name": permit.contractor_name,
+            "install_date": str(permit.install_date) if permit.install_date else None,
+            "permit_date": str(permit.permit_date) if permit.permit_date else None,
+            "expiration_date": str(permit.expiration_date) if permit.expiration_date else None,
+            "system_type_raw": permit.system_type_raw,
+            "tank_size_gallons": permit.tank_size_gallons,
+            "drainfield_size_sqft": permit.drainfield_size_sqft,
+            "bedrooms": permit.bedrooms,
+            "daily_flow_gpd": permit.daily_flow_gpd,
+            "pdf_url": permit.pdf_url,
+            "permit_url": permit.permit_url,
+            "source_portal_code": permit.source_portal_code,
+            "scraped_at": permit.scraped_at.isoformat() if permit.scraped_at else None,
         }
 
         version = PermitVersion(
@@ -273,33 +253,44 @@ class PermitIngestionService:
             change_source=change_source,
             source_portal_id=permit.source_portal_id,
             scraped_at=permit.scraped_at,
-            created_by='system'
+            created_by="system",
         )
         self.db.add(version)
         return version
 
-    def _get_changed_fields(
-        self,
-        existing: SepticPermit,
-        new_data: Dict[str, Any]
-    ) -> List[str]:
+    def _get_changed_fields(self, existing: SepticPermit, new_data: Dict[str, Any]) -> List[str]:
         """Determine which fields changed between existing and new data."""
         changed = []
         check_fields = [
-            'permit_number', 'address', 'city', 'zip_code', 'parcel_number',
-            'latitude', 'longitude', 'owner_name', 'applicant_name',
-            'contractor_name', 'install_date', 'permit_date', 'expiration_date',
-            'system_type_raw', 'tank_size_gallons', 'drainfield_size_sqft',
-            'bedrooms', 'daily_flow_gpd', 'pdf_url', 'permit_url'
+            "permit_number",
+            "address",
+            "city",
+            "zip_code",
+            "parcel_number",
+            "latitude",
+            "longitude",
+            "owner_name",
+            "applicant_name",
+            "contractor_name",
+            "install_date",
+            "permit_date",
+            "expiration_date",
+            "system_type_raw",
+            "tank_size_gallons",
+            "drainfield_size_sqft",
+            "bedrooms",
+            "daily_flow_gpd",
+            "pdf_url",
+            "permit_url",
         ]
 
         for field in check_fields:
             old_val = getattr(existing, field, None)
             new_val = new_data.get(field)
 
-            if hasattr(old_val, 'isoformat'):
+            if hasattr(old_val, "isoformat"):
                 old_val = str(old_val)
-            if hasattr(new_val, 'isoformat'):
+            if hasattr(new_val, "isoformat"):
                 new_val = str(new_val)
 
             if old_val != new_val and new_val is not None:
@@ -319,7 +310,7 @@ class PermitIngestionService:
             state_id = await self._get_or_create_state(permit_data.state_code)
             if not state_id:
                 logger.warning(f"Unknown state code: {permit_data.state_code}")
-                return None, 'error'
+                return None, "error"
 
             # Get county ID
             county_id = await self._get_or_create_county(permit_data.county_name, state_id)
@@ -329,58 +320,52 @@ class PermitIngestionService:
             owner_normalized = normalize_owner_name(permit_data.owner_name)
 
             # Compute address hash for deduplication
-            result = await self.db.execute(
-                select(State).where(State.id == state_id)
-            )
+            result = await self.db.execute(select(State).where(State.id == state_id))
             state = result.scalar_one_or_none()
             address_hash = compute_address_hash(
-                address_normalized,
-                permit_data.county_name,
-                state.code if state else None
+                address_normalized, permit_data.county_name, state.code if state else None
             )
 
             # Look for existing permit
-            existing = await self._find_existing_permit(
-                address_hash, permit_data.permit_number, state_id, county_id
-            )
+            existing = await self._find_existing_permit(address_hash, permit_data.permit_number, state_id, county_id)
 
             # Prepare permit data dict
             data_dict = {
-                'permit_number': permit_data.permit_number,
-                'address': permit_data.address,
-                'address_normalized': address_normalized,
-                'city': permit_data.city,
-                'zip_code': permit_data.zip_code,
-                'parcel_number': permit_data.parcel_number,
-                'latitude': permit_data.latitude,
-                'longitude': permit_data.longitude,
-                'owner_name': permit_data.owner_name,
-                'applicant_name': permit_data.applicant_name,
-                'contractor_name': permit_data.contractor_name,
-                'install_date': permit_data.install_date,
-                'permit_date': permit_data.permit_date,
-                'expiration_date': permit_data.expiration_date,
-                'system_type_raw': permit_data.system_type,
-                'tank_size_gallons': permit_data.tank_size_gallons,
-                'drainfield_size_sqft': permit_data.drainfield_size_sqft,
-                'bedrooms': permit_data.bedrooms,
-                'daily_flow_gpd': permit_data.daily_flow_gpd,
-                'pdf_url': permit_data.pdf_url,
-                'permit_url': permit_data.permit_url,
-                'source_portal_code': permit_data.source_portal_code,
-                'scraped_at': permit_data.scraped_at,
-                'raw_data': permit_data.raw_data,
+                "permit_number": permit_data.permit_number,
+                "address": permit_data.address,
+                "address_normalized": address_normalized,
+                "city": permit_data.city,
+                "zip_code": permit_data.zip_code,
+                "parcel_number": permit_data.parcel_number,
+                "latitude": permit_data.latitude,
+                "longitude": permit_data.longitude,
+                "owner_name": permit_data.owner_name,
+                "applicant_name": permit_data.applicant_name,
+                "contractor_name": permit_data.contractor_name,
+                "install_date": permit_data.install_date,
+                "permit_date": permit_data.permit_date,
+                "expiration_date": permit_data.expiration_date,
+                "system_type_raw": permit_data.system_type,
+                "tank_size_gallons": permit_data.tank_size_gallons,
+                "drainfield_size_sqft": permit_data.drainfield_size_sqft,
+                "bedrooms": permit_data.bedrooms,
+                "daily_flow_gpd": permit_data.daily_flow_gpd,
+                "pdf_url": permit_data.pdf_url,
+                "permit_url": permit_data.permit_url,
+                "source_portal_code": permit_data.source_portal_code,
+                "scraped_at": permit_data.scraped_at,
+                "raw_data": permit_data.raw_data,
             }
 
             if existing:
                 # Check if data actually changed
                 new_hash = self._compute_record_hash(data_dict)
                 if existing.record_hash == new_hash:
-                    return existing.id, 'skipped'
+                    return existing.id, "skipped"
 
                 # Data changed - create version and update
                 changed_fields = self._get_changed_fields(existing, data_dict)
-                await self._create_version(existing, 'scraper', changed_fields)
+                await self._create_version(existing, "scraper", changed_fields)
 
                 # Update existing record
                 for field, value in data_dict.items():
@@ -390,14 +375,12 @@ class PermitIngestionService:
                 existing.address_hash = address_hash
                 existing.owner_name_normalized = owner_normalized
                 existing.system_type_id = await self._get_system_type_id(permit_data.system_type)
-                existing.source_portal_id = await self._get_or_create_portal(
-                    permit_data.source_portal_code, state_id
-                )
+                existing.source_portal_id = await self._get_or_create_portal(permit_data.source_portal_code, state_id)
                 existing.version += 1
                 existing.record_hash = new_hash
                 existing.updated_at = datetime.utcnow()
 
-                return existing.id, 'updated'
+                return existing.id, "updated"
 
             else:
                 # Create new permit
@@ -409,31 +392,25 @@ class PermitIngestionService:
                     address_hash=address_hash,
                     owner_name_normalized=owner_normalized,
                     system_type_id=await self._get_system_type_id(permit_data.system_type),
-                    source_portal_id=await self._get_or_create_portal(
-                        permit_data.source_portal_code, state_id
-                    ),
+                    source_portal_id=await self._get_or_create_portal(permit_data.source_portal_code, state_id),
                     is_active=True,
                     version=1,
-                    **data_dict
+                    **data_dict,
                 )
                 new_permit.record_hash = self._compute_record_hash(data_dict)
 
                 self.db.add(new_permit)
-                return permit_id, 'inserted'
+                return permit_id, "inserted"
 
         except IntegrityError as e:
             logger.warning(f"Integrity error ingesting permit: {e}")
             await self.db.rollback()
-            return None, 'error'
+            return None, "error"
         except Exception as e:
             logger.error(f"Error ingesting permit: {e}")
-            return None, 'error'
+            return None, "error"
 
-    async def ingest_batch(
-        self,
-        permits: List[PermitCreate],
-        source_portal_code: str
-    ) -> BatchIngestionResponse:
+    async def ingest_batch(self, permits: List[PermitCreate], source_portal_code: str) -> BatchIngestionResponse:
         """
         Ingest a batch of permits.
 
@@ -452,16 +429,14 @@ class PermitIngestionService:
             id=batch_id,
             source_name=source_portal_code,
             total_records=len(permits),
-            status='processing',
-            started_at=datetime.utcnow()
+            status="processing",
+            started_at=datetime.utcnow(),
         )
         self.db.add(import_batch)
         await self.db.commit()
 
         stats = BatchIngestionStats(
-            batch_id=batch_id,
-            source_portal_code=source_portal_code,
-            total_records=len(permits)
+            batch_id=batch_id, source_portal_code=source_portal_code, total_records=len(permits)
         )
 
         errors = []
@@ -470,19 +445,15 @@ class PermitIngestionService:
             try:
                 permit_id, action = await self.ingest_permit(permit_data)
 
-                if action == 'inserted':
+                if action == "inserted":
                     stats.inserted += 1
-                elif action == 'updated':
+                elif action == "updated":
                     stats.updated += 1
-                elif action == 'skipped':
+                elif action == "skipped":
                     stats.skipped += 1
-                elif action == 'error':
+                elif action == "error":
                     stats.errors += 1
-                    errors.append({
-                        'index': i,
-                        'permit_number': permit_data.permit_number,
-                        'error': 'Failed to ingest'
-                    })
+                    errors.append({"index": i, "permit_number": permit_data.permit_number, "error": "Failed to ingest"})
 
                 # Commit every 100 records
                 if (i + 1) % 100 == 0:
@@ -491,11 +462,9 @@ class PermitIngestionService:
 
             except Exception as e:
                 stats.errors += 1
-                errors.append({
-                    'index': i,
-                    'permit_number': getattr(permit_data, 'permit_number', 'unknown'),
-                    'error': str(e)
-                })
+                errors.append(
+                    {"index": i, "permit_number": getattr(permit_data, "permit_number", "unknown"), "error": str(e)}
+                )
                 await self.db.rollback()
 
         # Final commit
@@ -504,9 +473,7 @@ class PermitIngestionService:
         # Update source portal stats
         portal_id = self._portal_cache.get(source_portal_code)
         if portal_id:
-            result = await self.db.execute(
-                select(SourcePortal).where(SourcePortal.id == portal_id)
-            )
+            result = await self.db.execute(select(SourcePortal).where(SourcePortal.id == portal_id))
             portal = result.scalar_one_or_none()
             if portal:
                 portal.last_scraped_at = datetime.utcnow()
@@ -514,7 +481,7 @@ class PermitIngestionService:
 
         # Update import batch
         elapsed = time.time() - start_time
-        import_batch.status = 'completed' if stats.errors == 0 else 'completed_with_errors'
+        import_batch.status = "completed" if stats.errors == 0 else "completed_with_errors"
         import_batch.completed_at = datetime.utcnow()
         import_batch.processing_time_seconds = elapsed
         import_batch.inserted = stats.inserted
@@ -535,9 +502,9 @@ class PermitIngestionService:
         )
 
         return BatchIngestionResponse(
-            status='completed' if stats.errors == 0 else 'completed_with_errors',
+            status="completed" if stats.errors == 0 else "completed_with_errors",
             stats=stats,
-            message=f"Processed {len(permits)} records"
+            message=f"Processed {len(permits)} records",
         )
 
 

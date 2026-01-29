@@ -9,19 +9,12 @@ from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 
 
-RoleKey = Literal[
-    "admin",
-    "executive",
-    "manager",
-    "technician",
-    "phone_agent",
-    "dispatcher",
-    "billing"
-]
+RoleKey = Literal["admin", "executive", "manager", "technician", "phone_agent", "dispatcher", "billing"]
 
 
 class RoleViewBase(BaseModel):
     """Base schema for role view."""
+
     role_key: RoleKey
     display_name: str
     description: Optional[str] = None
@@ -31,6 +24,7 @@ class RoleViewBase(BaseModel):
 
 class RoleViewResponse(RoleViewBase):
     """Response schema for a role view."""
+
     id: int
     visible_modules: List[str] = []
     default_route: str = "/"
@@ -46,6 +40,7 @@ class RoleViewResponse(RoleViewBase):
 
 class RoleViewListResponse(BaseModel):
     """Response schema for list of available roles."""
+
     roles: List[RoleViewResponse]
     current_role: Optional[RoleKey] = None
     is_demo_user: bool = False
@@ -53,11 +48,13 @@ class RoleViewListResponse(BaseModel):
 
 class RoleSwitchRequest(BaseModel):
     """Request schema for switching roles."""
+
     role_key: RoleKey = Field(..., description="The role key to switch to")
 
 
 class RoleSwitchResponse(BaseModel):
     """Response schema after switching roles."""
+
     success: bool = True
     message: str
     current_role: RoleViewResponse
@@ -66,6 +63,7 @@ class RoleSwitchResponse(BaseModel):
 
 class CurrentRoleResponse(BaseModel):
     """Response schema for current role info."""
+
     role: RoleViewResponse
     is_demo_user: bool
     user_email: str
@@ -74,6 +72,7 @@ class CurrentRoleResponse(BaseModel):
 
 class DemoModeStatusResponse(BaseModel):
     """Response schema for demo mode status check."""
+
     is_demo_mode: bool
     demo_user_email: Optional[str] = None
     available_roles: Optional[List[str]] = None

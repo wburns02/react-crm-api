@@ -67,8 +67,10 @@ class StepExecutionStatus(str, Enum):
 
 # Journey Steps
 
+
 class JourneyStepBase(BaseModel):
     """Base journey step schema."""
+
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     step_type: JourneyStepType
@@ -106,11 +108,13 @@ class JourneyStepBase(BaseModel):
 
 class JourneyStepCreate(JourneyStepBase):
     """Schema for creating a journey step."""
+
     journey_id: int
 
 
 class JourneyStepUpdate(BaseModel):
     """Schema for updating a journey step."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     step_type: Optional[JourneyStepType] = None
@@ -133,6 +137,7 @@ class JourneyStepUpdate(BaseModel):
 
 class JourneyStepResponse(JourneyStepBase):
     """Journey step response schema."""
+
     id: int
     journey_id: int
     created_at: Optional[datetime] = None
@@ -144,8 +149,10 @@ class JourneyStepResponse(JourneyStepBase):
 
 # Journeys
 
+
 class JourneyBase(BaseModel):
     """Base journey schema."""
+
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     journey_type: JourneyType = JourneyType.CUSTOM
@@ -186,11 +193,13 @@ class JourneyBase(BaseModel):
 
 class JourneyCreate(JourneyBase):
     """Schema for creating a journey."""
+
     steps: Optional[list[JourneyStepCreate]] = None
 
 
 class JourneyUpdate(BaseModel):
     """Schema for updating a journey."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     journey_type: Optional[JourneyType] = None
@@ -215,6 +224,7 @@ class JourneyUpdate(BaseModel):
 
 class JourneyResponse(JourneyBase):
     """Journey response schema."""
+
     id: int
 
     # Metrics (some columns may not exist in DB yet)
@@ -241,6 +251,7 @@ class JourneyResponse(JourneyBase):
 
 class JourneyListResponse(BaseModel):
     """Paginated journey list response."""
+
     items: list[JourneyResponse]
     total: int
     page: int
@@ -249,8 +260,10 @@ class JourneyListResponse(BaseModel):
 
 # Journey Enrollments
 
+
 class JourneyEnrollmentBase(BaseModel):
     """Base journey enrollment schema."""
+
     customer_id: int
     journey_id: int
     enrolled_by: Optional[str] = None
@@ -259,11 +272,13 @@ class JourneyEnrollmentBase(BaseModel):
 
 class JourneyEnrollmentCreate(JourneyEnrollmentBase):
     """Schema for creating a journey enrollment."""
+
     pass
 
 
 class JourneyEnrollmentResponse(JourneyEnrollmentBase):
     """Journey enrollment response schema."""
+
     id: int
     status: EnrollmentStatus
 
@@ -301,6 +316,7 @@ class JourneyEnrollmentResponse(JourneyEnrollmentBase):
 
 class JourneyEnrollmentListResponse(BaseModel):
     """Paginated journey enrollment list response."""
+
     items: list[JourneyEnrollmentResponse]
     total: int
     page: int
@@ -309,8 +325,10 @@ class JourneyEnrollmentListResponse(BaseModel):
 
 # Step Executions
 
+
 class JourneyStepExecutionResponse(BaseModel):
     """Journey step execution response schema."""
+
     id: int
     enrollment_id: int
     step_id: int
@@ -337,8 +355,10 @@ class JourneyStepExecutionResponse(BaseModel):
 
 # Enrollment Operations
 
+
 class JourneyEnrollRequest(BaseModel):
     """Request to enroll a customer in a journey."""
+
     customer_id: int
     journey_id: int
     reason: Optional[str] = None
@@ -348,6 +368,7 @@ class JourneyEnrollRequest(BaseModel):
 
 class JourneyBulkEnrollRequest(BaseModel):
     """Request to bulk enroll customers in a journey."""
+
     journey_id: int
     customer_ids: Optional[list[int]] = None
     segment_id: Optional[int] = None

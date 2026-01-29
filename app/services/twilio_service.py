@@ -6,6 +6,7 @@ Features:
 - Call recordings
 - Status callbacks
 """
+
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 from app.config import settings
@@ -91,7 +92,7 @@ class TwilioService:
             twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say>Connecting your call from MAC Septic CRM.</Say>
-    <Dial callerId="{from_formatted}" record="{'record-from-answer' if record else 'do-not-record'}">
+    <Dial callerId="{from_formatted}" record="{"record-from-answer" if record else "do-not-record"}">
         <Number>{to_formatted}</Number>
     </Dial>
 </Response>"""
@@ -186,13 +187,13 @@ class TwilioService:
 
     def _format_phone(self, phone: str) -> str:
         """Format phone number to E.164 format."""
-        digits = ''.join(c for c in phone if c.isdigit())
+        digits = "".join(c for c in phone if c.isdigit())
 
         if len(digits) == 10:
             return f"+1{digits}"
-        elif len(digits) == 11 and digits.startswith('1'):
+        elif len(digits) == 11 and digits.startswith("1"):
             return f"+{digits}"
-        elif phone.startswith('+'):
+        elif phone.startswith("+"):
             return phone
         else:
             return f"+{digits}"
@@ -242,18 +243,24 @@ class MockTwilioService(TwilioService):
 
     async def send_sms(self, to: str, body: str) -> dict:
         """Mock sending an SMS."""
-        mock_response = type("MockMessage", (), {
-            "sid": f"SM{''.join(['0'] * 32)}",
-            "status": "queued",
-            "to": to,
-            "body": body,
-        })()
+        mock_response = type(
+            "MockMessage",
+            (),
+            {
+                "sid": f"SM{''.join(['0'] * 32)}",
+                "status": "queued",
+                "to": to,
+                "body": body,
+            },
+        )()
 
-        self._sent_messages.append({
-            "to": to,
-            "body": body,
-            "sid": mock_response.sid,
-        })
+        self._sent_messages.append(
+            {
+                "to": to,
+                "body": body,
+                "sid": mock_response.sid,
+            }
+        )
 
         logger.info(f"Mock SMS sent to {to}")
         return mock_response

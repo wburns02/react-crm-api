@@ -1,4 +1,5 @@
 """Service Intervals API - Recurring service scheduling and reminders."""
+
 from datetime import date, timedelta
 from typing import List, Optional
 from uuid import uuid4
@@ -17,6 +18,7 @@ router = APIRouter()
 # =============================================================================
 # SCHEMAS
 # =============================================================================
+
 
 class ServiceIntervalBase(BaseModel):
     name: str
@@ -140,6 +142,7 @@ _customer_schedules: dict = {}
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
+
 
 @router.get("/", response_model=dict)
 async def list_service_intervals(

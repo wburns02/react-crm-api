@@ -7,6 +7,7 @@ Features:
 - Call log synchronization
 - AI transcription integration
 """
+
 import httpx
 import logging
 from typing import Optional, Dict, Any, List
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class RingCentralConfig(BaseModel):
     """RingCentral API configuration."""
+
     client_id: str = ""
     client_secret: str = ""
     server_url: str = "https://platform.ringcentral.com"
@@ -33,10 +35,10 @@ class RingCentralService:
 
     def __init__(self):
         self.config = RingCentralConfig(
-            client_id=settings.RINGCENTRAL_CLIENT_ID or '',
-            client_secret=settings.RINGCENTRAL_CLIENT_SECRET or '',
-            server_url=settings.RINGCENTRAL_SERVER_URL or 'https://platform.ringcentral.com',
-            jwt_token=settings.RINGCENTRAL_JWT_TOKEN or '',
+            client_id=settings.RINGCENTRAL_CLIENT_ID or "",
+            client_secret=settings.RINGCENTRAL_CLIENT_SECRET or "",
+            server_url=settings.RINGCENTRAL_SERVER_URL or "https://platform.ringcentral.com",
+            jwt_token=settings.RINGCENTRAL_JWT_TOKEN or "",
         )
         self._access_token: Optional[str] = None
         self._token_expires: Optional[datetime] = None
@@ -160,7 +162,7 @@ class RingCentralService:
                 "connected": False,
                 "configured": True,
                 "message": "Failed to authenticate with RingCentral",
-                "auth_error": getattr(self, '_last_auth_error', None),
+                "auth_error": getattr(self, "_last_auth_error", None),
             }
 
         # Test API connection
@@ -197,7 +199,7 @@ class RingCentralService:
             Call session information
         """
         # Normalize from_number - extract digits only
-        from_digits = ''.join(c for c in from_number if c.isdigit())
+        from_digits = "".join(c for c in from_number if c.isdigit())
 
         # Detect extension (1-5 digits) vs phone number (6+ digits)
         from_field = None  # Will be set below or left None for default
@@ -244,7 +246,9 @@ class RingCentralService:
                         features = fwd.get("features", [])
 
                         # Log each forwarding number
-                        logger.info(f"Forwarding number: id={fwd.get('id')}, label={fwd_label}, phone={fwd_phone}, features={features}")
+                        logger.info(
+                            f"Forwarding number: id={fwd.get('id')}, label={fwd_label}, phone={fwd_phone}, features={features}"
+                        )
 
                         # Prefer forwarding numbers that support CallFlip (for desk phones/softphones)
                         if "CallFlip" in features and not selected_fwd:
@@ -254,7 +258,9 @@ class RingCentralService:
                     if not selected_fwd:
                         selected_fwd = records[0]
 
-                    logger.info(f"Selected forwarding number: id={selected_fwd.get('id')}, label={selected_fwd.get('label')}")
+                    logger.info(
+                        f"Selected forwarding number: id={selected_fwd.get('id')}, label={selected_fwd.get('label')}"
+                    )
 
                     # Use forwardingNumberId - this is the correct field for RingOut API
                     from_field = {"forwardingNumberId": selected_fwd.get("id")}
@@ -262,16 +268,16 @@ class RingCentralService:
             # It's a phone number - format with +1 country code
             if len(from_digits) == 10:
                 from_field = {"phoneNumber": f"+1{from_digits}"}
-            elif len(from_digits) == 11 and from_digits.startswith('1'):
+            elif len(from_digits) == 11 and from_digits.startswith("1"):
                 from_field = {"phoneNumber": f"+{from_digits}"}
             else:
                 from_field = {"phoneNumber": from_digits}
 
         # Format to_number with country code
-        to_digits = ''.join(c for c in to_number if c.isdigit())
+        to_digits = "".join(c for c in to_number if c.isdigit())
         if len(to_digits) == 10:
             to_formatted = f"+1{to_digits}"
-        elif len(to_digits) == 11 and to_digits.startswith('1'):
+        elif len(to_digits) == 11 and to_digits.startswith("1"):
             to_formatted = f"+{to_digits}"
         else:
             to_formatted = to_digits

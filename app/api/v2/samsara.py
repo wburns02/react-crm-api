@@ -9,6 +9,7 @@ Integrates with Samsara's Fleet API to provide:
 
 API Documentation: https://developers.samsara.com/reference
 """
+
 from fastapi import APIRouter, HTTPException
 from typing import Optional
 from pydantic import BaseModel
@@ -34,6 +35,7 @@ CACHE_TTL_SECONDS = 15  # Cache for 15 seconds to avoid rate limits
 
 class VehicleLocation(BaseModel):
     """Vehicle location with GPS data and status."""
+
     lat: float
     lng: float
     heading: float
@@ -43,6 +45,7 @@ class VehicleLocation(BaseModel):
 
 class Vehicle(BaseModel):
     """Full vehicle data matching frontend schema."""
+
     id: str
     name: str
     vin: Optional[str] = None
@@ -54,6 +57,7 @@ class Vehicle(BaseModel):
 
 class LocationHistoryPoint(BaseModel):
     """Single point in location history."""
+
     lat: float
     lng: float
     timestamp: str
@@ -159,21 +163,23 @@ async def fetch_vehicles_from_samsara() -> list[Vehicle]:
         # If no GPS data but we have vehicles, add them with offline status
         if not vehicles and vehicle_info:
             for vid, info in vehicle_info.items():
-                vehicles.append(Vehicle(
-                    id=vid,
-                    name=info.get("name", "Unknown Vehicle"),
-                    vin=info.get("vin"),
-                    driver_id=None,
-                    driver_name=None,
-                    location=VehicleLocation(
-                        lat=0,
-                        lng=0,
-                        heading=0,
-                        speed=0,
-                        updated_at=now.isoformat(),
-                    ),
-                    status="offline",
-                ))
+                vehicles.append(
+                    Vehicle(
+                        id=vid,
+                        name=info.get("name", "Unknown Vehicle"),
+                        vin=info.get("vin"),
+                        driver_id=None,
+                        driver_name=None,
+                        location=VehicleLocation(
+                            lat=0,
+                            lng=0,
+                            heading=0,
+                            speed=0,
+                            updated_at=now.isoformat(),
+                        ),
+                        status="offline",
+                    )
+                )
 
         return vehicles
 
@@ -266,12 +272,14 @@ async def get_vehicle_history(
             for vehicle_data in data.get("data", []):
                 if vehicle_data.get("id") == vehicle_id:
                     for point in vehicle_data.get("gps", []):
-                        history.append(LocationHistoryPoint(
-                            lat=point.get("latitude", 0),
-                            lng=point.get("longitude", 0),
-                            timestamp=point.get("time", ""),
-                            speed=round(point.get("speedMilesPerHour", 0) or 0, 1),
-                        ))
+                        history.append(
+                            LocationHistoryPoint(
+                                lat=point.get("latitude", 0),
+                                lng=point.get("longitude", 0),
+                                timestamp=point.get("time", ""),
+                                speed=round(point.get("speedMilesPerHour", 0) or 0, 1),
+                            )
+                        )
 
             logger.info(f"Retrieved {len(history)} history points for vehicle {vehicle_id}")
             return history

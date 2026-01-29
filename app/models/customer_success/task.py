@@ -4,10 +4,7 @@ Task Model for Enterprise Customer Success Platform
 Manages CS tasks generated from playbooks, journeys, or manually created.
 """
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text, Date,
-    ForeignKey, Enum as SQLEnum, JSON
-)
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, Date, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -23,6 +20,7 @@ class CSTask(Base):
     - Manual creation
     - System alerts
     """
+
     __tablename__ = "cs_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -40,20 +38,35 @@ class CSTask(Base):
 
     task_type = Column(
         SQLEnum(
-            'call', 'email', 'meeting', 'internal', 'review',
-            'escalation', 'follow_up', 'documentation', 'training',
-            'product_demo', 'qbr', 'renewal', 'custom',
-            name='cs_task_type_enum'
+            "call",
+            "email",
+            "meeting",
+            "internal",
+            "review",
+            "escalation",
+            "follow_up",
+            "documentation",
+            "training",
+            "product_demo",
+            "qbr",
+            "renewal",
+            "custom",
+            name="cs_task_type_enum",
         ),
-        default='custom'
+        default="custom",
     )
 
     # Category for filtering/reporting
     category = Column(
         SQLEnum(
-            'onboarding', 'adoption', 'retention', 'expansion',
-            'support', 'relationship', 'administrative',
-            name='cs_task_category_enum'
+            "onboarding",
+            "adoption",
+            "retention",
+            "expansion",
+            "support",
+            "relationship",
+            "administrative",
+            name="cs_task_category_enum",
         )
     )
 
@@ -70,13 +83,10 @@ class CSTask(Base):
     contact_role = Column(String(100))
 
     # Priority and status
-    priority = Column(
-        SQLEnum('low', 'medium', 'high', 'critical', name='cs_task_priority_enum'),
-        default='medium'
-    )
+    priority = Column(SQLEnum("low", "medium", "high", "critical", name="cs_task_priority_enum"), default="medium")
     status = Column(
-        SQLEnum('pending', 'in_progress', 'completed', 'cancelled', 'blocked', 'snoozed', name='cs_task_status_enum'),
-        default='pending'
+        SQLEnum("pending", "in_progress", "completed", "cancelled", "blocked", "snoozed", name="cs_task_status_enum"),
+        default="pending",
     )
 
     # Timing
@@ -92,9 +102,15 @@ class CSTask(Base):
     # Outcome
     outcome = Column(
         SQLEnum(
-            'successful', 'unsuccessful', 'rescheduled', 'no_response',
-            'voicemail', 'escalated', 'cancelled', 'not_applicable',
-            name='cs_task_outcome_enum'
+            "successful",
+            "unsuccessful",
+            "rescheduled",
+            "no_response",
+            "voicemail",
+            "escalated",
+            "cancelled",
+            "not_applicable",
+            name="cs_task_outcome_enum",
         )
     )
     outcome_notes = Column(Text)

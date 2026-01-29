@@ -12,7 +12,16 @@ from app.models.technician import Technician
 
 router = APIRouter()
 
-JOB_TYPES = ["pumping", "inspection", "repair", "installation", "emergency", "maintenance", "grease_trap", "camera_inspection"]
+JOB_TYPES = [
+    "pumping",
+    "inspection",
+    "repair",
+    "installation",
+    "emergency",
+    "maintenance",
+    "grease_trap",
+    "camera_inspection",
+]
 PROSPECT_STAGES = ["new_lead", "contacted", "qualified", "quoted", "negotiation"]
 
 
@@ -82,33 +91,35 @@ async def get_revenue_report(
 ):
     end = date.today()
     start = end - timedelta(days=30)
-    
-    wo_result = await db.execute(
-        select(func.count()).where(WorkOrder.status == "completed")
-    )
+
+    wo_result = await db.execute(select(func.count()).where(WorkOrder.status == "completed"))
     work_orders_completed = wo_result.scalar() or 0
     avg_job_value = 350.0
     total_revenue = work_orders_completed * avg_job_value
-    
+
     service_breakdown = []
     for job_type in JOB_TYPES:
         type_result = await db.execute(
-            select(func.count()).where(
-                and_(WorkOrder.job_type == job_type, WorkOrder.status == "completed")
-            )
+            select(func.count()).where(and_(WorkOrder.job_type == job_type, WorkOrder.status == "completed"))
         )
         count = type_result.scalar() or 0
         if count > 0:
-            service_breakdown.append(ServiceBreakdown(
-                service_type=job_type, count=count,
-                revenue=count * avg_job_value,
-                percentage=(count / work_orders_completed * 100) if work_orders_completed > 0 else 0,
-            ))
-    
+            service_breakdown.append(
+                ServiceBreakdown(
+                    service_type=job_type,
+                    count=count,
+                    revenue=count * avg_job_value,
+                    percentage=(count / work_orders_completed * 100) if work_orders_completed > 0 else 0,
+                )
+            )
+
     return RevenueReport(
         metrics=RevenueMetrics(
-            total_revenue=total_revenue, work_orders_completed=work_orders_completed,
-            average_job_value=avg_job_value, new_customers=0, repeat_customer_rate=0.0,
+            total_revenue=total_revenue,
+            work_orders_completed=work_orders_completed,
+            average_job_value=avg_job_value,
+            new_customers=0,
+            repeat_customer_rate=0.0,
         ),
         service_breakdown=service_breakdown,
         date_range={"start_date": start.isoformat(), "end_date": end.isoformat()},
@@ -124,7 +135,7 @@ async def get_technician_report(
 ):
     techs_result = await db.execute(select(Technician).where(Technician.is_active == True))
     technicians = techs_result.scalars().all()
-    
+
     metrics = []
     for tech in technicians:
         jobs_result = await db.execute(
@@ -136,11 +147,16 @@ async def get_technician_report(
             )
         )
         jobs = jobs_result.scalar() or 0
-        metrics.append(TechnicianMetrics(
-            technician_id=str(tech.id), technician_name=f"{tech.first_name} {tech.last_name}",
-            jobs_completed=jobs, total_revenue=jobs * 350.0, on_time_completion_rate=95.0,
-        ))
-    
+        metrics.append(
+            TechnicianMetrics(
+                technician_id=str(tech.id),
+                technician_name=f"{tech.first_name} {tech.last_name}",
+                jobs_completed=jobs,
+                total_revenue=jobs * 350.0,
+                on_time_completion_rate=95.0,
+            )
+        )
+
     return TechnicianReport(technicians=metrics, date_range={"start_date": "", "end_date": ""})
 
 
@@ -157,7 +173,7 @@ async def get_customer_report(
         select(func.count()).where(and_(Customer.prospect_stage == "won", Customer.is_active == True))
     )
     active = active_result.scalar() or 0
-    
+
     return CustomerReport(
         metrics=CustomerMetrics(total_customers=total, active_customers=active, new_customers_this_month=0),
         date_range={"start_date": "", "end_date": ""},
@@ -166,26 +182,27 @@ async def get_customer_report(
 
 @router.get("/pipeline", response_model=PipelineMetrics)
 async def get_pipeline_metrics(db: DbSession, current_user: CurrentUser):
-    total_result = await db.execute(
-        select(func.count()).where(Customer.prospect_stage.in_(PROSPECT_STAGES))
-    )
+    total_result = await db.execute(select(func.count()).where(Customer.prospect_stage.in_(PROSPECT_STAGES)))
     total_prospects = total_result.scalar() or 0
-    
+
     prospects_by_stage = []
     for stage in PROSPECT_STAGES:
         stage_result = await db.execute(select(func.count()).where(Customer.prospect_stage == stage))
         count = stage_result.scalar() or 0
         prospects_by_stage.append(ProspectsByStage(stage=stage, count=count, total_value=count * 500))
-    
+
     total_value = sum(p.total_value for p in prospects_by_stage)
     return PipelineMetrics(
-        total_pipeline_value=total_value, total_prospects=total_prospects, prospects_by_stage=prospects_by_stage,
+        total_pipeline_value=total_value,
+        total_prospects=total_prospects,
+        prospects_by_stage=prospects_by_stage,
     )
 
 
 # ========================
 # Enhanced Reports (Phase 7)
 # ========================
+
 
 class RevenueByServiceResponse(BaseModel):
     period: dict
@@ -255,12 +272,14 @@ async def get_revenue_by_service(
         total_revenue += revenue
 
         if count > 0:
-            services.append({
-                "service_type": job_type,
-                "job_count": count,
-                "revenue": revenue,
-                "average_job_value": avg_price,
-            })
+            services.append(
+                {
+                    "service_type": job_type,
+                    "job_count": count,
+                    "revenue": revenue,
+                    "average_job_value": avg_price,
+                }
+            )
 
     # Sort by revenue descending
     services.sort(key=lambda x: x["revenue"], reverse=True)
@@ -283,9 +302,7 @@ async def get_revenue_by_technician(
     end = end_date or date.today()
     start = start_date or (end - timedelta(days=30))
 
-    techs_result = await db.execute(
-        select(Technician).where(Technician.is_active == True)
-    )
+    techs_result = await db.execute(select(Technician).where(Technician.is_active == True))
     technicians = techs_result.scalars().all()
 
     tech_data = []
@@ -305,13 +322,15 @@ async def get_revenue_by_technician(
         revenue = jobs * 350.0  # Average job value
         total_revenue += revenue
 
-        tech_data.append({
-            "technician_id": str(tech.id),
-            "technician_name": full_name,
-            "jobs_completed": jobs,
-            "revenue": revenue,
-            "average_job_value": 350.0 if jobs > 0 else 0,
-        })
+        tech_data.append(
+            {
+                "technician_id": str(tech.id),
+                "technician_name": full_name,
+                "jobs_completed": jobs,
+                "revenue": revenue,
+                "average_job_value": 350.0 if jobs > 0 else 0,
+            }
+        )
 
     # Sort by revenue descending
     tech_data.sort(key=lambda x: x["revenue"], reverse=True)
@@ -387,9 +406,7 @@ async def get_customer_lifetime_value(
 ):
     """Get customer lifetime value analysis."""
     # Get customers with their work order counts
-    customers_result = await db.execute(
-        select(Customer).where(Customer.prospect_stage == "won")
-    )
+    customers_result = await db.execute(select(Customer).where(Customer.prospect_stage == "won"))
     customers = customers_result.scalars().all()
 
     customer_ltv = []
@@ -416,14 +433,16 @@ async def get_customer_lifetime_value(
                 tenure_days = (datetime.now() - customer.created_at).days
                 tenure_months = max(1, tenure_days // 30)
 
-            customer_ltv.append({
-                "customer_id": customer.id,
-                "customer_name": customer.name,
-                "lifetime_value": ltv,
-                "total_jobs": wo_count,
-                "tenure_months": tenure_months,
-                "monthly_value": round(ltv / tenure_months, 2),
-            })
+            customer_ltv.append(
+                {
+                    "customer_id": customer.id,
+                    "customer_name": customer.name,
+                    "lifetime_value": ltv,
+                    "total_jobs": wo_count,
+                    "tenure_months": tenure_months,
+                    "monthly_value": round(ltv / tenure_months, 2),
+                }
+            )
 
     # Sort by LTV
     customer_ltv.sort(key=lambda x: x["lifetime_value"], reverse=True)
@@ -448,9 +467,7 @@ async def get_technician_performance(
     end = end_date or date.today()
     start = start_date or (end - timedelta(days=30))
 
-    techs_result = await db.execute(
-        select(Technician).where(Technician.is_active == True)
-    )
+    techs_result = await db.execute(select(Technician).where(Technician.is_active == True))
     technicians = techs_result.scalars().all()
 
     tech_performance = []
@@ -470,11 +487,7 @@ async def get_technician_performance(
         completed = completed_result.scalar() or 0
 
         # Total assigned jobs
-        total_result = await db.execute(
-            select(func.count()).where(
-                WorkOrder.assigned_technician == full_name
-            )
-        )
+        total_result = await db.execute(select(func.count()).where(WorkOrder.assigned_technician == full_name))
         total = total_result.scalar() or 0
 
         # Calculate metrics
@@ -485,17 +498,19 @@ async def get_technician_performance(
         work_days = 22  # Approximate working days in a month
         jobs_per_day = completed / work_days if work_days > 0 else 0
 
-        tech_performance.append({
-            "technician_id": str(tech.id),
-            "technician_name": full_name,
-            "jobs_completed": completed,
-            "jobs_assigned": total,
-            "completion_rate": round(completion_rate, 1),
-            "revenue_generated": revenue,
-            "jobs_per_day": round(jobs_per_day, 2),
-            "on_time_rate": 95.0,  # Placeholder - would need actual tracking
-            "customer_rating": 4.5,  # Placeholder - would need rating system
-        })
+        tech_performance.append(
+            {
+                "technician_id": str(tech.id),
+                "technician_name": full_name,
+                "jobs_completed": completed,
+                "jobs_assigned": total,
+                "completion_rate": round(completion_rate, 1),
+                "revenue_generated": revenue,
+                "jobs_per_day": round(jobs_per_day, 2),
+                "on_time_rate": 95.0,  # Placeholder - would need actual tracking
+                "customer_rating": 4.5,  # Placeholder - would need rating system
+            }
+        )
 
     # Sort by jobs completed
     tech_performance.sort(key=lambda x: x["jobs_completed"], reverse=True)

@@ -1,4 +1,5 @@
 """Marketing automation models."""
+
 from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, JSON, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func

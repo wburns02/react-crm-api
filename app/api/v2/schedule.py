@@ -67,9 +67,7 @@ async def get_schedule_stats(
     week_start = today - timedelta(days=today.weekday())
     week_end = week_start + timedelta(days=6)
 
-    today_result = await db.execute(
-        select(func.count()).where(func.date(WorkOrder.scheduled_date) == today)
-    )
+    today_result = await db.execute(select(func.count()).where(func.date(WorkOrder.scheduled_date) == today))
     today_jobs = today_result.scalar() or 0
 
     week_result = await db.execute(
@@ -95,9 +93,7 @@ async def get_schedule_stats(
     )
     unscheduled_jobs = unscheduled_result.scalar() or 0
 
-    emergency_result = await db.execute(
-        select(func.count()).where(WorkOrder.priority == "emergency")
-    )
+    emergency_result = await db.execute(select(func.count()).where(WorkOrder.priority == "emergency"))
     emergency_jobs = emergency_result.scalar() or 0
 
     return ScheduleStats(
@@ -115,15 +111,20 @@ async def get_unscheduled_work_orders(
     page_size: int = Query(100, ge=1, le=500),
 ):
     """Get unscheduled work orders (draft without date)."""
-    query = select(WorkOrder).where(
-        and_(
-            WorkOrder.status == "draft",
-            or_(
-                WorkOrder.scheduled_date.is_(None),
-                WorkOrder.scheduled_date == None,
-            ),
+    query = (
+        select(WorkOrder)
+        .where(
+            and_(
+                WorkOrder.status == "draft",
+                or_(
+                    WorkOrder.scheduled_date.is_(None),
+                    WorkOrder.scheduled_date == None,
+                ),
+            )
         )
-    ).order_by(WorkOrder.created_at.desc()).limit(page_size)
+        .order_by(WorkOrder.created_at.desc())
+        .limit(page_size)
+    )
 
     result = await db.execute(query)
     work_orders = result.scalars().all()
@@ -141,9 +142,7 @@ async def get_schedule_by_date(
     date: str = Query(..., description="Date in YYYY-MM-DD format"),
 ):
     """Get all work orders scheduled for a specific date."""
-    query = select(WorkOrder).where(
-        func.date(WorkOrder.scheduled_date) == date
-    ).order_by(WorkOrder.time_window_start)
+    query = select(WorkOrder).where(func.date(WorkOrder.scheduled_date) == date).order_by(WorkOrder.time_window_start)
 
     result = await db.execute(query)
     work_orders = result.scalars().all()
@@ -163,9 +162,7 @@ async def get_schedule_by_technician(
     date_to: Optional[str] = None,
 ):
     """Get work orders assigned to a specific technician."""
-    query = select(WorkOrder).where(
-        WorkOrder.assigned_technician == technician_name
-    )
+    query = select(WorkOrder).where(WorkOrder.assigned_technician == technician_name)
 
     if date_from:
         query = query.where(func.date(WorkOrder.scheduled_date) >= date_from)
@@ -194,12 +191,16 @@ async def get_week_view(
     start = datetime.strptime(start_date, "%Y-%m-%d").date()
     end = start + timedelta(days=6)
 
-    query = select(WorkOrder).where(
-        and_(
-            func.date(WorkOrder.scheduled_date) >= start,
-            func.date(WorkOrder.scheduled_date) <= end,
+    query = (
+        select(WorkOrder)
+        .where(
+            and_(
+                func.date(WorkOrder.scheduled_date) >= start,
+                func.date(WorkOrder.scheduled_date) <= end,
+            )
         )
-    ).order_by(WorkOrder.scheduled_date, WorkOrder.time_window_start)
+        .order_by(WorkOrder.scheduled_date, WorkOrder.time_window_start)
+    )
 
     result = await db.execute(query)
     work_orders = result.scalars().all()
@@ -211,7 +212,11 @@ async def get_week_view(
 
     for wo in work_orders:
         if wo.scheduled_date:
-            day_str = wo.scheduled_date.isoformat() if hasattr(wo.scheduled_date, 'isoformat') else str(wo.scheduled_date)[:10]
+            day_str = (
+                wo.scheduled_date.isoformat()
+                if hasattr(wo.scheduled_date, "isoformat")
+                else str(wo.scheduled_date)[:10]
+            )
             if day_str in by_date:
                 by_date[day_str].append(work_order_to_schedule(wo))
 

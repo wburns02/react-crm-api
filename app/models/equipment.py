@@ -1,4 +1,5 @@
 """Equipment model for tracking customer equipment (septic tanks, pumps, etc.)."""
+
 from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Integer, Float, Date
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
