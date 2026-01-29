@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '029_create_bookings'
-down_revision = '028_create_dump_sites_standalone'
+down_revision = '028_create_dump_sites'
 branch_labels = None
 depends_on = None
 
