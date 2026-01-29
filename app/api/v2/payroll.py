@@ -1429,6 +1429,13 @@ async def list_pay_rates(
 
         result = await db.execute(query)
         rates = result.scalars().all()
+
+        # Resolve technician names
+        tech_ids = list(set(r.technician_id for r in rates if r.technician_id))
+        technicians = {}
+        if tech_ids:
+            tech_result = await db.execute(select(Technician).where(Technician.id.in_(tech_ids)))
+            technicians = {str(t.id): f"{t.first_name} {t.last_name}" for t in tech_result.scalars().all()}
     except Exception as e:
         logger.error(f"Error fetching pay rates: {type(e).__name__}: {str(e)}")
         return {"rates": []}
@@ -1438,6 +1445,7 @@ async def list_pay_rates(
             {
                 "id": str(r.id),
                 "technician_id": r.technician_id,
+                "technician_name": technicians.get(r.technician_id, "Unknown Technician"),
                 "pay_type": r.pay_type or "hourly",
                 "hourly_rate": r.hourly_rate,
                 "overtime_rate": (r.hourly_rate or 0) * (r.overtime_multiplier or 1.5),
@@ -1503,11 +1511,20 @@ async def create_pay_rate(
         await db.commit()
         await db.refresh(rate)
 
+        # Resolve technician name
+        tech_name = "Unknown Technician"
+        if rate.technician_id:
+            tech_result = await db.execute(select(Technician).where(Technician.id == rate.technician_id))
+            tech = tech_result.scalar_one_or_none()
+            if tech:
+                tech_name = f"{tech.first_name} {tech.last_name}"
+
         logger.info(f"Created pay rate {rate.id} for technician {request.technician_id}")
 
         return {
             "id": str(rate.id),
             "technician_id": rate.technician_id,
+            "technician_name": tech_name,
             "pay_type": rate.pay_type or "hourly",
             "hourly_rate": rate.hourly_rate,
             "overtime_rate": (rate.hourly_rate or 0) * (rate.overtime_multiplier or 1.5),
@@ -1556,9 +1573,18 @@ async def update_pay_rate(
     await db.commit()
     await db.refresh(rate)
 
+    # Resolve technician name
+    tech_name = "Unknown Technician"
+    if rate.technician_id:
+        tech_result = await db.execute(select(Technician).where(Technician.id == rate.technician_id))
+        tech = tech_result.scalar_one_or_none()
+        if tech:
+            tech_name = f"{tech.first_name} {tech.last_name}"
+
     return {
         "id": str(rate.id),
         "technician_id": rate.technician_id,
+        "technician_name": tech_name,
         "pay_type": rate.pay_type or "hourly",
         "hourly_rate": rate.hourly_rate,
         "overtime_rate": (rate.hourly_rate or 0) * (rate.overtime_multiplier or 1.5),
