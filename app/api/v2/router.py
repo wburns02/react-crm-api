@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from app.api.v2 import (
     auth,
+    availability,
     customers,
     work_orders,
     communications,
@@ -249,3 +250,6 @@ api_router.include_router(local_ai.router, prefix="/local-ai", tags=["local-ai"]
 
 # National Septic OCR Permit System
 api_router.include_router(permits.router, prefix="/permits", tags=["permits"])
+
+# Public Availability API (Lead Form - No Auth Required)
+api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
