@@ -4,14 +4,17 @@ Availability API endpoints for public lead form scheduling.
 Provides available time slots based on current work order schedule.
 This is a PUBLIC endpoint - no authentication required.
 """
+import logging
 from fastapi import APIRouter, Query, HTTPException
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, and_
 from typing import Optional, List
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
 
 from app.api.deps import DbSession
 from app.models.work_order import WorkOrder
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -71,6 +74,12 @@ def windows_overlap(start1: str, end1: str, start2: str, end2: str) -> bool:
     return s1 < e2 and s2 < e1
 
 
+@router.get("/test")
+async def test_endpoint():
+    """Simple test endpoint to verify routing works."""
+    return {"status": "ok", "message": "Availability API is working"}
+
+
 @router.get("/slots", response_model=AvailabilityResponse)
 async def get_availability_slots(
     db: DbSession,
@@ -116,34 +125,47 @@ async def get_availability_slots(
     # Get scheduled work orders in date range
     active_statuses = ["scheduled", "confirmed", "enroute", "on_site", "in_progress"]
 
-    query = select(WorkOrder).where(
-        and_(
-            WorkOrder.scheduled_date >= parsed_start,
-            WorkOrder.scheduled_date <= parsed_end,
-            WorkOrder.status.in_(active_statuses)
+    try:
+        query = select(WorkOrder).where(
+            and_(
+                WorkOrder.scheduled_date >= parsed_start,
+                WorkOrder.scheduled_date <= parsed_end,
+                WorkOrder.status.in_(active_statuses)
+            )
         )
-    )
 
-    if service_type:
-        query = query.where(WorkOrder.job_type == service_type)
+        if service_type:
+            query = query.where(WorkOrder.job_type == service_type)
 
-    result = await db.execute(query)
-    work_orders = result.scalars().all()
+        result = await db.execute(query)
+        work_orders = result.scalars().all()
+    except Exception as e:
+        logger.error(f"Database query error: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     # Group work orders by date
     busy_by_date: dict[str, list] = {}
-    for wo in work_orders:
-        if wo.scheduled_date:
-            date_str = wo.scheduled_date.isoformat() if hasattr(wo.scheduled_date, 'isoformat') else str(wo.scheduled_date)[:10]
-            if date_str not in busy_by_date:
-                busy_by_date[date_str] = []
-            # Format time as HH:MM (truncate seconds if present)
-            start_time = wo.time_window_start.strftime("%H:%M") if wo.time_window_start else BUSINESS_START
-            end_time = wo.time_window_end.strftime("%H:%M") if wo.time_window_end else BUSINESS_END
-            busy_by_date[date_str].append({
-                "start": start_time,
-                "end": end_time,
-            })
+    try:
+        for wo in work_orders:
+            if wo.scheduled_date:
+                date_str = wo.scheduled_date.isoformat() if hasattr(wo.scheduled_date, 'isoformat') else str(wo.scheduled_date)[:10]
+                if date_str not in busy_by_date:
+                    busy_by_date[date_str] = []
+                # Format time as HH:MM (handle various time formats)
+                try:
+                    start_time = wo.time_window_start.strftime("%H:%M") if wo.time_window_start else BUSINESS_START
+                    end_time = wo.time_window_end.strftime("%H:%M") if wo.time_window_end else BUSINESS_END
+                except AttributeError:
+                    # If time_window is a string, use it directly
+                    start_time = str(wo.time_window_start)[:5] if wo.time_window_start else BUSINESS_START
+                    end_time = str(wo.time_window_end)[:5] if wo.time_window_end else BUSINESS_END
+                busy_by_date[date_str].append({
+                    "start": start_time,
+                    "end": end_time,
+                })
+    except Exception as e:
+        logger.error(f"Error processing work orders: {e}")
+        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
     # Calculate availability for each day
     slots: List[DayAvailability] = []
