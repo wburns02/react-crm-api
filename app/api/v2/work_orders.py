@@ -98,10 +98,7 @@ async def list_work_orders(
     """List work orders with pagination, filtering, and real customer names."""
     try:
         # Base query with LEFT JOIN to Customer for real customer names
-        query = (
-            select(WorkOrder, Customer)
-            .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
-        )
+        query = select(WorkOrder, Customer).outerjoin(Customer, WorkOrder.customer_id == Customer.id)
 
         # Apply filters
         if customer_id:
