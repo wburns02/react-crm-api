@@ -390,7 +390,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.7",  # Email templates API + communications fixes
+        "version": "2.7.8",  # MessageResponse schema fix for nullable fields
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
@@ -400,6 +400,7 @@ async def health_check():
             "journey_status",
             "technician_performance",
             "call_intelligence",
+            "email_crm",
         ],
     }
 
