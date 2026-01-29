@@ -126,15 +126,16 @@ async def get_availability_slots(
             )
         )
 
-        if service_type:
-            query = query.where(WorkOrder.job_type == service_type)
-
         result = await db.execute(query)
         all_work_orders = result.scalars().all()
 
-        # Filter by status in Python (avoid PostgreSQL ENUM comparison issues with asyncpg)
+        # Filter by status and service_type in Python (avoid PostgreSQL ENUM comparison issues with asyncpg)
         active_statuses = {"scheduled", "confirmed", "enroute", "on_site", "in_progress"}
         work_orders = [wo for wo in all_work_orders if wo.status in active_statuses]
+
+        # Filter by service_type if specified
+        if service_type:
+            work_orders = [wo for wo in work_orders if wo.job_type == service_type]
     except Exception as e:
         logger.error(f"Database query error: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
