@@ -554,7 +554,9 @@ class TestSegmentEvaluation:
             f"/api/v2/cs/segments/{sample_segment.id}/evaluate"
         )
         assert response.status_code == 200
-        assert response.json()["status"] == "accepted"
+        data = response.json()
+        assert "segment_id" in data
+        assert data["segment_id"] == sample_segment.id
 
     @pytest.mark.asyncio
     async def test_trigger_evaluation_static_segment_fails(
@@ -625,7 +627,7 @@ class TestSchemaValidation:
         segment_data = {
             "name": "Invalid Frequency Segment",
             "segment_type": "dynamic",
-            "update_frequency_hours": 500,  # Max is 168
+            "refresh_interval_hours": 500,  # Max is 168
         }
 
         response = await authenticated_client.post(
