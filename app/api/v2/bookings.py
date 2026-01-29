@@ -57,17 +57,20 @@ async def ensure_bookings_table(db: DbSession) -> None:
 
     try:
         # Check if table exists
-        result = await db.execute(text("""
+        result = await db.execute(
+            text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables
                 WHERE table_name = 'bookings'
             )
-        """))
+        """)
+        )
         exists = result.scalar()
 
         if not exists:
             logger.warning("Bookings table not found - creating via fallback SQL")
-            await db.execute(text("""
+            await db.execute(
+                text("""
                 CREATE TABLE IF NOT EXISTS bookings (
                     id VARCHAR(36) PRIMARY KEY,
                     customer_id INTEGER REFERENCES customers(id),
@@ -101,7 +104,8 @@ async def ensure_bookings_table(db: DbSession) -> None:
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                     updated_at TIMESTAMP WITH TIME ZONE
                 )
-            """))
+            """)
+            )
             await db.execute(text("CREATE INDEX IF NOT EXISTS ix_bookings_scheduled_date ON bookings(scheduled_date)"))
             await db.execute(text("CREATE INDEX IF NOT EXISTS ix_bookings_customer_phone ON bookings(customer_phone)"))
             await db.execute(text("CREATE INDEX IF NOT EXISTS ix_bookings_payment_status ON bookings(payment_status)"))
