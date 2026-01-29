@@ -84,7 +84,7 @@ async def list_dump_sites(
                 "notes": site.notes,
                 "contact_name": site.contact_name,
                 "contact_phone": site.contact_phone,
-                "hours_of_operation": getattr(site, 'hours_of_operation', None),
+                "hours_of_operation": site.hours_of_operation,
                 "created_at": site.created_at.isoformat() if site.created_at else None,
                 "updated_at": site.updated_at.isoformat() if site.updated_at else None,
             }
@@ -124,7 +124,7 @@ async def get_dump_site(
         "notes": site.notes,
         "contact_name": site.contact_name,
         "contact_phone": site.contact_phone,
-        "hours_of_operation": getattr(site, 'hours_of_operation', None),
+        "hours_of_operation": site.hours_of_operation,
         "created_at": site.created_at.isoformat() if site.created_at else None,
         "updated_at": site.updated_at.isoformat() if site.updated_at else None,
     }
@@ -165,7 +165,7 @@ async def create_dump_site(
         notes=request.notes,
         contact_name=request.contact_name,
         contact_phone=request.contact_phone,
-        # hours_of_operation will be added after migration 027 runs
+        hours_of_operation=request.hours_of_operation,
     )
 
     db.add(site)

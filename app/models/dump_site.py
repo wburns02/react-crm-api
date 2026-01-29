@@ -41,8 +41,7 @@ class DumpSite(Base):
     contact_phone = Column(String(20), nullable=True)
 
     # Hours of operation (e.g., "Mon-Fri 7AM-5PM", "24/7")
-    # NOTE: Column will be added by migration 027. Using deferred for compatibility.
-    # hours_of_operation = Column(String(255), nullable=True)
+    hours_of_operation = Column(String(255), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
