@@ -326,26 +326,14 @@ async def ensure_messages_columns():
                 )
 
                 # Add type column
-                await session.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS type messagetype")
-                )
-                await session.execute(
-                    text("UPDATE messages SET type = 'sms' WHERE type IS NULL")
-                )
-                await session.execute(
-                    text("ALTER TABLE messages ALTER COLUMN type SET NOT NULL")
-                )
+                await session.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS type messagetype"))
+                await session.execute(text("UPDATE messages SET type = 'sms' WHERE type IS NULL"))
+                await session.execute(text("ALTER TABLE messages ALTER COLUMN type SET NOT NULL"))
 
                 # Add direction column
-                await session.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS direction messagedirection")
-                )
-                await session.execute(
-                    text("UPDATE messages SET direction = 'outbound' WHERE direction IS NULL")
-                )
-                await session.execute(
-                    text("ALTER TABLE messages ALTER COLUMN direction SET NOT NULL")
-                )
+                await session.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS direction messagedirection"))
+                await session.execute(text("UPDATE messages SET direction = 'outbound' WHERE direction IS NULL"))
+                await session.execute(text("ALTER TABLE messages ALTER COLUMN direction SET NOT NULL"))
 
                 # Add status column
                 await session.execute(
@@ -353,24 +341,14 @@ async def ensure_messages_columns():
                 )
 
                 # Add other columns
-                await session.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS subject VARCHAR(255)")
-                )
-                await session.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS from_address VARCHAR(255)")
-                )
+                await session.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS subject VARCHAR(255)"))
+                await session.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS from_address VARCHAR(255)"))
                 await session.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'react'")
                 )
-                await session.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ")
-                )
-                await session.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ")
-                )
-                await session.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ")
-                )
+                await session.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ"))
+                await session.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ"))
+                await session.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ"))
 
                 await session.commit()
                 logger.info("Added missing columns to messages table successfully")
@@ -379,6 +357,64 @@ async def ensure_messages_columns():
 
         except Exception as e:
             logger.warning(f"Could not ensure messages columns: {type(e).__name__}: {e}")
+
+
+async def ensure_email_templates_table():
+    """
+    Ensure email_templates table exists.
+
+    This table was added by migration 037. Runs on startup to ensure table exists.
+    """
+    from sqlalchemy import text
+
+    try:
+        async with async_engine.begin() as conn:
+            # Check if table exists
+            result = await conn.execute(
+                text(
+                    """
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'email_templates'
+                )
+            """
+                )
+            )
+            exists = result.scalar()
+
+            if not exists:
+                logger.info("Creating email_templates table...")
+                await conn.execute(
+                    text(
+                        """
+                    CREATE TABLE IF NOT EXISTS email_templates (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        name VARCHAR(255) NOT NULL,
+                        subject VARCHAR(255) NOT NULL,
+                        body_html TEXT NOT NULL,
+                        body_text TEXT,
+                        variables JSONB,
+                        category VARCHAR(50),
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_by INTEGER,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ
+                    )
+                """
+                    )
+                )
+                await conn.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_email_templates_category ON email_templates(category)")
+                )
+                await conn.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_email_templates_is_active ON email_templates(is_active)")
+                )
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_email_templates_name ON email_templates(name)"))
+                logger.info("email_templates table created successfully")
+            else:
+                logger.info("email_templates table already exists")
+    except Exception as e:
+        logger.warning(f"Could not ensure email_templates table: {type(e).__name__}: {e}")
 
 
 @asynccontextmanager
@@ -405,6 +441,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure messages columns exist (fix for migration 036 not running)
         await ensure_messages_columns()
+
+        # Ensure email_templates table exists (fix for migration 037 not running)
+        await ensure_email_templates_table()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
@@ -511,7 +550,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.12",  # MessageResponse schema fix for nullable fields
+        "version": "2.7.13",  # Add email_templates table migration
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
