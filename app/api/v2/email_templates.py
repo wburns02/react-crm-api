@@ -25,6 +25,58 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/ensure-table")
+async def ensure_email_templates_table(db: DbSession):
+    """DEBUG: Ensure email_templates table exists."""
+    from sqlalchemy import text
+
+    try:
+        # Check if table exists
+        result = await db.execute(
+            text(
+                """SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'email_templates'
+            )"""
+            )
+        )
+        exists = result.scalar()
+
+        if not exists:
+            await db.execute(
+                text(
+                    """
+                CREATE TABLE IF NOT EXISTS email_templates (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name VARCHAR(255) NOT NULL,
+                    subject VARCHAR(255) NOT NULL,
+                    body_html TEXT NOT NULL,
+                    body_text TEXT,
+                    variables JSONB,
+                    category VARCHAR(50),
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_by INTEGER,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ
+                )
+            """
+                )
+            )
+            await db.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_email_templates_category ON email_templates(category)")
+            )
+            await db.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_email_templates_is_active ON email_templates(is_active)")
+            )
+            await db.execute(text("CREATE INDEX IF NOT EXISTS ix_email_templates_name ON email_templates(name)"))
+            await db.commit()
+            return {"success": True, "message": "Table created successfully"}
+        else:
+            return {"success": True, "message": "Table already exists"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @router.get("")
 async def list_email_templates(
     db: DbSession,

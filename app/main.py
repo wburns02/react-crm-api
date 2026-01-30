@@ -553,7 +553,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.15",  # Fix email_templates table creation using async_session_maker
+        "version": "2.7.16",  # Add /email-templates/ensure-table debug endpoint
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
