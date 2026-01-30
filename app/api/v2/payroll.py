@@ -901,11 +901,13 @@ async def list_commissions(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
-    """List commissions with technician names."""
+    """List commissions with technician names and work order numbers."""
     try:
-        # Join with Technician to get names
-        query = select(Commission, Technician).outerjoin(
+        # Join with Technician and WorkOrder to get names and numbers
+        query = select(Commission, Technician, WorkOrder).outerjoin(
             Technician, Commission.technician_id == Technician.id
+        ).outerjoin(
+            WorkOrder, Commission.work_order_id == WorkOrder.id
         )
 
         if technician_id:
@@ -931,7 +933,7 @@ async def list_commissions(
         query = query.offset(offset).limit(page_size).order_by(Commission.earned_date.desc())
 
         result = await db.execute(query)
-        rows = result.all()  # Returns tuples of (Commission, Technician)
+        rows = result.all()  # Returns tuples of (Commission, Technician, WorkOrder)
     except Exception as e:
         logger.error(f"Error fetching commissions: {type(e).__name__}: {str(e)}")
         return {"commissions": [], "total": 0, "page": 1, "page_size": page_size}
@@ -943,6 +945,7 @@ async def list_commissions(
                 "technician_id": c.technician_id,
                 "technician_name": f"{t.first_name} {t.last_name}".strip() if t else None,
                 "work_order_id": c.work_order_id,
+                "work_order_number": wo.work_order_number if wo else None,
                 "invoice_id": c.invoice_id,
                 "payroll_period_id": str(c.payroll_period_id) if c.payroll_period_id else None,
                 "commission_type": c.commission_type,
@@ -961,7 +964,7 @@ async def list_commissions(
                 "dump_fee_amount": c.dump_fee_amount,
                 "commissionable_amount": c.commissionable_amount,
             }
-            for c, t in rows
+            for c, t, wo in rows
         ],
         "total": total,
         "page": page,
