@@ -39,6 +39,7 @@ def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -
 
     return {
         "id": wo.id,
+        "work_order_number": wo.work_order_number,
         "customer_id": wo.customer_id,
         "customer_name": customer_name,
         "technician_id": wo.technician_id,
@@ -308,6 +309,22 @@ async def get_work_order(
     return work_order_with_customer_name(work_order, customer)
 
 
+async def generate_work_order_number(db: DbSession) -> str:
+    """Generate next work order number in WO-NNNNNN format."""
+    result = await db.execute(
+        select(func.max(WorkOrder.work_order_number))
+    )
+    last_number = result.scalar()
+    if last_number and last_number.startswith("WO-"):
+        try:
+            num = int(last_number.replace("WO-", "")) + 1
+        except ValueError:
+            num = 1
+    else:
+        num = 1
+    return f"WO-{num:06d}"
+
+
 @router.post("", response_model=WorkOrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_work_order(
     work_order_data: WorkOrderCreate,
@@ -317,6 +334,7 @@ async def create_work_order(
     """Create a new work order."""
     data = work_order_data.model_dump()
     data["id"] = str(uuid.uuid4())
+    data["work_order_number"] = await generate_work_order_number(db)
     work_order = WorkOrder(**data)
     db.add(work_order)
     await db.commit()

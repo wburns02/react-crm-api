@@ -420,6 +420,67 @@ async def ensure_email_templates_table():
             logger.warning(f"Could not ensure email_templates table: {type(e).__name__}: {e}")
 
 
+async def ensure_work_order_number_column():
+    """
+    Ensure work_orders table has work_order_number column and backfill existing rows.
+
+    This column provides human-readable work order numbers in WO-NNNNNN format.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    async with async_session_maker() as session:
+        try:
+            # Check if column exists
+            result = await session.execute(
+                text(
+                    """SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'work_orders' AND column_name = 'work_order_number'"""
+                )
+            )
+            exists = result.fetchone()
+
+            if not exists:
+                logger.info("Adding work_order_number column to work_orders table...")
+                await session.execute(
+                    text("ALTER TABLE work_orders ADD COLUMN work_order_number VARCHAR(20)")
+                )
+                await session.commit()
+                logger.info("Added work_orders.work_order_number column")
+
+                # Backfill existing work orders with sequential numbers
+                logger.info("Backfilling work order numbers...")
+                await session.execute(
+                    text("""
+                        WITH numbered AS (
+                            SELECT id, ROW_NUMBER() OVER (ORDER BY created_at NULLS LAST, id) as rn
+                            FROM work_orders
+                            WHERE work_order_number IS NULL
+                        )
+                        UPDATE work_orders wo
+                        SET work_order_number = 'WO-' || LPAD(n.rn::text, 6, '0')
+                        FROM numbered n
+                        WHERE wo.id = n.id
+                    """)
+                )
+                await session.commit()
+                logger.info("Backfilled work order numbers")
+
+                # Add unique constraint and index
+                try:
+                    await session.execute(
+                        text("CREATE UNIQUE INDEX IF NOT EXISTS ix_work_orders_number ON work_orders(work_order_number)")
+                    )
+                    await session.commit()
+                except Exception:
+                    pass  # Index may conflict, that's okay
+
+            logger.info("Work order number column verified")
+
+        except Exception as e:
+            logger.warning(f"Could not ensure work_order_number column: {type(e).__name__}: {e}")
+
+
 async def ensure_commissions_columns():
     """
     Ensure commissions table has auto-calculation columns.
@@ -506,6 +567,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure commissions table has auto-calc columns (fix for migration 039 not running)
         await ensure_commissions_columns()
+
+        # Ensure work_orders table has work_order_number column
+        await ensure_work_order_number_column()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")

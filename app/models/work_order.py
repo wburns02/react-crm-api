@@ -58,6 +58,8 @@ class WorkOrder(Base):
 
     # Flask uses VARCHAR(36) UUID for work order IDs
     id = Column(String(36), primary_key=True, index=True)
+    # Human-readable work order number (WO-000001 format)
+    work_order_number = Column(String(20), unique=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
     technician_id = Column(String(36), ForeignKey("technicians.id"), index=True)
 
