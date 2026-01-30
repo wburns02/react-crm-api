@@ -1,5 +1,5 @@
 FROM python:3.12-slim
-# Build: v2.7.8 - Email CRM integration fixes - 2026-01-29T23:20:00
+# Build: v2.7.9 - Force Railway rebuild - 2026-01-30T17:15:00
 
 WORKDIR /app
 
