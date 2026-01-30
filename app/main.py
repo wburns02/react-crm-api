@@ -366,25 +366,24 @@ async def ensure_email_templates_table():
     This table was added by migration 037. Runs on startup to ensure table exists.
     """
     from sqlalchemy import text
+    from app.database import async_session_maker
 
-    try:
-        async with async_engine.begin() as conn:
+    async with async_session_maker() as session:
+        try:
             # Check if table exists
-            result = await conn.execute(
+            result = await session.execute(
                 text(
-                    """
-                SELECT EXISTS (
+                    """SELECT EXISTS (
                     SELECT FROM information_schema.tables
                     WHERE table_name = 'email_templates'
-                )
-            """
+                )"""
                 )
             )
             exists = result.scalar()
 
             if not exists:
                 logger.info("Creating email_templates table...")
-                await conn.execute(
+                await session.execute(
                     text(
                         """
                     CREATE TABLE IF NOT EXISTS email_templates (
@@ -403,18 +402,22 @@ async def ensure_email_templates_table():
                 """
                     )
                 )
-                await conn.execute(
+                await session.execute(
                     text("CREATE INDEX IF NOT EXISTS ix_email_templates_category ON email_templates(category)")
                 )
-                await conn.execute(
+                await session.execute(
                     text("CREATE INDEX IF NOT EXISTS ix_email_templates_is_active ON email_templates(is_active)")
                 )
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_email_templates_name ON email_templates(name)"))
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_email_templates_name ON email_templates(name)")
+                )
+                await session.commit()
                 logger.info("email_templates table created successfully")
             else:
                 logger.info("email_templates table already exists")
-    except Exception as e:
-        logger.warning(f"Could not ensure email_templates table: {type(e).__name__}: {e}")
+
+        except Exception as e:
+            logger.warning(f"Could not ensure email_templates table: {type(e).__name__}: {e}")
 
 
 @asynccontextmanager
@@ -550,7 +553,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.14",  # Fix email_templates endpoint error handling
+        "version": "2.7.15",  # Fix email_templates table creation using async_session_maker
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
