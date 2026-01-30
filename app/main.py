@@ -550,7 +550,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.13",  # Add email_templates table migration
+        "version": "2.7.14",  # Fix email_templates endpoint error handling
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",

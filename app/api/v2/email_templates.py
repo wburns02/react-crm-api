@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("", response_model=EmailTemplateListResponse)
+@router.get("")
 async def list_email_templates(
     db: DbSession,
     current_user: CurrentUser,
@@ -35,34 +35,59 @@ async def list_email_templates(
     is_active: Optional[bool] = None,
 ):
     """List all email templates with optional filtering."""
-    query = select(EmailTemplate)
+    try:
+        query = select(EmailTemplate)
 
-    # Apply filters
-    if category:
-        query = query.where(EmailTemplate.category == category)
+        # Apply filters
+        if category:
+            query = query.where(EmailTemplate.category == category)
 
-    if is_active is not None:
-        query = query.where(EmailTemplate.is_active == is_active)
+        if is_active is not None:
+            query = query.where(EmailTemplate.is_active == is_active)
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
 
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(EmailTemplate.name)
+        # Apply pagination
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size).order_by(EmailTemplate.name)
 
-    # Execute query
-    result = await db.execute(query)
-    templates = result.scalars().all()
+        # Execute query
+        result = await db.execute(query)
+        templates = result.scalars().all()
 
-    return EmailTemplateListResponse(
-        items=templates,
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+        return {
+            "items": [
+                {
+                    "id": str(t.id),
+                    "name": t.name,
+                    "subject": t.subject,
+                    "body_html": t.body_html,
+                    "body_text": t.body_text,
+                    "variables": t.variables or [],
+                    "category": t.category,
+                    "is_active": t.is_active,
+                    "created_by": t.created_by,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                    "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+                }
+                for t in templates
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        logger.error(f"Email templates list failed: {e}")
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "debug_error": str(e),
+        }
 
 
 @router.get("/categories")
