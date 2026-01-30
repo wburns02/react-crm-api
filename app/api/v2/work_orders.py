@@ -655,6 +655,7 @@ async def complete_work_order(
 
     # Store values before any potential errors
     wo_id = work_order.id
+    wo_number = work_order.work_order_number
     labor_mins = work_order.total_labor_minutes
     tech_id = work_order.technician_id
     cust_id = work_order.customer_id
@@ -692,6 +693,7 @@ async def complete_work_order(
 
     return {
         "id": wo_id,
+        "work_order_number": wo_number,
         "status": "completed",
         "customer_name": customer_name,
         "labor_minutes": labor_mins,
