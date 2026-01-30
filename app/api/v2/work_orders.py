@@ -505,23 +505,30 @@ async def complete_work_order(
             detail="Work order is already completed",
         )
 
-    # Update work order status
-    work_order.status = "completed"
-    work_order.actual_end_time = datetime.now()
+    # Build update data
+    update_values = {
+        "status": "completed",
+        "actual_end_time": datetime.now(),
+    }
 
     if request.latitude and request.longitude:
-        work_order.clock_out_gps_lat = request.latitude
-        work_order.clock_out_gps_lon = request.longitude
+        update_values["clock_out_gps_lat"] = request.latitude
+        update_values["clock_out_gps_lon"] = request.longitude
 
     if request.notes:
         existing_notes = work_order.notes or ""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        work_order.notes = f"{existing_notes}\n[{timestamp}] Completion: {request.notes}".strip()
+        update_values["notes"] = f"{existing_notes}\n[{timestamp}] Completion: {request.notes}".strip()
 
     # Calculate labor minutes if start time exists
     if work_order.actual_start_time:
         duration = datetime.now() - work_order.actual_start_time
-        work_order.total_labor_minutes = int(duration.total_seconds() / 60)
+        update_values["total_labor_minutes"] = int(duration.total_seconds() / 60)
+
+    # Use explicit UPDATE statement instead of ORM modification
+    from sqlalchemy import update
+    stmt = update(WorkOrder).where(WorkOrder.id == work_order_id).values(**update_values)
+    await db.execute(stmt)
 
     # Auto-create commission
     commission = await auto_create_commission(
