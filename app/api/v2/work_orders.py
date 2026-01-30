@@ -530,40 +530,57 @@ async def complete_work_order(
         dump_site_id=request.dump_site_id,
     )
 
+    # Commit changes - must happen before any potential exceptions
     await db.commit()
-    await db.refresh(work_order)
 
-    # Broadcast WebSocket event
-    await manager.broadcast_event(
-        event_type="work_order.completed",
-        data={
-            "id": work_order.id,
-            "status": "completed",
-            "technician_id": work_order.technician_id,
-            "commission_id": str(commission.id) if commission else None,
-            "commission_amount": float(commission.commission_amount) if commission else None,
-        },
-    )
+    # Store values before any potential errors
+    wo_id = work_order.id
+    labor_mins = work_order.total_labor_minutes
+    tech_id = work_order.technician_id
+    cust_id = work_order.customer_id
+    comm_id = str(commission.id) if commission else None
+    comm_amount = float(commission.commission_amount) if commission else None
+    comm_status = commission.status if commission else None
+    comm_job_type = commission.job_type if commission else None
+    comm_rate = commission.rate if commission else None
 
-    # Get customer name for response
+    # Get customer name (in try block to not affect commit)
     customer_name = None
-    if work_order.customer_id:
-        cust_result = await db.execute(select(Customer).where(Customer.id == work_order.customer_id))
-        customer = cust_result.scalar_one_or_none()
-        if customer:
-            customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+    try:
+        if cust_id:
+            cust_result = await db.execute(select(Customer).where(Customer.id == cust_id))
+            customer = cust_result.scalar_one_or_none()
+            if customer:
+                customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+    except Exception as e:
+        logger.warning(f"Failed to get customer name: {e}")
+
+    # Broadcast WebSocket event (non-blocking, errors don't affect response)
+    try:
+        await manager.broadcast_event(
+            event_type="work_order.completed",
+            data={
+                "id": wo_id,
+                "status": "completed",
+                "technician_id": tech_id,
+                "commission_id": comm_id,
+                "commission_amount": comm_amount,
+            },
+        )
+    except Exception as e:
+        logger.warning(f"Failed to broadcast WebSocket event: {e}")
 
     return {
-        "id": work_order.id,
+        "id": wo_id,
         "status": "completed",
         "customer_name": customer_name,
-        "labor_minutes": work_order.total_labor_minutes,
+        "labor_minutes": labor_mins,
         "commission": {
-            "id": str(commission.id),
-            "amount": float(commission.commission_amount),
-            "status": commission.status,
-            "job_type": commission.job_type,
-            "rate": commission.rate,
+            "id": comm_id,
+            "amount": comm_amount,
+            "status": comm_status,
+            "job_type": comm_job_type,
+            "rate": comm_rate,
         }
         if commission
         else None,
