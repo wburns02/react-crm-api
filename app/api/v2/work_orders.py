@@ -530,8 +530,15 @@ async def complete_work_order(
         dump_site_id=request.dump_site_id,
     )
 
-    # Commit changes - must happen before any potential exceptions
-    await db.commit()
+    # Explicitly flush and commit changes
+    try:
+        await db.flush()  # Ensure changes are written to DB
+        await db.commit()
+        logger.info(f"Successfully committed work order {work_order_id} status to completed")
+    except Exception as e:
+        logger.error(f"Failed to commit work order completion: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to complete work order: {str(e)}")
 
     # Store values before any potential errors
     wo_id = work_order.id
