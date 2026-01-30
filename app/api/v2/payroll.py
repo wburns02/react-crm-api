@@ -901,9 +901,12 @@ async def list_commissions(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
-    """List commissions."""
+    """List commissions with technician names."""
     try:
-        query = select(Commission)
+        # Join with Technician to get names
+        query = select(Commission, Technician).outerjoin(
+            Technician, Commission.technician_id == Technician.id
+        )
 
         if technician_id:
             query = query.where(Commission.technician_id == technician_id)
@@ -912,8 +915,14 @@ async def list_commissions(
         if status_filter:
             query = query.where(Commission.status == status_filter)
 
-        # Count
-        count_query = select(func.count()).select_from(query.subquery())
+        # Count (use Commission table for count)
+        count_query = select(func.count()).select_from(Commission)
+        if technician_id:
+            count_query = count_query.where(Commission.technician_id == technician_id)
+        if payroll_period_id:
+            count_query = count_query.where(Commission.payroll_period_id == payroll_period_id)
+        if status_filter:
+            count_query = count_query.where(Commission.status == status_filter)
         total_result = await db.execute(count_query)
         total = total_result.scalar()
 
@@ -922,7 +931,7 @@ async def list_commissions(
         query = query.offset(offset).limit(page_size).order_by(Commission.earned_date.desc())
 
         result = await db.execute(query)
-        commissions = result.scalars().all()
+        rows = result.all()  # Returns tuples of (Commission, Technician)
     except Exception as e:
         logger.error(f"Error fetching commissions: {type(e).__name__}: {str(e)}")
         return {"commissions": [], "total": 0, "page": 1, "page_size": page_size}
@@ -932,6 +941,7 @@ async def list_commissions(
             {
                 "id": str(c.id),
                 "technician_id": c.technician_id,
+                "technician_name": f"{t.first_name} {t.last_name}".strip() if t else None,
                 "work_order_id": c.work_order_id,
                 "invoice_id": c.invoice_id,
                 "payroll_period_id": str(c.payroll_period_id) if c.payroll_period_id else None,
@@ -951,7 +961,7 @@ async def list_commissions(
                 "dump_fee_amount": c.dump_fee_amount,
                 "commissionable_amount": c.commissionable_amount,
             }
-            for c in commissions
+            for c, t in rows
         ],
         "total": total,
         "page": page,
