@@ -200,6 +200,49 @@ async def list_payroll_periods(
     }
 
 
+@router.get("/periods/current")
+async def get_current_period(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get current or most recent payroll period.
+
+    Returns the period where today falls within start_date and end_date,
+    or falls back to the most recent period if none is current.
+    """
+    try:
+        today = date.today()
+
+        # Find period where today falls within date range
+        result = await db.execute(
+            select(PayrollPeriod)
+            .where(PayrollPeriod.start_date <= today)
+            .where(PayrollPeriod.end_date >= today)
+            .limit(1)
+        )
+        period = result.scalar_one_or_none()
+
+        # Fallback to most recent period
+        if not period:
+            result = await db.execute(
+                select(PayrollPeriod)
+                .order_by(PayrollPeriod.end_date.desc())
+                .limit(1)
+            )
+            period = result.scalar_one_or_none()
+
+        if not period:
+            raise HTTPException(status_code=404, detail="No payroll periods found")
+
+        return _format_period(period)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching current period: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch current period")
+
+
 @router.get("/periods/{period_id}")
 async def get_payroll_period(
     period_id: str,
@@ -846,49 +889,124 @@ async def get_period_summary(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get payroll summary by technician for a period."""
-    result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
-    period = result.scalar_one_or_none()
+    """Get comprehensive payroll summary by technician for a period.
 
-    if not period:
-        raise HTTPException(status_code=404, detail="Payroll period not found")
+    Returns per-technician breakdown including:
+    - technician_name
+    - regular_hours / overtime_hours
+    - regular_pay / overtime_pay (calculated from pay rates)
+    - total_commissions
+    - gross_pay / net_pay
+    - jobs_completed (count of completed work orders)
+    """
+    try:
+        # 1. Validate period exists
+        result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
+        period = result.scalar_one_or_none()
 
-    # Get time entries grouped by technician
-    entries_result = await db.execute(select(TimeEntry).where(TimeEntry.payroll_period_id == period_id))
-    entries = entries_result.scalars().all()
+        if not period:
+            raise HTTPException(status_code=404, detail="Payroll period not found")
 
-    # Get commissions
-    comm_result = await db.execute(select(Commission).where(Commission.payroll_period_id == period_id))
-    commissions = comm_result.scalars().all()
+        # 2. Get all technicians (for names)
+        tech_result = await db.execute(select(Technician))
+        technicians = {t.id: t for t in tech_result.scalars().all()}
 
-    # Group by technician
-    by_technician = {}
-    for entry in entries:
-        tech_id = entry.technician_id
-        if tech_id not in by_technician:
-            by_technician[tech_id] = {
-                "technician_id": tech_id,
-                "regular_hours": 0,
-                "overtime_hours": 0,
-                "gross_pay": 0,
-                "commissions": 0,
-            }
-        by_technician[tech_id]["regular_hours"] += entry.regular_hours or 0
-        by_technician[tech_id]["overtime_hours"] += entry.overtime_hours or 0
+        # 3. Get active pay rates
+        rates_result = await db.execute(
+            select(TechnicianPayRate).where(TechnicianPayRate.is_active == True)
+        )
+        pay_rates = {r.technician_id: r for r in rates_result.scalars().all()}
 
-    for comm in commissions:
-        tech_id = comm.technician_id
-        if tech_id not in by_technician:
-            by_technician[tech_id] = {
-                "technician_id": tech_id,
-                "regular_hours": 0,
-                "overtime_hours": 0,
-                "gross_pay": 0,
-                "commissions": 0,
-            }
-        by_technician[tech_id]["commissions"] += comm.commission_amount or 0
+        # 4. Get time entries grouped by technician
+        entries_result = await db.execute(
+            select(TimeEntry).where(TimeEntry.payroll_period_id == period_id)
+        )
+        entries = entries_result.scalars().all()
 
-    return {"summaries": list(by_technician.values())}
+        # 5. Get commissions
+        comm_result = await db.execute(
+            select(Commission).where(Commission.payroll_period_id == period_id)
+        )
+        commissions = comm_result.scalars().all()
+
+        # 6. Get jobs completed per technician (work orders completed in period date range)
+        jobs_result = await db.execute(
+            select(WorkOrder.technician_id, func.count(WorkOrder.id))
+            .where(WorkOrder.status == "completed")
+            .where(WorkOrder.scheduled_date >= period.start_date)
+            .where(WorkOrder.scheduled_date <= period.end_date)
+            .group_by(WorkOrder.technician_id)
+        )
+        jobs_by_tech = dict(jobs_result.all())
+
+        # 7. Build summaries by technician
+        by_technician = {}
+
+        def get_or_create_tech(tech_id: str):
+            if tech_id not in by_technician:
+                tech = technicians.get(tech_id)
+                tech_name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{tech_id[:8]}"
+                by_technician[tech_id] = {
+                    "technician_id": tech_id,
+                    "technician_name": tech_name,
+                    "regular_hours": 0.0,
+                    "overtime_hours": 0.0,
+                    "regular_pay": 0.0,
+                    "overtime_pay": 0.0,
+                    "total_commissions": 0.0,
+                    "gross_pay": 0.0,
+                    "deductions": 0.0,
+                    "net_pay": 0.0,
+                    "jobs_completed": 0,
+                }
+            return by_technician[tech_id]
+
+        # Add time entry hours
+        for entry in entries:
+            summary = get_or_create_tech(entry.technician_id)
+            summary["regular_hours"] += entry.regular_hours or 0
+            summary["overtime_hours"] += entry.overtime_hours or 0
+
+        # Add commissions
+        for comm in commissions:
+            summary = get_or_create_tech(comm.technician_id)
+            summary["total_commissions"] += comm.commission_amount or 0
+
+        # Add jobs completed from work orders
+        for tech_id, job_count in jobs_by_tech.items():
+            summary = get_or_create_tech(tech_id)
+            summary["jobs_completed"] = job_count
+
+        # 8. Calculate pay for each technician using their pay rates
+        for tech_id, summary in by_technician.items():
+            pay_rate = pay_rates.get(tech_id)
+
+            if pay_rate and pay_rate.pay_type == "hourly":
+                hourly = pay_rate.hourly_rate or 0
+                overtime_rate = pay_rate.overtime_rate or (hourly * 1.5)
+                summary["regular_pay"] = summary["regular_hours"] * hourly
+                summary["overtime_pay"] = summary["overtime_hours"] * overtime_rate
+            elif pay_rate and pay_rate.pay_type == "salary":
+                # For salaried, prorate based on period (assume biweekly = 1/26 of annual)
+                salary = pay_rate.salary_amount or 0
+                summary["regular_pay"] = salary / 26  # Biweekly
+                summary["overtime_pay"] = 0  # Salaried typically no OT
+
+            summary["gross_pay"] = (
+                summary["regular_pay"] +
+                summary["overtime_pay"] +
+                summary["total_commissions"]
+            )
+            summary["deductions"] = 0  # Future: tax withholding calculations
+            summary["net_pay"] = summary["gross_pay"] - summary["deductions"]
+
+        return {"summaries": list(by_technician.values())}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching period summary: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch summary: {str(e)}")
 
 
 @router.get("/commissions")
