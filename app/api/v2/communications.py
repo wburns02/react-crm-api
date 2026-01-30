@@ -285,33 +285,43 @@ async def get_communication_stats(
     current_user: CurrentUser,
 ):
     """Get communication statistics for dashboard."""
-    # Count unread SMS (inbound, received status)
-    sms_query = (
-        select(func.count())
-        .select_from(Message)
-        .where(
-            (Message.type == MessageType.sms)
-            & (Message.direction == MessageDirection.inbound)
-            & (Message.status == MessageStatus.received)
+    try:
+        # Count unread SMS (inbound, received status)
+        sms_query = (
+            select(func.count())
+            .select_from(Message)
+            .where(
+                (Message.type == MessageType.sms)
+                & (Message.direction == MessageDirection.inbound)
+                & (Message.status == MessageStatus.received)
+            )
         )
-    )
-    sms_result = await db.execute(sms_query)
-    unread_sms = sms_result.scalar() or 0
+        sms_result = await db.execute(sms_query)
+        unread_sms = sms_result.scalar() or 0
 
-    # Count unread emails (inbound)
-    email_query = (
-        select(func.count())
-        .select_from(Message)
-        .where((Message.type == MessageType.email) & (Message.direction == MessageDirection.inbound))
-    )
-    email_result = await db.execute(email_query)
-    unread_email = email_result.scalar() or 0
+        # Count unread emails (inbound)
+        email_query = (
+            select(func.count())
+            .select_from(Message)
+            .where((Message.type == MessageType.email) & (Message.direction == MessageDirection.inbound))
+        )
+        email_result = await db.execute(email_query)
+        unread_email = email_result.scalar() or 0
 
-    return {
-        "unread_sms": unread_sms,
-        "unread_email": unread_email,
-        "pending_reminders": 0,
-    }
+        return {
+            "unread_sms": unread_sms,
+            "unread_email": unread_email,
+            "pending_reminders": 0,
+        }
+    except Exception as e:
+        logger.error(f"Stats query failed: {e}")
+        # Return a simple response with the error for debugging
+        return {
+            "unread_sms": 0,
+            "unread_email": 0,
+            "pending_reminders": 0,
+            "debug_error": str(e),
+        }
 
 
 @router.get("/activity")
@@ -321,28 +331,36 @@ async def get_communication_activity(
     limit: int = Query(10, ge=1, le=50),
 ):
     """Get recent communication activity."""
-    query = select(Message).order_by(Message.created_at.desc()).limit(limit)
-    result = await db.execute(query)
-    messages = result.scalars().all()
+    try:
+        query = select(Message).order_by(Message.created_at.desc()).limit(limit)
+        result = await db.execute(query)
+        messages = result.scalars().all()
 
-    return {
-        "items": [
-            {
-                "id": m.id,
-                "type": m.type.value if m.type else None,
-                "direction": m.direction.value if m.direction else None,
-                "status": m.status.value if m.status else None,
-                "to_address": m.to_address,
-                "from_address": m.from_address,
-                "subject": m.subject,
-                "content": m.content[:100] if m.content else None,
-                "customer_id": m.customer_id,
-                "created_at": m.created_at.isoformat() if m.created_at else None,
-            }
-            for m in messages
-        ],
-        "total": len(messages),
-    }
+        return {
+            "items": [
+                {
+                    "id": m.id,
+                    "type": m.type.value if m.type else None,
+                    "direction": m.direction.value if m.direction else None,
+                    "status": m.status.value if m.status else None,
+                    "to_address": m.to_address,
+                    "from_address": m.from_address,
+                    "subject": m.subject,
+                    "content": m.content[:100] if m.content else None,
+                    "customer_id": m.customer_id,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                }
+                for m in messages
+            ],
+            "total": len(messages),
+        }
+    except Exception as e:
+        logger.error(f"Activity query failed: {e}")
+        return {
+            "items": [],
+            "total": 0,
+            "debug_error": str(e),
+        }
 
 
 @router.get("/message/{message_id}", response_model=MessageResponse)
