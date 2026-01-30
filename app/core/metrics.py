@@ -23,6 +23,7 @@ import threading
 @dataclass
 class MetricBucket:
     """A single histogram bucket."""
+
     le: float  # Less than or equal
     count: int = 0
 
@@ -30,6 +31,7 @@ class MetricBucket:
 @dataclass
 class Histogram:
     """Prometheus-style histogram."""
+
     name: str
     help_text: str
     buckets: list = field(default_factory=list)
@@ -42,7 +44,7 @@ class Histogram:
             # Default buckets for HTTP request latency (in seconds)
             bucket_bounds = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
             self.buckets = [MetricBucket(le=b) for b in bucket_bounds]
-            self.buckets.append(MetricBucket(le=float('inf')))  # +Inf bucket
+            self.buckets.append(MetricBucket(le=float("inf")))  # +Inf bucket
 
     def observe(self, value: float):
         """Record an observation."""
@@ -56,6 +58,7 @@ class Histogram:
 @dataclass
 class Counter:
     """Prometheus-style counter."""
+
     name: str
     help_text: str
     value: float = 0.0
@@ -69,6 +72,7 @@ class Counter:
 @dataclass
 class Gauge:
     """Prometheus-style gauge."""
+
     name: str
     help_text: str
     value: float = 0.0
@@ -111,55 +115,30 @@ class MetricsRegistry:
 
         # HTTP metrics
         self.http_requests_total = defaultdict(
-            lambda: Counter(
-                name="http_requests_total",
-                help_text="Total number of HTTP requests"
-            )
+            lambda: Counter(name="http_requests_total", help_text="Total number of HTTP requests")
         )
         self.http_request_duration = defaultdict(
-            lambda: Histogram(
-                name="http_request_duration_seconds",
-                help_text="HTTP request duration in seconds"
-            )
+            lambda: Histogram(name="http_request_duration_seconds", help_text="HTTP request duration in seconds")
         )
         self.http_requests_in_flight = Gauge(
-            name="http_requests_in_flight",
-            help_text="Number of HTTP requests currently being processed"
+            name="http_requests_in_flight", help_text="Number of HTTP requests currently being processed"
         )
 
         # Database metrics
-        self.db_pool_size = Gauge(
-            name="db_pool_connections_total",
-            help_text="Total database pool connections"
-        )
+        self.db_pool_size = Gauge(name="db_pool_connections_total", help_text="Total database pool connections")
         self.db_pool_available = Gauge(
-            name="db_pool_connections_available",
-            help_text="Available database pool connections"
+            name="db_pool_connections_available", help_text="Available database pool connections"
         )
 
         # Business metrics
         self.ai_requests_total = defaultdict(
-            lambda: Counter(
-                name="crm_ai_requests_total",
-                help_text="Total AI/ML API requests"
-            )
+            lambda: Counter(name="crm_ai_requests_total", help_text="Total AI/ML API requests")
         )
-        self.cache_hits = Counter(
-            name="crm_cache_hits_total",
-            help_text="Total cache hits"
-        )
-        self.cache_misses = Counter(
-            name="crm_cache_misses_total",
-            help_text="Total cache misses"
-        )
+        self.cache_hits = Counter(name="crm_cache_hits_total", help_text="Total cache hits")
+        self.cache_misses = Counter(name="crm_cache_misses_total", help_text="Total cache misses")
 
         # Error metrics
-        self.errors_total = defaultdict(
-            lambda: Counter(
-                name="crm_errors_total",
-                help_text="Total errors by type"
-            )
-        )
+        self.errors_total = defaultdict(lambda: Counter(name="crm_errors_total", help_text="Total errors by type"))
 
     def format_prometheus(self) -> str:
         """Format all metrics in Prometheus text format."""
@@ -182,7 +161,7 @@ class MetricsRegistry:
             for labels, histogram in self.http_request_duration.items():
                 method, path = labels
                 for bucket in histogram.buckets:
-                    le_str = "+Inf" if bucket.le == float('inf') else str(bucket.le)
+                    le_str = "+Inf" if bucket.le == float("inf") else str(bucket.le)
                     lines.append(
                         f'http_request_duration_seconds_bucket{{method="{method}",path="{path}",le="{le_str}"}} {bucket.count}'
                     )
@@ -215,9 +194,7 @@ class MetricsRegistry:
             lines.append("# TYPE crm_ai_requests_total counter")
             for labels, counter in self.ai_requests_total.items():
                 ai_type, status = labels
-                lines.append(
-                    f'crm_ai_requests_total{{type="{ai_type}",status="{status}"}} {counter.value}'
-                )
+                lines.append(f'crm_ai_requests_total{{type="{ai_type}",status="{status}"}} {counter.value}')
 
             # Cache metrics
             lines.append("")
@@ -234,7 +211,7 @@ class MetricsRegistry:
             lines.append("# HELP crm_errors_total Total errors by type")
             lines.append("# TYPE crm_errors_total counter")
             for labels, counter in self.errors_total.items():
-                error_type, = labels
+                (error_type,) = labels
                 lines.append(f'crm_errors_total{{type="{error_type}"}} {counter.value}')
 
         return "\n".join(lines)
@@ -255,12 +232,7 @@ def track_request_start():
     return time.time()
 
 
-def track_request_end(
-    start_time: float,
-    method: str,
-    path: str,
-    status_code: int
-):
+def track_request_end(start_time: float, method: str, path: str, status_code: int):
     """Track end of HTTP request."""
     duration = time.time() - start_time
 

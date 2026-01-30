@@ -53,9 +53,7 @@ async def check_and_send_reminders():
     try:
         async with async_session_maker() as db:
             # Query active schedules that may need reminders
-            query = select(CustomerServiceSchedule).where(
-                CustomerServiceSchedule.status.in_(["upcoming", "due"])
-            )
+            query = select(CustomerServiceSchedule).where(CustomerServiceSchedule.status.in_(["upcoming", "due"]))
             result = await db.execute(query)
             schedules = result.scalars().all()
 
@@ -67,10 +65,7 @@ async def check_and_send_reminders():
                     reminders_sent += 1
                 except Exception as e:
                     errors += 1
-                    logger.error(
-                        f"Error processing schedule {schedule.id}: {e}",
-                        exc_info=True
-                    )
+                    logger.error(f"Error processing schedule {schedule.id}: {e}", exc_info=True)
 
             await db.commit()
 
@@ -80,11 +75,7 @@ async def check_and_send_reminders():
     logger.info(f"Reminder check complete. Processed: {reminders_sent}, Errors: {errors}")
 
 
-async def process_schedule_reminders(
-    db: AsyncSession,
-    schedule: CustomerServiceSchedule,
-    today: date
-):
+async def process_schedule_reminders(db: AsyncSession, schedule: CustomerServiceSchedule, today: date):
     """
     Process reminders for a single schedule.
 
@@ -122,10 +113,7 @@ async def process_schedule_reminders(
     # Check if we already sent a reminder for this schedule at this interval
     existing_result = await db.execute(
         select(ServiceReminder).where(
-            and_(
-                ServiceReminder.schedule_id == schedule.id,
-                ServiceReminder.days_before_due == days_until
-            )
+            and_(ServiceReminder.schedule_id == schedule.id, ServiceReminder.days_before_due == days_until)
         )
     )
     existing = existing_result.scalar_one_or_none()
@@ -135,9 +123,7 @@ async def process_schedule_reminders(
         return
 
     # Get customer details
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == schedule.customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == schedule.customer_id))
     customer = customer_result.scalar_one_or_none()
 
     if not customer:
@@ -182,12 +168,9 @@ Mac Septic Services Team
         try:
             twilio = TwilioService()
             if twilio.is_configured:
-                sms_response = await twilio.send_sms(
-                    to=customer.phone,
-                    body=message_body
-                )
+                sms_response = await twilio.send_sms(to=customer.phone, body=message_body)
                 sms_sent = True
-                sms_message_id = getattr(sms_response, 'sid', None)
+                sms_message_id = getattr(sms_response, "sid", None)
                 logger.info(f"SMS reminder sent to {customer.phone[-4:]} for schedule {schedule.id}")
         except Exception as e:
             logger.error(f"Failed to send SMS reminder: {e}")
@@ -200,9 +183,7 @@ Mac Septic Services Team
             email_service = EmailService()
             if email_service.is_configured:
                 email_response = await email_service.send_email(
-                    to=customer.email,
-                    subject=email_subject,
-                    body=email_body
+                    to=customer.email, subject=email_subject, body=email_body
                 )
                 if email_response.get("success"):
                     email_sent = True
@@ -242,9 +223,7 @@ Mac Septic Services Team
     if sms_sent or email_sent:
         schedule.reminder_sent = True
         schedule.last_reminder_sent_at = now
-        logger.info(
-            f"Reminders sent for schedule {schedule.id}: SMS={sms_sent}, Email={email_sent}"
-        )
+        logger.info(f"Reminders sent for schedule {schedule.id}: SMS={sms_sent}, Email={email_sent}")
 
 
 async def update_schedule_statuses():
@@ -262,9 +241,7 @@ async def update_schedule_statuses():
         async with async_session_maker() as db:
             # Get all active schedules
             result = await db.execute(
-                select(CustomerServiceSchedule).where(
-                    CustomerServiceSchedule.status.in_(["upcoming", "due"])
-                )
+                select(CustomerServiceSchedule).where(CustomerServiceSchedule.status.in_(["upcoming", "due"]))
             )
             schedules = result.scalars().all()
 

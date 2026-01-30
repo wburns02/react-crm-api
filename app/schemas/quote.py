@@ -159,7 +159,10 @@ class QuoteListResponse(BaseModel):
 class QuoteConvertRequest(BaseModel):
     """Schema for converting a quote to a work order."""
 
-    job_type: str = Field(..., description="Required job type: pumping, inspection, repair, installation, emergency, maintenance, grease_trap, camera_inspection")
+    job_type: str = Field(
+        ...,
+        description="Required job type: pumping, inspection, repair, installation, emergency, maintenance, grease_trap, camera_inspection",
+    )
     scheduled_date: Optional[date] = Field(None, description="Optional scheduled date for the work order")
     technician_id: Optional[str] = Field(None, description="Optional technician UUID to assign")
     priority: str = Field("normal", description="Priority level: low, normal, high, urgent, emergency")
@@ -168,7 +171,16 @@ class QuoteConvertRequest(BaseModel):
     @field_validator("job_type")
     @classmethod
     def validate_job_type(cls, v):
-        valid_types = ["pumping", "inspection", "repair", "installation", "emergency", "maintenance", "grease_trap", "camera_inspection"]
+        valid_types = [
+            "pumping",
+            "inspection",
+            "repair",
+            "installation",
+            "emergency",
+            "maintenance",
+            "grease_trap",
+            "camera_inspection",
+        ]
         if v not in valid_types:
             raise ValueError(f"job_type must be one of: {', '.join(valid_types)}")
         return v

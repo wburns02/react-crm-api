@@ -25,6 +25,7 @@ def _get_trace_id() -> str:
     """Get trace ID from correlation context or generate a new one."""
     try:
         from app.middleware.correlation import get_request_id
+
         request_id = get_request_id()
         if request_id and request_id != "unknown":
             return request_id
@@ -91,44 +92,17 @@ class ProblemDetail(BaseModel):
         retry_after: Seconds to wait before retrying (for rate limits)
     """
 
-    type: str = Field(
-        default="about:blank",
-        description="URI reference identifying the problem type"
-    )
-    title: str = Field(
-        description="Short, human-readable summary of the problem"
-    )
-    status: int = Field(
-        description="HTTP status code"
-    )
-    detail: str = Field(
-        description="Human-readable explanation specific to this occurrence"
-    )
-    instance: Optional[str] = Field(
-        default=None,
-        description="URI reference for this specific occurrence"
-    )
-    code: str = Field(
-        description="Machine-readable error code"
-    )
-    timestamp: str = Field(
-        description="ISO 8601 timestamp"
-    )
-    trace_id: str = Field(
-        description="Unique trace ID for debugging"
-    )
-    errors: Optional[List[Dict[str, Any]]] = Field(
-        default=None,
-        description="Field-level validation errors"
-    )
-    help_url: Optional[str] = Field(
-        default=None,
-        description="Link to relevant documentation"
-    )
-    retry_after: Optional[int] = Field(
-        default=None,
-        description="Seconds to wait before retrying"
-    )
+    type: str = Field(default="about:blank", description="URI reference identifying the problem type")
+    title: str = Field(description="Short, human-readable summary of the problem")
+    status: int = Field(description="HTTP status code")
+    detail: str = Field(description="Human-readable explanation specific to this occurrence")
+    instance: Optional[str] = Field(default=None, description="URI reference for this specific occurrence")
+    code: str = Field(description="Machine-readable error code")
+    timestamp: str = Field(description="ISO 8601 timestamp")
+    trace_id: str = Field(description="Unique trace ID for debugging")
+    errors: Optional[List[Dict[str, Any]]] = Field(default=None, description="Field-level validation errors")
+    help_url: Optional[str] = Field(default=None, description="Link to relevant documentation")
+    retry_after: Optional[int] = Field(default=None, description="Seconds to wait before retrying")
 
     model_config = {
         "json_schema_extra": {
@@ -140,7 +114,7 @@ class ProblemDetail(BaseModel):
                 "instance": "/api/v2/customers/123",
                 "code": "RES_001",
                 "timestamp": "2026-01-29T10:30:00Z",
-                "trace_id": "abc123def456"
+                "trace_id": "abc123def456",
             }
         }
     }
@@ -219,15 +193,11 @@ class CRMException(HTTPException):
 
 # Convenience exception classes
 
+
 class NotFoundError(CRMException):
     """Resource not found (404)."""
 
-    def __init__(
-        self,
-        resource: str,
-        resource_id: str,
-        instance: Optional[str] = None
-    ):
+    def __init__(self, resource: str, resource_id: str, instance: Optional[str] = None):
         super().__init__(
             status_code=404,
             code=ErrorCode.NOT_FOUND,
@@ -239,11 +209,7 @@ class NotFoundError(CRMException):
 class ValidationError(CRMException):
     """Validation error (422)."""
 
-    def __init__(
-        self,
-        detail: str,
-        errors: Optional[List[Dict[str, Any]]] = None
-    ):
+    def __init__(self, detail: str, errors: Optional[List[Dict[str, Any]]] = None):
         super().__init__(
             status_code=422,
             code=ErrorCode.VALIDATION_ERROR,
@@ -323,6 +289,7 @@ class BusinessRuleError(CRMException):
 
 # Exception handlers for FastAPI
 
+
 def create_problem_response(
     status_code: int,
     code: ErrorCode,
@@ -374,7 +341,7 @@ async def crm_exception_handler(
             "trace_id": exc.trace_id,
             "status_code": exc.status_code,
             "path": request.url.path,
-        }
+        },
     )
 
     response = JSONResponse(
@@ -409,10 +376,7 @@ def create_exception_handlers(allowed_origins: List[str]):
     async def handle_crm_exception(request: Request, exc: CRMException) -> JSONResponse:
         return await crm_exception_handler(request, exc, allowed_origins)
 
-    async def handle_http_exception(
-        request: Request,
-        exc: StarletteHTTPException
-    ) -> JSONResponse:
+    async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         """Handle standard HTTPException with RFC 7807 response."""
         # Map status codes to error codes
         code_map = {
@@ -438,18 +402,17 @@ def create_exception_handlers(allowed_origins: List[str]):
             allowed_origins=allowed_origins,
         )
 
-    async def handle_validation_exception(
-        request: Request,
-        exc: RequestValidationError
-    ) -> JSONResponse:
+    async def handle_validation_exception(request: Request, exc: RequestValidationError) -> JSONResponse:
         """Handle Pydantic validation errors with field-level details."""
         errors = []
         for error in exc.errors():
-            errors.append({
-                "field": ".".join(str(loc) for loc in error["loc"]),
-                "message": error["msg"],
-                "type": error["type"],
-            })
+            errors.append(
+                {
+                    "field": ".".join(str(loc) for loc in error["loc"]),
+                    "message": error["msg"],
+                    "type": error["type"],
+                }
+            )
 
         return create_problem_response(
             status_code=422,
@@ -460,10 +423,7 @@ def create_exception_handlers(allowed_origins: List[str]):
             allowed_origins=allowed_origins,
         )
 
-    async def handle_generic_exception(
-        request: Request,
-        exc: Exception
-    ) -> JSONResponse:
+    async def handle_generic_exception(request: Request, exc: Exception) -> JSONResponse:
         """Handle unexpected exceptions with RFC 7807 response."""
         import traceback
 
@@ -479,19 +439,21 @@ def create_exception_handlers(allowed_origins: List[str]):
         # Try to report to Sentry if available
         try:
             from app.core.sentry import capture_exception
+
             capture_exception(
                 exc,
                 context={
                     "trace_id": trace_id,
                     "path": request.url.path,
                     "method": request.method,
-                }
+                },
             )
         except ImportError:
             pass  # Sentry not configured yet
 
         # Don't expose internal details in production
         from app.config import settings
+
         detail = str(exc) if settings.DEBUG else "An unexpected error occurred"
 
         return create_problem_response(

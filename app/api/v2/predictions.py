@@ -94,9 +94,7 @@ async def get_lead_score(
     if not score:
         if calculate_if_missing:
             # Calculate on-demand
-            customer_result = await db.execute(
-                select(Customer).where(Customer.id == int(customer_id))
-            )
+            customer_result = await db.execute(select(Customer).where(Customer.id == int(customer_id)))
             customer = customer_result.scalar_one_or_none()
 
             if not customer:
@@ -136,7 +134,9 @@ async def get_lead_score(
 
 
 class LeadScoreRequest(BaseModel):
-    customer_ids: Optional[List[str]] = Field(None, description="List of customer IDs to score. If empty, scores all active customers.")
+    customer_ids: Optional[List[str]] = Field(
+        None, description="List of customer IDs to score. If empty, scores all active customers."
+    )
 
 
 @router.post("/lead-scores/calculate")

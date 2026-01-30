@@ -352,9 +352,7 @@ async def update_technician_location(
 
     # Check if location record exists for this technician
     result = await db.execute(
-        select(TechnicianLocation).where(
-            TechnicianLocation.technician_id == request.technician_id
-        )
+        select(TechnicianLocation).where(TechnicianLocation.technician_id == request.technician_id)
     )
     existing_location = result.scalar_one_or_none()
 

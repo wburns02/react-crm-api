@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ScoringFactors:
     """Container for scoring factors and their contributions."""
+
     recent_activity: int = 0
     open_quotes: int = 0
     previous_work_orders: int = 0
@@ -50,15 +51,15 @@ class ScoringFactors:
     def total_score(self) -> int:
         """Calculate total score (capped at 100)."""
         total = (
-            self.base_score +
-            self.recent_activity +
-            self.open_quotes +
-            self.previous_work_orders +
-            self.property_size +
-            self.customer_type +
-            self.lead_source +
-            self.engagement +
-            self.recency
+            self.base_score
+            + self.recent_activity
+            + self.open_quotes
+            + self.previous_work_orders
+            + self.property_size
+            + self.customer_type
+            + self.lead_source
+            + self.engagement
+            + self.recency
         )
         return min(100, max(0, total))
 
@@ -134,9 +135,7 @@ async def calculate_customer_lead_score(
     # Check for activities in last 7/30 days
     try:
         activity_result = await db.execute(
-            select(func.max(Activity.created_at)).where(
-                Activity.customer_id == customer.id
-            )
+            select(func.max(Activity.created_at)).where(Activity.customer_id == customer.id)
         )
         last_activity = activity_result.scalar()
 
@@ -155,12 +154,9 @@ async def calculate_customer_lead_score(
     # 2. Open Quotes Score
     try:
         open_quotes_result = await db.execute(
-            select(func.count()).select_from(Quote).where(
-                and_(
-                    Quote.customer_id == customer.id,
-                    Quote.status.in_(["draft", "sent", "pending"])
-                )
-            )
+            select(func.count())
+            .select_from(Quote)
+            .where(and_(Quote.customer_id == customer.id, Quote.status.in_(["draft", "sent", "pending"])))
         )
         open_quotes = open_quotes_result.scalar() or 0
 
@@ -173,9 +169,7 @@ async def calculate_customer_lead_score(
     # 3. Previous Work Orders Score
     try:
         work_order_result = await db.execute(
-            select(func.count()).select_from(WorkOrder).where(
-                WorkOrder.customer_id == customer.id
-            )
+            select(func.count()).select_from(WorkOrder).where(WorkOrder.customer_id == customer.id)
         )
         work_order_count = work_order_result.scalar() or 0
 
@@ -296,9 +290,7 @@ async def calculate_lead_scores_batch(
             score_data = await calculate_customer_lead_score(db, customer)
 
             # Check if score already exists
-            existing_result = await db.execute(
-                select(LeadScore).where(LeadScore.customer_id == customer.id)
-            )
+            existing_result = await db.execute(select(LeadScore).where(LeadScore.customer_id == customer.id))
             existing_score = existing_result.scalar_one_or_none()
 
             if existing_score:
@@ -350,31 +342,21 @@ async def calculate_lead_scores_batch(
 async def get_lead_scoring_summary(db: AsyncSession) -> Dict[str, Any]:
     """Get summary statistics for lead scoring."""
     # Count by label
-    hot_result = await db.execute(
-        select(func.count()).select_from(LeadScore).where(LeadScore.score_label == "hot")
-    )
+    hot_result = await db.execute(select(func.count()).select_from(LeadScore).where(LeadScore.score_label == "hot"))
     hot_count = hot_result.scalar() or 0
 
-    warm_result = await db.execute(
-        select(func.count()).select_from(LeadScore).where(LeadScore.score_label == "warm")
-    )
+    warm_result = await db.execute(select(func.count()).select_from(LeadScore).where(LeadScore.score_label == "warm"))
     warm_count = warm_result.scalar() or 0
 
-    cold_result = await db.execute(
-        select(func.count()).select_from(LeadScore).where(LeadScore.score_label == "cold")
-    )
+    cold_result = await db.execute(select(func.count()).select_from(LeadScore).where(LeadScore.score_label == "cold"))
     cold_count = cold_result.scalar() or 0
 
     # Average score
-    avg_result = await db.execute(
-        select(func.avg(LeadScore.score))
-    )
+    avg_result = await db.execute(select(func.avg(LeadScore.score)))
     avg_score = avg_result.scalar() or 0
 
     # Most recent scoring
-    recent_result = await db.execute(
-        select(func.max(LeadScore.scored_at))
-    )
+    recent_result = await db.execute(select(func.max(LeadScore.scored_at)))
     last_scored = recent_result.scalar()
 
     return {

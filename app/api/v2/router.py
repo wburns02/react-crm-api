@@ -266,4 +266,5 @@ api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"]
 
 # Observability: Prometheus Metrics
 from app.api.v2.endpoints.metrics import router as metrics_router
+
 api_router.include_router(metrics_router, prefix="/metrics", tags=["metrics"])

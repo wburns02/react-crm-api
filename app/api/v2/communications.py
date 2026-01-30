@@ -210,7 +210,7 @@ async def send_email(
         logger.error("Email service not configured", extra={"status": status_info})
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Email service not available: {status_info.get('message', 'Not configured')}"
+            detail=f"Email service not available: {status_info.get('message', 'Not configured')}",
         )
 
     # Create message record with from_address
@@ -235,7 +235,7 @@ async def send_email(
             to=request.to,
             subject=request.subject,
             body=request.body,
-            html_body=getattr(request, 'html_body', None),
+            html_body=getattr(request, "html_body", None),
         )
 
         if email_response.get("success"):
@@ -286,18 +286,23 @@ async def get_communication_stats(
 ):
     """Get communication statistics for dashboard."""
     # Count unread SMS (inbound, received status)
-    sms_query = select(func.count()).select_from(Message).where(
-        (Message.type == MessageType.sms) &
-        (Message.direction == MessageDirection.inbound) &
-        (Message.status == MessageStatus.received)
+    sms_query = (
+        select(func.count())
+        .select_from(Message)
+        .where(
+            (Message.type == MessageType.sms)
+            & (Message.direction == MessageDirection.inbound)
+            & (Message.status == MessageStatus.received)
+        )
     )
     sms_result = await db.execute(sms_query)
     unread_sms = sms_result.scalar() or 0
 
     # Count unread emails (inbound)
-    email_query = select(func.count()).select_from(Message).where(
-        (Message.type == MessageType.email) &
-        (Message.direction == MessageDirection.inbound)
+    email_query = (
+        select(func.count())
+        .select_from(Message)
+        .where((Message.type == MessageType.email) & (Message.direction == MessageDirection.inbound))
     )
     email_result = await db.execute(email_query)
     unread_email = email_result.scalar() or 0
@@ -357,4 +362,6 @@ async def get_message(
         )
 
     return message
+
+
 # Railway deployment trigger: Thu Jan 29 05:13:07 PM CST 2026

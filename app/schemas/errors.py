@@ -23,10 +23,10 @@ ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
                     "detail": "Invalid request format",
                     "code": "VAL_001",
                     "timestamp": "2026-01-29T10:30:00Z",
-                    "trace_id": "abc123def456"
+                    "trace_id": "abc123def456",
                 }
             }
-        }
+        },
     },
     401: {
         "description": "Unauthorized - Authentication required",
@@ -39,10 +39,10 @@ ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
                     "detail": "Authentication required",
                     "code": "AUTH_001",
                     "timestamp": "2026-01-29T10:30:00Z",
-                    "trace_id": "abc123def456"
+                    "trace_id": "abc123def456",
                 }
             }
-        }
+        },
     },
     403: {
         "description": "Forbidden - Insufficient permissions",
@@ -55,10 +55,10 @@ ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
                     "detail": "Permission denied",
                     "code": "AUTH_002",
                     "timestamp": "2026-01-29T10:30:00Z",
-                    "trace_id": "abc123def456"
+                    "trace_id": "abc123def456",
                 }
             }
-        }
+        },
     },
     404: {
         "description": "Not Found - Resource does not exist",
@@ -71,10 +71,10 @@ ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
                     "detail": "Customer with ID 123 was not found",
                     "code": "RES_001",
                     "timestamp": "2026-01-29T10:30:00Z",
-                    "trace_id": "abc123def456"
+                    "trace_id": "abc123def456",
                 }
             }
-        }
+        },
     },
     409: {
         "description": "Conflict - Resource already exists",
@@ -87,10 +87,10 @@ ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
                     "detail": "A customer with this email already exists",
                     "code": "RES_003",
                     "timestamp": "2026-01-29T10:30:00Z",
-                    "trace_id": "abc123def456"
+                    "trace_id": "abc123def456",
                 }
             }
-        }
+        },
     },
     422: {
         "description": "Validation Error - Invalid field values",
@@ -104,16 +104,10 @@ ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
                     "code": "VAL_001",
                     "timestamp": "2026-01-29T10:30:00Z",
                     "trace_id": "abc123def456",
-                    "errors": [
-                        {
-                            "field": "body.email",
-                            "message": "Invalid email format",
-                            "type": "value_error"
-                        }
-                    ]
+                    "errors": [{"field": "body.email", "message": "Invalid email format", "type": "value_error"}],
                 }
             }
-        }
+        },
     },
     429: {
         "description": "Too Many Requests - Rate limit exceeded",
@@ -127,10 +121,10 @@ ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
                     "code": "BIZ_002",
                     "timestamp": "2026-01-29T10:30:00Z",
                     "trace_id": "abc123def456",
-                    "retry_after": 60
+                    "retry_after": 60,
                 }
             }
-        }
+        },
     },
     500: {
         "description": "Internal Server Error",
@@ -143,10 +137,10 @@ ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
                     "detail": "An unexpected error occurred",
                     "code": "SRV_001",
                     "timestamp": "2026-01-29T10:30:00Z",
-                    "trace_id": "abc123def456"
+                    "trace_id": "abc123def456",
                 }
             }
-        }
+        },
     },
     502: {
         "description": "Bad Gateway - External service error",
@@ -159,10 +153,10 @@ ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
                     "detail": "External service error: Connection timeout",
                     "code": "EXT_001",
                     "timestamp": "2026-01-29T10:30:00Z",
-                    "trace_id": "abc123def456"
+                    "trace_id": "abc123def456",
                 }
             }
-        }
+        },
     },
     503: {
         "description": "Service Unavailable",
@@ -175,10 +169,10 @@ ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
                     "detail": "Service temporarily unavailable",
                     "code": "SRV_002",
                     "timestamp": "2026-01-29T10:30:00Z",
-                    "trace_id": "abc123def456"
+                    "trace_id": "abc123def456",
                 }
             }
-        }
+        },
     },
 }
 
@@ -199,11 +193,7 @@ def get_error_responses(*status_codes: int) -> Dict[int, Dict[str, Any]]:
     Returns:
         Dictionary of error responses for OpenAPI schema
     """
-    return {
-        code: ERROR_RESPONSES[code]
-        for code in status_codes
-        if code in ERROR_RESPONSES
-    }
+    return {code: ERROR_RESPONSES[code] for code in status_codes if code in ERROR_RESPONSES}
 
 
 # Common response combinations for convenience

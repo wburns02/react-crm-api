@@ -143,10 +143,11 @@ class EmailTemplate(Base):
     def render_body_text(self, context: dict) -> str:
         """Render plain text body template with context variables."""
         import re
+
         if not self.body_text:
             # Strip HTML tags as fallback
-            text = re.sub(r'<[^>]+>', '', self.body_html or "")
-            text = text.replace('&nbsp;', ' ')
+            text = re.sub(r"<[^>]+>", "", self.body_html or "")
+            text = text.replace("&nbsp;", " ")
         else:
             text = self.body_text
 

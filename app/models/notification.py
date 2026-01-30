@@ -19,7 +19,9 @@ class Notification(Base):
     user_id = Column(Integer, ForeignKey("api_users.id"), nullable=False, index=True)
 
     # Notification content
-    type = Column(String(50), nullable=False, index=True)  # work_order, payment, customer, system, schedule, message, alert
+    type = Column(
+        String(50), nullable=False, index=True
+    )  # work_order, payment, customer, system, schedule, message, alert
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
 
@@ -31,7 +33,7 @@ class Notification(Base):
     link = Column(String(500), nullable=True)
 
     # Additional context
-    metadata = Column(JSON, nullable=True)  # entity_id, entity_type, etc.
+    extra_data = Column(JSON, nullable=True)  # entity_id, entity_type, etc.
 
     # Source
     source = Column(String(50), nullable=True)  # system, user, webhook, scheduler

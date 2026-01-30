@@ -532,19 +532,14 @@ async def calculate_labor_cost(
         # Get technician's active pay rate
         result = await db.execute(
             select(TechnicianPayRate)
-            .where(
-                TechnicianPayRate.technician_id == technician_id,
-                TechnicianPayRate.is_active == True
-            )
+            .where(TechnicianPayRate.technician_id == technician_id, TechnicianPayRate.is_active == True)
             .order_by(TechnicianPayRate.effective_date.desc())
             .limit(1)
         )
         pay_rate = result.scalar_one_or_none()
 
         # Get technician name
-        tech_result = await db.execute(
-            select(Technician).where(Technician.id == technician_id)
-        )
+        tech_result = await db.execute(select(Technician).where(Technician.id == technician_id))
         technician = tech_result.scalar_one_or_none()
         tech_name = technician.name if technician else "Unknown"
 
@@ -563,7 +558,7 @@ async def calculate_labor_cost(
                 "overtime_cost": max(0, hours - 8) * default_rate * 1.5,
                 "total_labor_cost": min(hours, 8) * default_rate + max(0, hours - 8) * default_rate * 1.5,
                 "commission_rate": 0,
-                "source": "default"
+                "source": "default",
             }
 
         # Calculate based on pay type
@@ -586,7 +581,7 @@ async def calculate_labor_cost(
                 "overtime_cost": 0,
                 "total_labor_cost": round(total_cost, 2),
                 "commission_rate": pay_rate.job_commission_rate or 0,
-                "source": "pay_rate"
+                "source": "pay_rate",
             }
         else:
             # Hourly calculation with overtime
@@ -613,7 +608,7 @@ async def calculate_labor_cost(
                 "overtime_cost": round(overtime_cost, 2),
                 "total_labor_cost": round(regular_cost + overtime_cost, 2),
                 "commission_rate": pay_rate.job_commission_rate or 0,
-                "source": "pay_rate"
+                "source": "pay_rate",
             }
 
     except Exception as e:
@@ -630,9 +625,7 @@ async def calculate_dump_fee(
 ):
     """Calculate dump fee for given gallons at specific site."""
     try:
-        result = await db.execute(
-            select(DumpSite).where(DumpSite.id == dump_site_id)
-        )
+        result = await db.execute(select(DumpSite).where(DumpSite.id == dump_site_id))
         dump_site = result.scalar_one_or_none()
 
         if not dump_site:
@@ -647,7 +640,7 @@ async def calculate_dump_fee(
             "state": dump_site.address_state,
             "gallons": gallons,
             "fee_per_gallon": fee_per_gallon,
-            "total_dump_fee": round(total_fee, 2)
+            "total_dump_fee": round(total_fee, 2),
         }
 
     except HTTPException:
@@ -670,19 +663,14 @@ async def calculate_commission(
         # Get technician's commission rate
         result = await db.execute(
             select(TechnicianPayRate)
-            .where(
-                TechnicianPayRate.technician_id == technician_id,
-                TechnicianPayRate.is_active == True
-            )
+            .where(TechnicianPayRate.technician_id == technician_id, TechnicianPayRate.is_active == True)
             .order_by(TechnicianPayRate.effective_date.desc())
             .limit(1)
         )
         pay_rate = result.scalar_one_or_none()
 
         # Get technician name
-        tech_result = await db.execute(
-            select(Technician).where(Technician.id == technician_id)
-        )
+        tech_result = await db.execute(select(Technician).where(Technician.id == technician_id))
         technician = tech_result.scalar_one_or_none()
         tech_name = technician.name if technician else "Unknown"
 
@@ -705,7 +693,7 @@ async def calculate_commission(
             "commissionable_amount": round(commissionable_amount, 2),
             "commission_rate_percent": commission_rate,
             "commission_amount": round(commission_amount, 2),
-            "net_to_company": round(job_total - commission_amount, 2)
+            "net_to_company": round(job_total - commission_amount, 2),
         }
 
     except Exception as e:
@@ -721,9 +709,7 @@ async def list_technician_pay_rates(
     """List all technicians with their current pay rates."""
     try:
         # Get all active technicians
-        tech_result = await db.execute(
-            select(Technician).where(Technician.is_active == True)
-        )
+        tech_result = await db.execute(select(Technician).where(Technician.is_active == True))
         technicians = tech_result.scalars().all()
 
         result = []
@@ -731,24 +717,23 @@ async def list_technician_pay_rates(
             # Get pay rate for this technician
             rate_result = await db.execute(
                 select(TechnicianPayRate)
-                .where(
-                    TechnicianPayRate.technician_id == tech.id,
-                    TechnicianPayRate.is_active == True
-                )
+                .where(TechnicianPayRate.technician_id == tech.id, TechnicianPayRate.is_active == True)
                 .order_by(TechnicianPayRate.effective_date.desc())
                 .limit(1)
             )
             pay_rate = rate_result.scalar_one_or_none()
 
-            result.append({
-                "technician_id": tech.id,
-                "name": tech.name,
-                "pay_type": pay_rate.pay_type if pay_rate else "hourly",
-                "hourly_rate": pay_rate.hourly_rate if pay_rate else None,
-                "salary_amount": pay_rate.salary_amount if pay_rate else None,
-                "commission_rate": pay_rate.job_commission_rate if pay_rate else 0,
-                "has_pay_rate": pay_rate is not None
-            })
+            result.append(
+                {
+                    "technician_id": tech.id,
+                    "name": tech.name,
+                    "pay_type": pay_rate.pay_type if pay_rate else "hourly",
+                    "hourly_rate": pay_rate.hourly_rate if pay_rate else None,
+                    "salary_amount": pay_rate.salary_amount if pay_rate else None,
+                    "commission_rate": pay_rate.job_commission_rate if pay_rate else 0,
+                    "has_pay_rate": pay_rate is not None,
+                }
+            )
 
         return {"technicians": result, "total": len(result)}
 
@@ -765,9 +750,7 @@ async def list_dump_sites_for_costing(
     """List active dump sites for job costing selection."""
     try:
         result = await db.execute(
-            select(DumpSite)
-            .where(DumpSite.is_active == True)
-            .order_by(DumpSite.address_state, DumpSite.name)
+            select(DumpSite).where(DumpSite.is_active == True).order_by(DumpSite.address_state, DumpSite.name)
         )
         sites = result.scalars().all()
 
@@ -778,11 +761,11 @@ async def list_dump_sites_for_costing(
                     "name": site.name,
                     "city": site.address_city,
                     "state": site.address_state,
-                    "fee_per_gallon": site.fee_per_gallon
+                    "fee_per_gallon": site.fee_per_gallon,
                 }
                 for site in sites
             ],
-            "total": len(sites)
+            "total": len(sites),
         }
 
     except Exception as e:
@@ -798,11 +781,7 @@ async def list_recent_work_orders(
 ):
     """List recent work orders for job costing selection."""
     try:
-        result = await db.execute(
-            select(WorkOrder)
-            .order_by(WorkOrder.created_at.desc())
-            .limit(limit)
-        )
+        result = await db.execute(select(WorkOrder).order_by(WorkOrder.created_at.desc()).limit(limit))
         work_orders = result.scalars().all()
 
         return {
@@ -813,13 +792,15 @@ async def list_recent_work_orders(
                     "job_type": getattr(wo, "job_type", None),
                     "status": getattr(wo, "status", None),
                     "total_amount": float(wo.total_amount) if hasattr(wo, "total_amount") and wo.total_amount else 0,
-                    "scheduled_start": wo.scheduled_start.isoformat() if hasattr(wo, "scheduled_start") and wo.scheduled_start else None,
+                    "scheduled_start": wo.scheduled_start.isoformat()
+                    if hasattr(wo, "scheduled_start") and wo.scheduled_start
+                    else None,
                     "technician_id": getattr(wo, "technician_id", None),
-                    "created_at": wo.created_at.isoformat() if wo.created_at else None
+                    "created_at": wo.created_at.isoformat() if wo.created_at else None,
                 }
                 for wo in work_orders
             ],
-            "total": len(work_orders)
+            "total": len(work_orders),
         }
 
     except Exception as e:

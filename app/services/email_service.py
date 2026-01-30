@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 try:
     from sendgrid import SendGridAPIClient
     from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
+
     SENDGRID_AVAILABLE = True
 except ImportError:
     SENDGRID_AVAILABLE = False
@@ -137,7 +138,7 @@ class EmailService:
                     "subject": subject[:50],
                     "status_code": response.status_code,
                     "message_id": message_id,
-                }
+                },
             )
 
             return {
@@ -153,7 +154,7 @@ class EmailService:
                 extra={
                     "to": to,
                     "error": error_msg,
-                }
+                },
             )
             return {
                 "success": False,
@@ -215,7 +216,7 @@ class EmailService:
                     "template_id": template_id,
                     "status_code": response.status_code,
                     "message_id": message_id,
-                }
+                },
             )
 
             return {
@@ -232,7 +233,7 @@ class EmailService:
                     "to": to,
                     "template_id": template_id,
                     "error": error_msg,
-                }
+                },
             )
             return {
                 "success": False,
@@ -279,14 +280,16 @@ class MockEmailService(EmailService):
 
         mock_message_id = f"mock-{uuid.uuid4().hex[:16]}"
 
-        self._sent_emails.append({
-            "to": to,
-            "subject": subject,
-            "body": body,
-            "html_body": html_body,
-            "reply_to": reply_to,
-            "message_id": mock_message_id,
-        })
+        self._sent_emails.append(
+            {
+                "to": to,
+                "subject": subject,
+                "body": body,
+                "html_body": html_body,
+                "reply_to": reply_to,
+                "message_id": mock_message_id,
+            }
+        )
 
         logger.info(f"Mock email sent to {to}: {subject}")
 
@@ -307,12 +310,14 @@ class MockEmailService(EmailService):
 
         mock_message_id = f"mock-{uuid.uuid4().hex[:16]}"
 
-        self._sent_emails.append({
-            "to": to,
-            "template_id": template_id,
-            "dynamic_template_data": dynamic_template_data,
-            "message_id": mock_message_id,
-        })
+        self._sent_emails.append(
+            {
+                "to": to,
+                "template_id": template_id,
+                "dynamic_template_data": dynamic_template_data,
+                "message_id": mock_message_id,
+            }
+        )
 
         logger.info(f"Mock template email sent to {to}: template={template_id}")
 

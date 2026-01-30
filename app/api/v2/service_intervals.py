@@ -131,9 +131,7 @@ async def list_service_intervals(
     current_user=Depends(get_current_user),
 ):
     """Get all service interval templates."""
-    result = await db.execute(
-        select(ServiceInterval).order_by(ServiceInterval.name)
-    )
+    result = await db.execute(select(ServiceInterval).order_by(ServiceInterval.name))
     intervals = result.scalars().all()
 
     intervals_data = [
@@ -165,9 +163,7 @@ async def get_service_interval(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid interval ID format")
 
-    result = await db.execute(
-        select(ServiceInterval).where(ServiceInterval.id == interval_uuid)
-    )
+    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
     interval = result.scalar_one_or_none()
 
     if not interval:
@@ -230,9 +226,7 @@ async def update_service_interval(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid interval ID format")
 
-    result = await db.execute(
-        select(ServiceInterval).where(ServiceInterval.id == interval_uuid)
-    )
+    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
     existing = result.scalar_one_or_none()
 
     if not existing:
@@ -270,9 +264,7 @@ async def delete_service_interval(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid interval ID format")
 
-    result = await db.execute(
-        select(ServiceInterval).where(ServiceInterval.id == interval_uuid)
-    )
+    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
     existing = result.scalar_one_or_none()
 
     if not existing:
@@ -298,10 +290,7 @@ async def list_customer_schedules(
     current_user=Depends(get_current_user),
 ):
     """Get customer service schedules with optional filters."""
-    query = (
-        select(CustomerServiceSchedule)
-        .options(selectinload(CustomerServiceSchedule.service_interval))
-    )
+    query = select(CustomerServiceSchedule).options(selectinload(CustomerServiceSchedule.service_interval))
 
     if status:
         query = query.where(CustomerServiceSchedule.status == status)
@@ -317,29 +306,31 @@ async def list_customer_schedules(
     schedules_data = []
     for schedule in schedules:
         # Get customer name
-        customer_result = await db.execute(
-            select(Customer).where(Customer.id == schedule.customer_id)
-        )
+        customer_result = await db.execute(select(Customer).where(Customer.id == schedule.customer_id))
         customer = customer_result.scalar_one_or_none()
-        customer_name = f"{customer.first_name} {customer.last_name}" if customer else f"Customer #{schedule.customer_id}"
+        customer_name = (
+            f"{customer.first_name} {customer.last_name}" if customer else f"Customer #{schedule.customer_id}"
+        )
 
         # Recalculate status
         status_val, days_until = calculate_status(schedule.next_due_date)
 
-        schedules_data.append({
-            "id": str(schedule.id),
-            "customer_id": schedule.customer_id,
-            "customer_name": customer_name,
-            "service_interval_id": str(schedule.service_interval_id),
-            "service_interval_name": schedule.service_interval.name if schedule.service_interval else "Unknown",
-            "last_service_date": schedule.last_service_date.isoformat() if schedule.last_service_date else None,
-            "next_due_date": schedule.next_due_date.isoformat(),
-            "status": status_val,
-            "scheduled_work_order_id": schedule.scheduled_work_order_id,
-            "days_until_due": days_until,
-            "reminder_sent": schedule.reminder_sent,
-            "notes": schedule.notes,
-        })
+        schedules_data.append(
+            {
+                "id": str(schedule.id),
+                "customer_id": schedule.customer_id,
+                "customer_name": customer_name,
+                "service_interval_id": str(schedule.service_interval_id),
+                "service_interval_name": schedule.service_interval.name if schedule.service_interval else "Unknown",
+                "last_service_date": schedule.last_service_date.isoformat() if schedule.last_service_date else None,
+                "next_due_date": schedule.next_due_date.isoformat(),
+                "status": status_val,
+                "scheduled_work_order_id": schedule.scheduled_work_order_id,
+                "days_until_due": days_until,
+                "reminder_sent": schedule.reminder_sent,
+                "notes": schedule.notes,
+            }
+        )
 
     return {"schedules": schedules_data, "total": len(schedules_data)}
 
@@ -360,9 +351,7 @@ async def get_customer_schedules(
     schedules = result.scalars().all()
 
     # Get customer name once
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == customer_id))
     customer = customer_result.scalar_one_or_none()
     customer_name = f"{customer.first_name} {customer.last_name}" if customer else f"Customer #{customer_id}"
 
@@ -370,20 +359,22 @@ async def get_customer_schedules(
     for schedule in schedules:
         status_val, days_until = calculate_status(schedule.next_due_date)
 
-        schedules_data.append({
-            "id": str(schedule.id),
-            "customer_id": schedule.customer_id,
-            "customer_name": customer_name,
-            "service_interval_id": str(schedule.service_interval_id),
-            "service_interval_name": schedule.service_interval.name if schedule.service_interval else "Unknown",
-            "last_service_date": schedule.last_service_date.isoformat() if schedule.last_service_date else None,
-            "next_due_date": schedule.next_due_date.isoformat(),
-            "status": status_val,
-            "scheduled_work_order_id": schedule.scheduled_work_order_id,
-            "days_until_due": days_until,
-            "reminder_sent": schedule.reminder_sent,
-            "notes": schedule.notes,
-        })
+        schedules_data.append(
+            {
+                "id": str(schedule.id),
+                "customer_id": schedule.customer_id,
+                "customer_name": customer_name,
+                "service_interval_id": str(schedule.service_interval_id),
+                "service_interval_name": schedule.service_interval.name if schedule.service_interval else "Unknown",
+                "last_service_date": schedule.last_service_date.isoformat() if schedule.last_service_date else None,
+                "next_due_date": schedule.next_due_date.isoformat(),
+                "status": status_val,
+                "scheduled_work_order_id": schedule.scheduled_work_order_id,
+                "days_until_due": days_until,
+                "reminder_sent": schedule.reminder_sent,
+                "notes": schedule.notes,
+            }
+        )
 
     return {"schedules": schedules_data}
 
@@ -401,9 +392,7 @@ async def assign_interval_to_customer(
         raise HTTPException(status_code=400, detail="Invalid service interval ID format")
 
     # Get service interval
-    result = await db.execute(
-        select(ServiceInterval).where(ServiceInterval.id == interval_uuid)
-    )
+    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
     interval = result.scalar_one_or_none()
 
     if not interval:
@@ -415,9 +404,7 @@ async def assign_interval_to_customer(
     status_val, days_until = calculate_status(next_due)
 
     # Get customer name
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == request.customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == request.customer_id))
     customer = customer_result.scalar_one_or_none()
 
     if not customer:
@@ -466,9 +453,7 @@ async def unassign_interval(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid schedule ID format")
 
-    result = await db.execute(
-        select(CustomerServiceSchedule).where(CustomerServiceSchedule.id == schedule_uuid)
-    )
+    result = await db.execute(select(CustomerServiceSchedule).where(CustomerServiceSchedule.id == schedule_uuid))
     schedule = result.scalar_one_or_none()
 
     if not schedule:
@@ -522,9 +507,7 @@ async def update_schedule(
     await db.refresh(schedule)
 
     # Get customer name
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == schedule.customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == schedule.customer_id))
     customer = customer_result.scalar_one_or_none()
     customer_name = f"{customer.first_name} {customer.last_name}" if customer else f"Customer #{schedule.customer_id}"
 
@@ -589,9 +572,7 @@ async def get_service_interval_stats(
     today = date.today()
 
     # Total customers with intervals
-    total_result = await db.execute(
-        select(func.count(func.distinct(CustomerServiceSchedule.customer_id)))
-    )
+    total_result = await db.execute(select(func.count(func.distinct(CustomerServiceSchedule.customer_id))))
     total_customers = total_result.scalar() or 0
 
     # Count by status
@@ -599,7 +580,7 @@ async def get_service_interval_stats(
         select(func.count()).where(
             and_(
                 CustomerServiceSchedule.next_due_date > today + timedelta(days=7),
-                CustomerServiceSchedule.status != "scheduled"
+                CustomerServiceSchedule.status != "scheduled",
             )
         )
     )
@@ -610,7 +591,7 @@ async def get_service_interval_stats(
             and_(
                 CustomerServiceSchedule.next_due_date <= today + timedelta(days=7),
                 CustomerServiceSchedule.next_due_date >= today,
-                CustomerServiceSchedule.status != "scheduled"
+                CustomerServiceSchedule.status != "scheduled",
             )
         )
     )
@@ -618,10 +599,7 @@ async def get_service_interval_stats(
 
     overdue_result = await db.execute(
         select(func.count()).where(
-            and_(
-                CustomerServiceSchedule.next_due_date < today,
-                CustomerServiceSchedule.status != "scheduled"
-            )
+            and_(CustomerServiceSchedule.next_due_date < today, CustomerServiceSchedule.status != "scheduled")
         )
     )
     overdue = overdue_result.scalar() or 0
@@ -631,7 +609,7 @@ async def get_service_interval_stats(
         select(func.count()).where(
             and_(
                 ServiceReminder.sent_at >= datetime.combine(today, datetime.min.time()),
-                ServiceReminder.status == "sent"
+                ServiceReminder.status == "sent",
             )
         )
     )
@@ -641,8 +619,7 @@ async def get_service_interval_stats(
     pending_result = await db.execute(
         select(func.count()).where(
             and_(
-                CustomerServiceSchedule.reminder_sent == False,
-                CustomerServiceSchedule.status.in_(["upcoming", "due"])
+                CustomerServiceSchedule.reminder_sent == False, CustomerServiceSchedule.status.in_(["upcoming", "due"])
             )
         )
     )
@@ -683,6 +660,7 @@ async def create_work_order_from_schedule(
     # In production, create actual work order using WorkOrder model
     # For now, generate a work order ID and update the schedule
     from uuid import uuid4
+
     work_order_id = str(uuid4())
 
     # Update schedule status
@@ -706,9 +684,7 @@ async def send_service_reminder(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid schedule ID format")
 
-    result = await db.execute(
-        select(CustomerServiceSchedule).where(CustomerServiceSchedule.id == schedule_uuid)
-    )
+    result = await db.execute(select(CustomerServiceSchedule).where(CustomerServiceSchedule.id == schedule_uuid))
     schedule = result.scalar_one_or_none()
 
     if not schedule:
@@ -751,9 +727,7 @@ async def bulk_assign_interval(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid service interval ID format")
 
-    result = await db.execute(
-        select(ServiceInterval).where(ServiceInterval.id == interval_uuid)
-    )
+    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
     interval = result.scalar_one_or_none()
 
     if not interval:
@@ -765,9 +739,7 @@ async def bulk_assign_interval(
     for customer_id in request.customer_ids:
         try:
             # Check customer exists
-            customer_result = await db.execute(
-                select(Customer).where(Customer.id == customer_id)
-            )
+            customer_result = await db.execute(select(Customer).where(Customer.id == customer_id))
             customer = customer_result.scalar_one_or_none()
 
             if not customer:
@@ -832,12 +804,14 @@ async def get_scheduler_status(
     jobs = []
     if scheduler:
         for job in scheduler.get_jobs():
-            jobs.append({
-                "id": job.id,
-                "name": job.name,
-                "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
-                "trigger": str(job.trigger),
-            })
+            jobs.append(
+                {
+                    "id": job.id,
+                    "name": job.name,
+                    "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
+                    "trigger": str(job.trigger),
+                }
+            )
 
     return {
         "running": scheduler.running if scheduler else False,

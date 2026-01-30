@@ -94,6 +94,7 @@ class CacheService:
         if self._client is None:
             try:
                 import redis.asyncio as redis
+
                 self._client = redis.from_url(
                     self._redis_url,
                     encoding="utf-8",
@@ -141,9 +142,7 @@ class CacheService:
             logger.warning("Cache circuit breaker opened (failed recovery)")
         elif self._failure_count >= self._failure_threshold:
             self._circuit_state = CircuitState.OPEN
-            logger.warning(
-                f"Cache circuit breaker opened after {self._failure_count} failures"
-            )
+            logger.warning(f"Cache circuit breaker opened after {self._failure_count} failures")
 
     async def get(self, key: str) -> Optional[Any]:
         """
@@ -295,6 +294,7 @@ def get_cache_service() -> CacheService:
     global _cache_service
     if _cache_service is None:
         from app.config import settings
+
         redis_url = getattr(settings, "REDIS_URL", None)
         _cache_service = CacheService(redis_url=redis_url)
     return _cache_service

@@ -48,9 +48,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     Also adds these IDs to response headers for client-side correlation.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Response]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Response]) -> Response:
         # Extract correlation ID from request headers or generate new one
         correlation_id = request.headers.get("X-Correlation-ID")
         if not correlation_id:

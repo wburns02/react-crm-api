@@ -52,6 +52,7 @@ def init_telemetry() -> bool:
     _initialized = True
 
     from app.config import settings
+
     endpoint = settings.OTEL_EXPORTER_OTLP_ENDPOINT
     service_name = settings.OTEL_SERVICE_NAME
 
@@ -67,9 +68,11 @@ def init_telemetry() -> bool:
         from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 
         # Create resource with service name
-        resource = Resource(attributes={
-            SERVICE_NAME: service_name,
-        })
+        resource = Resource(
+            attributes={
+                SERVICE_NAME: service_name,
+            }
+        )
 
         # Create tracer provider
         provider = TracerProvider(resource=resource)
@@ -104,6 +107,7 @@ def _instrument_frameworks():
     # FastAPI
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
         FastAPIInstrumentor().instrument()
         logger.debug("Instrumented FastAPI")
     except ImportError:
@@ -112,6 +116,7 @@ def _instrument_frameworks():
     # SQLAlchemy
     try:
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
         SQLAlchemyInstrumentor().instrument()
         logger.debug("Instrumented SQLAlchemy")
     except ImportError:
@@ -120,6 +125,7 @@ def _instrument_frameworks():
     # Redis
     try:
         from opentelemetry.instrumentation.redis import RedisInstrumentor
+
         RedisInstrumentor().instrument()
         logger.debug("Instrumented Redis")
     except ImportError:
@@ -128,6 +134,7 @@ def _instrument_frameworks():
     # HTTPX (for external API calls)
     try:
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
         HTTPXClientInstrumentor().instrument()
         logger.debug("Instrumented HTTPX")
     except ImportError:
@@ -170,6 +177,7 @@ def traced(
         span_name = name or func.__name__
 
         if _is_async(func):
+
             @wraps(func)
             async def async_wrapper(*args, **kwargs) -> T:
                 tracer = get_tracer()
@@ -190,6 +198,7 @@ def traced(
 
             return async_wrapper
         else:
+
             @wraps(func)
             def sync_wrapper(*args, **kwargs) -> T:
                 tracer = get_tracer()
@@ -216,6 +225,7 @@ def traced(
 def _is_async(func: Callable) -> bool:
     """Check if function is async."""
     import asyncio
+
     return asyncio.iscoroutinefunction(func)
 
 
@@ -223,6 +233,7 @@ def trace_status_error():
     """Get error status for span."""
     try:
         from opentelemetry.trace import StatusCode, Status
+
         return Status(StatusCode.ERROR)
     except ImportError:
         return None
@@ -253,6 +264,7 @@ def add_span_attribute(key: str, value: Any):
     """Add attribute to current span."""
     try:
         from opentelemetry import trace
+
         current_span = trace.get_current_span()
         if current_span:
             current_span.set_attribute(key, value)
@@ -264,6 +276,7 @@ def record_exception(exception: Exception):
     """Record exception on current span."""
     try:
         from opentelemetry import trace
+
         current_span = trace.get_current_span()
         if current_span:
             current_span.record_exception(exception)

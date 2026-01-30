@@ -22,9 +22,7 @@ class EmailTemplateBase(BaseModel):
     subject: str = Field(..., min_length=1, max_length=255, description="Email subject with merge fields")
     body_html: str = Field(..., min_length=1, description="HTML body with merge fields")
     body_text: Optional[str] = Field(None, description="Plain text body with merge fields")
-    variables: Optional[List[str]] = Field(
-        default_factory=list, description="List of available merge field names"
-    )
+    variables: Optional[List[str]] = Field(default_factory=list, description="List of available merge field names")
     is_active: bool = Field(default=True, description="Whether template is available for use")
 
 

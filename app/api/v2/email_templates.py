@@ -79,12 +79,7 @@ async def list_template_categories(
     result = await db.execute(query)
     rows = result.all()
 
-    return {
-        "categories": [
-            {"name": row.category, "count": row.count}
-            for row in rows
-        ]
-    }
+    return {"categories": [{"name": row.category, "count": row.count} for row in rows]}
 
 
 @router.get("/{template_id}", response_model=EmailTemplateResponse)
@@ -94,9 +89,7 @@ async def get_email_template(
     current_user: CurrentUser,
 ):
     """Get a single email template by ID."""
-    result = await db.execute(
-        select(EmailTemplate).where(EmailTemplate.id == template_id)
-    )
+    result = await db.execute(select(EmailTemplate).where(EmailTemplate.id == template_id))
     template = result.scalar_one_or_none()
 
     if not template:
@@ -143,9 +136,7 @@ async def update_email_template(
     current_user: CurrentUser,
 ):
     """Update an existing email template."""
-    result = await db.execute(
-        select(EmailTemplate).where(EmailTemplate.id == template_id)
-    )
+    result = await db.execute(select(EmailTemplate).where(EmailTemplate.id == template_id))
     template = result.scalar_one_or_none()
 
     if not template:
@@ -174,9 +165,7 @@ async def delete_email_template(
     current_user: CurrentUser,
 ):
     """Delete an email template."""
-    result = await db.execute(
-        select(EmailTemplate).where(EmailTemplate.id == template_id)
-    )
+    result = await db.execute(select(EmailTemplate).where(EmailTemplate.id == template_id))
     template = result.scalar_one_or_none()
 
     if not template:
@@ -199,9 +188,7 @@ async def preview_email_template(
     current_user: CurrentUser,
 ):
     """Preview a template with sample data."""
-    result = await db.execute(
-        select(EmailTemplate).where(EmailTemplate.id == template_id)
-    )
+    result = await db.execute(select(EmailTemplate).where(EmailTemplate.id == template_id))
     template = result.scalar_one_or_none()
 
     if not template:
@@ -224,9 +211,7 @@ async def get_template_merge_fields(
     current_user: CurrentUser,
 ):
     """Get available merge fields for a template."""
-    result = await db.execute(
-        select(EmailTemplate).where(EmailTemplate.id == template_id)
-    )
+    result = await db.execute(select(EmailTemplate).where(EmailTemplate.id == template_id))
     template = result.scalar_one_or_none()
 
     if not template:
@@ -257,10 +242,7 @@ async def get_template_merge_fields(
 
     return {
         "fields": [
-            {
-                "name": field,
-                **field_metadata.get(field, {"description": f"Value for {field}", "example": ""})
-            }
+            {"name": field, **field_metadata.get(field, {"description": f"Value for {field}", "example": ""})}
             for field in (template.variables or [])
         ]
     }

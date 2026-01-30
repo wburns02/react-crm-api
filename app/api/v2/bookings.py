@@ -118,7 +118,9 @@ async def ensure_bookings_table(db: DbSession) -> None:
         # Ensure work_order_id column exists (added later)
         try:
             await db.execute(
-                text("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS work_order_id VARCHAR(36) REFERENCES work_orders(id)")
+                text(
+                    "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS work_order_id VARCHAR(36) REFERENCES work_orders(id)"
+                )
             )
             await db.commit()
             logger.info("Added work_order_id column to bookings table")
@@ -202,9 +204,7 @@ async def create_booking(
         raise HTTPException(status_code=402, detail=f"Payment authorization failed: {payment_result.error_message}")
 
     # Find or create customer by phone number
-    customer_result = await db.execute(
-        select(Customer).where(Customer.phone == booking_data.phone)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.phone == booking_data.phone))
     customer = customer_result.scalar_one_or_none()
 
     if not customer:
@@ -253,6 +253,7 @@ async def create_booking(
 
     # Create work order for the schedule
     import uuid
+
     is_emergency = "ASAP" in (booking_data.notes or "").upper()
     work_order = WorkOrder(
         id=str(uuid.uuid4()),

@@ -43,11 +43,9 @@ def init_sentry() -> None:
             dsn=sentry_dsn,
             environment=settings.ENVIRONMENT,
             release=getattr(settings, "VERSION", "unknown"),
-
             # Performance monitoring
             traces_sample_rate=0.1 if settings.is_production else 1.0,
             profiles_sample_rate=0.1 if settings.is_production else 0.0,
-
             # Integrations
             integrations=[
                 FastApiIntegration(transaction_style="endpoint"),
@@ -57,10 +55,8 @@ def init_sentry() -> None:
                     event_level=logging.ERROR,
                 ),
             ],
-
             # Filter sensitive data
             before_send=filter_sensitive_data,
-
             # Additional options
             send_default_pii=False,
             attach_stacktrace=True,
@@ -76,10 +72,7 @@ def init_sentry() -> None:
         logger.warning(f"Failed to initialize Sentry: {e}")
 
 
-def filter_sensitive_data(
-    event: Dict[str, Any],
-    hint: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
+def filter_sensitive_data(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Filter sensitive data before sending to Sentry.
 
@@ -101,10 +94,7 @@ def filter_sensitive_data(
     if "request" in event and "data" in event["request"]:
         data = event["request"]["data"]
         if isinstance(data, dict):
-            sensitive_fields = [
-                "password", "token", "secret", "api_key",
-                "credit_card", "ssn", "social_security"
-            ]
+            sensitive_fields = ["password", "token", "secret", "api_key", "credit_card", "ssn", "social_security"]
             for field in sensitive_fields:
                 if field in data:
                     data[field] = "[Filtered]"
@@ -183,11 +173,7 @@ def capture_message(
         return None
 
 
-def set_user_context(
-    user_id: str,
-    email: Optional[str] = None,
-    role: Optional[str] = None
-) -> None:
+def set_user_context(user_id: str, email: Optional[str] = None, role: Optional[str] = None) -> None:
     """Set user context for all subsequent events in this request."""
     if not _sentry_initialized:
         return
@@ -195,11 +181,13 @@ def set_user_context(
     try:
         import sentry_sdk
 
-        sentry_sdk.set_user({
-            "id": user_id,
-            "email": email,
-            "role": role,
-        })
+        sentry_sdk.set_user(
+            {
+                "id": user_id,
+                "email": email,
+                "role": role,
+            }
+        )
     except Exception:
         pass
 

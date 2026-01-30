@@ -162,17 +162,20 @@ async def ensure_work_order_photos_table():
     async with async_session_maker() as session:
         try:
             # Check if table exists
-            result = await session.execute(text(
-                """SELECT EXISTS (
+            result = await session.execute(
+                text(
+                    """SELECT EXISTS (
                     SELECT 1 FROM information_schema.tables
                     WHERE table_name = 'work_order_photos'
                 )"""
-            ))
+                )
+            )
             table_exists = result.scalar()
 
             if not table_exists:
                 logger.info("Creating missing work_order_photos table...")
-                await session.execute(text("""
+                await session.execute(
+                    text("""
                     CREATE TABLE work_order_photos (
                         id VARCHAR(36) PRIMARY KEY,
                         work_order_id VARCHAR(36) NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
@@ -187,10 +190,13 @@ async def ensure_work_order_photos_table():
                         created_at TIMESTAMPTZ DEFAULT NOW(),
                         updated_at TIMESTAMPTZ
                     )
-                """))
-                await session.execute(text(
-                    "CREATE INDEX IF NOT EXISTS ix_work_order_photos_work_order_id ON work_order_photos(work_order_id)"
-                ))
+                """)
+                )
+                await session.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_work_order_photos_work_order_id ON work_order_photos(work_order_id)"
+                    )
+                )
                 await session.commit()
                 logger.info("Created work_order_photos table successfully")
             else:
@@ -212,50 +218,52 @@ async def ensure_pay_rate_columns():
     async with async_session_maker() as session:
         try:
             # Check if pay_type column exists
-            result = await session.execute(text(
-                """SELECT EXISTS (
+            result = await session.execute(
+                text(
+                    """SELECT EXISTS (
                     SELECT 1 FROM information_schema.columns
                     WHERE table_name = 'technician_pay_rates' AND column_name = 'pay_type'
                 )"""
-            ))
+                )
+            )
             pay_type_exists = result.scalar()
 
             if not pay_type_exists:
                 logger.info("Adding missing pay_type column to technician_pay_rates...")
-                await session.execute(text(
-                    "ALTER TABLE technician_pay_rates ADD COLUMN pay_type VARCHAR(20) DEFAULT 'hourly' NOT NULL"
-                ))
+                await session.execute(
+                    text("ALTER TABLE technician_pay_rates ADD COLUMN pay_type VARCHAR(20) DEFAULT 'hourly' NOT NULL")
+                )
                 await session.commit()
                 logger.info("Added pay_type column successfully")
 
             # Check if salary_amount column exists
-            result = await session.execute(text(
-                """SELECT EXISTS (
+            result = await session.execute(
+                text(
+                    """SELECT EXISTS (
                     SELECT 1 FROM information_schema.columns
                     WHERE table_name = 'technician_pay_rates' AND column_name = 'salary_amount'
                 )"""
-            ))
+                )
+            )
             salary_exists = result.scalar()
 
             if not salary_exists:
                 logger.info("Adding missing salary_amount column to technician_pay_rates...")
-                await session.execute(text(
-                    "ALTER TABLE technician_pay_rates ADD COLUMN salary_amount FLOAT"
-                ))
+                await session.execute(text("ALTER TABLE technician_pay_rates ADD COLUMN salary_amount FLOAT"))
                 await session.commit()
                 logger.info("Added salary_amount column successfully")
 
             # Check if hourly_rate needs to be made nullable
-            result = await session.execute(text(
-                """SELECT is_nullable FROM information_schema.columns
+            result = await session.execute(
+                text(
+                    """SELECT is_nullable FROM information_schema.columns
                    WHERE table_name = 'technician_pay_rates' AND column_name = 'hourly_rate'"""
-            ))
+                )
+            )
             row = result.fetchone()
-            if row and row[0] == 'NO':
+            if row and row[0] == "NO":
                 logger.info("Making hourly_rate column nullable...")
-                await session.execute(text(
-                    "ALTER TABLE technician_pay_rates ALTER COLUMN hourly_rate DROP NOT NULL"
-                ))
+                await session.execute(text("ALTER TABLE technician_pay_rates ALTER COLUMN hourly_rate DROP NOT NULL"))
                 await session.commit()
                 logger.info("Made hourly_rate nullable successfully")
 

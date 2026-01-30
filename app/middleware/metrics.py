@@ -33,9 +33,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         "/favicon.ico",
     }
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Response]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Response]) -> Response:
         path = request.url.path
 
         # Skip metrics collection for excluded paths
@@ -54,11 +52,6 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             raise
         finally:
             # Track request end
-            track_request_end(
-                start_time=start_time,
-                method=request.method,
-                path=path,
-                status_code=status_code
-            )
+            track_request_end(start_time=start_time, method=request.method, path=path, status_code=status_code)
 
         return response

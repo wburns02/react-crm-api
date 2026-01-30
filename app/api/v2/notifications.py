@@ -69,7 +69,7 @@ async def list_notifications(
             "read": n.read,
             "created_at": n.created_at.isoformat() if n.created_at else None,
             "link": n.link,
-            "metadata": n.metadata,
+            "metadata": n.extra_data,
         }
         for n in notifications
     ]
@@ -89,19 +89,12 @@ async def get_notification_stats(
 ):
     """Get notification statistics for the current user."""
     # Total count
-    total_result = await db.execute(
-        select(func.count()).where(Notification.user_id == current_user.id)
-    )
+    total_result = await db.execute(select(func.count()).where(Notification.user_id == current_user.id))
     total = total_result.scalar() or 0
 
     # Unread count
     unread_result = await db.execute(
-        select(func.count()).where(
-            and_(
-                Notification.user_id == current_user.id,
-                Notification.read == False
-            )
-        )
+        select(func.count()).where(and_(Notification.user_id == current_user.id, Notification.read == False))
     )
     unread = unread_result.scalar() or 0
 
@@ -121,12 +114,7 @@ async def mark_notification_read(
         raise HTTPException(status_code=400, detail="Invalid notification ID format")
 
     result = await db.execute(
-        select(Notification).where(
-            and_(
-                Notification.id == notif_uuid,
-                Notification.user_id == current_user.id
-            )
-        )
+        select(Notification).where(and_(Notification.id == notif_uuid, Notification.user_id == current_user.id))
     )
     notification = result.scalar_one_or_none()
 
@@ -151,12 +139,7 @@ async def mark_all_notifications_read(
 
     result = await db.execute(
         update(Notification)
-        .where(
-            and_(
-                Notification.user_id == current_user.id,
-                Notification.read == False
-            )
-        )
+        .where(and_(Notification.user_id == current_user.id, Notification.read == False))
         .values(read=True, read_at=now)
         .returning(Notification.id)
     )
@@ -209,7 +192,7 @@ async def create_notification(
         title=notification_data.title,
         message=notification_data.message,
         link=notification_data.link,
-        metadata=notification_data.metadata,
+        extra_data=notification_data.metadata,
         source="user",
     )
 
@@ -225,7 +208,7 @@ async def create_notification(
         "read": notification.read,
         "created_at": notification.created_at.isoformat() if notification.created_at else now.isoformat(),
         "link": notification.link,
-        "metadata": notification.metadata,
+        "metadata": notification.extra_data,
     }
 
     # Broadcast via WebSocket based on targeting
@@ -275,12 +258,7 @@ async def delete_notification(
         raise HTTPException(status_code=400, detail="Invalid notification ID format")
 
     result = await db.execute(
-        select(Notification).where(
-            and_(
-                Notification.id == notif_uuid,
-                Notification.user_id == current_user.id
-            )
-        )
+        select(Notification).where(and_(Notification.id == notif_uuid, Notification.user_id == current_user.id))
     )
     notification = result.scalar_one_or_none()
 

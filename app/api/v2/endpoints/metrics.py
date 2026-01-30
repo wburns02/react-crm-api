@@ -18,9 +18,9 @@ router = APIRouter()
     responses={
         200: {
             "description": "Prometheus metrics",
-            "content": {"text/plain": {"example": "# HELP http_requests_total Total HTTP requests\n..."}}
+            "content": {"text/plain": {"example": "# HELP http_requests_total Total HTTP requests\n..."}},
         }
-    }
+    },
 )
 async def get_metrics():
     """
@@ -32,7 +32,4 @@ async def get_metrics():
     registry = get_registry()
     metrics_text = registry.format_prometheus()
 
-    return Response(
-        content=metrics_text,
-        media_type="text/plain; version=0.0.4; charset=utf-8"
-    )
+    return Response(content=metrics_text, media_type="text/plain; version=0.0.4; charset=utf-8")

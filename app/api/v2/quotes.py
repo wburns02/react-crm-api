@@ -339,9 +339,7 @@ async def convert_quote_to_work_order(
         )
 
     # Fetch customer for service address
-    customer_result = await db.execute(
-        select(Customer).where(Customer.id == quote.customer_id)
-    )
+    customer_result = await db.execute(select(Customer).where(Customer.id == quote.customer_id))
     customer = customer_result.scalar_one_or_none()
 
     if not customer:
@@ -389,8 +387,8 @@ async def convert_quote_to_work_order(
         service_city=customer.city,
         service_state=customer.state,
         service_postal_code=customer.postal_code,
-        service_latitude=customer.latitude if hasattr(customer, 'latitude') else None,
-        service_longitude=customer.longitude if hasattr(customer, 'longitude') else None,
+        service_latitude=customer.latitude if hasattr(customer, "latitude") else None,
+        service_longitude=customer.longitude if hasattr(customer, "longitude") else None,
         notes=combined_notes,
         total_amount=quote.total,
         created_at=now,

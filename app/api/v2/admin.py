@@ -1660,51 +1660,53 @@ async def fix_pay_rate_schema(
 
     try:
         # Check and add pay_type column
-        result = await db.execute(text(
-            """SELECT EXISTS (
+        result = await db.execute(
+            text(
+                """SELECT EXISTS (
                 SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'technician_pay_rates' AND column_name = 'pay_type'
             )"""
-        ))
+            )
+        )
         pay_type_exists = result.scalar()
         results["pay_type_column"]["existed"] = pay_type_exists
 
         if not pay_type_exists:
-            await db.execute(text(
-                "ALTER TABLE technician_pay_rates ADD COLUMN pay_type VARCHAR(20) DEFAULT 'hourly' NOT NULL"
-            ))
+            await db.execute(
+                text("ALTER TABLE technician_pay_rates ADD COLUMN pay_type VARCHAR(20) DEFAULT 'hourly' NOT NULL")
+            )
             results["pay_type_column"]["added"] = True
             logger.info("Added pay_type column")
 
         # Check and add salary_amount column
-        result = await db.execute(text(
-            """SELECT EXISTS (
+        result = await db.execute(
+            text(
+                """SELECT EXISTS (
                 SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'technician_pay_rates' AND column_name = 'salary_amount'
             )"""
-        ))
+            )
+        )
         salary_exists = result.scalar()
         results["salary_amount_column"]["existed"] = salary_exists
 
         if not salary_exists:
-            await db.execute(text(
-                "ALTER TABLE technician_pay_rates ADD COLUMN salary_amount FLOAT"
-            ))
+            await db.execute(text("ALTER TABLE technician_pay_rates ADD COLUMN salary_amount FLOAT"))
             results["salary_amount_column"]["added"] = True
             logger.info("Added salary_amount column")
 
         # Check and make hourly_rate nullable
-        result = await db.execute(text(
-            """SELECT is_nullable FROM information_schema.columns
+        result = await db.execute(
+            text(
+                """SELECT is_nullable FROM information_schema.columns
                WHERE table_name = 'technician_pay_rates' AND column_name = 'hourly_rate'"""
-        ))
+            )
+        )
         row = result.fetchone()
         if row:
-            results["hourly_rate_nullable"]["was_nullable"] = row[0] == 'YES'
-            if row[0] == 'NO':
-                await db.execute(text(
-                    "ALTER TABLE technician_pay_rates ALTER COLUMN hourly_rate DROP NOT NULL"
-                ))
+            results["hourly_rate_nullable"]["was_nullable"] = row[0] == "YES"
+            if row[0] == "NO":
+                await db.execute(text("ALTER TABLE technician_pay_rates ALTER COLUMN hourly_rate DROP NOT NULL"))
                 results["hourly_rate_nullable"]["made_nullable"] = True
                 logger.info("Made hourly_rate nullable")
 
