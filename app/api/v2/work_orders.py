@@ -505,57 +505,51 @@ async def complete_work_order(
             detail="Work order is already completed",
         )
 
-    # Build update data
-    update_values = {
-        "status": "completed",
-        "actual_end_time": datetime.now(),
-    }
+    # Use ORM setattr like the PATCH endpoint does - handles ENUM types correctly
+    work_order.status = "completed"
+    work_order.actual_end_time = datetime.now()
+    work_order.updated_at = datetime.utcnow()
 
     if request.latitude and request.longitude:
-        update_values["clock_out_gps_lat"] = request.latitude
-        update_values["clock_out_gps_lon"] = request.longitude
+        work_order.clock_out_gps_lat = request.latitude
+        work_order.clock_out_gps_lon = request.longitude
 
     if request.notes:
         existing_notes = work_order.notes or ""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        update_values["notes"] = f"{existing_notes}\n[{timestamp}] Completion: {request.notes}".strip()
+        work_order.notes = f"{existing_notes}\n[{timestamp}] Completion: {request.notes}".strip()
 
     # Calculate labor minutes if start time exists
     if work_order.actual_start_time:
         duration = datetime.now() - work_order.actual_start_time
-        update_values["total_labor_minutes"] = int(duration.total_seconds() / 60)
+        work_order.total_labor_minutes = int(duration.total_seconds() / 60)
 
-    # Use raw SQL to ensure commit
-    from sqlalchemy import text
+    # Commit the status change FIRST, before commission
+    try:
+        await db.commit()
+        await db.refresh(work_order)
+        logger.info(f"Committed work order {work_order_id} status to completed")
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to commit work order completion: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to complete work order: {str(e)}")
 
-    # Build SET clause dynamically
-    set_clauses = []
-    params = {"wo_id": work_order_id}
-
-    for key, value in update_values.items():
-        set_clauses.append(f"{key} = :{key}")
-        params[key] = value
-
-    sql = text(f"UPDATE work_orders SET {', '.join(set_clauses)} WHERE id = :wo_id")
-    await db.execute(sql, params)
-    logger.info(f"Executed raw SQL UPDATE for work order {work_order_id}")
-
-    # Auto-create commission
+    # Now auto-create commission (in separate transaction)
     commission = await auto_create_commission(
         db=db,
         work_order=work_order,
         dump_site_id=request.dump_site_id,
     )
 
-    # Explicitly flush and commit changes
-    try:
-        await db.flush()  # Ensure changes are written to DB
-        await db.commit()
-        logger.info(f"Successfully committed work order {work_order_id} status to completed")
-    except Exception as e:
-        logger.error(f"Failed to commit work order completion: {e}")
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to complete work order: {str(e)}")
+    # Commit commission if created
+    if commission:
+        try:
+            await db.commit()
+            logger.info(f"Created commission {commission.id} for work order {work_order_id}")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to create commission: {e}")
+            commission = None  # Still return success for work order completion
 
     # Store values before any potential errors
     wo_id = work_order.id
