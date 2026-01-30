@@ -49,11 +49,10 @@ async def get_twilio_debug_config():
 
 @router.get("/debug-messages-schema")
 async def debug_messages_schema(db: DbSession):
-    """DEBUG: Check messages table schema and fix if needed."""
+    """DEBUG: Check messages table schema."""
     from sqlalchemy import text
 
     try:
-        # Get current columns
         result = await db.execute(
             text(
                 """SELECT column_name, data_type, is_nullable
@@ -64,20 +63,9 @@ async def debug_messages_schema(db: DbSession):
         )
         columns = [{"name": row[0], "type": row[1], "nullable": row[2]} for row in result.fetchall()]
 
-        column_names = [c["name"] for c in columns]
-        missing = []
-
-        if "type" not in column_names:
-            missing.append("type")
-        if "direction" not in column_names:
-            missing.append("direction")
-        if "status" not in column_names:
-            missing.append("status")
-
         return {
             "columns": columns,
             "column_count": len(columns),
-            "missing_columns": missing,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -92,56 +80,82 @@ async def get_email_service_status(
     return email_service.get_status()
 
 
-@router.get("/history", response_model=MessageListResponse)
+@router.get("/history")
 async def get_communication_history(
     db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     customer_id: Optional[int] = None,
-    type: Optional[MessageType] = None,
-    direction: Optional[MessageDirection] = None,
-    status: Optional[MessageStatus] = None,
+    message_type: Optional[str] = None,
+    direction: Optional[str] = None,
+    status: Optional[str] = None,
 ):
     """Get communication history with pagination and filtering."""
-    # Base query
-    query = select(Message)
+    try:
+        # Base query
+        query = select(Message)
 
-    # Apply filters
-    if customer_id:
-        query = query.where(Message.customer_id == customer_id)
+        # Apply filters
+        if customer_id:
+            query = query.where(Message.customer_id == customer_id)
 
-    if type:
-        query = query.where(Message.type == type)
+        if message_type:
+            query = query.where(Message.message_type == message_type)
 
-    if direction:
-        query = query.where(Message.direction == direction)
+        if direction:
+            query = query.where(Message.direction == direction)
 
-    if status:
-        query = query.where(Message.status == status)
+        if status:
+            query = query.where(Message.status == status)
 
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
 
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(Message.created_at.desc())
+        # Apply pagination
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size).order_by(Message.created_at.desc())
 
-    # Execute query
-    result = await db.execute(query)
-    messages = result.scalars().all()
+        # Execute query
+        result = await db.execute(query)
+        messages = result.scalars().all()
 
-    return MessageListResponse(
-        items=messages,
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+        return {
+            "items": [
+                {
+                    "id": m.id,
+                    "customer_id": m.customer_id,
+                    "type": m.message_type,
+                    "direction": m.direction,
+                    "status": m.status,
+                    "to_address": m.to_number or m.to_email,
+                    "from_address": m.from_number or m.from_email,
+                    "subject": m.subject,
+                    "content": m.content,
+                    "external_id": m.external_id,
+                    "sent_at": m.sent_at.isoformat() if m.sent_at else None,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                }
+                for m in messages
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        logger.error(f"History query failed: {e}")
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "debug_error": str(e),
+        }
 
 
-@router.post("/sms/send", response_model=MessageResponse)
+@router.post("/sms/send")
 async def send_sms(
     request: SendSMSRequest,
     db: DbSession,
@@ -173,16 +187,15 @@ async def send_sms(
 
     twilio_service = TwilioService()
 
-    # Create message record
+    # Create message record with correct column names
     message = Message(
         customer_id=request.customer_id,
-        type=MessageType.sms,
-        direction=MessageDirection.outbound,
-        status=MessageStatus.pending,
-        to_address=request.to,
-        from_address=twilio_service.phone_number,
+        message_type="sms",
+        direction="outbound",
+        status="pending",
+        to_number=request.to,
+        from_number=twilio_service.phone_number,
         content=request.body,
-        source=request.source,
     )
     db.add(message)
     await db.commit()
@@ -196,17 +209,16 @@ async def send_sms(
         )
 
         # Update message with Twilio response
-        message.twilio_sid = twilio_response.sid
-        message.status = MessageStatus.queued
+        message.external_id = twilio_response.sid
+        message.status = "queued"
         message.sent_at = datetime.utcnow()
         await db.commit()
         await db.refresh(message)
 
-        # SECURITY: Don't log phone numbers or message content
         logger.info("SMS sent successfully", extra={"message_id": message.id, "user_id": current_user.id})
 
     except Exception as e:
-        message.status = MessageStatus.failed
+        message.status = "failed"
         message.error_message = str(e)
         await db.commit()
         await db.refresh(message)
@@ -218,10 +230,21 @@ async def send_sms(
             detail="Failed to send SMS. Please try again later.",
         )
 
-    return message
+    return {
+        "id": message.id,
+        "type": message.message_type,
+        "direction": message.direction,
+        "status": message.status,
+        "to_address": message.to_number,
+        "from_address": message.from_number,
+        "content": message.content,
+        "external_id": message.external_id,
+        "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+    }
 
 
-@router.post("/email/send", response_model=MessageResponse)
+@router.post("/email/send")
 async def send_email(
     request: SendEmailRequest,
     db: DbSession,
@@ -249,17 +272,16 @@ async def send_email(
             detail=f"Email service not available: {status_info.get('message', 'Not configured')}",
         )
 
-    # Create message record with from_address
+    # Create message record with correct column names
     message = Message(
         customer_id=request.customer_id,
-        type=MessageType.email,
-        direction=MessageDirection.outbound,
-        status=MessageStatus.pending,
-        to_address=request.to,
-        from_address=email_service.from_address,
+        message_type="email",
+        direction="outbound",
+        status="pending",
+        to_email=request.to,
+        from_email=email_service.from_address,
         subject=request.subject,
         content=request.body,
-        source=request.source,
     )
     db.add(message)
     await db.commit()
@@ -275,17 +297,15 @@ async def send_email(
         )
 
         if email_response.get("success"):
-            # Update message with success
-            message.twilio_sid = email_response.get("message_id")  # Reuse for SendGrid ID
-            message.status = MessageStatus.sent
+            message.external_id = email_response.get("message_id")
+            message.status = "sent"
             message.sent_at = datetime.utcnow()
             await db.commit()
             await db.refresh(message)
 
             logger.info("Email sent successfully", extra={"message_id": message.id, "user_id": current_user.id})
         else:
-            # SendGrid returned an error
-            message.status = MessageStatus.failed
+            message.status = "failed"
             message.error_message = email_response.get("error", "Unknown error")
             await db.commit()
             await db.refresh(message)
@@ -300,7 +320,7 @@ async def send_email(
     except HTTPException:
         raise
     except Exception as e:
-        message.status = MessageStatus.failed
+        message.status = "failed"
         message.error_message = str(e)
         await db.commit()
         await db.refresh(message)
@@ -312,7 +332,19 @@ async def send_email(
             detail="Failed to send email. Please try again later.",
         )
 
-    return message
+    return {
+        "id": message.id,
+        "type": message.message_type,
+        "direction": message.direction,
+        "status": message.status,
+        "to_address": message.to_email,
+        "from_address": message.from_email,
+        "subject": message.subject,
+        "content": message.content,
+        "external_id": message.external_id,
+        "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+    }
 
 
 @router.get("/stats")
@@ -327,9 +359,9 @@ async def get_communication_stats(
             select(func.count())
             .select_from(Message)
             .where(
-                (Message.type == MessageType.sms)
-                & (Message.direction == MessageDirection.inbound)
-                & (Message.status == MessageStatus.received)
+                (Message.message_type == "sms")
+                & (Message.direction == "inbound")
+                & (Message.status == "received")
             )
         )
         sms_result = await db.execute(sms_query)
@@ -339,7 +371,7 @@ async def get_communication_stats(
         email_query = (
             select(func.count())
             .select_from(Message)
-            .where((Message.type == MessageType.email) & (Message.direction == MessageDirection.inbound))
+            .where((Message.message_type == "email") & (Message.direction == "inbound"))
         )
         email_result = await db.execute(email_query)
         unread_email = email_result.scalar() or 0
@@ -351,7 +383,6 @@ async def get_communication_stats(
         }
     except Exception as e:
         logger.error(f"Stats query failed: {e}")
-        # Return a simple response with the error for debugging
         return {
             "unread_sms": 0,
             "unread_email": 0,
@@ -376,11 +407,11 @@ async def get_communication_activity(
             "items": [
                 {
                     "id": m.id,
-                    "type": m.type.value if m.type else None,
-                    "direction": m.direction.value if m.direction else None,
-                    "status": m.status.value if m.status else None,
-                    "to_address": m.to_address,
-                    "from_address": m.from_address,
+                    "type": m.message_type,
+                    "direction": m.direction,
+                    "status": m.status,
+                    "to_address": m.to_number or m.to_email,
+                    "from_address": m.from_number or m.from_email,
                     "subject": m.subject,
                     "content": m.content[:100] if m.content else None,
                     "customer_id": m.customer_id,
@@ -399,7 +430,7 @@ async def get_communication_activity(
         }
 
 
-@router.get("/message/{message_id}", response_model=MessageResponse)
+@router.get("/message/{message_id}")
 async def get_message(
     message_id: int,
     db: DbSession,
@@ -415,7 +446,17 @@ async def get_message(
             detail="Message not found",
         )
 
-    return message
-
-
-# Railway deployment trigger: Thu Jan 29 05:13:07 PM CST 2026
+    return {
+        "id": message.id,
+        "customer_id": message.customer_id,
+        "type": message.message_type,
+        "direction": message.direction,
+        "status": message.status,
+        "to_address": message.to_number or message.to_email,
+        "from_address": message.from_number or message.from_email,
+        "subject": message.subject,
+        "content": message.content,
+        "external_id": message.external_id,
+        "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+    }

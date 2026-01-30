@@ -511,7 +511,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.11",  # MessageResponse schema fix for nullable fields
+        "version": "2.7.12",  # MessageResponse schema fix for nullable fields
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
