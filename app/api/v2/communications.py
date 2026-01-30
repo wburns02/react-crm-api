@@ -47,6 +47,42 @@ async def get_twilio_debug_config():
     }
 
 
+@router.get("/debug-messages-schema")
+async def debug_messages_schema(db: DbSession):
+    """DEBUG: Check messages table schema and fix if needed."""
+    from sqlalchemy import text
+
+    try:
+        # Get current columns
+        result = await db.execute(
+            text(
+                """SELECT column_name, data_type, is_nullable
+                   FROM information_schema.columns
+                   WHERE table_name = 'messages'
+                   ORDER BY ordinal_position"""
+            )
+        )
+        columns = [{"name": row[0], "type": row[1], "nullable": row[2]} for row in result.fetchall()]
+
+        column_names = [c["name"] for c in columns]
+        missing = []
+
+        if "type" not in column_names:
+            missing.append("type")
+        if "direction" not in column_names:
+            missing.append("direction")
+        if "status" not in column_names:
+            missing.append("status")
+
+        return {
+            "columns": columns,
+            "column_count": len(columns),
+            "missing_columns": missing,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.get("/email/status")
 async def get_email_service_status(
     current_user: CurrentUser,
