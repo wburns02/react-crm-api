@@ -521,9 +521,17 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-Correlation-ID",
+        "X-Request-ID",
+        "X-CSRF-Token",
+        "Accept",
+    ],
     expose_headers=["X-Correlation-ID", "X-Request-ID"],  # Allow frontend to read correlation headers
+    max_age=3600,  # Cache preflight responses for 1 hour
 )
 
 # Include routers

@@ -17,6 +17,11 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.sqlalchemy_echo,  # Disabled in production
     future=True,
+    # Connection pool settings for production stability
+    pool_size=20,           # Base pool connections (default is 5)
+    max_overflow=10,        # Additional connections for peak load (total max: 30)
+    pool_recycle=3600,      # Recycle connections after 1 hour to prevent stale connections
+    pool_pre_ping=True,     # Test connection validity before use
 )
 
 # Session factory

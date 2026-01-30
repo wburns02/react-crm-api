@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Response, Depends
+from fastapi import APIRouter, HTTPException, status, Response, Depends, Request
 from sqlalchemy import select
 from datetime import timedelta
 import logging
@@ -13,6 +13,7 @@ from app.api.deps import (
 from app.config import settings
 from app.models.user import User
 from app.schemas.auth import UserCreate, UserResponse, Token, LoginRequest, AuthMeResponse
+from app.core.rate_limit import rate_limit_by_ip
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -20,11 +21,15 @@ logger = logging.getLogger(__name__)
 
 @router.post("/login", response_model=Token)
 async def login(
+    request: Request,
     response: Response,
     login_data: LoginRequest,
     db: DbSession,
 ):
     """Authenticate user and return JWT token."""
+    # Rate limit: 5 requests/minute per IP to prevent brute force attacks
+    rate_limit_by_ip(request, requests_per_minute=5)
+
     try:
         # Find user
         logger.info(f"Login attempt for: {login_data.email}")
@@ -97,10 +102,14 @@ async def get_current_user_info(current_user: CurrentUser):
 
 @router.post("/register", response_model=UserResponse)
 async def register(
+    request: Request,
     user_data: UserCreate,
     db: DbSession,
 ):
     """Register a new user."""
+    # Rate limit: 3 requests/minute per IP to prevent account enumeration
+    rate_limit_by_ip(request, requests_per_minute=3)
+
     # Check if user exists
     result = await db.execute(select(User).where(User.email == user_data.email))
     existing_user = result.scalar_one_or_none()
