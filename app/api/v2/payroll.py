@@ -9,7 +9,7 @@ Features:
 """
 
 from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func, and_, delete
+from sqlalchemy import select, func, and_, delete, cast, String
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timedelta
@@ -930,9 +930,10 @@ async def get_period_summary(
         commissions = comm_result.scalars().all()
 
         # 6. Get jobs completed per technician (work orders completed in period date range)
+        # Cast status enum to string for comparison
         jobs_result = await db.execute(
             select(WorkOrder.technician_id, func.count(WorkOrder.id))
-            .where(WorkOrder.status == "completed")
+            .where(cast(WorkOrder.status, String) == "completed")
             .where(WorkOrder.scheduled_date >= period.start_date)
             .where(WorkOrder.scheduled_date <= period.end_date)
             .group_by(WorkOrder.technician_id)
