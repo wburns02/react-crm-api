@@ -39,16 +39,16 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncSession:
-    """Dependency to get database session."""
-    async with async_session_maker() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    """Dependency to get database session.
+
+    Note: Endpoints are responsible for calling commit() when needed.
+    This dependency only provides the session and handles cleanup.
+    """
+    session = async_session_maker()
+    try:
+        yield session
+    finally:
+        await session.close()
 
 
 async def init_db():
