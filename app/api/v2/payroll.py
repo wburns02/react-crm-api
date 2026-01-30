@@ -25,6 +25,67 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# Admin endpoint to fix missing columns
+@router.post("/commissions/fix-table")
+async def fix_commissions_table(db: DbSession, current_user: CurrentUser):
+    """Add missing columns to commissions table for auto-calculation."""
+    from sqlalchemy import text
+
+    try:
+        # Check which columns exist
+        result = await db.execute(
+            text(
+                """SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'commissions'"""
+            )
+        )
+        existing_columns = {row[0] for row in result}
+
+        # Columns to ensure exist
+        columns_to_add = [
+            ("dump_site_id", "UUID"),
+            ("job_type", "VARCHAR(50)"),
+            ("gallons_pumped", "INTEGER"),
+            ("dump_fee_per_gallon", "FLOAT"),
+            ("dump_fee_amount", "FLOAT"),
+            ("commissionable_amount", "FLOAT"),
+        ]
+
+        added = []
+        already_exists = []
+
+        for col_name, col_type in columns_to_add:
+            if col_name not in existing_columns:
+                await db.execute(
+                    text(f"ALTER TABLE commissions ADD COLUMN {col_name} {col_type}")
+                )
+                added.append(col_name)
+            else:
+                already_exists.append(col_name)
+
+        await db.commit()
+
+        # Create index on job_type if not exists
+        try:
+            await db.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_commissions_job_type ON commissions(job_type)")
+            )
+            await db.commit()
+        except Exception:
+            pass
+
+        return {
+            "status": "success",
+            "columns_added": added,
+            "columns_already_existed": already_exists,
+            "total_columns": len(existing_columns) + len(added),
+        }
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to fix table: {str(e)}")
+
+
 # Request Models
 
 
