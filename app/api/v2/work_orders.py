@@ -29,6 +29,90 @@ router = APIRouter()
 ENUM_FIELDS = {"status", "job_type", "priority"}
 
 
+@router.post("/fix-table")
+async def fix_work_orders_table(db: DbSession, current_user: CurrentUser):
+    """Add work_order_number column and backfill existing work orders."""
+    try:
+        # Check if column exists
+        result = await db.execute(
+            text(
+                """SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'work_orders' AND column_name = 'work_order_number'"""
+            )
+        )
+        exists = result.fetchone()
+
+        if not exists:
+            logger.info("Adding work_order_number column...")
+            await db.execute(
+                text("ALTER TABLE work_orders ADD COLUMN work_order_number VARCHAR(20)")
+            )
+            await db.commit()
+
+            # Backfill existing work orders
+            logger.info("Backfilling work order numbers...")
+            await db.execute(
+                text("""
+                    WITH numbered AS (
+                        SELECT id, ROW_NUMBER() OVER (ORDER BY created_at NULLS LAST, id) as rn
+                        FROM work_orders
+                        WHERE work_order_number IS NULL
+                    )
+                    UPDATE work_orders wo
+                    SET work_order_number = 'WO-' || LPAD(n.rn::text, 6, '0')
+                    FROM numbered n
+                    WHERE wo.id = n.id
+                """)
+            )
+            await db.commit()
+
+            # Add index
+            try:
+                await db.execute(
+                    text("CREATE UNIQUE INDEX IF NOT EXISTS ix_work_orders_number ON work_orders(work_order_number)")
+                )
+                await db.commit()
+            except Exception:
+                pass
+
+            return {"status": "success", "message": "work_order_number column added and backfilled"}
+        else:
+            # Check for any NULL values and backfill them
+            result = await db.execute(
+                text("SELECT COUNT(*) FROM work_orders WHERE work_order_number IS NULL")
+            )
+            null_count = result.scalar()
+
+            if null_count and null_count > 0:
+                logger.info(f"Backfilling {null_count} work orders with NULL work_order_number...")
+                await db.execute(
+                    text("""
+                        WITH max_num AS (
+                            SELECT COALESCE(MAX(CAST(REPLACE(work_order_number, 'WO-', '') AS INTEGER)), 0) as max_n
+                            FROM work_orders
+                            WHERE work_order_number IS NOT NULL
+                        ),
+                        numbered AS (
+                            SELECT id, ROW_NUMBER() OVER (ORDER BY created_at NULLS LAST, id) as rn
+                            FROM work_orders
+                            WHERE work_order_number IS NULL
+                        )
+                        UPDATE work_orders wo
+                        SET work_order_number = 'WO-' || LPAD((n.rn + (SELECT max_n FROM max_num))::text, 6, '0')
+                        FROM numbered n
+                        WHERE wo.id = n.id
+                    """)
+                )
+                await db.commit()
+                return {"status": "success", "message": f"Backfilled {null_count} work orders"}
+
+            return {"status": "success", "message": "Column already exists, no action needed"}
+
+    except Exception as e:
+        logger.error(f"Error fixing work_orders table: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -> dict:
     """Convert WorkOrder to dict with customer_name populated from Customer JOIN."""
     customer_name = None
