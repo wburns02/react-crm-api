@@ -18,6 +18,7 @@ import logging
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
 from app.models.technician import Technician
+from app.services.commission_service import auto_create_commission
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -354,10 +355,11 @@ async def complete_job(
     longitude: Optional[float] = None,
     customer_signature: Optional[str] = None,
     technician_signature: Optional[str] = None,
+    dump_site_id: Optional[str] = None,
     db: DbSession = None,
     current_user: CurrentUser = None,
 ):
-    """Complete a job."""
+    """Complete a job and auto-create commission."""
     wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == job_id))
     work_order = wo_result.scalar_one_or_none()
 
@@ -381,12 +383,21 @@ async def complete_job(
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
         work_order.notes = f"{existing_notes}\n[{timestamp}] Completion: {notes}".strip()
 
+    # Auto-create commission for completed work order
+    commission = await auto_create_commission(
+        db=db,
+        work_order=work_order,
+        dump_site_id=dump_site_id,
+    )
+
     await db.commit()
 
     return {
         "id": str(work_order.id),
         "status": work_order.status,
         "labor_minutes": work_order.total_labor_minutes,
+        "commission_id": str(commission.id) if commission else None,
+        "commission_amount": float(commission.commission_amount) if commission else None,
     }
 
 

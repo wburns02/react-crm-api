@@ -136,3 +136,12 @@ class WorkOrderListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class WorkOrderCursorResponse(BaseModel):
+    """Cursor-paginated work order list response (for large datasets)."""
+
+    items: list[WorkOrderResponse]
+    next_cursor: Optional[str] = None
+    has_more: bool
+    total: Optional[int] = None  # Optional for performance

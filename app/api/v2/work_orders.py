@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func, cast, String, text
+from sqlalchemy import select, func, cast, String, text, and_, or_
 from typing import Optional
 from datetime import datetime, date as date_type
+from pydantic import BaseModel
 import uuid
 import logging
 import traceback
@@ -9,12 +10,15 @@ import traceback
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
 from app.models.customer import Customer
+from app.services.commission_service import auto_create_commission
 from app.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
     WorkOrderResponse,
     WorkOrderListResponse,
+    WorkOrderCursorResponse,
 )
+from app.schemas.pagination import decode_cursor, encode_cursor
 from app.services.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -173,6 +177,107 @@ async def list_work_orders(
         )
     except Exception as e:
         logger.error(f"Error in list_work_orders: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.get("/cursor", response_model=WorkOrderCursorResponse)
+async def list_work_orders_cursor(
+    db: DbSession,
+    current_user: CurrentUser,
+    cursor: Optional[str] = None,
+    page_size: int = Query(20, ge=1, le=100),
+    customer_id: Optional[int] = None,
+    status_filter: Optional[str] = Query(None, alias="status"),
+    job_type: Optional[str] = None,
+    priority: Optional[str] = None,
+    assigned_technician: Optional[str] = None,
+    technician_id: Optional[str] = None,
+    scheduled_date: Optional[str] = None,
+    scheduled_date_from: Optional[datetime] = None,
+    scheduled_date_to: Optional[datetime] = None,
+):
+    """List work orders with cursor-based pagination (efficient for large datasets).
+
+    Uses cursor pagination instead of offset pagination for better performance
+    when paginating through large result sets.
+    """
+    try:
+        # Base query with LEFT JOIN to Customer for real customer names
+        query = select(WorkOrder, Customer).outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+
+        # Apply filters
+        if customer_id:
+            query = query.where(WorkOrder.customer_id == customer_id)
+        if status_filter:
+            query = query.where(cast(WorkOrder.status, String) == status_filter)
+        if job_type:
+            query = query.where(cast(WorkOrder.job_type, String) == job_type)
+        if priority:
+            query = query.where(cast(WorkOrder.priority, String) == priority)
+        if assigned_technician:
+            query = query.where(WorkOrder.assigned_technician == assigned_technician)
+        if technician_id:
+            query = query.where(WorkOrder.technician_id == technician_id)
+        if scheduled_date:
+            try:
+                date_obj = date_type.fromisoformat(scheduled_date)
+                query = query.where(WorkOrder.scheduled_date == date_obj)
+            except ValueError:
+                pass
+        if scheduled_date_from:
+            query = query.where(WorkOrder.scheduled_date >= scheduled_date_from)
+        if scheduled_date_to:
+            query = query.where(WorkOrder.scheduled_date <= scheduled_date_to)
+
+        # Apply cursor filter if provided
+        if cursor:
+            try:
+                cursor_id, cursor_ts = decode_cursor(cursor)
+                # Descending order: get items BEFORE the cursor
+                if cursor_ts:
+                    cursor_filter = or_(
+                        WorkOrder.created_at < cursor_ts,
+                        and_(WorkOrder.created_at == cursor_ts, WorkOrder.id < cursor_id),
+                    )
+                else:
+                    cursor_filter = WorkOrder.id < cursor_id
+                query = query.where(cursor_filter)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid cursor format")
+
+        # Order by created_at descending, then id for stable pagination
+        query = query.order_by(WorkOrder.created_at.desc(), WorkOrder.id.desc())
+
+        # Fetch one extra to determine if there are more results
+        query = query.limit(page_size + 1)
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        # Check if there are more results
+        has_more = len(rows) > page_size
+        rows = rows[:page_size]  # Trim to requested page size
+
+        # Convert to dicts with customer_name populated
+        items = [work_order_with_customer_name(wo, customer) for wo, customer in rows]
+
+        # Build next cursor from last item
+        next_cursor = None
+        if has_more and rows:
+            last_wo, _ = rows[-1]
+            next_cursor = encode_cursor(last_wo.id, last_wo.created_at)
+
+        return WorkOrderCursorResponse(
+            items=items,
+            next_cursor=next_cursor,
+            has_more=has_more,
+            total=None,  # Omit total for cursor pagination (expensive to compute)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in list_work_orders_cursor: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
@@ -358,3 +463,108 @@ async def delete_work_order(
 
     await db.delete(work_order)
     await db.commit()
+
+
+class WorkOrderCompleteRequest(BaseModel):
+    """Request to complete a work order."""
+
+    dump_site_id: Optional[str] = None
+    notes: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+@router.post("/{work_order_id}/complete")
+async def complete_work_order(
+    work_order_id: str,
+    request: WorkOrderCompleteRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Complete a work order and auto-create commission.
+
+    This endpoint marks a work order as completed and automatically creates
+    a commission record for the assigned technician based on job type and
+    configured commission rates.
+
+    For pumping and grease_trap jobs, a dump_site_id should be provided to
+    calculate dump fee deductions from the commission.
+    """
+    result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+    work_order = result.scalar_one_or_none()
+
+    if not work_order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Work order not found",
+        )
+
+    if str(work_order.status) == "completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Work order is already completed",
+        )
+
+    # Update work order status
+    work_order.status = "completed"
+    work_order.actual_end_time = datetime.now()
+
+    if request.latitude and request.longitude:
+        work_order.clock_out_gps_lat = request.latitude
+        work_order.clock_out_gps_lon = request.longitude
+
+    if request.notes:
+        existing_notes = work_order.notes or ""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        work_order.notes = f"{existing_notes}\n[{timestamp}] Completion: {request.notes}".strip()
+
+    # Calculate labor minutes if start time exists
+    if work_order.actual_start_time:
+        duration = datetime.now() - work_order.actual_start_time
+        work_order.total_labor_minutes = int(duration.total_seconds() / 60)
+
+    # Auto-create commission
+    commission = await auto_create_commission(
+        db=db,
+        work_order=work_order,
+        dump_site_id=request.dump_site_id,
+    )
+
+    await db.commit()
+    await db.refresh(work_order)
+
+    # Broadcast WebSocket event
+    await manager.broadcast_event(
+        event_type="work_order.completed",
+        data={
+            "id": work_order.id,
+            "status": "completed",
+            "technician_id": work_order.technician_id,
+            "commission_id": str(commission.id) if commission else None,
+            "commission_amount": float(commission.commission_amount) if commission else None,
+        },
+    )
+
+    # Get customer name for response
+    customer_name = None
+    if work_order.customer_id:
+        cust_result = await db.execute(select(Customer).where(Customer.id == work_order.customer_id))
+        customer = cust_result.scalar_one_or_none()
+        if customer:
+            customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+
+    return {
+        "id": work_order.id,
+        "status": "completed",
+        "customer_name": customer_name,
+        "labor_minutes": work_order.total_labor_minutes,
+        "commission": {
+            "id": str(commission.id),
+            "amount": float(commission.commission_amount),
+            "status": commission.status,
+            "job_type": commission.job_type,
+            "rate": commission.rate,
+        }
+        if commission
+        else None,
+    }

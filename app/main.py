@@ -561,7 +561,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.16",  # Add /email-templates/ensure-table debug endpoint
+        "version": "2.8.0",  # Auto-commission creation on work order completion
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
