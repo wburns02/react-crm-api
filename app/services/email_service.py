@@ -1,73 +1,54 @@
-"""Email Service - SendGrid integration for transactional emails.
+"""Email Service - Brevo (formerly Sendinblue) integration for transactional emails.
 
 Features:
-- Send transactional emails via SendGrid
+- Send transactional emails via Brevo API
 - HTML and plain text support
 - Template support
 - Delivery status tracking
+- No external SDK required (uses httpx)
 """
 
 from app.config import settings
 import logging
 from typing import Optional, Dict, Any
+import httpx
 
 logger = logging.getLogger(__name__)
 
-# Try to import sendgrid, but handle if not installed
-try:
-    from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
-
-    SENDGRID_AVAILABLE = True
-except ImportError:
-    SENDGRID_AVAILABLE = False
-    logger.warning("SendGrid package not installed. Email sending disabled.")
+# Brevo API endpoint
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 class EmailService:
-    """Service for sending emails via SendGrid API."""
+    """Service for sending emails via Brevo API."""
 
     def __init__(self):
-        self.api_key = settings.SENDGRID_API_KEY
+        self.api_key = settings.BREVO_API_KEY
         self.from_address = settings.EMAIL_FROM_ADDRESS
         self.from_name = settings.EMAIL_FROM_NAME
-
-        if SENDGRID_AVAILABLE and self.api_key:
-            self.client = SendGridAPIClient(api_key=self.api_key)
-        else:
-            self.client = None
-            if not SENDGRID_AVAILABLE:
-                logger.warning("SendGrid package not installed")
-            elif not self.api_key:
-                logger.warning("SendGrid API key not configured")
 
     @property
     def is_configured(self) -> bool:
         """Check if email service is properly configured."""
-        return self.client is not None and bool(self.from_address)
+        return bool(self.api_key) and bool(self.from_address)
 
     def get_status(self) -> Dict[str, Any]:
         """Get email service configuration status."""
-        if not SENDGRID_AVAILABLE:
-            return {
-                "connected": False,
-                "configured": False,
-                "message": "SendGrid package not installed. Run: pip install sendgrid",
-            }
-
         if not self.api_key:
             return {
                 "connected": False,
                 "configured": False,
-                "message": "SendGrid API key not configured. Set SENDGRID_API_KEY environment variable.",
+                "provider": "brevo",
+                "message": "Brevo API key not configured. Set BREVO_API_KEY environment variable.",
             }
 
         return {
             "connected": True,
             "configured": True,
+            "provider": "brevo",
             "from_address": self.from_address,
             "from_name": self.from_name,
-            "message": "SendGrid email service configured",
+            "message": "Brevo email service configured",
         }
 
     async def send_email(
@@ -79,20 +60,20 @@ class EmailService:
         reply_to: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Send an email via SendGrid.
+        Send an email via Brevo API.
 
         Args:
             to: Recipient email address
             subject: Email subject line
             body: Plain text body
-            html_body: Optional HTML body (if not provided, plain text is used)
+            html_body: Optional HTML body (if not provided, plain text wrapped in basic HTML)
             reply_to: Optional reply-to address
 
         Returns:
             Dict with status_code, message_id, and success status
         """
-        if not self.client:
-            error_msg = "Email service not configured"
+        if not self.api_key:
+            error_msg = "Brevo API key not configured"
             logger.error(error_msg)
             return {
                 "success": False,
@@ -101,56 +82,91 @@ class EmailService:
                 "message_id": None,
             }
 
+        # Build request payload
+        payload = {
+            "sender": {
+                "name": self.from_name,
+                "email": self.from_address,
+            },
+            "to": [{"email": to}],
+            "subject": subject,
+            "textContent": body,
+        }
+
+        # Add HTML content
+        if html_body:
+            payload["htmlContent"] = html_body
+        else:
+            # Wrap plain text in basic HTML
+            payload["htmlContent"] = f"<html><body><p>{body.replace(chr(10), '<br>')}</p></body></html>"
+
+        # Add reply-to if provided
+        if reply_to:
+            payload["replyTo"] = {"email": reply_to}
+
+        headers = {
+            "accept": "application/json",
+            "api-key": self.api_key,
+            "content-type": "application/json",
+        }
+
         try:
-            from_email = Email(self.from_address, self.from_name)
-            to_email = To(to)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    BREVO_API_URL,
+                    json=payload,
+                    headers=headers,
+                    timeout=30.0,
+                )
 
-            # Build message
-            message = Mail(
-                from_email=from_email,
-                to_emails=to_email,
-                subject=subject,
-            )
+            if response.status_code in (200, 201):
+                result = response.json()
+                message_id = result.get("messageId")
 
-            # Add plain text content
-            message.add_content(Content("text/plain", body))
+                logger.info(
+                    "Email sent successfully via Brevo",
+                    extra={
+                        "to": to,
+                        "subject": subject[:50],
+                        "status_code": response.status_code,
+                        "message_id": message_id,
+                    },
+                )
 
-            # Add HTML content if provided
-            if html_body:
-                message.add_content(Content("text/html", html_body))
-
-            # Add reply-to if provided
-            if reply_to:
-                message.reply_to = Email(reply_to)
-
-            # Send email
-            response = self.client.send(message)
-
-            # Extract message ID from headers
-            message_id = None
-            if response.headers:
-                message_id = response.headers.get("X-Message-Id")
-
-            logger.info(
-                f"Email sent successfully",
-                extra={
-                    "to": to,
-                    "subject": subject[:50],
+                return {
+                    "success": True,
                     "status_code": response.status_code,
                     "message_id": message_id,
-                },
-            )
+                }
+            else:
+                error_detail = response.text
+                logger.error(
+                    "Brevo API error",
+                    extra={
+                        "status_code": response.status_code,
+                        "error": error_detail,
+                    },
+                )
+                return {
+                    "success": False,
+                    "error": f"Brevo API error: {error_detail}",
+                    "status_code": response.status_code,
+                    "message_id": None,
+                }
 
+        except httpx.TimeoutException:
+            error_msg = "Brevo API request timed out"
+            logger.error(error_msg)
             return {
-                "success": True,
-                "status_code": response.status_code,
-                "message_id": message_id,
+                "success": False,
+                "error": error_msg,
+                "status_code": None,
+                "message_id": None,
             }
-
         except Exception as e:
             error_msg = str(e)
             logger.error(
-                f"Failed to send email",
+                "Failed to send email via Brevo",
                 extra={
                     "to": to,
                     "error": error_msg,
@@ -166,22 +182,22 @@ class EmailService:
     async def send_template_email(
         self,
         to: str,
-        template_id: str,
-        dynamic_template_data: Optional[Dict[str, Any]] = None,
+        template_id: int,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Send an email using a SendGrid dynamic template.
+        Send an email using a Brevo template.
 
         Args:
             to: Recipient email address
-            template_id: SendGrid template ID
-            dynamic_template_data: Template variable substitutions
+            template_id: Brevo template ID (integer)
+            params: Template variable substitutions
 
         Returns:
             Dict with status_code, message_id, and success status
         """
-        if not self.client:
-            error_msg = "Email service not configured"
+        if not self.api_key:
+            error_msg = "Brevo API key not configured"
             logger.error(error_msg)
             return {
                 "success": False,
@@ -190,45 +206,68 @@ class EmailService:
                 "message_id": None,
             }
 
+        payload = {
+            "to": [{"email": to}],
+            "templateId": template_id,
+        }
+
+        if params:
+            payload["params"] = params
+
+        headers = {
+            "accept": "application/json",
+            "api-key": self.api_key,
+            "content-type": "application/json",
+        }
+
         try:
-            from_email = Email(self.from_address, self.from_name)
-            to_email = To(to)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    BREVO_API_URL,
+                    json=payload,
+                    headers=headers,
+                    timeout=30.0,
+                )
 
-            message = Mail(
-                from_email=from_email,
-                to_emails=to_email,
-            )
-            message.template_id = template_id
+            if response.status_code in (200, 201):
+                result = response.json()
+                message_id = result.get("messageId")
 
-            if dynamic_template_data:
-                message.dynamic_template_data = dynamic_template_data
+                logger.info(
+                    "Template email sent successfully via Brevo",
+                    extra={
+                        "to": to,
+                        "template_id": template_id,
+                        "status_code": response.status_code,
+                        "message_id": message_id,
+                    },
+                )
 
-            response = self.client.send(message)
-
-            message_id = None
-            if response.headers:
-                message_id = response.headers.get("X-Message-Id")
-
-            logger.info(
-                f"Template email sent successfully",
-                extra={
-                    "to": to,
-                    "template_id": template_id,
+                return {
+                    "success": True,
                     "status_code": response.status_code,
                     "message_id": message_id,
-                },
-            )
-
-            return {
-                "success": True,
-                "status_code": response.status_code,
-                "message_id": message_id,
-            }
+                }
+            else:
+                error_detail = response.text
+                logger.error(
+                    "Brevo API template error",
+                    extra={
+                        "status_code": response.status_code,
+                        "error": error_detail,
+                    },
+                )
+                return {
+                    "success": False,
+                    "error": f"Brevo API error: {error_detail}",
+                    "status_code": response.status_code,
+                    "message_id": None,
+                }
 
         except Exception as e:
             error_msg = str(e)
             logger.error(
-                f"Failed to send template email",
+                "Failed to send template email via Brevo",
                 extra={
                     "to": to,
                     "template_id": template_id,
@@ -247,9 +286,9 @@ class MockEmailService(EmailService):
     """Mock email service for testing and development."""
 
     def __init__(self):
+        self.api_key = "mock-key"
         self.from_address = "test@example.com"
         self.from_name = "Test Sender"
-        self.client = None
         self._sent_emails = []
 
     @property
@@ -262,6 +301,7 @@ class MockEmailService(EmailService):
         return {
             "connected": True,
             "configured": True,
+            "provider": "mock",
             "from_address": self.from_address,
             "from_name": self.from_name,
             "message": "Mock email service (emails not actually sent)",
@@ -295,15 +335,15 @@ class MockEmailService(EmailService):
 
         return {
             "success": True,
-            "status_code": 202,
+            "status_code": 201,
             "message_id": mock_message_id,
         }
 
     async def send_template_email(
         self,
         to: str,
-        template_id: str,
-        dynamic_template_data: Optional[Dict[str, Any]] = None,
+        template_id: int,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Mock sending a template email."""
         import uuid
@@ -314,7 +354,7 @@ class MockEmailService(EmailService):
             {
                 "to": to,
                 "template_id": template_id,
-                "dynamic_template_data": dynamic_template_data,
+                "params": params,
                 "message_id": mock_message_id,
             }
         )
@@ -323,6 +363,6 @@ class MockEmailService(EmailService):
 
         return {
             "success": True,
-            "status_code": 202,
+            "status_code": 201,
             "message_id": mock_message_id,
         }

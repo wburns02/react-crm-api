@@ -57,8 +57,9 @@ class Settings(BaseSettings):
     TWILIO_API_KEY_SECRET: str | None = None
     TWILIO_TWIML_APP_SID: str | None = None
 
-    # Email (SendGrid)
-    SENDGRID_API_KEY: str | None = None
+    # Email (Brevo - formerly Sendinblue)
+    BREVO_API_KEY: str | None = None
+    SENDGRID_API_KEY: str | None = None  # Legacy - use BREVO_API_KEY instead
     EMAIL_FROM_ADDRESS: str = "noreply@macseptic.com"
     EMAIL_FROM_NAME: str = "Mac Septic Services"
 
@@ -109,6 +110,7 @@ class Settings(BaseSettings):
 
     # Redis Cache (optional)
     REDIS_URL: str | None = None
+    RATE_LIMIT_REDIS_ENABLED: bool = False  # Use Redis for distributed rate limiting
 
     # OpenTelemetry (optional)
     OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
