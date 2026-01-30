@@ -525,10 +525,20 @@ async def complete_work_order(
         duration = datetime.now() - work_order.actual_start_time
         update_values["total_labor_minutes"] = int(duration.total_seconds() / 60)
 
-    # Use explicit UPDATE statement instead of ORM modification
-    from sqlalchemy import update
-    stmt = update(WorkOrder).where(WorkOrder.id == work_order_id).values(**update_values)
-    await db.execute(stmt)
+    # Use raw SQL to ensure commit
+    from sqlalchemy import text
+
+    # Build SET clause dynamically
+    set_clauses = []
+    params = {"wo_id": work_order_id}
+
+    for key, value in update_values.items():
+        set_clauses.append(f"{key} = :{key}")
+        params[key] = value
+
+    sql = text(f"UPDATE work_orders SET {', '.join(set_clauses)} WHERE id = :wo_id")
+    await db.execute(sql, params)
+    logger.info(f"Executed raw SQL UPDATE for work order {work_order_id}")
 
     # Auto-create commission
     commission = await auto_create_commission(
