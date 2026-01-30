@@ -420,6 +420,62 @@ async def ensure_email_templates_table():
             logger.warning(f"Could not ensure email_templates table: {type(e).__name__}: {e}")
 
 
+async def ensure_commissions_columns():
+    """
+    Ensure commissions table has auto-calculation columns.
+
+    These columns are needed for auto-commission creation on work order completion.
+    Added by migration 026/039 but may not have run on Railway.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    async with async_session_maker() as session:
+        try:
+            # Check which columns exist
+            result = await session.execute(
+                text(
+                    """SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'commissions'"""
+                )
+            )
+            existing_columns = {row[0] for row in result}
+
+            # Columns to ensure exist
+            columns_to_add = [
+                ("dump_site_id", "UUID"),
+                ("job_type", "VARCHAR(50)"),
+                ("gallons_pumped", "INTEGER"),
+                ("dump_fee_per_gallon", "FLOAT"),
+                ("dump_fee_amount", "FLOAT"),
+                ("commissionable_amount", "FLOAT"),
+            ]
+
+            for col_name, col_type in columns_to_add:
+                if col_name not in existing_columns:
+                    logger.info(f"Adding column commissions.{col_name}...")
+                    await session.execute(
+                        text(f"ALTER TABLE commissions ADD COLUMN {col_name} {col_type}")
+                    )
+                    logger.info(f"Added commissions.{col_name}")
+
+            await session.commit()
+
+            # Create index on job_type if not exists
+            try:
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_commissions_job_type ON commissions(job_type)")
+                )
+                await session.commit()
+            except Exception:
+                pass  # Index may already exist
+
+            logger.info("Commissions table columns verified")
+
+        except Exception as e:
+            logger.warning(f"Could not ensure commissions columns: {type(e).__name__}: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
@@ -447,6 +503,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure email_templates table exists (fix for migration 037 not running)
         await ensure_email_templates_table()
+
+        # Ensure commissions table has auto-calc columns (fix for migration 039 not running)
+        await ensure_commissions_columns()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
