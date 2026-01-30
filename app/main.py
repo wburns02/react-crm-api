@@ -271,6 +271,116 @@ async def ensure_pay_rate_columns():
             logger.warning(f"Could not ensure pay_rate columns: {type(e).__name__}: {e}")
 
 
+async def ensure_messages_columns():
+    """Ensure messages table has required columns.
+
+    This is a runtime fix for missing database columns that should have been
+    added by migration 036. Runs on startup to ensure columns exist.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    async with async_session_maker() as session:
+        try:
+            # Check if type column exists
+            result = await session.execute(
+                text(
+                    """SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'messages' AND column_name = 'type'
+                )"""
+                )
+            )
+            type_exists = result.scalar()
+
+            if not type_exists:
+                logger.info("Adding missing columns to messages table...")
+
+                # Create enum types if they don't exist
+                await session.execute(
+                    text("""
+                        DO $$ BEGIN
+                            CREATE TYPE messagetype AS ENUM ('sms', 'email', 'call', 'note');
+                        EXCEPTION
+                            WHEN duplicate_object THEN null;
+                        END $$;
+                    """)
+                )
+                await session.execute(
+                    text("""
+                        DO $$ BEGIN
+                            CREATE TYPE messagedirection AS ENUM ('inbound', 'outbound');
+                        EXCEPTION
+                            WHEN duplicate_object THEN null;
+                        END $$;
+                    """)
+                )
+                await session.execute(
+                    text("""
+                        DO $$ BEGIN
+                            CREATE TYPE messagestatus AS ENUM ('pending', 'queued', 'sent', 'delivered', 'failed', 'received');
+                        EXCEPTION
+                            WHEN duplicate_object THEN null;
+                        END $$;
+                    """)
+                )
+
+                # Add type column
+                await session.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS type messagetype")
+                )
+                await session.execute(
+                    text("UPDATE messages SET type = 'sms' WHERE type IS NULL")
+                )
+                await session.execute(
+                    text("ALTER TABLE messages ALTER COLUMN type SET NOT NULL")
+                )
+
+                # Add direction column
+                await session.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS direction messagedirection")
+                )
+                await session.execute(
+                    text("UPDATE messages SET direction = 'outbound' WHERE direction IS NULL")
+                )
+                await session.execute(
+                    text("ALTER TABLE messages ALTER COLUMN direction SET NOT NULL")
+                )
+
+                # Add status column
+                await session.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS status messagestatus DEFAULT 'sent'")
+                )
+
+                # Add other columns
+                await session.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS subject VARCHAR(255)")
+                )
+                await session.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS from_address VARCHAR(255)")
+                )
+                await session.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'react'")
+                )
+                await session.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ")
+                )
+                await session.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ")
+                )
+                await session.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ")
+                )
+
+                await session.commit()
+                logger.info("Added missing columns to messages table successfully")
+            else:
+                logger.debug("messages table already has required columns")
+
+        except Exception as e:
+            logger.warning(f"Could not ensure messages columns: {type(e).__name__}: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
@@ -292,6 +402,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure work_order_photos table exists (fix for migration 032 not running)
         await ensure_work_order_photos_table()
+
+        # Ensure messages columns exist (fix for migration 036 not running)
+        await ensure_messages_columns()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
@@ -398,7 +511,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.7.10",  # MessageResponse schema fix for nullable fields
+        "version": "2.7.11",  # MessageResponse schema fix for nullable fields
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
