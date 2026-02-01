@@ -275,10 +275,29 @@ class MarketingTasksResponse(BaseModel):
 
 
 def is_railway_deployment() -> bool:
-    """Check if we're running on Railway without tunnel configuration."""
+    """Check if we're running on Railway without tunnel configuration.
+
+    Returns True if:
+    1. RAILWAY_ENVIRONMENT is set (Railway deployment)
+    2. RAILWAY_STATIC_URL is set (Railway deployment indicator)
+    3. We're not on localhost with tunnel URLs configured
+    """
     # If SEO_MONITOR_URL is overridden to a non-localhost URL, we have tunnel access
     if SEO_MONITOR_URL and not SEO_MONITOR_URL.startswith("http://localhost"):
         return False
+
+    # Multiple Railway detection methods for reliability
+    railway_indicators = [
+        os.getenv("RAILWAY_ENVIRONMENT"),
+        os.getenv("RAILWAY_STATIC_URL"),
+        os.getenv("RAILWAY_SERVICE_NAME"),
+        os.getenv("RAILWAY_PROJECT_ID"),
+    ]
+
+    # If any Railway indicator is present, we're on Railway
+    if any(railway_indicators):
+        return True
+
     # On Railway without tunnel, we can't reach localhost services
     return SEO_SERVICE_HOST == "localhost" and os.getenv("RAILWAY_ENVIRONMENT") is not None
 
@@ -332,24 +351,38 @@ async def check_service_health(service_key: str, config: dict) -> ServiceHealth:
                     details={"error": f"HTTP {response.status_code}"},
                 )
     except httpx.TimeoutException:
+        # If targeting localhost, show "local" status (service runs locally, not here)
+        status = "local" if "localhost" in config["url"] else "unreachable"
         return ServiceHealth(
             service=service_key,
             name=config["name"],
             port=config["port"],
             description=config["description"],
-            status="unreachable",
+            status=status,
             lastCheck=datetime.utcnow().isoformat() + "Z",
-            details={"error": "Connection timeout - service may be on local network"},
+            details={
+                "message": "Service runs on local server (not Railway)" if status == "local" else "Connection timeout",
+                "location": f"localhost:{config['port']}",
+                "note": "Configure SEO_SERVICE_HOST env var to connect remotely",
+                "demoMode": True,
+            },
         )
     except Exception as e:
+        # If targeting localhost, show "local" status (service runs locally, not here)
+        status = "local" if "localhost" in config["url"] else "unreachable"
         return ServiceHealth(
             service=service_key,
             name=config["name"],
             port=config["port"],
             description=config["description"],
-            status="unreachable",
+            status=status,
             lastCheck=datetime.utcnow().isoformat() + "Z",
-            details={"error": str(e), "note": "Service may be on local network"},
+            details={
+                "message": "Service runs on local server (not Railway)" if status == "local" else str(e),
+                "location": f"localhost:{config['port']}",
+                "note": "Configure SEO_SERVICE_HOST env var to connect remotely",
+                "demoMode": True,
+            },
         )
 
 
@@ -437,10 +470,17 @@ async def get_marketing_tasks(current_user: CurrentUser) -> MarketingTasksRespon
     ]
     services = await asyncio.gather(*health_tasks)
 
-    # Check if we can reach the services (not on Railway without tunnel)
-    services_reachable = not is_railway_deployment() and any(
-        s.status in ("healthy", "degraded") for s in services
-    )
+    # Check if we can reach the services
+    # Services are reachable if at least one has healthy/degraded status
+    # and we're not in a scenario where services are on localhost (local/unreachable)
+    any_service_healthy = any(s.status in ("healthy", "degraded") for s in services)
+    all_services_local = all(s.status in ("local", "unreachable") for s in services)
+
+    # Use fallback data if:
+    # 1. Explicitly on Railway deployment, OR
+    # 2. All services are local/unreachable, OR
+    # 3. No service is healthy
+    services_reachable = any_service_healthy and not all_services_local and not is_railway_deployment()
 
     if services_reachable:
         # Fetch data from services in parallel
