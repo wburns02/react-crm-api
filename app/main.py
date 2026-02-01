@@ -684,7 +684,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.8.1",  # Fix notifications column name and marketing fallback data
+        "version": "2.8.2",  # Fix notifications stats query
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
