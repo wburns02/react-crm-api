@@ -684,7 +684,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.8.0",  # Auto-commission creation on work order completion
+        "version": "2.8.1",  # Fix notifications column name and marketing fallback data
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
