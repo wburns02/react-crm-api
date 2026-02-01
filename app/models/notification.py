@@ -33,7 +33,7 @@ class Notification(Base):
     link = Column(String(500), nullable=True)
 
     # Additional context
-    extra_data = Column(JSON, nullable=True)  # entity_id, entity_type, etc.
+    metadata = Column(JSON, nullable=True)  # entity_id, entity_type, etc.
 
     # Source
     source = Column(String(50), nullable=True)  # system, user, webhook, scheduler
