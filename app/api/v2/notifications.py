@@ -89,12 +89,16 @@ async def get_notification_stats(
 ):
     """Get notification statistics for the current user."""
     # Total count
-    total_result = await db.execute(select(func.count()).where(Notification.user_id == current_user.id))
+    total_result = await db.execute(
+        select(func.count(Notification.id)).where(Notification.user_id == current_user.id)
+    )
     total = total_result.scalar() or 0
 
     # Unread count
     unread_result = await db.execute(
-        select(func.count()).where(and_(Notification.user_id == current_user.id, Notification.read == False))
+        select(func.count(Notification.id)).where(
+            and_(Notification.user_id == current_user.id, Notification.read == False)
+        )
     )
     unread = unread_result.scalar() or 0
 
