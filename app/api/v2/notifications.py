@@ -61,6 +61,55 @@ async def debug_notifications(current_user: CurrentUser, db: DbSession):
         return {"error": str(e), "type": type(e).__name__}
 
 
+@router.post("/init-table")
+async def init_notifications_table(current_user: CurrentUser, db: DbSession):
+    """Initialize the notifications table if it doesn't exist."""
+    # Only allow admin users
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        from sqlalchemy import text
+
+        # Check if table already exists
+        result = await db.execute(
+            text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'notifications')")
+        )
+        if result.scalar():
+            return {"status": "Table already exists", "created": False}
+
+        # Create the table
+        await db.execute(text("""
+            CREATE TABLE notifications (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id INTEGER NOT NULL REFERENCES api_users(id),
+                type VARCHAR(50) NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                read BOOLEAN DEFAULT FALSE,
+                read_at TIMESTAMP WITH TIME ZONE,
+                link VARCHAR(500),
+                metadata JSONB,
+                source VARCHAR(50),
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """))
+
+        # Create indexes
+        await db.execute(text("CREATE INDEX ix_notifications_user_id ON notifications(user_id)"))
+        await db.execute(text("CREATE INDEX ix_notifications_type ON notifications(type)"))
+        await db.execute(text("CREATE INDEX ix_notifications_read ON notifications(read)"))
+        await db.execute(text("CREATE INDEX ix_notifications_created_at ON notifications(created_at)"))
+        await db.execute(text("CREATE INDEX ix_notifications_user_unread ON notifications(user_id, read) WHERE read = false"))
+
+        await db.commit()
+
+        return {"status": "Table created successfully", "created": True}
+    except Exception as e:
+        await db.rollback()
+        return {"error": str(e), "type": type(e).__name__}
+
+
 class NotificationResponse(BaseModel):
     id: str
     type: str  # work_order, payment, customer, system

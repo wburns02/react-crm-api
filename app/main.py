@@ -684,7 +684,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.8.4",  # Add notifications debug endpoint
+        "version": "2.8.5",  # Add notifications init-table endpoint
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
