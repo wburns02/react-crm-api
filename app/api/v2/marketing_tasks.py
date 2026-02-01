@@ -5,6 +5,13 @@ Connects to:
 - seo-monitor (port 3001): PageSpeed, Core Web Vitals, alerts
 - content-gen (port 3002): AI content generation status
 - gbp-sync (port 3003): Google Business Profile sync status
+
+Environment Variables:
+- SEO_SERVICE_HOST: Override localhost (default: localhost)
+- SEO_MONITOR_URL: Full URL for seo-monitor (e.g., https://seo-api.ecbtx.com)
+- CONTENT_GEN_URL: Full URL for content-gen
+- GBP_SYNC_URL: Full URL for gbp-sync
+- SEO_DB_HOST: PostgreSQL host for SEO database (for managed_sites)
 """
 
 from fastapi import APIRouter, HTTPException
@@ -14,6 +21,7 @@ from datetime import datetime
 import httpx
 import asyncio
 import os
+import asyncpg
 
 from app.api.deps import CurrentUser
 
@@ -21,22 +29,35 @@ router = APIRouter()
 
 # Service configuration - can be overridden by environment variables
 SEO_SERVICE_HOST = os.getenv("SEO_SERVICE_HOST", "localhost")
+
+# Support full URL overrides for tunnel/proxy deployments
+SEO_MONITOR_URL = os.getenv("SEO_MONITOR_URL", f"http://{SEO_SERVICE_HOST}:3001")
+CONTENT_GEN_URL = os.getenv("CONTENT_GEN_URL", f"http://{SEO_SERVICE_HOST}:3002")
+GBP_SYNC_URL = os.getenv("GBP_SYNC_URL", f"http://{SEO_SERVICE_HOST}:3003")
+
+# SEO Database connection for managed_sites table
+SEO_DB_HOST = os.getenv("SEO_DB_HOST", "localhost")
+SEO_DB_USER = os.getenv("SEO_DB_USER", "ecbtx")
+SEO_DB_PASSWORD = os.getenv("SEO_DB_PASSWORD", "ecbtx_seo_2026")
+SEO_DB_NAME = os.getenv("SEO_DB_NAME", "ecbtx_seo")
+SEO_DB_PORT = int(os.getenv("SEO_DB_PORT", "5432"))
+
 SEO_SERVICES = {
     "seo-monitor": {
         "name": "SEO Monitor",
-        "url": f"http://{SEO_SERVICE_HOST}:3001",
+        "url": SEO_MONITOR_URL,
         "port": 3001,
         "description": "PageSpeed, Core Web Vitals, keyword tracking",
     },
     "content-gen": {
         "name": "Content Generator",
-        "url": f"http://{SEO_SERVICE_HOST}:3002",
+        "url": CONTENT_GEN_URL,
         "port": 3002,
         "description": "AI-powered content generation (Mistral-7B)",
     },
     "gbp-sync": {
         "name": "GBP Sync",
-        "url": f"http://{SEO_SERVICE_HOST}:3003",
+        "url": GBP_SYNC_URL,
         "port": 3003,
         "description": "Google Business Profile posts and reviews",
     },
@@ -78,8 +99,8 @@ SCHEDULED_TASKS = [
     },
 ]
 
-# Sites configuration
-SITES = [
+# Fallback sites if database is unreachable
+FALLBACK_SITES = [
     {
         "id": "ecbtx",
         "name": "ECB TX",
@@ -95,6 +116,55 @@ SITES = [
         "status": "active",
     },
 ]
+
+
+async def get_seo_db_connection():
+    """Get a connection to the SEO PostgreSQL database."""
+    try:
+        return await asyncpg.connect(
+            host=SEO_DB_HOST,
+            port=SEO_DB_PORT,
+            user=SEO_DB_USER,
+            password=SEO_DB_PASSWORD,
+            database=SEO_DB_NAME,
+            timeout=5.0,
+        )
+    except Exception as e:
+        print(f"[marketing_tasks] Failed to connect to SEO DB: {e}")
+        return None
+
+
+async def fetch_managed_sites_from_db() -> List[dict]:
+    """Fetch managed sites from SEO database."""
+    conn = await get_seo_db_connection()
+    if not conn:
+        return FALLBACK_SITES
+
+    try:
+        rows = await conn.fetch("""
+            SELECT id, name, domain, url, is_active, gsc_property, gbp_location_id
+            FROM managed_sites
+            WHERE is_active = true
+            ORDER BY id
+        """)
+
+        sites = []
+        for row in rows:
+            sites.append({
+                "id": str(row["id"]),
+                "name": row["name"],
+                "domain": row["domain"],
+                "url": row["url"],
+                "status": "active" if row["is_active"] else "inactive",
+                "gscProperty": row["gsc_property"],
+                "gbpLocationId": row["gbp_location_id"],
+            })
+        return sites if sites else FALLBACK_SITES
+    except Exception as e:
+        print(f"[marketing_tasks] Error fetching managed sites: {e}")
+        return FALLBACK_SITES
+    finally:
+        await conn.close()
 
 # Fallback data when services are unreachable (Railway deployment)
 # These represent actual recent data from local SEO service database
@@ -205,7 +275,11 @@ class MarketingTasksResponse(BaseModel):
 
 
 def is_railway_deployment() -> bool:
-    """Check if we're running on Railway (can't reach localhost services)."""
+    """Check if we're running on Railway without tunnel configuration."""
+    # If SEO_MONITOR_URL is overridden to a non-localhost URL, we have tunnel access
+    if SEO_MONITOR_URL and not SEO_MONITOR_URL.startswith("http://localhost"):
+        return False
+    # On Railway without tunnel, we can't reach localhost services
     return SEO_SERVICE_HOST == "localhost" and os.getenv("RAILWAY_ENVIRONMENT") is not None
 
 
@@ -402,7 +476,8 @@ async def get_marketing_tasks(current_user: CurrentUser) -> MarketingTasksRespon
     # Build scheduled tasks list
     scheduled_tasks = [ScheduledTask(**task) for task in SCHEDULED_TASKS]
 
-    # Build sites list
+    # Build sites list from database
+    db_sites = await fetch_managed_sites_from_db()
     sites = [
         MarketingTaskSite(
             id=site["id"],
@@ -412,7 +487,7 @@ async def get_marketing_tasks(current_user: CurrentUser) -> MarketingTasksRespon
             status=site["status"],
             lastUpdated=now,
         )
-        for site in SITES
+        for site in db_sites
     ]
 
     return MarketingTasksResponse(
@@ -571,8 +646,9 @@ async def trigger_scheduled_task(task_id: str, current_user: CurrentUser) -> dic
 
 @router.get("/tasks/sites")
 async def get_sites(current_user: CurrentUser) -> List[MarketingTaskSite]:
-    """Get all configured marketing sites."""
+    """Get all configured marketing sites from database."""
     now = datetime.utcnow().isoformat() + "Z"
+    sites = await fetch_managed_sites_from_db()
     return [
         MarketingTaskSite(
             id=site["id"],
@@ -582,7 +658,7 @@ async def get_sites(current_user: CurrentUser) -> List[MarketingTaskSite]:
             status=site["status"],
             lastUpdated=now,
         )
-        for site in SITES
+        for site in sites
     ]
 
 
@@ -616,3 +692,49 @@ async def get_metrics(current_user: CurrentUser) -> MarketingMetrics:
         pendingResponses=gbp_data.get("pendingResponses", 0),
         contentGenerated=len(content_data) if isinstance(content_data, list) else 0,
     )
+
+
+@router.get("/tasks/sites/{site_id}/metrics")
+async def get_site_metrics(site_id: str, current_user: CurrentUser) -> dict:
+    """Get metrics for a specific site."""
+    # Find the site
+    sites = await fetch_managed_sites_from_db()
+    site = next((s for s in sites if s["id"] == site_id), None)
+
+    if not site:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Site '{site_id}' not found. Available: {[s['id'] for s in sites]}",
+        )
+
+    # For now, return aggregated metrics (future: filter by site)
+    # This would require seo-monitor to support site filtering
+    if is_railway_deployment():
+        return {
+            "site": site,
+            "metrics": FALLBACK_METRICS,
+            "note": "Using fallback data - configure tunnel for real data",
+        }
+
+    monitor_data, gbp_data, content_data = await asyncio.gather(
+        fetch_monitor_data(),
+        fetch_gbp_data(),
+        fetch_content_data(),
+    )
+
+    vitals = monitor_data.get("latestVitals") or {}
+    return {
+        "site": site,
+        "metrics": {
+            "performanceScore": vitals.get("performance_score", 0) or 0,
+            "seoScore": vitals.get("seo_score", 0) or 0,
+            "indexedPages": monitor_data.get("indexedPages", 0),
+            "trackedKeywords": monitor_data.get("trackedKeywords", 0),
+            "unresolvedAlerts": monitor_data.get("unresolvedAlerts", 0),
+            "publishedPosts": gbp_data.get("publishedPosts", 0),
+            "totalReviews": gbp_data.get("totalReviews", 0),
+            "averageRating": gbp_data.get("averageRating", 0.0),
+            "pendingResponses": gbp_data.get("pendingResponses", 0),
+            "contentGenerated": len(content_data) if isinstance(content_data, list) else 0,
+        },
+    }
