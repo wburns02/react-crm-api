@@ -64,13 +64,13 @@ async def debug_notifications(current_user: CurrentUser, db: DbSession):
 @router.post("/init-table")
 async def init_notifications_table(current_user: CurrentUser, db: DbSession):
     """Initialize the notifications table if it doesn't exist."""
-    # Only allow admin users
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Only allow superuser
+    if not getattr(current_user, 'is_superuser', False):
+        return {"error": "Superuser access required", "user_id": current_user.id, "created": False}
+
+    from sqlalchemy import text
 
     try:
-        from sqlalchemy import text
-
         # Check if table already exists
         result = await db.execute(
             text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'notifications')")
@@ -106,8 +106,11 @@ async def init_notifications_table(current_user: CurrentUser, db: DbSession):
 
         return {"status": "Table created successfully", "created": True}
     except Exception as e:
-        await db.rollback()
-        return {"error": str(e), "type": type(e).__name__}
+        try:
+            await db.rollback()
+        except:
+            pass
+        return {"error": str(e), "type": type(e).__name__, "created": False}
 
 
 class NotificationResponse(BaseModel):
