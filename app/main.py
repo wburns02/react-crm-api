@@ -684,7 +684,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.8.6",  # Fix init-table user check
+        "version": "2.8.7",  # Fix resolve button for fallback alerts
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
