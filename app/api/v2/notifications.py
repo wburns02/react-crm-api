@@ -20,6 +20,47 @@ from app.services.websocket_manager import manager
 router = APIRouter()
 
 
+@router.get("/debug")
+async def debug_notifications(current_user: CurrentUser, db: DbSession):
+    """Debug endpoint to check notifications table status."""
+    try:
+        from sqlalchemy import text
+
+        # Check if table exists
+        result = await db.execute(
+            text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'notifications')")
+        )
+        table_exists = result.scalar()
+
+        # Check table columns if it exists
+        columns = []
+        if table_exists:
+            col_result = await db.execute(
+                text("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'notifications' ORDER BY ordinal_position")
+            )
+            columns = [{"name": row[0], "type": row[1]} for row in col_result.fetchall()]
+
+        # Try a simple count
+        count = None
+        error = None
+        if table_exists:
+            try:
+                count_result = await db.execute(text("SELECT COUNT(*) FROM notifications"))
+                count = count_result.scalar()
+            except Exception as e:
+                error = str(e)
+
+        return {
+            "table_exists": table_exists,
+            "columns": columns,
+            "row_count": count,
+            "error": error,
+            "user_id": current_user.id,
+        }
+    except Exception as e:
+        return {"error": str(e), "type": type(e).__name__}
+
+
 class NotificationResponse(BaseModel):
     id: str
     type: str  # work_order, payment, customer, system
