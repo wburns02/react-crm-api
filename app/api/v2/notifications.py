@@ -45,41 +45,47 @@ async def list_notifications(
     unread_only: bool = False,
 ):
     """List notifications for the current user."""
-    query = select(Notification).where(Notification.user_id == current_user.id)
+    try:
+        query = select(Notification).where(Notification.user_id == current_user.id)
 
-    if unread_only:
-        query = query.where(Notification.read == False)
+        if unread_only:
+            query = query.where(Notification.read == False)
 
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
+        # Count total
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
 
-    # Get paginated results
-    query = query.order_by(Notification.created_at.desc()).offset(offset).limit(limit)
-    result = await db.execute(query)
-    notifications = result.scalars().all()
+        # Get paginated results
+        query = query.order_by(Notification.created_at.desc()).offset(offset).limit(limit)
+        result = await db.execute(query)
+        notifications = result.scalars().all()
 
-    items = [
-        {
-            "id": str(n.id),
-            "type": n.type,
-            "title": n.title,
-            "message": n.message,
-            "read": n.read,
-            "created_at": n.created_at.isoformat() if n.created_at else None,
-            "link": n.link,
-            "metadata": n.extra_data,
+        items = [
+            {
+                "id": str(n.id),
+                "type": n.type,
+                "title": n.title,
+                "message": n.message,
+                "read": n.read,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+                "link": n.link,
+                "metadata": n.extra_data,
+            }
+            for n in notifications
+        ]
+
+        return {
+            "items": items,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
         }
-        for n in notifications
-    ]
-
-    return {
-        "items": items,
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-    }
+    except Exception as e:
+        # Log detailed error for debugging
+        import logging
+        logging.error(f"Notifications list error for user {current_user.id}: {str(e)}")
+        raise
 
 
 @router.get("/stats")
@@ -88,21 +94,29 @@ async def get_notification_stats(
     db: DbSession,
 ):
     """Get notification statistics for the current user."""
-    # Total count
-    total_result = await db.execute(
-        select(func.count(Notification.id)).where(Notification.user_id == current_user.id)
-    )
-    total = total_result.scalar() or 0
-
-    # Unread count
-    unread_result = await db.execute(
-        select(func.count(Notification.id)).where(
-            and_(Notification.user_id == current_user.id, Notification.read == False)
+    try:
+        # Total count - use select_from for explicit table reference
+        total_result = await db.execute(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.user_id == current_user.id)
         )
-    )
-    unread = unread_result.scalar() or 0
+        total = total_result.scalar() or 0
 
-    return NotificationStats(total=total, unread=unread)
+        # Unread count
+        unread_result = await db.execute(
+            select(func.count())
+            .select_from(Notification)
+            .where(and_(Notification.user_id == current_user.id, Notification.read == False))
+        )
+        unread = unread_result.scalar() or 0
+
+        return NotificationStats(total=total, unread=unread)
+    except Exception as e:
+        # Log detailed error for debugging
+        import logging
+        logging.error(f"Notifications stats error for user {current_user.id}: {str(e)}")
+        raise
 
 
 @router.post("/{notification_id}/read")
