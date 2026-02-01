@@ -69,7 +69,7 @@ async def list_notifications(
             "read": n.read,
             "created_at": n.created_at.isoformat() if n.created_at else None,
             "link": n.link,
-            "metadata": n.metadata,
+            "metadata": n.extra_data,
         }
         for n in notifications
     ]
@@ -192,7 +192,7 @@ async def create_notification(
         title=notification_data.title,
         message=notification_data.message,
         link=notification_data.link,
-        metadata=notification_data.metadata,
+        extra_data=notification_data.metadata,
         source="user",
     )
 
@@ -208,7 +208,7 @@ async def create_notification(
         "read": notification.read,
         "created_at": notification.created_at.isoformat() if notification.created_at else now.isoformat(),
         "link": notification.link,
-        "metadata": notification.metadata,
+        "metadata": notification.extra_data,
     }
 
     # Broadcast via WebSocket based on targeting

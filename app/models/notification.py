@@ -32,8 +32,8 @@ class Notification(Base):
     # Action link (URL to navigate to)
     link = Column(String(500), nullable=True)
 
-    # Additional context
-    metadata = Column(JSON, nullable=True)  # entity_id, entity_type, etc.
+    # Additional context - maps Python 'extra_data' to DB column 'metadata'
+    extra_data = Column("metadata", JSON, nullable=True)  # entity_id, entity_type, etc.
 
     # Source
     source = Column(String(50), nullable=True)  # system, user, webhook, scheduler
