@@ -1012,3 +1012,269 @@ async def get_vitals_detail(current_user: CurrentUser) -> dict:
         "vitals": FALLBACK_VITALS,
         "latest": FALLBACK_VITALS[0] if FALLBACK_VITALS else None,
     }
+
+
+# =============================================================================
+# CONTENT GENERATOR ENDPOINTS
+# =============================================================================
+
+class ContentGenerateRequest(BaseModel):
+    contentType: str  # blog, faq, gbp_post, service_description
+    topic: str
+    targetLength: Optional[int] = 500
+    tone: Optional[str] = "professional"
+
+
+DEMO_CONTENT = {
+    "blog": """# 5 Essential Septic Tank Maintenance Tips for Texas Homeowners
+
+Regular septic tank maintenance is crucial for keeping your system running smoothly and avoiding costly repairs. Here are five essential tips every Texas homeowner should know:
+
+## 1. Schedule Regular Pumping
+
+Your septic tank should be pumped every 3-5 years, depending on household size and usage. For a family of four, aim for pumping every 3 years to prevent solids from building up and causing blockages.
+
+## 2. Be Mindful of What Goes Down the Drain
+
+Never flush non-biodegradable items like wet wipes, feminine products, or paper towels. These can clog your system and lead to expensive repairs. Stick to toilet paper and human waste only.
+
+## 3. Protect Your Drain Field
+
+Keep vehicles, heavy equipment, and structures away from your drain field. The pipes beneath the surface are fragile and can be crushed by excessive weight. Also avoid planting trees nearby as roots can damage the system.
+
+## 4. Conserve Water
+
+High water usage can overload your septic system. Fix leaky faucets, use high-efficiency appliances, and spread out laundry loads throughout the week to give your system time to process wastewater properly.
+
+## 5. Know the Warning Signs
+
+Watch for slow drains, gurgling sounds, foul odors, or wet spots in your yard. These could indicate a problem that needs professional attention. Don't wait - call a septic professional at the first sign of trouble.
+
+*Need professional septic service in East Texas? Contact us today for a free inspection!*""",
+
+    "faq": """## How Often Should I Pump My Septic Tank?
+
+For a typical household of 4 people, your septic tank should be pumped every 3-5 years. However, this can vary based on:
+
+- **Household size**: Larger families may need more frequent pumping
+- **Tank size**: Smaller tanks fill up faster
+- **Water usage**: High water usage means more frequent pumping
+- **Garbage disposal use**: Using a garbage disposal adds more solids
+
+**Signs you need pumping now:**
+- Slow drains throughout the house
+- Sewage odors near the tank or drain field
+- Standing water or soggy spots in your yard
+- Sewage backup in your home
+
+Don't wait until you have a problem! Regular maintenance saves money and prevents emergencies.
+
+*Schedule your free septic inspection today!*""",
+
+    "gbp_post": """🏠 **Keep Your Septic System Healthy This Season!**
+
+Regular maintenance is the key to avoiding costly septic emergencies. Our expert technicians are here to help with:
+
+✅ Septic tank pumping
+✅ System inspections
+✅ Repairs & maintenance
+✅ 24/7 emergency service
+
+📞 Call us today for a FREE estimate!
+
+#SepticService #EastTexas #HomeMaintenanceTips #SepticTank""",
+
+    "service_description": """## Professional Septic Tank Pumping Services
+
+Our experienced technicians provide thorough, reliable septic tank pumping for residential and commercial properties throughout East Texas.
+
+### What's Included:
+
+- **Complete tank pumping** - We remove all sludge and scum buildup
+- **System inspection** - Visual check of tank condition and components
+- **Detailed report** - Written summary of system health and recommendations
+- **Cleanup** - We leave your property clean and tidy
+
+### Why Choose Us:
+
+- Family-owned and operated since 1985
+- Licensed and insured technicians
+- Same-day service available
+- Competitive pricing with no hidden fees
+- 24/7 emergency service
+
+*Serving Nacogdoches, Lufkin, and surrounding East Texas communities.*"""
+}
+
+
+@router.post("/tasks/content/generate")
+async def generate_content(request: ContentGenerateRequest, current_user: CurrentUser) -> dict:
+    """Generate AI content - uses demo mode when content-gen service unavailable."""
+    content_type = request.contentType
+
+    # Always try to reach content-gen service first (unless on Railway)
+    if not is_railway_deployment():
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{CONTENT_GEN_URL}/api/generate",
+                    json={
+                        "type": content_type,
+                        "topic": request.topic,
+                        "targetLength": request.targetLength,
+                        "tone": request.tone,
+                    }
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return {
+                        "success": True,
+                        "content": data.get("content", ""),
+                        "contentType": content_type,
+                        "topic": request.topic,
+                        "demoMode": False,
+                        "message": "Content generated successfully",
+                    }
+        except Exception as e:
+            print(f"[marketing_tasks] Content-gen service error: {e}")
+
+    # Fallback to demo content
+    demo_content = DEMO_CONTENT.get(content_type, DEMO_CONTENT["blog"])
+
+    # Customize demo content with topic if provided
+    if request.topic:
+        demo_content = demo_content.replace("Septic Tank Maintenance", f"{request.topic.title()}")
+        demo_content = demo_content.replace("septic tank", request.topic.lower())
+
+    return {
+        "success": True,
+        "content": demo_content,
+        "contentType": content_type,
+        "topic": request.topic,
+        "demoMode": True,
+        "message": "Demo content generated (AI service unavailable - connect via tunnel for live generation)",
+    }
+
+
+# =============================================================================
+# GBP SYNC ENDPOINTS
+# =============================================================================
+
+class GBPPostRequest(BaseModel):
+    title: str
+    content: str
+    callToAction: Optional[str] = "Learn More"
+    actionUrl: Optional[str] = None
+
+
+DEMO_GBP_STATUS = {
+    "connected": False,
+    "lastSync": "2026-02-01T08:00:00Z",
+    "profileName": "ECB TX Septic Services",
+    "profileUrl": "https://business.google.com/dashboard/l/123456789",
+    "stats": {
+        "totalPosts": 12,
+        "totalReviews": 89,
+        "averageRating": 4.7,
+        "pendingResponses": 2,
+        "viewsThisMonth": 1250,
+        "callsThisMonth": 47,
+    }
+}
+
+
+@router.get("/tasks/gbp/status")
+async def get_gbp_status(current_user: CurrentUser) -> dict:
+    """Get GBP sync status and profile info."""
+    # Try to reach gbp-sync service
+    if not is_railway_deployment():
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(f"{GBP_SYNC_URL}/api/status")
+                if response.status_code == 200:
+                    data = response.json()
+                    return {
+                        "success": True,
+                        "connected": data.get("connected", False),
+                        "lastSync": data.get("lastSync"),
+                        "profileName": data.get("profileName"),
+                        "profileUrl": data.get("profileUrl"),
+                        "stats": data.get("stats", {}),
+                        "demoMode": False,
+                    }
+        except Exception as e:
+            print(f"[marketing_tasks] GBP-sync service error: {e}")
+
+    # Return demo status
+    return {
+        "success": True,
+        **DEMO_GBP_STATUS,
+        "demoMode": True,
+        "message": "Demo mode - GBP sync service runs locally",
+    }
+
+
+@router.post("/tasks/gbp/sync")
+async def trigger_gbp_sync(current_user: CurrentUser) -> dict:
+    """Trigger a GBP sync operation."""
+    # Try to reach gbp-sync service
+    if not is_railway_deployment():
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(f"{GBP_SYNC_URL}/api/sync")
+                if response.status_code == 200:
+                    data = response.json()
+                    return {
+                        "success": True,
+                        "message": data.get("message", "Sync completed"),
+                        "syncedAt": datetime.utcnow().isoformat() + "Z",
+                        "demoMode": False,
+                    }
+        except Exception as e:
+            print(f"[marketing_tasks] GBP-sync service error: {e}")
+
+    # Demo mode response
+    return {
+        "success": True,
+        "message": "Demo sync completed - GBP service runs locally",
+        "syncedAt": datetime.utcnow().isoformat() + "Z",
+        "demoMode": True,
+    }
+
+
+@router.post("/tasks/gbp/post")
+async def create_gbp_post(request: GBPPostRequest, current_user: CurrentUser) -> dict:
+    """Create and publish a GBP post."""
+    # Try to reach gbp-sync service
+    if not is_railway_deployment():
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{GBP_SYNC_URL}/api/posts",
+                    json={
+                        "title": request.title,
+                        "content": request.content,
+                        "callToAction": request.callToAction,
+                        "actionUrl": request.actionUrl,
+                    }
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return {
+                        "success": True,
+                        "postId": data.get("id"),
+                        "message": "Post published successfully",
+                        "publishedAt": datetime.utcnow().isoformat() + "Z",
+                        "demoMode": False,
+                    }
+        except Exception as e:
+            print(f"[marketing_tasks] GBP-sync service error: {e}")
+
+    # Demo mode response
+    return {
+        "success": True,
+        "postId": f"demo-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+        "message": "Demo post created - GBP service runs locally",
+        "publishedAt": datetime.utcnow().isoformat() + "Z",
+        "demoMode": True,
+    }
