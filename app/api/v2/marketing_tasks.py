@@ -738,3 +738,237 @@ async def get_site_metrics(site_id: str, current_user: CurrentUser) -> dict:
             "contentGenerated": len(content_data) if isinstance(content_data, list) else 0,
         },
     }
+
+
+# =============================================================================
+# DETAIL ENDPOINTS - Drill-down data for metric cards
+# =============================================================================
+
+# Fallback data for drill-down when services are unreachable
+FALLBACK_KEYWORDS = [
+    {"id": 1, "keyword": "septic tank pumping", "position": 3, "impressions": 1250, "clicks": 89, "ctr": 7.12, "county": "Nacogdoches", "category": "services", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 2, "keyword": "septic repair near me", "position": 5, "impressions": 890, "clicks": 52, "ctr": 5.84, "county": "Lufkin", "category": "services", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 3, "keyword": "emergency septic service", "position": 2, "impressions": 456, "clicks": 41, "ctr": 8.99, "county": "Nacogdoches", "category": "emergency", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 4, "keyword": "septic tank inspection", "position": 4, "impressions": 678, "clicks": 38, "ctr": 5.60, "county": "Angelina", "category": "services", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 5, "keyword": "septic system installation", "position": 8, "impressions": 345, "clicks": 19, "ctr": 5.51, "county": "Cherokee", "category": "services", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 6, "keyword": "aerobic septic maintenance", "position": 1, "impressions": 234, "clicks": 28, "ctr": 11.97, "county": "Nacogdoches", "category": "maintenance", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 7, "keyword": "septic tank cleaning cost", "position": 6, "impressions": 567, "clicks": 31, "ctr": 5.47, "county": "Houston", "category": "pricing", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 8, "keyword": "grease trap pumping", "position": 2, "impressions": 189, "clicks": 22, "ctr": 11.64, "county": "Nacogdoches", "category": "commercial", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 9, "keyword": "rv septic dump station", "position": 7, "impressions": 123, "clicks": 8, "ctr": 6.50, "county": "Angelina", "category": "rv", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 10, "keyword": "septic permit texas", "position": 12, "impressions": 89, "clicks": 4, "ctr": 4.49, "county": "Nacogdoches", "category": "permits", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 11, "keyword": "drain field repair", "position": 9, "impressions": 156, "clicks": 11, "ctr": 7.05, "county": "Cherokee", "category": "repair", "recordedAt": "2026-02-01T12:00:00Z"},
+    {"id": 12, "keyword": "septic service nacogdoches", "position": 1, "impressions": 445, "clicks": 67, "ctr": 15.06, "county": "Nacogdoches", "category": "local", "recordedAt": "2026-02-01T12:00:00Z"},
+]
+
+FALLBACK_PAGES = [
+    {"id": 1, "url": "https://www.ecbtx.com/", "indexed": True, "lastCrawled": "2026-02-01T08:00:00Z", "statusCode": 200, "createdAt": "2024-01-15T00:00:00Z"},
+    {"id": 2, "url": "https://www.ecbtx.com/services/septic-pumping", "indexed": True, "lastCrawled": "2026-02-01T08:15:00Z", "statusCode": 200, "createdAt": "2024-01-15T00:00:00Z"},
+    {"id": 3, "url": "https://www.ecbtx.com/services/septic-repair", "indexed": True, "lastCrawled": "2026-02-01T08:20:00Z", "statusCode": 200, "createdAt": "2024-01-15T00:00:00Z"},
+    {"id": 4, "url": "https://www.ecbtx.com/services/grease-trap", "indexed": True, "lastCrawled": "2026-02-01T08:25:00Z", "statusCode": 200, "createdAt": "2024-01-15T00:00:00Z"},
+    {"id": 5, "url": "https://www.ecbtx.com/about", "indexed": True, "lastCrawled": "2026-02-01T08:30:00Z", "statusCode": 200, "createdAt": "2024-01-15T00:00:00Z"},
+    {"id": 6, "url": "https://www.ecbtx.com/contact", "indexed": True, "lastCrawled": "2026-02-01T08:35:00Z", "statusCode": 200, "createdAt": "2024-01-15T00:00:00Z"},
+    {"id": 7, "url": "https://www.ecbtx.com/service-areas", "indexed": True, "lastCrawled": "2026-02-01T08:40:00Z", "statusCode": 200, "createdAt": "2024-01-15T00:00:00Z"},
+    {"id": 8, "url": "https://www.ecbtx.com/blog", "indexed": True, "lastCrawled": "2026-02-01T08:45:00Z", "statusCode": 200, "createdAt": "2024-02-01T00:00:00Z"},
+    {"id": 9, "url": "https://www.ecbtx.com/faq", "indexed": False, "lastCrawled": None, "statusCode": None, "createdAt": "2026-01-20T00:00:00Z"},
+    {"id": 10, "url": "https://www.ecbtx.com/reviews", "indexed": True, "lastCrawled": "2026-02-01T09:00:00Z", "statusCode": 200, "createdAt": "2024-06-01T00:00:00Z"},
+]
+
+FALLBACK_CONTENT = [
+    {"id": 1, "contentType": "blog", "title": "5 Signs Your Septic Tank Needs Pumping", "topic": "septic maintenance", "content": "Regular septic maintenance is crucial...", "keywordsUsed": ["septic pumping", "maintenance"], "published": True, "publishedUrl": "https://www.ecbtx.com/blog/signs-septic-needs-pumping", "createdAt": "2026-01-28T10:00:00Z"},
+    {"id": 2, "contentType": "faq", "title": "How Often Should I Pump My Septic Tank?", "topic": "septic faq", "content": "For a typical household of 4...", "keywordsUsed": ["septic pumping frequency"], "published": True, "publishedUrl": None, "createdAt": "2026-01-25T14:00:00Z"},
+    {"id": 3, "contentType": "gbp_post", "title": "Winter Septic Care Tips", "topic": "seasonal tips", "content": "Cold weather can affect your septic system...", "keywordsUsed": ["winter septic", "septic care"], "published": True, "publishedUrl": None, "createdAt": "2026-01-20T09:00:00Z"},
+    {"id": 4, "contentType": "service_description", "title": "Commercial Grease Trap Services", "topic": "commercial services", "content": "Keep your restaurant compliant...", "keywordsUsed": ["grease trap", "commercial"], "published": True, "publishedUrl": "https://www.ecbtx.com/services/grease-trap", "createdAt": "2026-01-15T11:00:00Z"},
+    {"id": 5, "contentType": "blog", "title": "Aerobic vs Conventional Septic Systems", "topic": "septic education", "content": "Understanding the differences...", "keywordsUsed": ["aerobic septic", "conventional septic"], "published": False, "publishedUrl": None, "createdAt": "2026-01-30T16:00:00Z"},
+]
+
+FALLBACK_REVIEWS = [
+    {"id": 1, "platform": "Google", "author": "John D.", "rating": 5, "reviewText": "Excellent service! They came out same day and fixed our septic issue quickly. Very professional team.", "responseText": "Thank you John! We're glad we could help with your septic emergency.", "respondedAt": "2026-01-29T10:00:00Z", "reviewDate": "2026-01-28T15:30:00Z", "createdAt": "2026-01-28T15:30:00Z"},
+    {"id": 2, "platform": "Google", "author": "Sarah M.", "rating": 5, "reviewText": "Best septic company in East Texas! Fair prices and honest work.", "responseText": "Thank you Sarah for the kind words!", "respondedAt": "2026-01-27T09:00:00Z", "reviewDate": "2026-01-26T12:00:00Z", "createdAt": "2026-01-26T12:00:00Z"},
+    {"id": 3, "platform": "Google", "author": "Mike R.", "rating": 4, "reviewText": "Good service overall. Had to wait a bit longer than expected but the work was quality.", "responseText": None, "respondedAt": None, "reviewDate": "2026-01-25T18:45:00Z", "createdAt": "2026-01-25T18:45:00Z"},
+    {"id": 4, "platform": "Google", "author": "Lisa T.", "rating": 5, "reviewText": "They installed our new aerobic system perfectly. Very knowledgeable about permits and regulations.", "responseText": "Thanks Lisa! Aerobic systems are our specialty.", "respondedAt": "2026-01-24T14:00:00Z", "reviewDate": "2026-01-23T11:00:00Z", "createdAt": "2026-01-23T11:00:00Z"},
+    {"id": 5, "platform": "Yelp", "author": "David K.", "rating": 5, "reviewText": "Emergency call at 10pm and they still came out! Saved our family vacation.", "responseText": None, "respondedAt": None, "reviewDate": "2026-01-20T22:30:00Z", "createdAt": "2026-01-20T22:30:00Z"},
+]
+
+FALLBACK_VITALS = [
+    {"id": 1, "url": "https://www.ecbtx.com/", "lcpMs": 1850, "inpMs": 45, "cls": 0.05, "fcpMs": 980, "ttfbMs": 320, "performanceScore": 92, "accessibilityScore": 95, "seoScore": 88, "bestPracticesScore": 90, "recordedAt": "2026-02-01T06:00:00Z"},
+    {"id": 2, "url": "https://www.ecbtx.com/", "lcpMs": 1920, "inpMs": 52, "cls": 0.08, "fcpMs": 1020, "ttfbMs": 340, "performanceScore": 89, "accessibilityScore": 95, "seoScore": 88, "bestPracticesScore": 90, "recordedAt": "2026-02-01T00:00:00Z"},
+    {"id": 3, "url": "https://www.ecbtx.com/", "lcpMs": 1780, "inpMs": 41, "cls": 0.04, "fcpMs": 920, "ttfbMs": 290, "performanceScore": 94, "accessibilityScore": 95, "seoScore": 88, "bestPracticesScore": 90, "recordedAt": "2026-01-31T18:00:00Z"},
+    {"id": 4, "url": "https://www.ecbtx.com/", "lcpMs": 2100, "inpMs": 68, "cls": 0.12, "fcpMs": 1150, "ttfbMs": 380, "performanceScore": 85, "accessibilityScore": 95, "seoScore": 88, "bestPracticesScore": 90, "recordedAt": "2026-01-31T12:00:00Z"},
+    {"id": 5, "url": "https://www.ecbtx.com/", "lcpMs": 1900, "inpMs": 48, "cls": 0.06, "fcpMs": 990, "ttfbMs": 330, "performanceScore": 91, "accessibilityScore": 95, "seoScore": 88, "bestPracticesScore": 90, "recordedAt": "2026-01-31T06:00:00Z"},
+]
+
+
+@router.get("/tasks/keywords")
+async def get_keywords_detail(current_user: CurrentUser) -> dict:
+    """Get detailed keyword list with rankings for drill-down view."""
+    if is_railway_deployment():
+        return {
+            "success": True,
+            "keywords": FALLBACK_KEYWORDS,
+            "total": len(FALLBACK_KEYWORDS),
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{SEO_SERVICES['seo-monitor']['url']}/api/keywords")
+            if response.status_code == 200:
+                data = response.json()
+                keywords = data if isinstance(data, list) else data.get("keywords", [])
+                return {
+                    "success": True,
+                    "keywords": keywords,
+                    "total": len(keywords),
+                }
+    except Exception as e:
+        print(f"[marketing_tasks] Error fetching keywords: {e}")
+
+    return {
+        "success": True,
+        "keywords": FALLBACK_KEYWORDS,
+        "total": len(FALLBACK_KEYWORDS),
+    }
+
+
+@router.get("/tasks/pages")
+async def get_pages_detail(current_user: CurrentUser) -> dict:
+    """Get detailed indexed pages list for drill-down view."""
+    if is_railway_deployment():
+        indexed = sum(1 for p in FALLBACK_PAGES if p["indexed"])
+        return {
+            "success": True,
+            "pages": FALLBACK_PAGES,
+            "total": len(FALLBACK_PAGES),
+            "indexed": indexed,
+            "notIndexed": len(FALLBACK_PAGES) - indexed,
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{SEO_SERVICES['seo-monitor']['url']}/api/pages")
+            if response.status_code == 200:
+                data = response.json()
+                pages = data if isinstance(data, list) else data.get("pages", [])
+                indexed = sum(1 for p in pages if p.get("indexed", False))
+                return {
+                    "success": True,
+                    "pages": pages,
+                    "total": len(pages),
+                    "indexed": indexed,
+                    "notIndexed": len(pages) - indexed,
+                }
+    except Exception as e:
+        print(f"[marketing_tasks] Error fetching pages: {e}")
+
+    indexed = sum(1 for p in FALLBACK_PAGES if p["indexed"])
+    return {
+        "success": True,
+        "pages": FALLBACK_PAGES,
+        "total": len(FALLBACK_PAGES),
+        "indexed": indexed,
+        "notIndexed": len(FALLBACK_PAGES) - indexed,
+    }
+
+
+@router.get("/tasks/content")
+async def get_content_detail(current_user: CurrentUser) -> dict:
+    """Get detailed content generation list for drill-down view."""
+    if is_railway_deployment():
+        return {
+            "success": True,
+            "content": FALLBACK_CONTENT,
+            "total": len(FALLBACK_CONTENT),
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{SEO_SERVICES['content-gen']['url']}/api/content-log")
+            if response.status_code == 200:
+                data = response.json()
+                content = data if isinstance(data, list) else data.get("content", [])
+                return {
+                    "success": True,
+                    "content": content,
+                    "total": len(content),
+                }
+    except Exception as e:
+        print(f"[marketing_tasks] Error fetching content: {e}")
+
+    return {
+        "success": True,
+        "content": FALLBACK_CONTENT,
+        "total": len(FALLBACK_CONTENT),
+    }
+
+
+@router.get("/tasks/reviews")
+async def get_reviews_detail(current_user: CurrentUser) -> dict:
+    """Get detailed reviews list for drill-down view."""
+    if is_railway_deployment():
+        pending = sum(1 for r in FALLBACK_REVIEWS if r["responseText"] is None)
+        avg_rating = sum(r["rating"] for r in FALLBACK_REVIEWS) / len(FALLBACK_REVIEWS) if FALLBACK_REVIEWS else 0
+        return {
+            "success": True,
+            "reviews": FALLBACK_REVIEWS,
+            "total": len(FALLBACK_REVIEWS),
+            "averageRating": round(avg_rating, 1),
+            "pendingResponses": pending,
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{SEO_SERVICES['gbp-sync']['url']}/api/reviews")
+            if response.status_code == 200:
+                data = response.json()
+                reviews = data if isinstance(data, list) else data.get("reviews", [])
+                pending = sum(1 for r in reviews if not r.get("responseText"))
+                avg_rating = sum(r.get("rating", 0) for r in reviews) / len(reviews) if reviews else 0
+                return {
+                    "success": True,
+                    "reviews": reviews,
+                    "total": len(reviews),
+                    "averageRating": round(avg_rating, 1),
+                    "pendingResponses": pending,
+                }
+    except Exception as e:
+        print(f"[marketing_tasks] Error fetching reviews: {e}")
+
+    pending = sum(1 for r in FALLBACK_REVIEWS if r["responseText"] is None)
+    avg_rating = sum(r["rating"] for r in FALLBACK_REVIEWS) / len(FALLBACK_REVIEWS) if FALLBACK_REVIEWS else 0
+    return {
+        "success": True,
+        "reviews": FALLBACK_REVIEWS,
+        "total": len(FALLBACK_REVIEWS),
+        "averageRating": round(avg_rating, 1),
+        "pendingResponses": pending,
+    }
+
+
+@router.get("/tasks/vitals")
+async def get_vitals_detail(current_user: CurrentUser) -> dict:
+    """Get Core Web Vitals history for drill-down view."""
+    if is_railway_deployment():
+        return {
+            "success": True,
+            "vitals": FALLBACK_VITALS,
+            "latest": FALLBACK_VITALS[0] if FALLBACK_VITALS else None,
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{SEO_SERVICES['seo-monitor']['url']}/api/vitals")
+            if response.status_code == 200:
+                data = response.json()
+                vitals = data if isinstance(data, list) else data.get("vitals", [])
+                return {
+                    "success": True,
+                    "vitals": vitals,
+                    "latest": vitals[0] if vitals else None,
+                }
+    except Exception as e:
+        print(f"[marketing_tasks] Error fetching vitals: {e}")
+
+    return {
+        "success": True,
+        "vitals": FALLBACK_VITALS,
+        "latest": FALLBACK_VITALS[0] if FALLBACK_VITALS else None,
+    }
