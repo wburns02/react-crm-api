@@ -684,7 +684,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.8.7",  # Fix resolve button for fallback alerts
+        "version": "2.8.8",  # RBAC authorization enforcement
         "environment": settings.ENVIRONMENT,
         "features": [
             "public_api",
