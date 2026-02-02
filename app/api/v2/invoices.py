@@ -41,10 +41,10 @@ def customer_id_to_uuid(customer_id: int) -> uuid.UUID:
 
 
 async def find_customer_by_invoice_uuid(db, invoice_customer_id: uuid.UUID) -> Optional[Customer]:
-    """Find the Customer whose ID generates the given UUID.
+    """Find the Customer by their customer_uuid (indexed lookup).
 
-    Since invoice.customer_id is a UUID derived from customer.id (integer),
-    we need to find the customer by computing UUIDs and matching.
+    OPTIMIZED: Uses the indexed customer_uuid column for O(1) lookup
+    instead of loading all customers.
 
     Args:
         db: Database session
@@ -57,16 +57,11 @@ async def find_customer_by_invoice_uuid(db, invoice_customer_id: uuid.UUID) -> O
         return None
 
     try:
-        # Get all customers (this could be optimized with caching or a mapping table)
-        result = await db.execute(select(Customer))
-        customers = result.scalars().all()
-
-        # Find the customer whose UUID matches
-        for customer in customers:
-            if customer.id and customer_id_to_uuid(customer.id) == invoice_customer_id:
-                return customer
-
-        return None
+        # Direct indexed lookup - O(1) instead of O(n)
+        result = await db.execute(
+            select(Customer).where(Customer.customer_uuid == invoice_customer_id)
+        )
+        return result.scalar_one_or_none()
     except Exception as e:
         logger.warning(f"Error finding customer for invoice UUID: {e}")
         return None
@@ -75,8 +70,8 @@ async def find_customer_by_invoice_uuid(db, invoice_customer_id: uuid.UUID) -> O
 async def build_customer_uuid_map(db, invoice_customer_ids: set) -> dict:
     """Build a mapping of invoice customer UUIDs to Customer objects.
 
-    This is O(n) for customers, but only called ONCE per request instead of
-    once per invoice. Much more efficient for list operations.
+    OPTIMIZED: Uses indexed customer_uuid column with IN clause
+    for efficient batch lookup.
 
     Args:
         db: Database session
@@ -89,17 +84,14 @@ async def build_customer_uuid_map(db, invoice_customer_ids: set) -> dict:
         return {}
 
     try:
-        # Fetch all customers in one query
-        result = await db.execute(select(Customer))
+        # Batch lookup using indexed column - O(log n) per lookup
+        result = await db.execute(
+            select(Customer).where(Customer.customer_uuid.in_(list(invoice_customer_ids)))
+        )
         customers = result.scalars().all()
 
         # Build map: invoice_uuid -> customer
-        uuid_map = {}
-        for customer in customers:
-            if customer.id:
-                customer_uuid = customer_id_to_uuid(customer.id)
-                if customer_uuid in invoice_customer_ids:
-                    uuid_map[customer_uuid] = customer
+        uuid_map = {customer.customer_uuid: customer for customer in customers if customer.customer_uuid}
 
         return uuid_map
     except Exception as e:

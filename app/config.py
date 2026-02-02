@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # Samsara Fleet Tracking
     SAMSARA_API_TOKEN: str | None = None
 
+    # Stripe Payment Processing
+    STRIPE_SECRET_KEY: str | None = None
+    STRIPE_PUBLISHABLE_KEY: str | None = None
+    STRIPE_WEBHOOK_SECRET: str | None = None
+
     # AI Services
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None

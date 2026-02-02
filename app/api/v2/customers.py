@@ -125,6 +125,12 @@ async def create_customer(
     db.add(customer)
     await db.commit()
     await db.refresh(customer)
+
+    # Set the customer_uuid for invoice FK optimization
+    customer.ensure_uuid()
+    await db.commit()
+    await db.refresh(customer)
+
     return customer
 
 

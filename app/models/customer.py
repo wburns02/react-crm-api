@@ -1,7 +1,13 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
+import uuid as uuid_module
+
+
+# Namespace for deterministic UUID generation (must match invoices.py)
+CUSTOMER_UUID_NAMESPACE = uuid_module.UUID("12345678-1234-5678-1234-567812345678")
 
 
 class Customer(Base):
@@ -10,6 +16,10 @@ class Customer(Base):
     __tablename__ = "customers"
 
     id = Column(Integer, primary_key=True, index=True)
+
+    # UUID column for efficient joins with Invoice table
+    # This is a deterministic UUID computed from the integer ID
+    customer_uuid = Column(UUID(as_uuid=True), unique=True, index=True, nullable=True)
     first_name = Column(String(100))
     last_name = Column(String(100))
     email = Column(String(255), index=True)
@@ -77,9 +87,25 @@ class Customer(Base):
     work_orders = relationship("WorkOrder", back_populates="customer")
     messages = relationship("Message", back_populates="customer")
     bookings = relationship("Booking", back_populates="customer", foreign_keys="Booking.customer_id")
+    # Invoice relationship via customer_uuid
+    invoices = relationship(
+        "Invoice",
+        primaryjoin="Customer.customer_uuid == foreign(Invoice.customer_id)",
+        viewonly=True,
+        lazy="dynamic",
+    )
 
     def __repr__(self):
         return f"<Customer {self.first_name} {self.last_name}>"
+
+    def compute_uuid(self) -> uuid_module.UUID:
+        """Compute the deterministic UUID from this customer's integer ID."""
+        return uuid_module.uuid5(CUSTOMER_UUID_NAMESPACE, str(self.id))
+
+    def ensure_uuid(self) -> None:
+        """Ensure customer_uuid is set (compute if missing)."""
+        if not self.customer_uuid and self.id:
+            self.customer_uuid = self.compute_uuid()
 
     @property
     def full_name(self):

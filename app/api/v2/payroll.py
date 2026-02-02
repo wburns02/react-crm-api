@@ -410,32 +410,158 @@ async def export_payroll(
     current_user: CurrentUser,
     format: str = Query("csv", pattern="^(csv|nacha|pdf)$"),
 ):
-    """Export payroll data for payroll systems."""
+    """Export payroll data for payroll systems.
+
+    Supports:
+    - csv: Detailed CSV with all technician pay data
+    - nacha: ACH file format (not yet implemented)
+    - pdf: PDF report (not yet implemented)
+    """
+    from fastapi.responses import StreamingResponse
+    import csv
+    import io
+
     result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
     period = result.scalar_one_or_none()
 
     if not period:
         raise HTTPException(status_code=404, detail="Payroll period not found")
 
-    # TODO: Generate actual export files
-    # For now, return data that could be exported
+    if format == "csv":
+        # Get all time entries for this period
+        time_result = await db.execute(
+            select(TimeEntry).where(TimeEntry.payroll_period_id == period_id)
+        )
+        time_entries = time_result.scalars().all()
 
-    return {
-        "format": format,
-        "period_id": period_id,
-        "status": "export_ready",
-        "message": f"Export to {format.upper()} format - implementation pending",
-        "data": {
-            "period": {
-                "start": period.start_date.isoformat(),
-                "end": period.end_date.isoformat(),
-            },
-            "totals": {
-                "gross_pay": period.total_gross_pay,
-                "commissions": period.total_commissions,
-            },
-        },
-    }
+        # Get all commissions for this period
+        comm_result = await db.execute(
+            select(Commission).where(Commission.payroll_period_id == period_id)
+        )
+        commissions = comm_result.scalars().all()
+
+        # Get technician IDs from entries
+        tech_ids = list(set(
+            [str(e.technician_id) for e in time_entries if e.technician_id] +
+            [str(c.technician_id) for c in commissions if c.technician_id]
+        ))
+
+        # Fetch technician info
+        technicians = {}
+        if tech_ids:
+            tech_result = await db.execute(
+                select(Technician).where(Technician.id.in_(tech_ids))
+            )
+            for tech in tech_result.scalars().all():
+                technicians[str(tech.id)] = tech
+
+        # Aggregate data by technician
+        tech_data = {}
+        for entry in time_entries:
+            tech_id = str(entry.technician_id)
+            if tech_id not in tech_data:
+                tech = technicians.get(tech_id)
+                tech_data[tech_id] = {
+                    "name": f"{tech.first_name} {tech.last_name}" if tech else "Unknown",
+                    "regular_hours": 0,
+                    "overtime_hours": 0,
+                    "hourly_rate": float(entry.hourly_rate or 0),
+                    "commissions": 0,
+                }
+            tech_data[tech_id]["regular_hours"] += float(entry.regular_hours or 0)
+            tech_data[tech_id]["overtime_hours"] += float(entry.overtime_hours or 0)
+
+        for comm in commissions:
+            tech_id = str(comm.technician_id)
+            if tech_id in tech_data:
+                tech_data[tech_id]["commissions"] += float(comm.amount or 0)
+            elif tech_id:
+                tech = technicians.get(tech_id)
+                tech_data[tech_id] = {
+                    "name": f"{tech.first_name} {tech.last_name}" if tech else "Unknown",
+                    "regular_hours": 0,
+                    "overtime_hours": 0,
+                    "hourly_rate": 0,
+                    "commissions": float(comm.amount or 0),
+                }
+
+        # Generate CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Header
+        writer.writerow([
+            "Technician ID",
+            "Technician Name",
+            "Regular Hours",
+            "Overtime Hours",
+            "Hourly Rate",
+            "Regular Pay",
+            "Overtime Pay",
+            "Commissions",
+            "Total Pay",
+        ])
+
+        # Data rows
+        for tech_id, data in tech_data.items():
+            regular_pay = data["regular_hours"] * data["hourly_rate"]
+            overtime_pay = data["overtime_hours"] * data["hourly_rate"] * 1.5
+            total_pay = regular_pay + overtime_pay + data["commissions"]
+
+            writer.writerow([
+                tech_id,
+                data["name"],
+                f"{data['regular_hours']:.2f}",
+                f"{data['overtime_hours']:.2f}",
+                f"{data['hourly_rate']:.2f}",
+                f"{regular_pay:.2f}",
+                f"{overtime_pay:.2f}",
+                f"{data['commissions']:.2f}",
+                f"{total_pay:.2f}",
+            ])
+
+        # Add totals row
+        total_regular = sum(d["regular_hours"] * d["hourly_rate"] for d in tech_data.values())
+        total_overtime = sum(d["overtime_hours"] * d["hourly_rate"] * 1.5 for d in tech_data.values())
+        total_commissions = sum(d["commissions"] for d in tech_data.values())
+        grand_total = total_regular + total_overtime + total_commissions
+
+        writer.writerow([])
+        writer.writerow([
+            "TOTALS",
+            "",
+            "",
+            "",
+            "",
+            f"{total_regular:.2f}",
+            f"{total_overtime:.2f}",
+            f"{total_commissions:.2f}",
+            f"{grand_total:.2f}",
+        ])
+
+        content = output.getvalue()
+        filename = f"payroll_{period.start_date}_{period.end_date}.csv"
+
+        return StreamingResponse(
+            iter([content]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    elif format == "nacha":
+        raise HTTPException(
+            status_code=501,
+            detail="NACHA format export not yet implemented. Use CSV for now.",
+        )
+
+    elif format == "pdf":
+        raise HTTPException(
+            status_code=501,
+            detail="PDF format export not yet implemented. Use CSV for now.",
+        )
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
 
 
 # Time Entry Endpoints

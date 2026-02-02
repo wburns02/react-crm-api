@@ -1,7 +1,9 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Numeric
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
+import uuid as uuid_module
 
 
 class Payment(Base):
@@ -16,8 +18,11 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
     work_order_id = Column(String(36), ForeignKey("work_orders.id"), nullable=True, index=True)
+
+    # Invoice reference (UUID to match invoices.id)
+    invoice_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
     # Payment details
     amount = Column(Numeric(10, 2), nullable=False)
@@ -46,6 +51,7 @@ class Payment(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
     processed_at = Column(DateTime)
+    payment_date = Column(DateTime)  # When payment was completed
 
     # Note: Relationship to Customer commented out to avoid import/backref issues
     # customer = relationship("Customer", backref="payments")

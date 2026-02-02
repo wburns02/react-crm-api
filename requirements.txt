@@ -20,6 +20,9 @@ python-multipart>=0.0.6
 # Twilio
 twilio>=8.10.0
 
+# Stripe Payment Processing
+stripe>=8.0.0
+
 # Email (SendGrid)
 sendgrid>=6.10.0
 
@@ -31,6 +34,10 @@ python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0
 # Pin cryptography to get ecdsa fix
 cryptography>=42.0.0
+
+# MFA (Multi-Factor Authentication)
+pyotp>=2.9.0
+qrcode>=7.4.2
 
 # Validation
 email-validator>=2.0.0

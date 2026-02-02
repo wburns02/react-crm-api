@@ -6,28 +6,44 @@ Handles:
 - Payment confirmation
 - Saved payment methods
 - ACH/bank account setup
+- Webhook processing
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from sqlalchemy import select
 from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional
 from uuid import uuid4
-import os
+import uuid
+import logging
+
+import stripe
 
 from app.api.deps import DbSession, CurrentUser
+from app.config import settings
+from app.models.invoice import Invoice
+from app.models.payment import Payment
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 # =============================================================================
-# Configuration
+# Stripe Configuration
 # =============================================================================
 
-# Get Stripe keys from environment (set in production)
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "sk_test_placeholder")
-STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "pk_test_placeholder")
+# Initialize Stripe with API key from settings
+if settings.STRIPE_SECRET_KEY:
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+else:
+    logger.warning("STRIPE_SECRET_KEY not configured - payment processing disabled")
+
+
+def is_stripe_configured() -> bool:
+    """Check if Stripe is properly configured."""
+    return bool(settings.STRIPE_SECRET_KEY and settings.STRIPE_PUBLISHABLE_KEY)
 
 
 # =============================================================================
@@ -134,7 +150,12 @@ async def get_stripe_config(
     current_user: CurrentUser,
 ) -> StripeConfig:
     """Get Stripe publishable key for frontend."""
-    return StripeConfig(publishable_key=STRIPE_PUBLISHABLE_KEY, connected_account_id=None)
+    if not settings.STRIPE_PUBLISHABLE_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="Stripe is not configured. Please set STRIPE_PUBLISHABLE_KEY.",
+        )
+    return StripeConfig(publishable_key=settings.STRIPE_PUBLISHABLE_KEY, connected_account_id=None)
 
 
 # =============================================================================
@@ -149,23 +170,55 @@ async def create_payment_intent(
     current_user: CurrentUser,
 ) -> PaymentIntentResponse:
     """Create a payment intent for an invoice."""
-    # In production, this would call Stripe API:
-    # stripe.PaymentIntent.create(
-    #     amount=request.amount,
-    #     currency=request.currency,
-    #     metadata={'invoice_id': request.invoice_id},
-    # )
+    if not is_stripe_configured():
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
 
-    # Mock response for development
-    payment_intent_id = f"pi_{uuid4().hex[:24]}"
-    client_secret = f"{payment_intent_id}_secret_{uuid4().hex[:24]}"
+    try:
+        # Verify invoice exists
+        result = await db.execute(
+            select(Invoice).where(Invoice.id == uuid.UUID(request.invoice_id))
+        )
+        invoice = result.scalar_one_or_none()
 
-    return PaymentIntentResponse(
-        client_secret=client_secret,
-        payment_intent_id=payment_intent_id,
-        amount=request.amount,
-        currency=request.currency,
-    )
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        # Use invoice total if amount not provided, otherwise use requested amount
+        amount_cents = request.amount
+        if amount_cents <= 0:
+            # Calculate from invoice
+            amount_cents = int((float(invoice.amount) or 0) * 100)
+
+        if amount_cents <= 0:
+            raise HTTPException(status_code=400, detail="Invalid payment amount")
+
+        # Create Stripe payment intent
+        intent = stripe.PaymentIntent.create(
+            amount=amount_cents,
+            currency=request.currency,
+            metadata={
+                "invoice_id": str(invoice.id),
+                "invoice_number": invoice.invoice_number or "",
+                "customer_id": str(invoice.customer_id) if invoice.customer_id else "",
+            },
+            receipt_email=request.customer_email,
+        )
+
+        logger.info(f"Created payment intent {intent.id} for invoice {invoice.id}")
+
+        return PaymentIntentResponse(
+            client_secret=intent.client_secret,
+            payment_intent_id=intent.id,
+            amount=intent.amount,
+            currency=intent.currency,
+        )
+
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error creating payment intent: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating payment intent: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create payment intent")
 
 
 @router.post("/confirm")
@@ -175,20 +228,71 @@ async def confirm_payment(
     current_user: CurrentUser,
 ) -> PaymentResult:
     """Confirm payment and update invoice status."""
-    # In production:
-    # 1. Verify payment intent with Stripe
-    # 2. Update invoice status to 'paid'
-    # 3. Create payment record
+    if not is_stripe_configured():
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
 
-    payment_id = f"pay_{uuid4().hex[:16]}"
+    try:
+        # Retrieve payment intent from Stripe
+        intent = stripe.PaymentIntent.retrieve(request.payment_intent_id)
 
-    return PaymentResult(
-        success=True,
-        payment_id=payment_id,
-        invoice_id=request.invoice_id,
-        amount=0,  # Would come from Stripe
-        status="succeeded",
-    )
+        if intent.status != "succeeded":
+            return PaymentResult(
+                success=False,
+                payment_id="",
+                invoice_id=request.invoice_id,
+                amount=intent.amount,
+                status=intent.status,
+                error_message=f"Payment status: {intent.status}",
+            )
+
+        # Get invoice
+        result = await db.execute(
+            select(Invoice).where(Invoice.id == uuid.UUID(request.invoice_id))
+        )
+        invoice = result.scalar_one_or_none()
+
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        # Update invoice status
+        amount_dollars = intent.amount / 100
+        invoice.status = "paid"
+        invoice.paid_amount = amount_dollars
+        invoice.paid_date = datetime.utcnow().date()
+
+        # Create payment record (id is auto-generated integer)
+        payment = Payment(
+            invoice_id=invoice.id,
+            customer_id=None,  # We don't have integer customer_id readily available
+            amount=amount_dollars,
+            payment_method="card",
+            stripe_payment_intent_id=intent.id,
+            stripe_charge_id=intent.latest_charge if hasattr(intent, "latest_charge") else None,
+            status="completed",
+            payment_date=datetime.utcnow(),
+        )
+        db.add(payment)
+
+        await db.commit()
+        await db.refresh(invoice)
+        await db.refresh(payment)
+
+        logger.info(f"Payment confirmed for invoice {invoice.id}: ${amount_dollars}")
+
+        return PaymentResult(
+            success=True,
+            payment_id=str(payment.id),
+            invoice_id=str(invoice.id),
+            amount=intent.amount,
+            status="succeeded",
+        )
+
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error confirming payment: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error confirming payment: {e}")
+        raise HTTPException(status_code=500, detail="Failed to confirm payment")
 
 
 # =============================================================================
@@ -203,29 +307,9 @@ async def get_customer_payment_methods(
     current_user: CurrentUser,
 ) -> dict:
     """Get saved payment methods for a customer."""
-    # In production: fetch from database/Stripe
-
-    # Mock data
-    payment_methods = [
-        SavedPaymentMethod(
-            id="pm_1",
-            stripe_payment_method_id=f"pm_{uuid4().hex[:24]}",
-            type="card",
-            last4="4242",
-            brand="visa",
-            is_default=True,
-        ),
-        SavedPaymentMethod(
-            id="pm_2",
-            stripe_payment_method_id=f"pm_{uuid4().hex[:24]}",
-            type="card",
-            last4="1234",
-            brand="mastercard",
-            is_default=False,
-        ),
-    ]
-
-    return {"payment_methods": [pm.model_dump() for pm in payment_methods]}
+    # For now, return empty list - saved payment methods require Stripe Customer IDs
+    # which would need to be stored in the database
+    return {"payment_methods": []}
 
 
 @router.post("/save-payment-method")
@@ -235,18 +319,11 @@ async def save_payment_method(
     current_user: CurrentUser,
 ) -> SavedPaymentMethod:
     """Save a payment method to customer account."""
-    # In production:
-    # 1. Attach payment method to Stripe customer
-    # 2. Store reference in database
+    if not is_stripe_configured():
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
 
-    return SavedPaymentMethod(
-        id=f"pm_{uuid4().hex[:8]}",
-        stripe_payment_method_id=request.payment_method_id,
-        type="card",
-        last4="4242",
-        brand="visa",
-        is_default=request.set_as_default,
-    )
+    # TODO: Implement saved payment methods with Stripe Customer objects
+    raise HTTPException(status_code=501, detail="Saved payment methods not yet implemented")
 
 
 @router.delete("/payment-methods/{payment_method_id}")
@@ -256,8 +333,11 @@ async def delete_payment_method(
     current_user: CurrentUser,
 ) -> dict:
     """Delete a saved payment method."""
-    # In production: detach from Stripe customer, delete from DB
-    return {"success": True}
+    if not is_stripe_configured():
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
+
+    # TODO: Implement payment method deletion
+    raise HTTPException(status_code=501, detail="Not yet implemented")
 
 
 @router.post("/set-default-payment-method")
@@ -268,7 +348,8 @@ async def set_default_payment_method(
     current_user: CurrentUser = None,
 ) -> dict:
     """Set a payment method as the default for a customer."""
-    return {"success": True}
+    # TODO: Implement default payment method
+    raise HTTPException(status_code=501, detail="Not yet implemented")
 
 
 # =============================================================================
@@ -283,16 +364,70 @@ async def charge_payment_method(
     current_user: CurrentUser,
 ) -> PaymentResult:
     """Charge a saved payment method."""
-    # In production:
-    # 1. Create payment intent with saved payment method
-    # 2. Confirm immediately
-    # 3. Update invoice status
+    if not is_stripe_configured():
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
 
-    payment_id = f"pay_{uuid4().hex[:16]}"
+    try:
+        # Create and confirm payment intent with saved payment method
+        intent = stripe.PaymentIntent.create(
+            amount=request.amount,
+            currency="usd",
+            payment_method=request.payment_method_id,
+            confirm=True,
+            off_session=True,
+            metadata={"invoice_id": request.invoice_id},
+        )
 
-    return PaymentResult(
-        success=True, payment_id=payment_id, invoice_id=request.invoice_id, amount=request.amount, status="succeeded"
-    )
+        if intent.status == "succeeded":
+            # Update invoice
+            result = await db.execute(
+                select(Invoice).where(Invoice.id == uuid.UUID(request.invoice_id))
+            )
+            invoice = result.scalar_one_or_none()
+
+            if invoice:
+                invoice.status = "paid"
+                invoice.paid_amount = intent.amount / 100
+                invoice.paid_date = datetime.utcnow().date()
+
+                payment = Payment(
+                    invoice_id=invoice.id,
+                    amount=intent.amount / 100,
+                    payment_method="card",
+                    stripe_payment_intent_id=intent.id,
+                    status="completed",
+                    payment_date=datetime.utcnow(),
+                )
+                db.add(payment)
+                await db.commit()
+                await db.refresh(payment)
+
+            return PaymentResult(
+                success=True,
+                payment_id=str(payment.id) if payment else "",
+                invoice_id=request.invoice_id,
+                amount=intent.amount,
+                status="succeeded",
+            )
+        else:
+            return PaymentResult(
+                success=False,
+                payment_id="",
+                invoice_id=request.invoice_id,
+                amount=request.amount,
+                status=intent.status,
+                error_message=f"Payment {intent.status}",
+            )
+
+    except stripe.error.CardError as e:
+        return PaymentResult(
+            success=False,
+            payment_id="",
+            invoice_id=request.invoice_id,
+            amount=request.amount,
+            status="failed",
+            error_message=str(e),
+        )
 
 
 # =============================================================================
@@ -307,14 +442,20 @@ async def setup_ach_payment(
     current_user: CurrentUser,
 ) -> dict:
     """Set up ACH payment for a customer."""
-    # In production:
-    # 1. Create Stripe SetupIntent for us_bank_account
-    # 2. Return client secret for frontend
+    if not is_stripe_configured():
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
 
-    setup_intent_id = f"seti_{uuid4().hex[:24]}"
-    client_secret = f"{setup_intent_id}_secret_{uuid4().hex[:24]}"
+    try:
+        # Create SetupIntent for ACH
+        setup_intent = stripe.SetupIntent.create(
+            payment_method_types=["us_bank_account"],
+            usage="off_session",
+        )
 
-    return {"setup_intent_client_secret": client_secret}
+        return {"setup_intent_client_secret": setup_intent.client_secret}
+
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # =============================================================================
@@ -329,18 +470,29 @@ async def get_invoice_payment_history(
     current_user: CurrentUser,
 ) -> dict:
     """Get payment history for an invoice."""
-    # Mock data
-    payments = [
-        PaymentHistoryItem(
-            id=f"pay_{uuid4().hex[:8]}",
-            amount=15000,  # $150.00 in cents
-            status="succeeded",
-            created_at=datetime.utcnow().isoformat(),
-            method="card",
-        ),
-    ]
+    try:
+        # Query payments from database
+        result = await db.execute(
+            select(Payment).where(Payment.invoice_id == uuid.UUID(invoice_id))
+        )
+        payments = result.scalars().all()
 
-    return {"payments": [p.model_dump() for p in payments]}
+        history = [
+            PaymentHistoryItem(
+                id=str(p.id),
+                amount=int((p.amount or 0) * 100),  # Convert to cents
+                status=p.status or "unknown",
+                created_at=p.payment_date.isoformat() if p.payment_date else "",
+                method=p.payment_method or "card",
+            )
+            for p in payments
+        ]
+
+        return {"payments": [h.model_dump() for h in history]}
+
+    except Exception as e:
+        logger.error(f"Error fetching payment history: {e}")
+        return {"payments": []}
 
 
 # =============================================================================
@@ -357,17 +509,38 @@ async def create_refund(
     current_user: CurrentUser = None,
 ) -> dict:
     """Create a refund for a payment."""
-    # In production: call Stripe refund API
+    if not is_stripe_configured():
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
 
-    refund_id = f"re_{uuid4().hex[:16]}"
+    try:
+        # Get payment record
+        result = await db.execute(
+            select(Payment).where(Payment.id == uuid.UUID(payment_id))
+        )
+        payment = result.scalar_one_or_none()
 
-    return {
-        "refund_id": refund_id,
-        "payment_id": payment_id,
-        "amount": amount,
-        "status": "succeeded",
-        "created_at": datetime.utcnow().isoformat(),
-    }
+        if not payment or not payment.stripe_payment_intent_id:
+            raise HTTPException(status_code=404, detail="Payment not found or not refundable")
+
+        # Create Stripe refund
+        refund_params = {"payment_intent": payment.stripe_payment_intent_id}
+        if amount:
+            refund_params["amount"] = amount
+        if reason:
+            refund_params["reason"] = reason
+
+        refund = stripe.Refund.create(**refund_params)
+
+        return {
+            "refund_id": refund.id,
+            "payment_id": payment_id,
+            "amount": refund.amount,
+            "status": refund.status,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # =============================================================================
@@ -377,12 +550,49 @@ async def create_refund(
 
 @router.post("/webhook")
 async def stripe_webhook(
+    request: Request,
     db: DbSession,
 ) -> dict:
     """Handle Stripe webhook events."""
-    # In production:
-    # 1. Verify webhook signature
-    # 2. Process event (payment_intent.succeeded, etc.)
-    # 3. Update database accordingly
+    if not settings.STRIPE_WEBHOOK_SECRET:
+        logger.warning("Stripe webhook received but STRIPE_WEBHOOK_SECRET not configured")
+        return {"received": True, "warning": "Webhook secret not configured"}
+
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    # Handle the event
+    if event.type == "payment_intent.succeeded":
+        intent = event.data.object
+        invoice_id = intent.metadata.get("invoice_id")
+
+        if invoice_id:
+            try:
+                result = await db.execute(
+                    select(Invoice).where(Invoice.id == uuid.UUID(invoice_id))
+                )
+                invoice = result.scalar_one_or_none()
+
+                if invoice and invoice.status != "paid":
+                    invoice.status = "paid"
+                    invoice.paid_amount = intent.amount / 100
+                    invoice.paid_date = datetime.utcnow().date()
+                    await db.commit()
+                    logger.info(f"Webhook: Updated invoice {invoice_id} to paid")
+            except Exception as e:
+                logger.error(f"Webhook: Error updating invoice: {e}")
+
+    elif event.type == "payment_intent.payment_failed":
+        intent = event.data.object
+        logger.warning(f"Payment failed for intent {intent.id}")
 
     return {"received": True}
