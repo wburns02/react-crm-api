@@ -839,7 +839,7 @@ async def health_check():
 
     return {
         "status": "healthy",
-        "version": "2.9.1",  # Added fix-api-users endpoint for is_admin column
+        "version": "2.9.2",  # is_admin as property to avoid missing column error
         "environment": settings.ENVIRONMENT,
         "rate_limiting": "redis" if settings.RATE_LIMIT_REDIS_ENABLED else "memory",
         "features": [
