@@ -839,7 +839,7 @@ async def health_check():
 
     return {
         "status": "healthy",
-        "version": "2.9.0",  # MFA models imported for login fix
+        "version": "2.9.1",  # Added fix-api-users endpoint for is_admin column
         "environment": settings.ENVIRONMENT,
         "rate_limiting": "redis" if settings.RATE_LIMIT_REDIS_ENABLED else "memory",
         "features": [
@@ -1210,6 +1210,9 @@ async def fix_table_schema():
 
     # Columns to add to each table (column_name, type)
     missing_columns = {
+        "api_users": [
+            ("is_admin", "BOOLEAN DEFAULT FALSE"),
+        ],
         "activities": [
             ("created_by", "VARCHAR(100)"),
             ("activity_date", "TIMESTAMP WITH TIME ZONE"),
@@ -1294,6 +1297,76 @@ async def fix_table_schema():
 
     except Exception as e:
         results["errors"].append(str(e))
+
+    return results
+
+
+@app.post("/health/db/fix-api-users")
+async def fix_api_users_table():
+    """
+    Explicitly add missing columns to api_users table.
+
+    This endpoint is designed to fix the is_admin column issue that
+    causes login to fail with ProgrammingError.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {
+        "existing_columns": [],
+        "columns_added": [],
+        "errors": [],
+        "actions": []
+    }
+
+    try:
+        async with async_session_maker() as session:
+            # First, get current columns
+            result = await session.execute(
+                text("""
+                    SELECT column_name, data_type
+                    FROM information_schema.columns
+                    WHERE table_name = 'api_users'
+                    ORDER BY ordinal_position
+                """)
+            )
+            columns = result.fetchall()
+            results["existing_columns"] = [{"name": c[0], "type": c[1]} for c in columns]
+            existing_names = {c[0] for c in columns}
+
+            # Columns that should exist in api_users
+            required_columns = [
+                ("is_admin", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ]
+
+            for col_name, col_def in required_columns:
+                if col_name not in existing_names:
+                    try:
+                        results["actions"].append(f"Adding column: {col_name}")
+                        await session.execute(
+                            text(f"ALTER TABLE api_users ADD COLUMN {col_name} {col_def}")
+                        )
+                        results["columns_added"].append(col_name)
+                        results["actions"].append(f"Successfully added: {col_name}")
+                    except Exception as add_err:
+                        results["errors"].append(f"Failed to add {col_name}: {type(add_err).__name__}: {str(add_err)}")
+                else:
+                    results["actions"].append(f"Column {col_name} already exists")
+
+            # Promote will@macseptic.com to admin if is_admin was just added
+            if "is_admin" in results["columns_added"]:
+                try:
+                    await session.execute(
+                        text("UPDATE api_users SET is_admin = true WHERE email = 'will@macseptic.com'")
+                    )
+                    results["actions"].append("Promoted will@macseptic.com to admin")
+                except Exception as promo_err:
+                    results["errors"].append(f"Failed to promote admin: {str(promo_err)}")
+
+            await session.commit()
+
+    except Exception as e:
+        results["errors"].append(f"General error: {type(e).__name__}: {str(e)}")
 
     return results
 
