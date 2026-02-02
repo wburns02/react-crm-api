@@ -481,6 +481,47 @@ async def ensure_work_order_number_column():
             logger.warning(f"Could not ensure work_order_number column: {type(e).__name__}: {e}")
 
 
+async def ensure_is_admin_column():
+    """
+    Ensure api_users table has is_admin column.
+
+    This column is needed for RBAC admin role detection.
+    Added by migration 043 but may not have run on Railway.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    async with async_session_maker() as session:
+        try:
+            # Check if is_admin column exists
+            result = await session.execute(
+                text(
+                    """SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'api_users' AND column_name = 'is_admin'
+                )"""
+                )
+            )
+            column_exists = result.scalar()
+
+            if not column_exists:
+                logger.info("Adding missing is_admin column to api_users...")
+                await session.execute(
+                    text("ALTER TABLE api_users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT false")
+                )
+                # Promote will@macseptic.com to admin
+                await session.execute(
+                    text("UPDATE api_users SET is_admin = true WHERE email = 'will@macseptic.com'")
+                )
+                await session.commit()
+                logger.info("Added is_admin column and promoted admin user")
+            else:
+                logger.debug("is_admin column already exists")
+
+        except Exception as e:
+            logger.warning(f"Could not ensure is_admin column: {type(e).__name__}: {e}")
+
+
 async def ensure_commissions_columns():
     """
     Ensure commissions table has auto-calculation columns.
@@ -570,6 +611,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure work_orders table has work_order_number column
         await ensure_work_order_number_column()
+
+        # Ensure api_users table has is_admin column (fix for migration 043 not running)
+        await ensure_is_admin_column()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
@@ -682,10 +726,15 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    warnings = []
+    if not settings.RATE_LIMIT_REDIS_ENABLED:
+        warnings.append("rate_limiting_not_distributed")
+
     return {
         "status": "healthy",
-        "version": "2.8.8",  # RBAC authorization enforcement
+        "version": "2.8.9",  # is_admin column + rate limiting awareness
         "environment": settings.ENVIRONMENT,
+        "rate_limiting": "redis" if settings.RATE_LIMIT_REDIS_ENABLED else "memory",
         "features": [
             "public_api",
             "oauth2",
@@ -695,7 +744,9 @@ async def health_check():
             "technician_performance",
             "call_intelligence",
             "email_crm",
+            "rbac_admin_role",
         ],
+        "warnings": warnings,
     }
 
 

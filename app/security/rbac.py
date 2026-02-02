@@ -74,8 +74,8 @@ def get_user_role(user: "User") -> Role:
     """Determine user's role from database flags."""
     if user.is_superuser:
         return Role.SUPERUSER
-    # Check for admin flag if added to model, otherwise default to USER
-    if getattr(user, "is_admin", False):
+    # Check for admin flag - column added in migration 043
+    if user.is_admin:
         return Role.ADMIN
     return Role.USER
 
