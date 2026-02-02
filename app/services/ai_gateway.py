@@ -212,11 +212,8 @@ class AIGateway:
         openai_key = getattr(settings, "OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
 
         if not openai_key:
-            logger.error("No OpenAI API key configured for fallback")
-            return {
-                "content": "[AI server unavailable and no cloud fallback configured]",
-                "error": "no_fallback_available",
-            }
+            # Try Anthropic as second fallback
+            return await self._anthropic_fallback(messages, max_tokens, temperature, system_prompt)
 
         try:
             # Prepend system prompt if provided
@@ -250,6 +247,64 @@ class AIGateway:
                 }
         except Exception as e:
             logger.error(f"OpenAI fallback error: {e}")
+            # Try Anthropic as final fallback
+            return await self._anthropic_fallback(messages, max_tokens, temperature, system_prompt)
+
+    async def _anthropic_fallback(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        system_prompt: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fallback to Anthropic Claude when OpenAI is unavailable."""
+        anthropic_key = getattr(settings, "ANTHROPIC_API_KEY", None) or os.getenv("ANTHROPIC_API_KEY")
+
+        if not anthropic_key:
+            logger.error("No Anthropic API key configured for fallback")
+            return {
+                "content": "[AI server unavailable and no cloud fallback configured]",
+                "error": "no_fallback_available",
+            }
+
+        try:
+            # Build Anthropic request format
+            payload = {
+                "model": "claude-3-5-sonnet-20241022",
+                "max_tokens": max_tokens,
+                "messages": messages,
+            }
+
+            if system_prompt:
+                payload["system"] = system_prompt
+
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": anthropic_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                # Extract content from Anthropic response
+                content = ""
+                if "content" in data and len(data["content"]) > 0:
+                    content = data["content"][0].get("text", "")
+
+                logger.info("Successfully used Anthropic fallback")
+
+                return {
+                    "content": content,
+                    "usage": data.get("usage", {}),
+                    "model": "claude-3.5-sonnet (fallback)",
+                }
+        except Exception as e:
+            logger.error(f"Anthropic fallback error: {e}")
             return {
                 "content": f"[AI temporarily unavailable - {str(e)[:50]}]",
                 "error": str(e),

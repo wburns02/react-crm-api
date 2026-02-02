@@ -44,6 +44,7 @@ from app.api.v2 import (
     marketing,
     marketing_hub,
     marketing_tasks,
+    content_generator,  # World-Class AI Content Generator
     # Phase 8: Schedule Map View
     schedule_map,
     # Phase 9: Employee Portal
@@ -168,6 +169,7 @@ api_router.include_router(predictions.router, prefix="/predictions", tags=["pred
 api_router.include_router(marketing.router, prefix="/marketing", tags=["marketing"])
 api_router.include_router(marketing_hub.router, prefix="/marketing-hub", tags=["marketing-hub"])
 api_router.include_router(marketing_tasks.router, prefix="/marketing-hub", tags=["marketing-tasks"])
+api_router.include_router(content_generator.router, prefix="/content-generator", tags=["content-generator"])
 
 # Phase 8: Schedule Map View
 api_router.include_router(schedule_map.router, prefix="/schedule-map", tags=["schedule-map"])
