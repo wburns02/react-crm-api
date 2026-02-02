@@ -269,6 +269,7 @@ class MarketingTasksResponse(BaseModel):
     alerts: List[MarketingAlert] = []
     metrics: MarketingMetrics = MarketingMetrics()
     lastUpdated: str = ""
+    demoMode: bool = False  # True when using fallback data (services unreachable)
 
 
 # Helper Functions
@@ -538,6 +539,7 @@ async def get_marketing_tasks(current_user: CurrentUser) -> MarketingTasksRespon
         alerts=alert_list,
         metrics=metrics,
         lastUpdated=now,
+        demoMode=not services_reachable,  # True when using fallback data
     )
 
 
