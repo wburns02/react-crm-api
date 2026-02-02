@@ -288,7 +288,7 @@ async def get_tracking_links(
 # Public endpoint - no auth required
 @router.get("/track/{token}", response_model=PublicTrackingInfo)
 async def get_public_tracking(
-    request: Request,
+    http_request: Request,
     token: str = Path(..., description="Tracking link token"),
     db: Session = Depends(get_db),
 ):
@@ -298,7 +298,7 @@ async def get_public_tracking(
     No authentication required.
     """
     # SECURITY: Rate limit to prevent enumeration and abuse
-    rate_limit_by_ip(request, requests_per_minute=60)
+    rate_limit_by_ip(http_request, requests_per_minute=60)
 
     service = GPSTrackingService(db)
     info = service.get_public_tracking_info(token)
