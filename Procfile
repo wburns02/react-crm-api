@@ -1,1 +1,1 @@
-web: sh -c 'echo "Running alembic migrations..." && alembic upgrade head 2>&1 || echo "Migration warning (may be normal)" && echo "Starting uvicorn..." && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'
+web: sh -c 'echo "=== Running Alembic migrations ===" && alembic upgrade head && echo "=== Migrations complete ===" || echo "WARNING: Migration failed, using runtime fallbacks" && echo "=== Starting uvicorn ===" && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'

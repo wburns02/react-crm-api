@@ -24,6 +24,7 @@ from app.schemas.booking import (
     BookingListResponse,
 )
 from app.services.clover_service import get_clover_service
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +177,13 @@ async def create_booking(
 
     # Get time window from slot
     time_start, time_end = TIME_SLOTS.get(booking_data.time_slot or "any", TIME_SLOTS["any"])
+
+    # SECURITY: Disable test mode in production
+    if booking_data.test_mode and settings.ENVIRONMENT == "production":
+        raise HTTPException(
+            status_code=400,
+            detail="Test mode is not available in production. Please provide a valid payment token."
+        )
 
     # Process payment (pre-authorize)
     clover = get_clover_service()

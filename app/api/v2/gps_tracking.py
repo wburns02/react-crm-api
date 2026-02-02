@@ -3,13 +3,14 @@ GPS Tracking API Endpoints
 Real-time location tracking, ETA, geofencing, and customer tracking links
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.api.deps import get_current_user
+from app.core.rate_limit import rate_limit_by_ip
 from app.services.gps_tracking_service import GPSTrackingService, GeofenceService
 from app.schemas.gps_tracking import (
     LocationUpdate,
@@ -286,12 +287,19 @@ async def get_tracking_links(
 
 # Public endpoint - no auth required
 @router.get("/track/{token}", response_model=PublicTrackingInfo)
-async def get_public_tracking(token: str = Path(..., description="Tracking link token"), db: Session = Depends(get_db)):
+async def get_public_tracking(
+    request: Request,
+    token: str = Path(..., description="Tracking link token"),
+    db: Session = Depends(get_db),
+):
     """
     PUBLIC ENDPOINT - Get tracking info for customer.
     This is the endpoint customers access to track their technician.
     No authentication required.
     """
+    # SECURITY: Rate limit to prevent enumeration and abuse
+    rate_limit_by_ip(request, requests_per_minute=60)
+
     service = GPSTrackingService(db)
     info = service.get_public_tracking_info(token)
 

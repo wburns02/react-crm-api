@@ -44,6 +44,7 @@ class CaptureSignatureRequest(BaseModel):
     signature_data: str = Field(..., description="Base64 image or SVG path data")
     signature_type: str = Field("drawn", description="drawn, typed, uploaded")
     consent_accepted: bool = True
+    signer_email: str = Field(..., description="Email of the signer for verification")
 
 
 class SignatureRequestResponse(BaseModel):
@@ -376,6 +377,13 @@ async def capture_signature(
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="Signing link has expired",
+        )
+
+    # SECURITY: Verify signer email matches the intended recipient
+    if request.signer_email.lower().strip() != sig_request.signer_email.lower().strip():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email address does not match the intended signer",
         )
 
     # Create signature record
