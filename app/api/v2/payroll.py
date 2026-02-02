@@ -1850,14 +1850,17 @@ async def create_pay_rate(
             existing.is_active = False
             existing.end_date = date.today()
 
+        # Calculate overtime_multiplier safely (avoid division by zero/None)
+        overtime_multiplier = 1.5  # Default
+        if request.hourly_rate and request.overtime_rate and request.hourly_rate > 0:
+            overtime_multiplier = request.overtime_rate / request.hourly_rate
+
         # Create new rate
         rate = TechnicianPayRate(
             technician_id=request.technician_id,
             pay_type=request.pay_type or "hourly",
             hourly_rate=request.hourly_rate,
-            overtime_multiplier=(request.overtime_rate / request.hourly_rate)
-            if request.hourly_rate and request.overtime_rate
-            else 1.5,
+            overtime_multiplier=overtime_multiplier,
             salary_amount=request.salary_amount,
             job_commission_rate=request.commission_rate or 0,
             upsell_commission_rate=0,
