@@ -5,12 +5,13 @@ Provides authorization controls for high-risk endpoints.
 """
 
 from enum import Enum
-from typing import Set, Callable
+from typing import Set, Callable, Annotated, TYPE_CHECKING
 from functools import wraps
 from fastapi import HTTPException, status, Depends
 import logging
 
-from app.models.user import User
+if TYPE_CHECKING:
+    from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,13 @@ class Permission(str, Enum):
     MANAGE_USERS = "manage_users"
     VIEW_ALL_COMMUNICATIONS = "view_all_communications"
     ADMIN_PANEL = "admin_panel"
+    # Financial permissions
+    MANAGE_PAYMENTS = "manage_payments"
+    MANAGE_INVOICES = "manage_invoices"
+    MANAGE_PAYROLL = "manage_payroll"
+    APPROVE_PAYROLL = "approve_payroll"
+    # Work order permissions
+    MANAGE_WORK_ORDERS = "manage_work_orders"
 
 
 # Role-to-permissions mapping
@@ -43,6 +51,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.SEND_EMAIL,
         Permission.VIEW_CUSTOMERS,
         Permission.EDIT_CUSTOMERS,
+        Permission.MANAGE_WORK_ORDERS,
     },
     Role.ADMIN: {
         Permission.SEND_SMS,
@@ -52,12 +61,16 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.DELETE_CUSTOMERS,
         Permission.VIEW_ALL_COMMUNICATIONS,
         Permission.ADMIN_PANEL,
+        Permission.MANAGE_PAYMENTS,
+        Permission.MANAGE_INVOICES,
+        Permission.MANAGE_PAYROLL,
+        Permission.MANAGE_WORK_ORDERS,
     },
     Role.SUPERUSER: set(Permission),  # All permissions
 }
 
 
-def get_user_role(user: User) -> Role:
+def get_user_role(user: "User") -> Role:
     """Determine user's role from database flags."""
     if user.is_superuser:
         return Role.SUPERUSER
@@ -67,13 +80,13 @@ def get_user_role(user: User) -> Role:
     return Role.USER
 
 
-def get_user_permissions(user: User) -> Set[Permission]:
+def get_user_permissions(user: "User") -> Set[Permission]:
     """Get all permissions for a user based on their role."""
     role = get_user_role(user)
     return ROLE_PERMISSIONS.get(role, set())
 
 
-def has_permission(user: User, permission: Permission) -> bool:
+def has_permission(user: "User", permission: Permission) -> bool:
     """Check if user has a specific permission."""
     return permission in get_user_permissions(user)
 
@@ -90,8 +103,9 @@ def require_permission(permission: Permission):
         ):
             ...
     """
+    from app.api.deps import get_current_active_user
 
-    def checker(current_user: User) -> None:
+    async def checker(current_user = Depends(get_current_active_user)) -> None:
         if not has_permission(current_user, permission):
             logger.warning(
                 f"Permission denied: user {current_user.id} lacks {permission.value}",
@@ -104,31 +118,39 @@ def require_permission(permission: Permission):
     return checker
 
 
-def require_admin(current_user: User) -> None:
-    """
-    Dependency for requiring admin or superuser role.
+def get_require_admin():
+    """Get the require_admin dependency (avoids circular import)."""
+    from app.api.deps import get_current_active_user
 
-    Usage:
-        @router.post("/admin/users")
-        async def manage_users(
-            current_user: CurrentUser,
-            _: None = Depends(require_admin)
-        ):
-            ...
-    """
-    role = get_user_role(current_user)
-    if role not in (Role.ADMIN, Role.SUPERUSER):
-        logger.warning(
-            f"Admin access denied for user {current_user.id}", extra={"user_id": current_user.id, "role": role.value}
-        )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    async def require_admin_check(current_user = Depends(get_current_active_user)) -> None:
+        """Dependency for requiring admin or superuser role."""
+        role = get_user_role(current_user)
+        if role not in (Role.ADMIN, Role.SUPERUSER):
+            logger.warning(
+                f"Admin access denied for user {current_user.id}",
+                extra={"user_id": current_user.id, "role": role.value}
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    return require_admin_check
 
 
-def require_superuser(current_user: User) -> None:
-    """Dependency for requiring superuser role."""
-    if not current_user.is_superuser:
-        logger.warning(f"Superuser access denied for user {current_user.id}", extra={"user_id": current_user.id})
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superuser access required")
+def get_require_superuser():
+    """Get the require_superuser dependency (avoids circular import)."""
+    from app.api.deps import get_current_active_user
+
+    async def require_superuser_check(current_user = Depends(get_current_active_user)) -> None:
+        """Dependency for requiring superuser role."""
+        if not current_user.is_superuser:
+            logger.warning(f"Superuser access denied for user {current_user.id}", extra={"user_id": current_user.id})
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superuser access required")
+
+    return require_superuser_check
+
+
+# Pre-built dependencies for common use
+require_admin = get_require_admin()
+require_superuser = get_require_superuser()
 
 
 class RBACChecker:
@@ -153,7 +175,8 @@ class RBACChecker:
         self.required_role = required_role
         self.any_permission = any_permission
 
-    def __call__(self, current_user: User) -> None:
+    async def __call__(self, current_user = Depends("app.api.deps.get_current_active_user")) -> None:
+        from app.api.deps import get_current_active_user
         # Check role if specified
         if self.required_role:
             user_role = get_user_role(current_user)

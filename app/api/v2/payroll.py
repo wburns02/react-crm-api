@@ -8,7 +8,7 @@ Features:
 - Export for payroll systems (NACHA, CSV)
 """
 
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Depends
 from sqlalchemy import select, func, and_, delete, cast, String
 from typing import Optional, List
 from pydantic import BaseModel, Field
@@ -17,6 +17,7 @@ import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.payroll import PayrollPeriod, TimeEntry, Commission, TechnicianPayRate
+from app.security.rbac import require_admin, require_permission, Permission
 from app.models.technician import Technician
 from app.models.work_order import WorkOrder
 from app.models.dump_site import DumpSite
@@ -27,8 +28,12 @@ router = APIRouter()
 
 # Admin endpoint to fix missing columns
 @router.post("/commissions/fix-table")
-async def fix_commissions_table(db: DbSession, current_user: CurrentUser):
-    """Add missing columns to commissions table for auto-calculation."""
+async def fix_commissions_table(
+    db: DbSession,
+    current_user: CurrentUser,
+    _: None = Depends(require_admin),
+):
+    """Add missing columns to commissions table for auto-calculation. Requires admin."""
     from sqlalchemy import text
 
     try:
@@ -382,8 +387,9 @@ async def approve_payroll(
     period_id: str,
     db: DbSession,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ):
-    """Approve payroll period for processing."""
+    """Approve payroll period for processing. Requires admin access."""
     result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
     period = result.scalar_one_or_none()
 
@@ -978,8 +984,9 @@ async def delete_payroll_period(
     period_id: str,
     db: DbSession,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ):
-    """Delete a payroll period. Only draft/open periods can be deleted."""
+    """Delete a payroll period. Only draft/open periods can be deleted. Requires admin."""
     try:
         result = await db.execute(select(PayrollPeriod).where(PayrollPeriod.id == period_id))
         period = result.scalar_one_or_none()
@@ -1521,8 +1528,9 @@ async def bulk_approve_time_entries(
     request: BulkApproveTimeEntriesRequest,
     db: DbSession,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ):
-    """Bulk approve time entries."""
+    """Bulk approve time entries. Requires admin access."""
     approved = 0
     for entry_id in request.entry_ids:
         result = await db.execute(select(TimeEntry).where(TimeEntry.id == entry_id))
@@ -1756,8 +1764,9 @@ async def bulk_approve_commissions(
     request: BulkApproveCommissionsRequest,
     db: DbSession,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ):
-    """Bulk approve commissions."""
+    """Bulk approve commissions. Requires admin access."""
     approved = 0
     for comm_id in request.commission_ids:
         result = await db.execute(select(Commission).where(Commission.id == comm_id))
@@ -2412,8 +2421,9 @@ async def bulk_mark_paid_commissions(
     request: BulkMarkPaidRequest,
     db: DbSession,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ):
-    """Bulk mark commissions as paid."""
+    """Bulk mark commissions as paid. Requires admin access."""
     paid = 0
     for comm_id in request.commission_ids:
         result = await db.execute(select(Commission).where(Commission.id == comm_id))

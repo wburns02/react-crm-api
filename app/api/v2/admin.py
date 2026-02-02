@@ -5,7 +5,7 @@ Provides settings management for system, notifications, integrations, and securi
 Also provides user management endpoints.
 """
 
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Depends
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from sqlalchemy import select, delete, func
@@ -16,6 +16,7 @@ import logging
 
 from app.api.deps import CurrentUser, DbSession, get_password_hash
 from app.models.user import User
+from app.security.rbac import require_admin, require_superuser
 from app.models.customer import Customer
 
 # Customer Success imports
@@ -83,8 +84,9 @@ def user_to_response(user: User) -> dict:
 async def list_users(
     db: DbSession,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ):
-    """List all users."""
+    """List all users. Requires admin access."""
     result = await db.execute(select(User).order_by(User.created_at.desc()))
     users = result.scalars().all()
     return {"users": [user_to_response(u) for u in users]}
@@ -95,8 +97,9 @@ async def create_user(
     request: CreateUserRequest,
     db: DbSession,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ):
-    """Create a new user."""
+    """Create a new user. Requires admin access."""
     # Check if email already exists
     existing = await db.execute(select(User).where(User.email == request.email))
     if existing.scalar_one_or_none():
@@ -127,8 +130,9 @@ async def update_user(
     request: UpdateUserRequest,
     db: DbSession,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ):
-    """Update a user."""
+    """Update a user. Requires admin access."""
     result = await db.execute(select(User).where(User.id == int(user_id)))
     user = result.scalar_one_or_none()
 
@@ -163,8 +167,9 @@ async def deactivate_user(
     user_id: str,
     db: DbSession,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ):
-    """Deactivate a user (soft delete)."""
+    """Deactivate a user (soft delete). Requires admin access."""
     result = await db.execute(select(User).where(User.id == int(user_id)))
     user = result.scalar_one_or_none()
 
@@ -213,8 +218,11 @@ class SecuritySettings(BaseModel):
 
 
 @router.get("/settings/system")
-async def get_system_settings(current_user: CurrentUser) -> SystemSettings:
-    """Get system settings."""
+async def get_system_settings(
+    current_user: CurrentUser,
+    _: None = Depends(require_admin),
+) -> SystemSettings:
+    """Get system settings. Requires admin access."""
     return SystemSettings()
 
 
@@ -222,15 +230,19 @@ async def get_system_settings(current_user: CurrentUser) -> SystemSettings:
 async def update_system_settings(
     settings: SystemSettings,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ) -> SystemSettings:
-    """Update system settings."""
+    """Update system settings. Requires admin access."""
     # TODO: Persist settings to database
     return settings
 
 
 @router.get("/settings/notifications")
-async def get_notification_settings(current_user: CurrentUser) -> NotificationSettings:
-    """Get notification settings."""
+async def get_notification_settings(
+    current_user: CurrentUser,
+    _: None = Depends(require_admin),
+) -> NotificationSettings:
+    """Get notification settings. Requires admin access."""
     return NotificationSettings()
 
 
@@ -238,14 +250,18 @@ async def get_notification_settings(current_user: CurrentUser) -> NotificationSe
 async def update_notification_settings(
     settings: NotificationSettings,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ) -> NotificationSettings:
-    """Update notification settings."""
+    """Update notification settings. Requires admin access."""
     return settings
 
 
 @router.get("/settings/integrations")
-async def get_integration_settings(current_user: CurrentUser) -> IntegrationSettings:
-    """Get integration settings."""
+async def get_integration_settings(
+    current_user: CurrentUser,
+    _: None = Depends(require_admin),
+) -> IntegrationSettings:
+    """Get integration settings. Requires admin access."""
     return IntegrationSettings()
 
 
@@ -253,14 +269,18 @@ async def get_integration_settings(current_user: CurrentUser) -> IntegrationSett
 async def update_integration_settings(
     settings: IntegrationSettings,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ) -> IntegrationSettings:
-    """Update integration settings."""
+    """Update integration settings. Requires admin access."""
     return settings
 
 
 @router.get("/settings/security")
-async def get_security_settings(current_user: CurrentUser) -> SecuritySettings:
-    """Get security settings."""
+async def get_security_settings(
+    current_user: CurrentUser,
+    _: None = Depends(require_admin),
+) -> SecuritySettings:
+    """Get security settings. Requires admin access."""
     return SecuritySettings()
 
 
@@ -268,8 +288,9 @@ async def get_security_settings(current_user: CurrentUser) -> SecuritySettings:
 async def update_security_settings(
     settings: SecuritySettings,
     current_user: CurrentUser,
+    _: None = Depends(require_admin),
 ) -> SecuritySettings:
-    """Update security settings."""
+    """Update security settings. Requires admin access."""
     return settings
 
 
