@@ -31,44 +31,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/debug-config")
-async def get_twilio_debug_config():
-    """DEBUG: Check Twilio configuration values (no auth required)."""
-    from app.config import settings
-
-    return {
-        "account_sid_set": bool(settings.TWILIO_ACCOUNT_SID),
-        "account_sid_len": len(settings.TWILIO_ACCOUNT_SID or ""),
-        "account_sid_preview": (settings.TWILIO_ACCOUNT_SID or "")[:4] + "..." if settings.TWILIO_ACCOUNT_SID else None,
-        "auth_token_set": bool(settings.TWILIO_AUTH_TOKEN),
-        "auth_token_len": len(settings.TWILIO_AUTH_TOKEN or ""),
-        "phone_number": settings.TWILIO_PHONE_NUMBER,
-        "sms_from_number": settings.TWILIO_SMS_FROM_NUMBER,
-    }
-
-
-@router.get("/debug-messages-schema")
-async def debug_messages_schema(db: DbSession):
-    """DEBUG: Check messages table schema."""
-    from sqlalchemy import text
-
-    try:
-        result = await db.execute(
-            text(
-                """SELECT column_name, data_type, is_nullable
-                   FROM information_schema.columns
-                   WHERE table_name = 'messages'
-                   ORDER BY ordinal_position"""
-            )
-        )
-        columns = [{"name": row[0], "type": row[1], "nullable": row[2]} for row in result.fetchall()]
-
-        return {
-            "columns": columns,
-            "column_count": len(columns),
-        }
-    except Exception as e:
-        return {"error": str(e)}
+# DEBUG endpoints removed for security - Issue #5
+# Previously: /debug-config, /debug-messages-schema
+# These exposed sensitive configuration in production
 
 
 @router.get("/email/status")
