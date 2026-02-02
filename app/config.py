@@ -72,10 +72,15 @@ class Settings(BaseSettings):
     # Samsara Fleet Tracking
     SAMSARA_API_TOKEN: str | None = None
 
-    # Stripe Payment Processing
+    # Stripe Payment Processing (deprecated - use Clover)
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_PUBLISHABLE_KEY: str | None = None
     STRIPE_WEBHOOK_SECRET: str | None = None
+
+    # Clover Payment Processing
+    CLOVER_MERCHANT_ID: str | None = None
+    CLOVER_API_KEY: str | None = None
+    CLOVER_ENVIRONMENT: str = "sandbox"  # "sandbox" or "production"
 
     # AI Services
     OPENAI_API_KEY: str | None = None

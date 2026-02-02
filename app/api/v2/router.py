@@ -79,8 +79,9 @@ from app.api.v2 import (
     iot,
     # Phase 22: Onboarding & Help
     onboarding,
-    # Phase 23: Stripe Payment Processing
+    # Phase 23: Payment Processing
     stripe_payments,
+    clover_payments,
     # Phase 24: Quick Wins Bundle
     quickbooks,
     push_notifications,
@@ -219,8 +220,9 @@ api_router.include_router(iot.router, prefix="/iot", tags=["iot"])
 # Phase 22: Onboarding & Help
 api_router.include_router(onboarding.router, prefix="/onboarding", tags=["onboarding"])
 
-# Phase 23: Stripe Payment Processing
+# Phase 23: Payment Processing
 api_router.include_router(stripe_payments.router, prefix="/payments/stripe", tags=["stripe-payments"])
+api_router.include_router(clover_payments.router, prefix="/payments/clover", tags=["clover-payments"])
 
 # Phase 24: Quick Wins Bundle
 api_router.include_router(quickbooks.router, prefix="/integrations/quickbooks", tags=["quickbooks"])
