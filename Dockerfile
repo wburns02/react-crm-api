@@ -1,5 +1,5 @@
 FROM python:3.12-slim
-# Build: v2.7.10 - Force Railway rebuild - 2026-01-30T17:15:00
+# Build: v2.9.2 - Force Railway rebuild - 2026-02-02T17:25:00
 
 WORKDIR /app
 
