@@ -9,7 +9,7 @@ Features:
 """
 
 from fastapi import APIRouter, HTTPException, status, Query, Depends
-from sqlalchemy import select, func, and_, delete, cast, String
+from sqlalchemy import select, func, and_, or_, delete, cast, String
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timedelta
@@ -1050,15 +1050,32 @@ async def get_period_summary(
         )
         pay_rates = {r.technician_id: r for r in rates_result.scalars().all()}
 
-        # 4. Get time entries grouped by technician
+        # 4. Get time entries by DATE RANGE (not just period_id link)
+        # This ensures entries show up even if not explicitly linked to period
         entries_result = await db.execute(
-            select(TimeEntry).where(TimeEntry.payroll_period_id == period_id)
+            select(TimeEntry).where(
+                or_(
+                    TimeEntry.payroll_period_id == period_id,
+                    and_(
+                        TimeEntry.entry_date >= period.start_date,
+                        TimeEntry.entry_date <= period.end_date
+                    )
+                )
+            )
         )
         entries = entries_result.scalars().all()
 
-        # 5. Get commissions
+        # 5. Get commissions by DATE RANGE (not just period_id link)
         comm_result = await db.execute(
-            select(Commission).where(Commission.payroll_period_id == period_id)
+            select(Commission).where(
+                or_(
+                    Commission.payroll_period_id == period_id,
+                    and_(
+                        Commission.earned_date >= period.start_date,
+                        Commission.earned_date <= period.end_date
+                    )
+                )
+            )
         )
         commissions = comm_result.scalars().all()
 
