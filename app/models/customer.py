@@ -18,11 +18,10 @@ class Customer(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # UUID column for efficient joins with Invoice table
-    # This is a deterministic UUID computed from the integer ID
-    # NOTE: This column may not exist until migration 040 runs
-    # The code is backwards-compatible and works without this column
-    customer_uuid = Column(UUID(as_uuid=True), unique=True, index=True, nullable=True)
+    # NOTE: customer_uuid column removed from model until migration 040 runs
+    # The invoices.py code computes UUIDs dynamically using customer_id_to_uuid()
+    # After migration runs, this column can be re-added for O(1) lookups
+    # customer_uuid = Column(UUID(as_uuid=True), unique=True, index=True, nullable=True)
     first_name = Column(String(100))
     last_name = Column(String(100))
     email = Column(String(255), index=True)
@@ -101,9 +100,13 @@ class Customer(Base):
         return uuid_module.uuid5(CUSTOMER_UUID_NAMESPACE, str(self.id))
 
     def ensure_uuid(self) -> None:
-        """Ensure customer_uuid is set (compute if missing)."""
-        if not self.customer_uuid and self.id:
-            self.customer_uuid = self.compute_uuid()
+        """Ensure customer_uuid is set (compute if missing).
+
+        NOTE: This is a no-op until migration 040 runs and customer_uuid
+        column is added back to the model.
+        """
+        # Column removed until migration runs
+        pass
 
     @property
     def full_name(self):
