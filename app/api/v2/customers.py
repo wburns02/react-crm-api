@@ -126,10 +126,15 @@ async def create_customer(
     await db.commit()
     await db.refresh(customer)
 
-    # Set the customer_uuid for invoice FK optimization
-    customer.ensure_uuid()
-    await db.commit()
-    await db.refresh(customer)
+    # Try to set the customer_uuid for invoice FK optimization
+    # This may fail if migration 040 hasn't run yet, which is OK
+    try:
+        customer.ensure_uuid()
+        await db.commit()
+        await db.refresh(customer)
+    except Exception:
+        # Column doesn't exist yet - that's OK, app works without it
+        pass
 
     return customer
 

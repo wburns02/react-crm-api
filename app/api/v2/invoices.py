@@ -41,10 +41,10 @@ def customer_id_to_uuid(customer_id: int) -> uuid.UUID:
 
 
 async def find_customer_by_invoice_uuid(db, invoice_customer_id: uuid.UUID) -> Optional[Customer]:
-    """Find the Customer by their customer_uuid (indexed lookup).
+    """Find the Customer by their customer_uuid (indexed lookup with fallback).
 
-    OPTIMIZED: Uses the indexed customer_uuid column for O(1) lookup
-    instead of loading all customers.
+    OPTIMIZED: Tries indexed customer_uuid column for O(1) lookup first.
+    Falls back to computing UUID from integer ID if column doesn't exist.
 
     Args:
         db: Database session
@@ -57,21 +57,36 @@ async def find_customer_by_invoice_uuid(db, invoice_customer_id: uuid.UUID) -> O
         return None
 
     try:
-        # Direct indexed lookup - O(1) instead of O(n)
+        # First try indexed lookup - O(1)
         result = await db.execute(
             select(Customer).where(Customer.customer_uuid == invoice_customer_id)
         )
-        return result.scalar_one_or_none()
+        customer = result.scalar_one_or_none()
+        if customer:
+            return customer
     except Exception as e:
-        logger.warning(f"Error finding customer for invoice UUID: {e}")
-        return None
+        # Column doesn't exist yet - fall through to fallback
+        logger.debug(f"customer_uuid lookup failed (expected if migration not run): {e}")
+
+    # Fallback: compute UUID from integer IDs and match
+    # This is O(n) but keeps the app working before migration runs
+    try:
+        result = await db.execute(select(Customer))
+        all_customers = result.scalars().all()
+        for customer in all_customers:
+            if customer_id_to_uuid(customer.id) == invoice_customer_id:
+                return customer
+    except Exception as e:
+        logger.warning(f"Error in fallback customer lookup: {e}")
+
+    return None
 
 
 async def build_customer_uuid_map(db, invoice_customer_ids: set) -> dict:
     """Build a mapping of invoice customer UUIDs to Customer objects.
 
-    OPTIMIZED: Uses indexed customer_uuid column with IN clause
-    for efficient batch lookup.
+    OPTIMIZED: Tries indexed customer_uuid column with IN clause first.
+    Falls back to computing UUIDs from integer IDs if column doesn't exist.
 
     Args:
         db: Database session
@@ -83,8 +98,10 @@ async def build_customer_uuid_map(db, invoice_customer_ids: set) -> dict:
     if not invoice_customer_ids:
         return {}
 
+    uuid_map = {}
+
     try:
-        # Batch lookup using indexed column - O(log n) per lookup
+        # First try batch lookup using indexed column - O(log n) per lookup
         result = await db.execute(
             select(Customer).where(Customer.customer_uuid.in_(list(invoice_customer_ids)))
         )
@@ -93,10 +110,26 @@ async def build_customer_uuid_map(db, invoice_customer_ids: set) -> dict:
         # Build map: invoice_uuid -> customer
         uuid_map = {customer.customer_uuid: customer for customer in customers if customer.customer_uuid}
 
-        return uuid_map
+        # If we found matches, return them
+        if uuid_map:
+            return uuid_map
     except Exception as e:
-        logger.warning(f"Error building customer UUID map: {e}")
-        return {}
+        # Column doesn't exist yet - fall through to fallback
+        logger.debug(f"customer_uuid batch lookup failed (expected if migration not run): {e}")
+
+    # Fallback: load all customers and compute UUIDs
+    # This is O(n) but keeps the app working before migration runs
+    try:
+        result = await db.execute(select(Customer))
+        all_customers = result.scalars().all()
+        for customer in all_customers:
+            computed_uuid = customer_id_to_uuid(customer.id)
+            if computed_uuid in invoice_customer_ids:
+                uuid_map[computed_uuid] = customer
+    except Exception as e:
+        logger.warning(f"Error in fallback customer map building: {e}")
+
+    return uuid_map
 
 
 def invoice_to_response(invoice: Invoice, customer: Optional[Customer] = None) -> dict:

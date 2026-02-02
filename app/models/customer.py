@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, 
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 from app.database import Base
 import uuid as uuid_module
 
@@ -19,6 +20,8 @@ class Customer(Base):
 
     # UUID column for efficient joins with Invoice table
     # This is a deterministic UUID computed from the integer ID
+    # NOTE: This column may not exist until migration 040 runs
+    # The code is backwards-compatible and works without this column
     customer_uuid = Column(UUID(as_uuid=True), unique=True, index=True, nullable=True)
     first_name = Column(String(100))
     last_name = Column(String(100))
@@ -87,13 +90,8 @@ class Customer(Base):
     work_orders = relationship("WorkOrder", back_populates="customer")
     messages = relationship("Message", back_populates="customer")
     bookings = relationship("Booking", back_populates="customer", foreign_keys="Booking.customer_id")
-    # Invoice relationship via customer_uuid
-    invoices = relationship(
-        "Invoice",
-        primaryjoin="Customer.customer_uuid == foreign(Invoice.customer_id)",
-        viewonly=True,
-        lazy="dynamic",
-    )
+    # NOTE: Invoice relationship removed - use invoices.py helper functions instead
+    # The old relationship via customer_uuid caused errors when migration hasn't run
 
     def __repr__(self):
         return f"<Customer {self.first_name} {self.last_name}>"
