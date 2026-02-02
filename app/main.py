@@ -126,6 +126,9 @@ from app.models import (
 # OAuth models for public API
 from app.models.oauth import APIClient, APIToken
 
+# MFA models for authentication (CRITICAL: must be imported for User.mfa_settings relationship)
+from app.models.mfa import UserMFASettings, UserBackupCode, MFASession
+
 # Configure secure logging
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
@@ -578,6 +581,107 @@ async def ensure_commissions_columns():
             logger.warning(f"Could not ensure commissions columns: {type(e).__name__}: {e}")
 
 
+async def ensure_mfa_tables():
+    """
+    Ensure MFA tables exist for authentication.
+
+    These tables are needed for the User.mfa_settings relationship.
+    Added by migration 038 but may not have run on Railway.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    async with async_session_maker() as session:
+        try:
+            # Check if user_mfa_settings table exists
+            result = await session.execute(
+                text(
+                    """SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_name = 'user_mfa_settings'
+                )"""
+                )
+            )
+            table_exists = result.scalar()
+
+            if not table_exists:
+                logger.info("Creating MFA tables (migration 038 may not have run)...")
+
+                # Create user_mfa_settings table
+                await session.execute(
+                    text("""
+                    CREATE TABLE IF NOT EXISTS user_mfa_settings (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL UNIQUE REFERENCES api_users(id),
+                        totp_secret VARCHAR(32),
+                        totp_enabled BOOLEAN DEFAULT FALSE,
+                        totp_verified BOOLEAN DEFAULT FALSE,
+                        mfa_enabled BOOLEAN DEFAULT FALSE,
+                        mfa_enforced BOOLEAN DEFAULT FALSE,
+                        backup_codes_count INTEGER DEFAULT 0,
+                        backup_codes_generated_at TIMESTAMPTZ,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ,
+                        last_used_at TIMESTAMPTZ
+                    )
+                """)
+                )
+
+                # Create user_backup_codes table
+                await session.execute(
+                    text("""
+                    CREATE TABLE IF NOT EXISTS user_backup_codes (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES api_users(id),
+                        mfa_settings_id INTEGER NOT NULL REFERENCES user_mfa_settings(id),
+                        code_hash VARCHAR(255) NOT NULL,
+                        used BOOLEAN DEFAULT FALSE,
+                        used_at TIMESTAMPTZ,
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                )
+
+                # Create mfa_sessions table
+                await session.execute(
+                    text("""
+                    CREATE TABLE IF NOT EXISTS mfa_sessions (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        user_id INTEGER NOT NULL REFERENCES api_users(id),
+                        session_token_hash VARCHAR(255) NOT NULL UNIQUE,
+                        challenge_type VARCHAR(20) DEFAULT 'totp',
+                        attempts INTEGER DEFAULT 0,
+                        max_attempts INTEGER DEFAULT 3,
+                        expires_at TIMESTAMPTZ NOT NULL,
+                        verified_at TIMESTAMPTZ,
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                )
+
+                # Create indexes
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_user_mfa_settings_user_id ON user_mfa_settings(user_id)")
+                )
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_user_backup_codes_user_id ON user_backup_codes(user_id)")
+                )
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_mfa_sessions_user_id ON mfa_sessions(user_id)")
+                )
+                await session.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_mfa_sessions_expires_at ON mfa_sessions(expires_at)")
+                )
+
+                await session.commit()
+                logger.info("MFA tables created successfully")
+            else:
+                logger.debug("MFA tables already exist")
+
+        except Exception as e:
+            logger.warning(f"Could not ensure MFA tables: {type(e).__name__}: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
@@ -614,6 +718,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure api_users table has is_admin column (fix for migration 043 not running)
         await ensure_is_admin_column()
+
+        # Ensure MFA tables exist (fix for migration 038 not running)
+        await ensure_mfa_tables()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
@@ -732,7 +839,7 @@ async def health_check():
 
     return {
         "status": "healthy",
-        "version": "2.8.9",  # is_admin column + rate limiting awareness
+        "version": "2.9.0",  # MFA models imported for login fix
         "environment": settings.ENVIRONMENT,
         "rate_limiting": "redis" if settings.RATE_LIMIT_REDIS_ENABLED else "memory",
         "features": [

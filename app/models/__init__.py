@@ -96,6 +96,9 @@ from app.models.service_interval import ServiceInterval, CustomerServiceSchedule
 # Notifications
 from app.models.notification import Notification
 
+# MFA (Multi-Factor Authentication)
+from app.models.mfa import UserMFASettings, UserBackupCode, MFASession
+
 __all__ = [
     # Core models
     "Customer",
@@ -198,4 +201,8 @@ __all__ = [
     "ServiceReminder",
     # Notifications
     "Notification",
+    # MFA (Multi-Factor Authentication)
+    "UserMFASettings",
+    "UserBackupCode",
+    "MFASession",
 ]
