@@ -839,7 +839,7 @@ async def health_check():
 
     return {
         "status": "healthy",
-        "version": "2.9.2",  # is_admin as property to avoid missing column error
+        "version": "2.9.3",  # is_admin column restored after database fix
         "environment": settings.ENVIRONMENT,
         "rate_limiting": "redis" if settings.RATE_LIMIT_REDIS_ENABLED else "memory",
         "features": [

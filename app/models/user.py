@@ -16,8 +16,7 @@ class User(Base):
     last_name = Column(String(100))
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
-    # NOTE: is_admin moved to @property while column is added to production DB
-    # is_admin = Column(Boolean, default=False, nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -26,22 +25,6 @@ class User(Base):
 
     def __repr__(self):
         return f"<User {self.email}>"
-
-    @property
-    def is_admin(self) -> bool:
-        """
-        Check if user has admin privileges.
-
-        NOTE: This is a temporary property while the is_admin column
-        is added to the production database. Once the column exists,
-        this should be replaced with:
-            is_admin = Column(Boolean, default=False, nullable=False)
-        """
-        # Check if the column exists in this row's data
-        try:
-            return bool(self.__dict__.get("is_admin", False))
-        except Exception:
-            return False
 
     @property
     def mfa_enabled(self) -> bool:
