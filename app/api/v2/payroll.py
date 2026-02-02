@@ -1134,7 +1134,9 @@ async def get_period_summary(
 
             if pay_rate and pay_rate.pay_type == "hourly":
                 hourly = pay_rate.hourly_rate or 0
-                overtime_rate = pay_rate.overtime_rate or (hourly * 1.5)
+                # Use overtime_multiplier to calculate OT rate (model has multiplier, not rate)
+                multiplier = pay_rate.overtime_multiplier or 1.5
+                overtime_rate = hourly * multiplier
                 summary["regular_pay"] = summary["regular_hours"] * hourly
                 summary["overtime_pay"] = summary["overtime_hours"] * overtime_rate
             elif pay_rate and pay_rate.pay_type == "salary":
