@@ -1762,3 +1762,4 @@ app.add_exception_handler(CRMException, _exception_handlers["crm"])
 app.add_exception_handler(StarletteHTTPException, _exception_handlers["http"])
 app.add_exception_handler(RequestValidationError, _exception_handlers["validation"])
 app.add_exception_handler(Exception, _exception_handlers["generic"])
+
