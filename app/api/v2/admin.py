@@ -233,8 +233,13 @@ async def update_system_settings(
     _: None = Depends(require_admin),
 ) -> SystemSettings:
     """Update system settings. Requires admin access."""
-    # TODO: Persist settings to database
-    return settings
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "error": "feature_not_implemented",
+            "message": "System settings persistence is coming soon",
+        },
+    )
 
 
 @router.get("/settings/notifications")
@@ -253,7 +258,13 @@ async def update_notification_settings(
     _: None = Depends(require_admin),
 ) -> NotificationSettings:
     """Update notification settings. Requires admin access."""
-    return settings
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "error": "feature_not_implemented",
+            "message": "Notification settings persistence is coming soon",
+        },
+    )
 
 
 @router.get("/settings/integrations")
@@ -272,7 +283,13 @@ async def update_integration_settings(
     _: None = Depends(require_admin),
 ) -> IntegrationSettings:
     """Update integration settings. Requires admin access."""
-    return settings
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "error": "feature_not_implemented",
+            "message": "Integration settings persistence is coming soon",
+        },
+    )
 
 
 @router.get("/settings/security")
@@ -291,7 +308,13 @@ async def update_security_settings(
     _: None = Depends(require_admin),
 ) -> SecuritySettings:
     """Update security settings. Requires admin access."""
-    return settings
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "error": "feature_not_implemented",
+            "message": "Security settings persistence is coming soon",
+        },
+    )
 
 
 # ============ Customer Success Seed Data ============

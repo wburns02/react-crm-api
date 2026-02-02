@@ -5,12 +5,23 @@ Provides email marketing status, subscription, profiles, templates, segments,
 campaigns, and AI features.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
 from app.api.deps import CurrentUser
+
+
+def _feature_not_implemented(feature_name: str):
+    """Raise 503 for unimplemented features."""
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "error": "feature_not_implemented",
+            "message": f"{feature_name} is coming soon",
+        },
+    )
 
 router = APIRouter()
 
@@ -74,7 +85,7 @@ async def get_subscription(current_user: CurrentUser) -> dict:
 @router.post("/subscription")
 async def update_subscription(current_user: CurrentUser, tier: str = "free") -> dict:
     """Update subscription tier."""
-    return {"success": True, "message": "Subscription updated"}
+    _feature_not_implemented("Email marketing subscription management")
 
 
 # Profile Endpoints
@@ -89,7 +100,7 @@ async def get_profile(current_user: CurrentUser) -> dict:
 @router.put("/profile")
 async def update_profile(current_user: CurrentUser) -> dict:
     """Update business profile."""
-    return {"success": True, "message": "Profile updated"}
+    _feature_not_implemented("Business profile management")
 
 
 # Template Endpoints
@@ -114,13 +125,13 @@ async def get_template(template_id: str, current_user: CurrentUser) -> dict:
 @router.post("/templates")
 async def create_template(current_user: CurrentUser) -> dict:
     """Create email template."""
-    return {"success": True, "template": None}
+    _feature_not_implemented("Email template creation")
 
 
 @router.put("/templates/{template_id}")
 async def update_template(template_id: str, current_user: CurrentUser) -> dict:
     """Update email template."""
-    return {"success": True, "message": "Template updated"}
+    _feature_not_implemented("Email template editing")
 
 
 @router.post("/templates/{template_id}/preview")
@@ -174,19 +185,19 @@ async def get_campaign(campaign_id: str, current_user: CurrentUser) -> dict:
 @router.post("/campaigns")
 async def create_campaign(current_user: CurrentUser) -> dict:
     """Create email campaign."""
-    return {"success": True, "campaign": None}
+    _feature_not_implemented("Email campaign creation")
 
 
 @router.post("/campaigns/{campaign_id}/send")
 async def send_campaign(campaign_id: str, current_user: CurrentUser) -> dict:
     """Send email campaign."""
-    return {"success": True, "message": "Campaign sending not configured"}
+    _feature_not_implemented("Campaign sending")
 
 
 @router.delete("/campaigns/{campaign_id}")
 async def delete_campaign(campaign_id: str, current_user: CurrentUser) -> dict:
     """Delete email campaign."""
-    return {"success": True, "message": "Campaign deleted"}
+    _feature_not_implemented("Campaign deletion")
 
 
 # AI Endpoints
@@ -207,25 +218,25 @@ async def generate_suggestions(current_user: CurrentUser) -> List[dict]:
 @router.post("/ai/suggestions/{suggestion_id}/approve")
 async def approve_suggestion(suggestion_id: str, current_user: CurrentUser) -> dict:
     """Approve AI suggestion."""
-    return {"success": True, "campaign_id": None}
+    _feature_not_implemented("AI suggestion approval")
 
 
 @router.post("/ai/suggestions/{suggestion_id}/dismiss")
 async def dismiss_suggestion(suggestion_id: str, current_user: CurrentUser) -> dict:
     """Dismiss AI suggestion."""
-    return {"success": True}
+    _feature_not_implemented("AI suggestion dismissal")
 
 
 @router.post("/ai/generate-content")
 async def generate_content(current_user: CurrentUser) -> dict:
     """Generate email content with AI."""
-    return {"success": True, "subject": "", "body_html": "", "body_text": ""}
+    _feature_not_implemented("AI content generation")
 
 
 @router.post("/ai/optimize-subject")
 async def optimize_subject(current_user: CurrentUser) -> dict:
     """Optimize email subject line."""
-    return {"success": True, "alternatives": []}
+    _feature_not_implemented("AI subject line optimization")
 
 
 @router.get("/ai/onboarding-questions")
@@ -237,7 +248,7 @@ async def get_onboarding_questions(current_user: CurrentUser) -> List[dict]:
 @router.post("/ai/generate-marketing-plan")
 async def generate_marketing_plan(current_user: CurrentUser) -> dict:
     """Generate marketing plan."""
-    return {"success": True, "html_content": ""}
+    _feature_not_implemented("AI marketing plan generation")
 
 
 # Analytics Endpoints
@@ -258,4 +269,4 @@ async def get_analytics(
 @router.post("/onboarding/answers")
 async def submit_onboarding(current_user: CurrentUser) -> dict:
     """Submit onboarding answers."""
-    return {"success": True}
+    _feature_not_implemented("Email marketing onboarding")
