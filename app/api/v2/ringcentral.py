@@ -1609,8 +1609,14 @@ async def get_db_auth_test(
         }
     except Exception as e:
         import traceback
+        import sentry_sdk
 
-        return {"error": str(e), "traceback": traceback.format_exc()}
+        logger.error(f"Error in analytics endpoint: {traceback.format_exc()}")
+        sentry_sdk.capture_exception(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred while fetching analytics",
+        )
 
 
 # DEBUG endpoint removed for security - Issue #5

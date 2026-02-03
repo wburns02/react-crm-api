@@ -885,11 +885,13 @@ async def get_dispatch_suggestions(
     except Exception as e:
         logger.error(f"Error generating dispatch suggestions: {e}")
         import traceback
+        import sentry_sdk
 
         logger.error(traceback.format_exc())
+        sentry_sdk.capture_exception(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generating suggestions: {str(e)}",
+            detail="Error generating dispatch suggestions",
         )
 
 
@@ -971,11 +973,13 @@ async def accept_dispatch_suggestion(
         await db.rollback()
         logger.error(f"Error accepting dispatch suggestion: {e}")
         import traceback
+        import sentry_sdk
 
         logger.error(traceback.format_exc())
+        sentry_sdk.capture_exception(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error accepting suggestion: {str(e)}",
+            detail="Error accepting dispatch suggestion",
         )
 
 
@@ -1144,11 +1148,13 @@ async def optimize_technician_route(
     except Exception as e:
         logger.error(f"Error optimizing route: {e}")
         import traceback
+        import sentry_sdk
 
         logger.error(traceback.format_exc())
+        sentry_sdk.capture_exception(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error optimizing route: {str(e)}",
+            detail="Error optimizing route",
         )
 
 
@@ -1313,11 +1319,13 @@ async def get_dispatch_stats(
     except Exception as e:
         logger.error(f"Error getting dispatch stats: {e}")
         import traceback
+        import sentry_sdk
 
         logger.error(traceback.format_exc())
+        sentry_sdk.capture_exception(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting stats: {str(e)}",
+            detail="Error getting dispatch stats",
         )
 
 
@@ -1531,11 +1539,13 @@ async def natural_language_dispatch_query(
     except Exception as e:
         logger.error(f"Error processing NL query: {e}")
         import traceback
+        import sentry_sdk
 
         logger.error(traceback.format_exc())
+        sentry_sdk.capture_exception(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing query: {str(e)}",
+            detail="Error processing natural language query",
         )
 
 

@@ -491,10 +491,27 @@ async def get_geofence_events(
 
     events = query.order_by(GeofenceEvent.occurred_at.desc()).limit(limit).all()
 
+    # Batch load geofences and technicians to avoid N+1 queries
+    geofence_ids = {e.geofence_id for e in events if e.geofence_id}
+    technician_ids = {e.technician_id for e in events if e.technician_id}
+
+    # Single query for all geofences
+    geofences_map = {}
+    if geofence_ids:
+        geofences = db.query(Geofence).filter(Geofence.id.in_(geofence_ids)).all()
+        geofences_map = {g.id: g for g in geofences}
+
+    # Single query for all technicians
+    technicians_map = {}
+    if technician_ids:
+        technicians = db.query(Technician).filter(Technician.id.in_(technician_ids)).all()
+        technicians_map = {t.id: t for t in technicians}
+
+    # Build results using maps (3 queries total instead of 2N+1)
     results = []
     for event in events:
-        geofence = db.query(Geofence).filter(Geofence.id == event.geofence_id).first()
-        tech = db.query(Technician).filter(Technician.id == event.technician_id).first()
+        geofence = geofences_map.get(event.geofence_id)
+        tech = technicians_map.get(event.technician_id)
 
         results.append(
             GeofenceEventResponse(
@@ -678,9 +695,12 @@ async def get_dispatch_map_data(
         }
 
     except Exception as e:
+        import sentry_sdk
+
+        logger.error(f"Error in get_fleet_data_v2: {traceback.format_exc()}")
+        sentry_sdk.capture_exception(e)
         return {
-            "error": str(e),
-            "traceback": traceback.format_exc(),
+            "error": "An internal error occurred while fetching fleet data",
             "technicians": [],
             "work_orders": [],
             "geofences": [],
@@ -1052,4 +1072,8 @@ async def seed_demo_data(db: Session = Depends(get_db), current_user=Depends(get
         }
 
     except Exception as e:
-        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
+        import sentry_sdk
+
+        logger.error(f"Error in seed_technician_locations: {traceback.format_exc()}")
+        sentry_sdk.capture_exception(e)
+        return {"success": False, "error": "An internal error occurred while seeding locations"}
