@@ -54,6 +54,13 @@ PAGESPEED_API_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 _pagespeed_cache: Dict[str, Dict] = {}
 _pagespeed_cache_ttl = 300  # 5 minutes
 
+# Log configuration at module load
+if GOOGLE_PAGESPEED_API_KEY:
+    print("[marketing_tasks] ✓ PageSpeed API key configured - will use REAL metrics")
+else:
+    print("[marketing_tasks] ⚠ No GOOGLE_PAGESPEED_API_KEY - will use sitemap data only, PageSpeed scores will be demo")
+print(f"[marketing_tasks] Monitored site: {MONITORED_SITE_URL}")
+
 
 async def fetch_pagespeed_metrics(url: str = None, force_refresh: bool = False) -> Optional[Dict]:
     """
@@ -146,11 +153,15 @@ async def fetch_sitemap_pages(sitemap_url: str = None) -> int:
     Returns count of <loc> URLs found, or 0 on failure.
     """
     import re
-    url = sitemap_url or f"{MONITORED_SITE_URL}/sitemap.xml"
+    base_url = sitemap_url or MONITORED_SITE_URL
+    # Remove www. prefix if present (ecbtx.com works better than www.ecbtx.com)
+    base_url = base_url.replace("://www.", "://")
+    url = f"{base_url}/sitemap.xml"
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, follow_redirects=True)
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            print(f"[marketing_tasks] Fetching sitemap from: {url}")
+            response = await client.get(url)
 
             if response.status_code == 200:
                 content = response.text
@@ -694,8 +705,13 @@ async def get_marketing_tasks(current_user: CurrentUser) -> MarketingTasksRespon
             demo_mode = False
         else:
             # Use fallback data when services are unreachable (Railway deployment)
+            # BUT use real sitemap count if available (sitemap_count from line 641)
             print("[marketing_tasks] Using FALLBACK/DEMO data (no PageSpeed API key and local services unreachable)")
-            metrics = MarketingMetrics(**FALLBACK_METRICS)
+            fallback_with_sitemap = {**FALLBACK_METRICS}
+            if sitemap_count > 0:
+                fallback_with_sitemap["indexedPages"] = sitemap_count
+                print(f"[marketing_tasks] Using REAL sitemap count: {sitemap_count} pages")
+            metrics = MarketingMetrics(**fallback_with_sitemap)
             alert_list = [
                 MarketingAlert(**alert) for alert in get_fallback_alerts()
             ]
