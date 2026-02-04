@@ -69,7 +69,16 @@ async def list_campaigns(
         result = await db.execute(query)
         campaigns = result.scalars().unique().all()
 
-        # Enhance with segment names
+        # Build segment name map in ONE query (N+1 fix)
+        segment_ids = [c.target_segment_id for c in campaigns if c.target_segment_id]
+        segment_map = {}
+        if segment_ids:
+            seg_result = await db.execute(
+                select(Segment.id, Segment.name).where(Segment.id.in_(segment_ids))
+            )
+            segment_map = {row.id: row.name for row in seg_result}
+
+        # Enhance with segment names using the pre-fetched map
         items = []
         for campaign in campaigns:
             campaign_dict = {
@@ -103,13 +112,8 @@ async def list_campaigns(
                 "created_at": campaign.created_at,
                 "updated_at": campaign.updated_at,
                 "launched_at": campaign.launched_at,
+                "target_segment_name": segment_map.get(campaign.target_segment_id) if campaign.target_segment_id else None,
             }
-
-            if campaign.target_segment_id:
-                seg_result = await db.execute(select(Segment.name).where(Segment.id == campaign.target_segment_id))
-                campaign_dict["target_segment_name"] = seg_result.scalar_one_or_none()
-            else:
-                campaign_dict["target_segment_name"] = None
 
             items.append(campaign_dict)
 

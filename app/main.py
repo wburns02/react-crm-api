@@ -17,11 +17,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 import logging
 import traceback
 
+from starlette.middleware.gzip import GZipMiddleware
+
 from app.api.v2.router import api_router
 from app.exceptions import CRMException, create_exception_handlers
 from app.core.sentry import init_sentry
 from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.metrics import MetricsMiddleware
+from app.middleware.cache_headers import CacheHeadersMiddleware
+from app.middleware.timing import ServerTimingMiddleware
 from app.api.public.router import public_router
 from app.webhooks.twilio import twilio_router
 from app.config import settings
@@ -740,6 +744,28 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start reminder scheduler: {e}")
 
+    # Pre-warm database connection pool for faster first request
+    logger.info("Pre-warming database connections...")
+    try:
+        from sqlalchemy import text
+        from app.database import async_session_maker
+
+        async with async_session_maker() as session:
+            await session.execute(text("SELECT 1"))
+        logger.info("Database connection pool warmed successfully")
+    except Exception as e:
+        logger.warning(f"Database warmup failed (non-fatal): {e}")
+
+    # Pre-warm Redis connection if available
+    logger.info("Pre-warming Redis connection...")
+    try:
+        from app.services.cache_service import cache_service
+
+        await cache_service.get("warmup:ping")
+        logger.info("Redis connection warmed successfully")
+    except Exception as e:
+        logger.debug(f"Redis warmup skipped: {e}")
+
     yield
 
     # Shutdown
@@ -760,6 +786,17 @@ app = FastAPI(
     redoc_url=redoc_url,
     lifespan=lifespan,
 )
+
+# GZip compression middleware - compress responses > 500 bytes
+# This can reduce response sizes by 60-80% for JSON payloads
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# Server-Timing middleware - adds performance timing headers
+# Visible in browser DevTools for debugging TTFB
+app.add_middleware(ServerTimingMiddleware)
+
+# Cache-Control headers middleware - browser caching for public endpoints
+app.add_middleware(CacheHeadersMiddleware)
 
 # Proxy headers middleware (must be added before CORS)
 # This ensures redirects use HTTPS when behind Railway's edge proxy
@@ -828,6 +865,16 @@ async def root():
     if settings.DOCS_ENABLED:
         response["docs"] = "/docs"
     return response
+
+
+@app.get("/ping")
+async def ping():
+    """Ultra-lightweight ping endpoint for load balancer keepalives.
+
+    Use this instead of /health for Railway health checks to minimize
+    cold start latency. The full /health endpoint validates features.
+    """
+    return {"status": "ok"}
 
 
 @app.get("/health")

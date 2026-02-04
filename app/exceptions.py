@@ -298,6 +298,7 @@ def create_problem_response(
     errors: Optional[List[Dict[str, Any]]] = None,
     trace_id: Optional[str] = None,
     allowed_origins: Optional[List[str]] = None,
+    headers: Optional[Dict[str, str]] = None,
 ) -> JSONResponse:
     """Create a RFC 7807 compliant JSON response with CORS headers."""
     problem = ProblemDetail(
@@ -316,6 +317,7 @@ def create_problem_response(
         status_code=status_code,
         content=problem.model_dump(exclude_none=True),
         media_type="application/problem+json",
+        headers=headers or {},
     )
 
     # Add CORS headers
@@ -400,6 +402,7 @@ def create_exception_handlers(allowed_origins: List[str]):
             detail=str(exc.detail),
             request=request,
             allowed_origins=allowed_origins,
+            headers=exc.headers,
         )
 
     async def handle_validation_exception(request: Request, exc: RequestValidationError) -> JSONResponse:

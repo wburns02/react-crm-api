@@ -151,36 +151,6 @@ async def list_service_intervals(
     return {"intervals": intervals_data, "total": len(intervals_data)}
 
 
-@router.get("/{interval_id}", response_model=dict)
-async def get_service_interval(
-    interval_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Get a specific service interval."""
-    try:
-        interval_uuid = UUID(interval_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid interval ID format")
-
-    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
-    interval = result.scalar_one_or_none()
-
-    if not interval:
-        raise HTTPException(status_code=404, detail="Service interval not found")
-
-    return {
-        "id": str(interval.id),
-        "name": interval.name,
-        "description": interval.description,
-        "service_type": interval.service_type,
-        "interval_months": interval.interval_months,
-        "reminder_days_before": interval.reminder_days_before,
-        "is_active": interval.is_active,
-        "created_at": interval.created_at.isoformat() if interval.created_at else None,
-    }
-
-
 @router.post("/", response_model=dict, status_code=201)
 async def create_service_interval(
     interval: ServiceIntervalCreate,
@@ -211,69 +181,6 @@ async def create_service_interval(
         "is_active": new_interval.is_active,
         "created_at": new_interval.created_at.isoformat() if new_interval.created_at else None,
     }
-
-
-@router.put("/{interval_id}", response_model=dict)
-async def update_service_interval(
-    interval_id: str,
-    interval: ServiceIntervalUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Update a service interval template."""
-    try:
-        interval_uuid = UUID(interval_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid interval ID format")
-
-    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
-    existing = result.scalar_one_or_none()
-
-    if not existing:
-        raise HTTPException(status_code=404, detail="Service interval not found")
-
-    # Update fields
-    update_data = interval.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(existing, field, value)
-
-    await db.commit()
-    await db.refresh(existing)
-
-    return {
-        "id": str(existing.id),
-        "name": existing.name,
-        "description": existing.description,
-        "service_type": existing.service_type,
-        "interval_months": existing.interval_months,
-        "reminder_days_before": existing.reminder_days_before,
-        "is_active": existing.is_active,
-        "created_at": existing.created_at.isoformat() if existing.created_at else None,
-    }
-
-
-@router.delete("/{interval_id}", status_code=204)
-async def delete_service_interval(
-    interval_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Delete a service interval template."""
-    try:
-        interval_uuid = UUID(interval_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid interval ID format")
-
-    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
-    existing = result.scalar_one_or_none()
-
-    if not existing:
-        raise HTTPException(status_code=404, detail="Service interval not found")
-
-    await db.delete(existing)
-    await db.commit()
-
-    return None
 
 
 # =============================================================================
@@ -817,3 +724,101 @@ async def get_scheduler_status(
         "running": scheduler.running if scheduler else False,
         "jobs": jobs,
     }
+
+
+# =============================================================================
+# INTERVAL ID ENDPOINTS (must come after specific routes to avoid path conflicts)
+# =============================================================================
+
+
+@router.get("/{interval_id}", response_model=dict)
+async def get_service_interval(
+    interval_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Get a specific service interval."""
+    try:
+        interval_uuid = UUID(interval_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid interval ID format")
+
+    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
+    interval = result.scalar_one_or_none()
+
+    if not interval:
+        raise HTTPException(status_code=404, detail="Service interval not found")
+
+    return {
+        "id": str(interval.id),
+        "name": interval.name,
+        "description": interval.description,
+        "service_type": interval.service_type,
+        "interval_months": interval.interval_months,
+        "reminder_days_before": interval.reminder_days_before,
+        "is_active": interval.is_active,
+        "created_at": interval.created_at.isoformat() if interval.created_at else None,
+    }
+
+
+@router.put("/{interval_id}", response_model=dict)
+async def update_service_interval(
+    interval_id: str,
+    interval: ServiceIntervalUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Update a service interval template."""
+    try:
+        interval_uuid = UUID(interval_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid interval ID format")
+
+    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
+    existing = result.scalar_one_or_none()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Service interval not found")
+
+    # Update fields
+    update_data = interval.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(existing, field, value)
+
+    await db.commit()
+    await db.refresh(existing)
+
+    return {
+        "id": str(existing.id),
+        "name": existing.name,
+        "description": existing.description,
+        "service_type": existing.service_type,
+        "interval_months": existing.interval_months,
+        "reminder_days_before": existing.reminder_days_before,
+        "is_active": existing.is_active,
+        "created_at": existing.created_at.isoformat() if existing.created_at else None,
+    }
+
+
+@router.delete("/{interval_id}", status_code=204)
+async def delete_service_interval(
+    interval_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Delete a service interval template."""
+    try:
+        interval_uuid = UUID(interval_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid interval ID format")
+
+    result = await db.execute(select(ServiceInterval).where(ServiceInterval.id == interval_uuid))
+    existing = result.scalar_one_or_none()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Service interval not found")
+
+    await db.delete(existing)
+    await db.commit()
+
+    return None
