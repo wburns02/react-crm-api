@@ -75,18 +75,17 @@ async def fetch_pagespeed_metrics(url: str = None, force_refresh: bool = False) 
             print(f"[marketing_tasks] Using cached PageSpeed data for {target_url}")
             return cached.get("data")
 
-    # If no API key, return None (will use fallback)
-    if not GOOGLE_PAGESPEED_API_KEY:
-        print("[marketing_tasks] No GOOGLE_PAGESPEED_API_KEY configured, using fallback")
-        return None
-
+    # PageSpeed API can be used without a key, but key is recommended for frequent use
     try:
         params = {
             "url": target_url,
-            "key": GOOGLE_PAGESPEED_API_KEY,
             "strategy": "mobile",
             "category": ["performance", "seo", "accessibility", "best-practices"],
         }
+
+        # Add API key if configured (recommended for production)
+        if GOOGLE_PAGESPEED_API_KEY:
+            params["key"] = GOOGLE_PAGESPEED_API_KEY
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(PAGESPEED_API_URL, params=params)
