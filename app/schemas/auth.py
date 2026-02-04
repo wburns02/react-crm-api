@@ -78,3 +78,58 @@ class LoginRequest(BaseModel):
 
     email: EmailStr
     password: str
+
+
+# MFA Schemas
+class MFASetupResponse(BaseModel):
+    """Response from MFA setup - contains QR code for authenticator app."""
+
+    secret: str  # For manual entry (show to user)
+    qr_code: str  # Base64 data URI for QR code image
+    message: str = "Scan the QR code with your authenticator app"
+
+
+class MFAVerifyRequest(BaseModel):
+    """Request to verify TOTP code during MFA setup or login."""
+
+    code: str = Field(..., min_length=6, max_length=8, description="6-digit TOTP code or backup code")
+
+
+class MFALoginRequest(BaseModel):
+    """Request for MFA verification during login."""
+
+    session_token: str
+    code: str = Field(..., min_length=6, max_length=8)
+    use_backup_code: bool = False
+
+
+class MFALoginResponse(BaseModel):
+    """Response when MFA is required during login."""
+
+    mfa_required: bool = True
+    session_token: str
+    message: str = "MFA verification required"
+
+
+class MFAStatusResponse(BaseModel):
+    """Response with user's MFA status."""
+
+    mfa_enabled: bool
+    totp_enabled: bool
+    totp_verified: bool
+    backup_codes_count: int
+    backup_codes_generated_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
+
+
+class BackupCodesResponse(BaseModel):
+    """Response containing newly generated backup codes."""
+
+    codes: list[str]
+    message: str = "Save these codes securely. Each code can only be used once."
+
+
+class MFADisableRequest(BaseModel):
+    """Request to disable MFA - requires current TOTP code."""
+
+    code: str = Field(..., min_length=6, max_length=6, description="Current 6-digit TOTP code")
