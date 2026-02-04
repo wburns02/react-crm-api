@@ -1169,10 +1169,22 @@ async def list_commissions(
     technician_id: Optional[str] = None,
     payroll_period_id: Optional[str] = None,
     status_filter: Optional[str] = Query(None, alias="status"),
+    commission_type: Optional[str] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
-    """List commissions with technician names and work order numbers."""
+    """List commissions with technician names and work order numbers.
+
+    Supports filtering by:
+    - technician_id: Filter by specific technician
+    - payroll_period_id: Filter by payroll period
+    - status: Filter by commission status (pending, approved, paid)
+    - commission_type: Filter by type (job_completion, upsell, referral, bonus)
+    - date_from: Filter commissions earned on or after this date
+    - date_to: Filter commissions earned on or before this date
+    """
     try:
         # Join with Technician and WorkOrder to get names and numbers
         query = select(Commission, Technician, WorkOrder).outerjoin(
@@ -1187,6 +1199,12 @@ async def list_commissions(
             query = query.where(Commission.payroll_period_id == payroll_period_id)
         if status_filter:
             query = query.where(Commission.status == status_filter)
+        if commission_type and commission_type != "all":
+            query = query.where(Commission.commission_type == commission_type)
+        if date_from:
+            query = query.where(Commission.earned_date >= date_from)
+        if date_to:
+            query = query.where(Commission.earned_date <= date_to)
 
         # Count (use Commission table for count)
         count_query = select(func.count()).select_from(Commission)
@@ -1196,6 +1214,12 @@ async def list_commissions(
             count_query = count_query.where(Commission.payroll_period_id == payroll_period_id)
         if status_filter:
             count_query = count_query.where(Commission.status == status_filter)
+        if commission_type and commission_type != "all":
+            count_query = count_query.where(Commission.commission_type == commission_type)
+        if date_from:
+            count_query = count_query.where(Commission.earned_date >= date_from)
+        if date_to:
+            count_query = count_query.where(Commission.earned_date <= date_to)
         total_result = await db.execute(count_query)
         total = total_result.scalar()
 
