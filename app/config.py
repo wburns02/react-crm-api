@@ -72,6 +72,14 @@ class Settings(BaseSettings):
     # Samsara Fleet Tracking
     SAMSARA_API_TOKEN: str | None = None
 
+    # Yelp Fusion API
+    YELP_API_KEY: str | None = None
+
+    # Facebook Graph API
+    FACEBOOK_APP_ID: str | None = None
+    FACEBOOK_APP_SECRET: str | None = None
+    FACEBOOK_REDIRECT_URI: str = ""
+
     # Stripe Payment Processing (deprecated - use Clover)
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_PUBLISHABLE_KEY: str | None = None
