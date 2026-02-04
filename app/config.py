@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # Auth - SECURITY: Must be set via environment in production
     SECRET_KEY: str = "development-secret-key-change-in-production"  # nosec B105 - Default for dev, overridden in production via env var
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours
 
     # CORS
     FRONTEND_URL: str = "http://localhost:5173"
