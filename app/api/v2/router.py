@@ -98,6 +98,8 @@ from app.api.v2 import (
     permits,
     # Email Templates
     email_templates,
+    # Social Integrations (Yelp, Facebook)
+    social_integrations,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -263,6 +265,9 @@ api_router.include_router(permits.router, prefix="/permits", tags=["permits"])
 
 # Email Templates
 api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
+
+# Social Integrations (Yelp, Facebook)
+api_router.include_router(social_integrations.router, prefix="/integrations/social", tags=["social-integrations"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
