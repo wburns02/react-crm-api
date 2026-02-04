@@ -839,7 +839,7 @@ async def health_check():
 
     return {
         "status": "healthy",
-        "version": "2.9.3",  # is_admin column restored after database fix
+        "version": "2.9.4",  # Added date filter to commissions + social integrations
         "environment": settings.ENVIRONMENT,
         "rate_limiting": "redis" if settings.RATE_LIMIT_REDIS_ENABLED else "memory",
         "features": [
