@@ -105,6 +105,15 @@ async def get_all_locations(db: Session = Depends(get_db), current_user=Depends(
     service = GPSTrackingService(db)
     data = service.get_all_technician_locations()
 
+    # Build base response using Pydantic model for proper serialization
+    base = AllTechniciansLocationResponse(
+        technicians=data["technicians"],
+        total_online=data["total_online"],
+        total_offline=data["total_offline"],
+        last_refresh=data["last_refresh"],
+    )
+    result = base.model_dump(mode="json")
+
     # Include Samsara vehicle counts for combined stats
     vehicle_online = 0
     vehicle_offline = 0
@@ -119,14 +128,11 @@ async def get_all_locations(db: Session = Depends(get_db), current_user=Depends(
     except Exception:
         pass
 
-    return {
-        "technicians": [t.model_dump() if hasattr(t, 'model_dump') else t for t in data["technicians"]],
-        "total_online": data["total_online"] + vehicle_online,
-        "total_offline": data["total_offline"] + vehicle_offline,
-        "vehicle_online": vehicle_online,
-        "vehicle_offline": vehicle_offline,
-        "last_refresh": data["last_refresh"],
-    }
+    result["total_online"] = result["total_online"] + vehicle_online
+    result["total_offline"] = result["total_offline"] + vehicle_offline
+    result["vehicle_online"] = vehicle_online
+    result["vehicle_offline"] = vehicle_offline
+    return result
 
 
 # ==================== Location History ====================
