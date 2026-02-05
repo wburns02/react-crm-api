@@ -23,7 +23,11 @@ import asyncio
 import os
 import asyncpg
 
+import logging
+
 from app.api.deps import CurrentUser
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -56,10 +60,10 @@ _pagespeed_cache_ttl = 300  # 5 minutes
 
 # Log configuration at module load
 if GOOGLE_PAGESPEED_API_KEY:
-    print("[marketing_tasks] ✓ PageSpeed API key configured - will use REAL metrics")
+    logger.info("[marketing_tasks] ✓ PageSpeed API key configured - will use REAL metrics")
 else:
-    print("[marketing_tasks] ⚠ No GOOGLE_PAGESPEED_API_KEY - will use sitemap data only, PageSpeed scores will be demo")
-print(f"[marketing_tasks] Monitored site: {MONITORED_SITE_URL}")
+    logger.info("[marketing_tasks] ⚠ No GOOGLE_PAGESPEED_API_KEY - will use sitemap data only, PageSpeed scores will be demo")
+logger.info(f"[marketing_tasks] Monitored site: {MONITORED_SITE_URL}")
 
 
 async def fetch_pagespeed_metrics(url: str = None, force_refresh: bool = False) -> Optional[Dict]:
@@ -79,7 +83,7 @@ async def fetch_pagespeed_metrics(url: str = None, force_refresh: bool = False) 
     if not force_refresh and cache_key in _pagespeed_cache:
         cached = _pagespeed_cache[cache_key]
         if (datetime.utcnow().timestamp() - cached.get("timestamp", 0)) < _pagespeed_cache_ttl:
-            print(f"[marketing_tasks] Using cached PageSpeed data for {target_url}")
+            logger.info(f"[marketing_tasks] Using cached PageSpeed data for {target_url}")
             return cached.get("data")
 
     # PageSpeed API can be used without a key, but key is recommended for frequent use
@@ -128,21 +132,21 @@ async def fetch_pagespeed_metrics(url: str = None, force_refresh: bool = False) 
                     "timestamp": datetime.utcnow().timestamp(),
                 }
 
-                print(f"[marketing_tasks] PageSpeed API success: performance={result['performanceScore']}, seo={result['seoScore']}")
+                logger.info(f"[marketing_tasks] PageSpeed API success: performance={result['performanceScore']}, seo={result['seoScore']}")
                 return result
 
             elif response.status_code == 429:
-                print(f"[marketing_tasks] PageSpeed API rate limited")
+                logger.info(f"[marketing_tasks] PageSpeed API rate limited")
                 return None
             else:
-                print(f"[marketing_tasks] PageSpeed API error: {response.status_code} - {response.text[:200]}")
+                logger.info(f"[marketing_tasks] PageSpeed API error: {response.status_code} - {response.text[:200]}")
                 return None
 
     except httpx.TimeoutException:
-        print(f"[marketing_tasks] PageSpeed API timeout for {target_url}")
+        logger.info(f"[marketing_tasks] PageSpeed API timeout for {target_url}")
         return None
     except Exception as e:
-        print(f"[marketing_tasks] PageSpeed API error: {e}")
+        logger.info(f"[marketing_tasks] PageSpeed API error: {e}")
         return None
 
 
@@ -160,7 +164,7 @@ async def fetch_sitemap_pages(sitemap_url: str = None) -> int:
 
     try:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            print(f"[marketing_tasks] Fetching sitemap from: {url}")
+            logger.info(f"[marketing_tasks] Fetching sitemap from: {url}")
             response = await client.get(url)
 
             if response.status_code == 200:
@@ -181,14 +185,14 @@ async def fetch_sitemap_pages(sitemap_url: str = None) -> int:
                                 total += len(ref_urls)
                         except Exception:
                             pass
-                    print(f"[marketing_tasks] Sitemap index found: {total} pages across {len(sitemap_refs)} sitemaps")
+                    logger.info(f"[marketing_tasks] Sitemap index found: {total} pages across {len(sitemap_refs)} sitemaps")
                     return total
 
-                print(f"[marketing_tasks] Sitemap parsed: {len(urls)} pages")
+                logger.info(f"[marketing_tasks] Sitemap parsed: {len(urls)} pages")
                 return len(urls)
 
     except Exception as e:
-        print(f"[marketing_tasks] Sitemap fetch error: {e}")
+        logger.info(f"[marketing_tasks] Sitemap fetch error: {e}")
 
     return 0
 
@@ -302,7 +306,7 @@ async def get_seo_db_connection():
             timeout=5.0,
         )
     except Exception as e:
-        print(f"[marketing_tasks] Failed to connect to SEO DB: {e}")
+        logger.info(f"[marketing_tasks] Failed to connect to SEO DB: {e}")
         return None
 
 
@@ -333,7 +337,7 @@ async def fetch_managed_sites_from_db() -> List[dict]:
             })
         return sites if sites else FALLBACK_SITES
     except Exception as e:
-        print(f"[marketing_tasks] Error fetching managed sites: {e}")
+        logger.info(f"[marketing_tasks] Error fetching managed sites: {e}")
         return FALLBACK_SITES
     finally:
         await conn.close()
@@ -656,7 +660,7 @@ async def get_marketing_tasks(current_user: CurrentUser) -> MarketingTasksRespon
 
     if pagespeed_data:
         # USE REAL DATA from Google PageSpeed Insights API
-        print(f"[marketing_tasks] Using REAL PageSpeed data: perf={pagespeed_data['performanceScore']}, seo={pagespeed_data['seoScore']}")
+        logger.info(f"[marketing_tasks] Using REAL PageSpeed data: perf={pagespeed_data['performanceScore']}, seo={pagespeed_data['seoScore']}")
         metrics = MarketingMetrics(
             performanceScore=pagespeed_data["performanceScore"],
             seoScore=pagespeed_data["seoScore"],
@@ -706,11 +710,11 @@ async def get_marketing_tasks(current_user: CurrentUser) -> MarketingTasksRespon
         else:
             # Use fallback data when services are unreachable (Railway deployment)
             # BUT use real sitemap count if available (sitemap_count from line 641)
-            print("[marketing_tasks] Using FALLBACK/DEMO data (no PageSpeed API key and local services unreachable)")
+            logger.info("[marketing_tasks] Using FALLBACK/DEMO data (no PageSpeed API key and local services unreachable)")
             fallback_with_sitemap = {**FALLBACK_METRICS}
             if sitemap_count > 0:
                 fallback_with_sitemap["indexedPages"] = sitemap_count
-                print(f"[marketing_tasks] Using REAL sitemap count: {sitemap_count} pages")
+                logger.info(f"[marketing_tasks] Using REAL sitemap count: {sitemap_count} pages")
             metrics = MarketingMetrics(**fallback_with_sitemap)
             alert_list = [
                 MarketingAlert(**alert) for alert in get_fallback_alerts()
@@ -786,7 +790,7 @@ async def trigger_health_check(
 
     # Special handling for seo-monitor: use PageSpeed API if available
     if service_name == "seo-monitor" and GOOGLE_PAGESPEED_API_KEY:
-        print("[marketing_tasks] Triggering REAL PageSpeed check...")
+        logger.info("[marketing_tasks] Triggering REAL PageSpeed check...")
         pagespeed_data = await fetch_pagespeed_metrics(force_refresh=True)
 
         if pagespeed_data:
@@ -1147,7 +1151,7 @@ async def get_keywords_detail(current_user: CurrentUser) -> dict:
                     "total": len(keywords),
                 }
     except Exception as e:
-        print(f"[marketing_tasks] Error fetching keywords: {e}")
+        logger.info(f"[marketing_tasks] Error fetching keywords: {e}")
 
     return {
         "success": True,
@@ -1184,7 +1188,7 @@ async def get_pages_detail(current_user: CurrentUser) -> dict:
                     "notIndexed": len(pages) - indexed,
                 }
     except Exception as e:
-        print(f"[marketing_tasks] Error fetching pages: {e}")
+        logger.info(f"[marketing_tasks] Error fetching pages: {e}")
 
     indexed = sum(1 for p in FALLBACK_PAGES if p["indexed"])
     return {
@@ -1218,7 +1222,7 @@ async def get_content_detail(current_user: CurrentUser) -> dict:
                     "total": len(content),
                 }
     except Exception as e:
-        print(f"[marketing_tasks] Error fetching content: {e}")
+        logger.info(f"[marketing_tasks] Error fetching content: {e}")
 
     return {
         "success": True,
@@ -1257,7 +1261,7 @@ async def get_reviews_detail(current_user: CurrentUser) -> dict:
                     "pendingResponses": pending,
                 }
     except Exception as e:
-        print(f"[marketing_tasks] Error fetching reviews: {e}")
+        logger.info(f"[marketing_tasks] Error fetching reviews: {e}")
 
     pending = sum(1 for r in FALLBACK_REVIEWS if r["responseText"] is None)
     avg_rating = sum(r["rating"] for r in FALLBACK_REVIEWS) / len(FALLBACK_REVIEWS) if FALLBACK_REVIEWS else 0
@@ -1315,7 +1319,7 @@ async def get_vitals_detail(current_user: CurrentUser) -> dict:
                         "demoMode": False,
                     }
         except Exception as e:
-            print(f"[marketing_tasks] Error fetching vitals: {e}")
+            logger.info(f"[marketing_tasks] Error fetching vitals: {e}")
 
     return {
         "success": True,
@@ -1447,7 +1451,7 @@ async def generate_content(request: ContentGenerateRequest, current_user: Curren
                         "message": "Content generated successfully",
                     }
         except Exception as e:
-            print(f"[marketing_tasks] Content-gen service error: {e}")
+            logger.info(f"[marketing_tasks] Content-gen service error: {e}")
 
     # Fallback to demo content
     demo_content = DEMO_CONTENT.get(content_type, DEMO_CONTENT["blog"])
@@ -1514,7 +1518,7 @@ async def get_gbp_status(current_user: CurrentUser) -> dict:
                         "demoMode": False,
                     }
         except Exception as e:
-            print(f"[marketing_tasks] GBP-sync service error: {e}")
+            logger.info(f"[marketing_tasks] GBP-sync service error: {e}")
 
     # Return demo status
     return {
@@ -1542,7 +1546,7 @@ async def trigger_gbp_sync(current_user: CurrentUser) -> dict:
                         "demoMode": False,
                     }
         except Exception as e:
-            print(f"[marketing_tasks] GBP-sync service error: {e}")
+            logger.info(f"[marketing_tasks] GBP-sync service error: {e}")
 
     # Demo mode response
     return {
@@ -1579,7 +1583,7 @@ async def create_gbp_post(request: GBPPostRequest, current_user: CurrentUser) ->
                         "demoMode": False,
                     }
         except Exception as e:
-            print(f"[marketing_tasks] GBP-sync service error: {e}")
+            logger.info(f"[marketing_tasks] GBP-sync service error: {e}")
 
     # Demo mode response
     return {

@@ -16,6 +16,9 @@ from datetime import datetime, timedelta, date
 from pydantic import BaseModel, Field
 from typing import Optional
 from decimal import Decimal
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
@@ -711,7 +714,7 @@ async def get_customer_intelligence(
                 # Approximate per-customer average
                 total_invoiced = float(inv_row.total_amount or 0) / max(1, inv_row.count or 1) * work_order_count
         except Exception:
-            pass
+            logger.warning("Analytics query failed", exc_info=True)
 
         # Get payment stats
         try:
@@ -723,7 +726,7 @@ async def get_customer_intelligence(
             total_paid = payment_stats.scalar() or 0
             paid_on_time = total_paid  # Simplified - assume all paid are on time
         except Exception:
-            pass
+            logger.warning("Analytics query failed", exc_info=True)
 
         # Calculate metrics
         churn_risk, engagement, payment_rel, cust_risk_level, recommendations = calculate_customer_metrics(
@@ -875,7 +878,7 @@ async def get_dashboard_metrics(
             overdue_invoices = overdue_row[0] or 0
             overdue_amount = float(overdue_row[1] or 0)
     except Exception:
-        pass
+        logger.warning("Analytics query failed", exc_info=True)
 
     # Generate alerts
     alerts = []
