@@ -11,7 +11,7 @@ Integrates with Samsara's Fleet API to provide:
 API Documentation: https://developers.samsara.com/reference
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional
 from pydantic import BaseModel
@@ -21,7 +21,7 @@ import logging
 import asyncio
 import json
 
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, get_current_user_ws
 from app.config import settings
 
 router = APIRouter()
@@ -449,13 +449,34 @@ async def get_vehicles(current_user: CurrentUser) -> list[Vehicle]:
 
 
 @router.get("/stream")
-async def stream_vehicles(request: Request, current_user: CurrentUser):
+async def stream_vehicles(
+    request: Request,
+    token: Optional[str] = Query(None),
+):
     """
     Server-Sent Events endpoint for real-time vehicle updates.
+
+    Accepts auth via:
+    - Bearer token in Authorization header (standard endpoints)
+    - `token` query parameter (required for EventSource/SSE since it can't set headers)
 
     Streams vehicle location updates as they arrive from the Samsara feed poller.
     Sends heartbeat every 15 seconds to keep connection alive.
     """
+    # EventSource can't set headers, so accept token from query param or header
+    jwt_token = None
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        jwt_token = auth_header[7:]
+    elif token:
+        jwt_token = token
+
+    if not jwt_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = await get_current_user_ws(jwt_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid token")
     queue: asyncio.Queue = asyncio.Queue(maxsize=50)
 
     async with _sse_clients_lock:
