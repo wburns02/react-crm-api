@@ -101,44 +101,90 @@ async def get_all_locations(db: Session = Depends(get_db), current_user=Depends(
     Get all technician locations for dispatch map.
     Returns current position, status, and online/offline count.
     Includes Samsara vehicle counts in online/offline totals.
+    Uses raw SQL for async session compatibility.
     """
+    from sqlalchemy import text
+
+    STALE_THRESHOLD_MINUTES = 5
+
+    technicians = []
+    online_count = 0
+    offline_count = 0
+
     try:
-        service = GPSTrackingService(db)
-        data = service.get_all_technician_locations()
+        result = await db.execute(
+            text("""
+            SELECT
+                tl.technician_id, t.first_name, t.last_name,
+                tl.latitude, tl.longitude, tl.accuracy, tl.speed, tl.heading,
+                tl.is_online, tl.battery_level, tl.current_status,
+                tl.current_work_order_id, tl.captured_at, tl.received_at
+            FROM technician_locations tl
+            JOIN technicians t ON tl.technician_id = t.id
+        """)
+        )
+        rows = result.fetchall()
 
-        # Serialize technicians to dicts for JSON response
-        technicians_list = []
-        for t in data["technicians"]:
-            if hasattr(t, 'model_dump'):
-                technicians_list.append(t.model_dump(mode="json"))
+        for row in rows:
+            (
+                tech_id, first_name, last_name, lat, lng,
+                accuracy, speed, heading, is_online, battery,
+                current_status, wo_id, captured_at, received_at,
+            ) = row
+
+            if captured_at:
+                minutes_since = int((datetime.utcnow() - captured_at).total_seconds() / 60)
             else:
-                technicians_list.append(t)
+                minutes_since = 999
 
-        # Include Samsara vehicle counts for combined stats
-        vehicle_online = 0
-        vehicle_offline = 0
-        try:
-            from app.api.v2.samsara import _vehicle_store, _vehicle_store_lock
-            async with _vehicle_store_lock:
-                for v in _vehicle_store.values():
-                    if v.status == "offline":
-                        vehicle_offline += 1
-                    else:
-                        vehicle_online += 1
-        except Exception:
-            pass
+            is_actually_online = bool(is_online) and minutes_since < STALE_THRESHOLD_MINUTES
 
-        return {
-            "technicians": technicians_list,
-            "total_online": data["total_online"] + vehicle_online,
-            "total_offline": data["total_offline"] + vehicle_offline,
-            "vehicle_online": vehicle_online,
-            "vehicle_offline": vehicle_offline,
-            "last_refresh": data["last_refresh"].isoformat() if hasattr(data["last_refresh"], 'isoformat') else str(data["last_refresh"]),
-        }
+            if is_actually_online:
+                online_count += 1
+            else:
+                offline_count += 1
+
+            technicians.append({
+                "technician_id": str(tech_id),
+                "technician_name": f"{first_name} {last_name}",
+                "latitude": float(lat) if lat else 0.0,
+                "longitude": float(lng) if lng else 0.0,
+                "accuracy": float(accuracy) if accuracy else None,
+                "speed": float(speed) if speed else None,
+                "heading": float(heading) if heading else None,
+                "is_online": is_actually_online,
+                "battery_level": int(battery) if battery else None,
+                "current_status": current_status or "unknown",
+                "current_work_order_id": str(wo_id) if wo_id else None,
+                "captured_at": captured_at.isoformat() if captured_at else None,
+                "received_at": received_at.isoformat() if received_at else None,
+                "minutes_since_update": minutes_since,
+            })
     except Exception as e:
-        logger.error(f"Error in get_all_locations: {type(e).__name__}: {e}")
-        raise
+        logger.warning(f"Error querying technician locations: {e}")
+
+    # Include Samsara vehicle counts for combined stats
+    vehicle_online = 0
+    vehicle_offline = 0
+    try:
+        from app.api.v2.samsara import _vehicle_store, _vehicle_store_lock
+        async with _vehicle_store_lock:
+            for v in _vehicle_store.values():
+                if v.status == "offline":
+                    vehicle_offline += 1
+                else:
+                    vehicle_online += 1
+    except Exception:
+        pass
+
+    return {
+        "technicians": technicians,
+        "total_online": online_count + vehicle_online,
+        "total_offline": offline_count + vehicle_offline,
+        "vehicle_online": vehicle_online,
+        "vehicle_offline": vehicle_offline,
+        "last_refresh": datetime.utcnow().isoformat(),
+    }
 
 
 # ==================== Location History ====================
