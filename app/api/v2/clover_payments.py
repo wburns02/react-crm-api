@@ -10,7 +10,7 @@ Handles:
 """
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import select, text
 from datetime import datetime, timezone
 from decimal import Decimal
 from pydantic import BaseModel, Field
@@ -295,23 +295,31 @@ async def sync_clover_payments(
                 amount_cents = cp.get("amount", 0) or 0
                 tender = cp.get("tender") or {}
                 created_ms = cp.get("createdTime") or 0
-                # Use naive UTC datetime (no timezone info) for SQLAlchemy DateTime columns
                 created_dt = datetime.utcfromtimestamp(created_ms / 1000) if created_ms else datetime.utcnow()
 
-                amount_dec = Decimal(str(round(amount_cents / 100, 2)))
+                amount_val = round(amount_cents / 100, 2)
                 method_label = (tender.get("label") or "card").lower()[:50]
 
-                payment = Payment(
-                    amount=amount_dec,
-                    currency="USD",
-                    payment_method=method_label,
-                    status="completed",
-                    stripe_payment_intent_id=clover_id,
-                    description="Clover POS payment (synced)",
-                    payment_date=created_dt,
-                    processed_at=created_dt,
+                # Use raw SQL to avoid ORM type mismatch (model has invoice_id as UUID
+                # but actual DB column is integer)
+                await db.execute(
+                    text("""
+                        INSERT INTO payments (amount, currency, payment_method, status,
+                            stripe_payment_intent_id, description, payment_date, processed_at)
+                        VALUES (:amount, :currency, :method, :status,
+                            :charge_id, :description, :payment_date, :processed_at)
+                    """),
+                    {
+                        "amount": amount_val,
+                        "currency": "USD",
+                        "method": method_label,
+                        "status": "completed",
+                        "charge_id": clover_id,
+                        "description": "Clover POS payment (synced)",
+                        "payment_date": created_dt,
+                        "processed_at": created_dt,
+                    },
                 )
-                db.add(payment)
                 synced += 1
             except Exception as e:
                 logger.error(f"Error syncing Clover payment {clover_id}: {e}")
