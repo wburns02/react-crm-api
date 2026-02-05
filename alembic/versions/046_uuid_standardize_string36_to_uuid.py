@@ -23,29 +23,47 @@ def _table_exists(conn, table_name):
     ), {"t": table_name}).scalar()
 
 
+def _drop_all_fks_referencing(conn, target_table):
+    """Drop ALL foreign key constraints that reference the given table's columns."""
+    fks = conn.execute(sa.text("""
+        SELECT tc.table_name, tc.constraint_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
+        JOIN information_schema.table_constraints tc2 ON rc.unique_constraint_name = tc2.constraint_name
+        WHERE tc2.table_name = :target AND tc.constraint_type = 'FOREIGN KEY'
+    """), {"target": target_table}).fetchall()
+    for table_name, constraint_name in fks:
+        conn.execute(sa.text(f'ALTER TABLE "{table_name}" DROP CONSTRAINT IF EXISTS "{constraint_name}"'))
+    return [(r[0], r[1]) for r in fks]
+
+
+def _drop_all_fks_from(conn, source_table):
+    """Drop ALL foreign key constraints on the given table."""
+    if not _table_exists(conn, source_table):
+        return []
+    fks = conn.execute(sa.text("""
+        SELECT constraint_name FROM information_schema.table_constraints
+        WHERE table_name = :t AND constraint_type = 'FOREIGN KEY'
+    """), {"t": source_table}).fetchall()
+    for (constraint_name,) in fks:
+        conn.execute(sa.text(f'ALTER TABLE "{source_table}" DROP CONSTRAINT IF EXISTS "{constraint_name}"'))
+    return [r[0] for r in fks]
+
+
 def upgrade() -> None:
     conn = op.get_bind()
 
-    # ── Step 1: Drop FK constraints that reference the tables being converted ──
-    # Using IF EXISTS since some constraints may not exist due to prior type mismatches
-    fk_drops = [
-        # FKs referencing technicians.id
-        ("work_orders", "work_orders_technician_id_fkey"),
-        # FKs referencing work_orders.id
-        ("quotes", "quotes_converted_to_work_order_id_fkey"),
-        ("bookings", "bookings_work_order_id_fkey"),
-        ("work_order_photos", "work_order_photos_work_order_id_fkey"),
-        ("tickets", "tickets_work_order_id_fkey"),
-        ("invoices", "invoices_work_order_id_fkey"),
-        # FK referencing inventory_items.id (UUID → String(36) mismatch)
-        ("inventory_transactions", "inventory_transactions_item_id_fkey"),
-    ]
-    for table, constraint in fk_drops:
+    # ── Step 1: Drop ALL FK constraints referencing/from tables being converted ──
+    # Dynamically discover FKs instead of hardcoding names (which can be wrong)
+    pk_tables = ["technicians", "work_orders", "bookings", "work_order_photos", "inventory_transactions"]
+    for table in pk_tables:
         if _table_exists(conn, table):
-            conn.execute(sa.text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {constraint}"))
+            # Drop FKs that OTHER tables have pointing TO this table
+            _drop_all_fks_referencing(conn, table)
+            # Drop FKs that THIS table has pointing to other tables
+            _drop_all_fks_from(conn, table)
 
     # ── Step 2: Convert Primary Keys from VARCHAR(36) to native UUID ──
-    pk_tables = ["technicians", "work_orders", "bookings", "work_order_photos", "inventory_transactions"]
     for table in pk_tables:
         if _table_exists(conn, table):
             conn.execute(sa.text(f"ALTER TABLE {table} ALTER COLUMN id TYPE UUID USING id::uuid"))
@@ -59,6 +77,7 @@ def upgrade() -> None:
         ("work_orders", "technician_id", True),
         # -- Tables referencing work_orders.id --
         ("quotes", "converted_to_work_order_id", True),
+        ("quotes", "work_order_id", True),
         ("bookings", "work_order_id", True),
         ("work_order_photos", "work_order_id", False),
         ("tickets", "work_order_id", True),
@@ -111,9 +130,11 @@ def upgrade() -> None:
         ))
 
     # ── Step 4: Re-create FK constraints with correct UUID types ──
+    # Also add quotes.work_order_id FK (existed as quotes_work_order_id_fkey)
     fk_creates = [
         ("work_orders", "technician_id", "technicians", "id"),
         ("quotes", "converted_to_work_order_id", "work_orders", "id"),
+        ("quotes", "work_order_id", "work_orders", "id"),
         ("bookings", "work_order_id", "work_orders", "id"),
         ("work_order_photos", "work_order_id", "work_orders", "id"),
         ("tickets", "work_order_id", "work_orders", "id"),
