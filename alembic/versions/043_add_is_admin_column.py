@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic
 revision = "043_add_is_admin_column"
-down_revision = "042_add_work_order_number"
+down_revision = "042_work_order_number"
 branch_labels = None
 depends_on = None
 

@@ -24,4 +24,4 @@ USER appuser
 EXPOSE 8080
 
 # Use shell form with explicit sh -c for environment variable expansion
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "alembic stamp 045 && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
