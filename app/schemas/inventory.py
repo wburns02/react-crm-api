@@ -107,3 +107,5 @@ class InventoryAdjustment(BaseModel):
 
     adjustment: int = Field(..., description="Positive to add, negative to subtract")
     reason: Optional[str] = Field(None, max_length=255)
+    reference_type: Optional[str] = Field(None, max_length=50, description="work_order, manual, restock, return")
+    reference_id: Optional[str] = Field(None, max_length=36)

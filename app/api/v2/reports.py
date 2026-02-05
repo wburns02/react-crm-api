@@ -492,10 +492,37 @@ async def get_technician_performance(
 
         # Calculate metrics
         completion_rate = (completed / total * 100) if total > 0 else 0
-        revenue = completed * 350.0
 
-        # Estimate efficiency (jobs per working day, assuming 5 days)
-        work_days = 22  # Approximate working days in a month
+        # Revenue from actual invoices linked to technician's work orders
+        rev_result = await db.execute(
+            select(func.coalesce(func.sum(Invoice.amount), 0)).where(
+                Invoice.work_order_id.in_(
+                    select(WorkOrder.id).where(WorkOrder.assigned_technician == full_name)
+                )
+            )
+        )
+        revenue = float(rev_result.scalar() or 0)
+
+        # On-time rate: completed jobs where actual_end_time <= scheduled_date end-of-day
+        if completed > 0:
+            on_time_result = await db.execute(
+                select(func.count()).where(
+                    and_(
+                        WorkOrder.assigned_technician == full_name,
+                        WorkOrder.status == "completed",
+                        WorkOrder.actual_end_time.isnot(None),
+                        WorkOrder.scheduled_date.isnot(None),
+                        func.date(WorkOrder.actual_end_time) <= WorkOrder.scheduled_date,
+                    )
+                )
+            )
+            on_time = on_time_result.scalar() or 0
+            on_time_rate = round(on_time / completed * 100, 1)
+        else:
+            on_time_rate = 0.0
+
+        # Estimate efficiency (jobs per working day)
+        work_days = 22
         jobs_per_day = completed / work_days if work_days > 0 else 0
 
         tech_performance.append(
@@ -507,8 +534,8 @@ async def get_technician_performance(
                 "completion_rate": round(completion_rate, 1),
                 "revenue_generated": revenue,
                 "jobs_per_day": round(jobs_per_day, 2),
-                "on_time_rate": 95.0,  # Placeholder - would need actual tracking
-                "customer_rating": 4.5,  # Placeholder - would need rating system
+                "on_time_rate": on_time_rate,
+                "customer_rating": None,
             }
         )
 

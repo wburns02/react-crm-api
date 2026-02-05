@@ -267,12 +267,50 @@ async def semantic_search(
                 "search_type": "text_fallback",
             }
 
-        # TODO: Implement proper vector similarity search with pgvector
-        # For now, return text search results
+        # Cosine similarity search in Python (pgvector-free)
+        import math
+
+        query_embedding = query_result["embeddings"][0]
+
+        # Fetch candidate embeddings from DB
+        emb_query = select(AIEmbedding).where(AIEmbedding.embedding.isnot(None))
+        if request.entity_types:
+            emb_query = emb_query.where(AIEmbedding.entity_type.in_(request.entity_types))
+
+        emb_result = await db.execute(emb_query)
+        candidates = emb_result.scalars().all()
+
+        # Compute cosine similarity
+        def cosine_sim(a, b):
+            if not a or not b or len(a) != len(b):
+                return 0.0
+            dot = sum(x * y for x, y in zip(a, b))
+            mag_a = math.sqrt(sum(x * x for x in a))
+            mag_b = math.sqrt(sum(x * x for x in b))
+            if mag_a == 0 or mag_b == 0:
+                return 0.0
+            return dot / (mag_a * mag_b)
+
+        scored = []
+        for emb in candidates:
+            score = cosine_sim(query_embedding, emb.embedding)
+            if score >= 0.3:
+                scored.append((score, emb))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top_results = scored[: request.limit]
+
         return {
-            "results": [],
-            "search_type": "vector",
-            "note": "pgvector extension required for full semantic search",
+            "results": [
+                {
+                    "entity_type": emb.entity_type,
+                    "entity_id": emb.entity_id,
+                    "content": emb.content,
+                    "score": round(score, 4),
+                }
+                for score, emb in top_results
+            ],
+            "search_type": "vector_cosine",
         }
 
     except Exception as e:

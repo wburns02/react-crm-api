@@ -7,9 +7,14 @@ from sqlalchemy import select, func, and_
 from typing import Optional
 from datetime import datetime, timedelta
 
+import logging
+
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
 from app.models.customer_success import Touchpoint
+from app.services.ai_gateway import ai_gateway
+
+logger = logging.getLogger(__name__)
 from app.schemas.customer_success.touchpoint import (
     TouchpointCreate,
     TouchpointUpdate,
@@ -275,21 +280,124 @@ async def analyze_touchpoint_sentiment(
             detail="Touchpoint not found",
         )
 
-    # In production, this would call an AI service for sentiment analysis
-    # For now, return placeholder data
-    analysis = TouchpointSentimentAnalysis(
-        touchpoint_id=touchpoint_id,
-        sentiment_score=0.0,
-        sentiment_label=SentimentLabel.NEUTRAL,
-        sentiment_confidence=0.0,
-        key_topics=[],
-        action_items=[],
-        risk_signals=[],
-        expansion_signals=[],
-        key_quotes=[],
-        engagement_score=50,
-        was_positive=True,
-    )
+    # Build text content from touchpoint fields
+    text_parts = []
+    if touchpoint.subject:
+        text_parts.append(f"Subject: {touchpoint.subject}")
+    if touchpoint.summary:
+        text_parts.append(f"Summary: {touchpoint.summary}")
+    if touchpoint.description:
+        text_parts.append(touchpoint.description)
+    if touchpoint.notes:
+        text_parts.append(f"Notes: {touchpoint.notes}")
+
+    text_content = "\n".join(text_parts) if text_parts else "No content available"
+
+    # Call AI gateway for comprehensive sentiment analysis
+    try:
+        ai_result = await ai_gateway.chat_completion(
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Analyze this customer touchpoint interaction. Return JSON only:
+{{
+  "sentiment_score": <float -1.0 to 1.0>,
+  "sentiment_label": "<very_negative|negative|neutral|positive|very_positive>",
+  "sentiment_confidence": <float 0.0 to 1.0>,
+  "key_topics": ["topic1", "topic2"],
+  "action_items": ["action1", "action2"],
+  "risk_signals": ["risk1"],
+  "expansion_signals": ["signal1"],
+  "key_quotes": ["quote1"],
+  "engagement_score": <int 0-100>,
+  "was_positive": <true|false>
+}}
+
+Touchpoint type: {touchpoint.touchpoint_type}
+Channel: {touchpoint.channel or 'unknown'}
+Content:
+{text_content}""",
+                }
+            ],
+            max_tokens=500,
+            temperature=0.1,
+        )
+
+        import json
+        content = ai_result.get("content", "{}")
+        if "```" in content:
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        parsed = json.loads(content.strip())
+
+        # Map sentiment label
+        label_map = {
+            "very_negative": SentimentLabel.VERY_NEGATIVE,
+            "negative": SentimentLabel.NEGATIVE,
+            "neutral": SentimentLabel.NEUTRAL,
+            "positive": SentimentLabel.POSITIVE,
+            "very_positive": SentimentLabel.VERY_POSITIVE,
+        }
+
+        sentiment_label = label_map.get(parsed.get("sentiment_label", "neutral"), SentimentLabel.NEUTRAL)
+        sentiment_score = float(parsed.get("sentiment_score", 0.0))
+        was_positive = parsed.get("was_positive", sentiment_score > 0)
+
+        # Persist to touchpoint record
+        touchpoint.sentiment_score = sentiment_score
+        touchpoint.sentiment_label = sentiment_label.value
+        touchpoint.sentiment_confidence = float(parsed.get("sentiment_confidence", 0.5))
+        touchpoint.key_topics = parsed.get("key_topics", [])
+        touchpoint.action_items = parsed.get("action_items", [])
+        touchpoint.risk_signals = parsed.get("risk_signals", [])
+        touchpoint.expansion_signals = parsed.get("expansion_signals", [])
+        touchpoint.key_quotes = parsed.get("key_quotes", [])
+        touchpoint.engagement_score = int(parsed.get("engagement_score", 50))
+        touchpoint.was_positive = was_positive
+        await db.commit()
+
+        analysis = TouchpointSentimentAnalysis(
+            touchpoint_id=touchpoint_id,
+            sentiment_score=sentiment_score,
+            sentiment_label=sentiment_label,
+            sentiment_confidence=float(parsed.get("sentiment_confidence", 0.5)),
+            key_topics=parsed.get("key_topics", []),
+            action_items=parsed.get("action_items", []),
+            risk_signals=parsed.get("risk_signals", []),
+            expansion_signals=parsed.get("expansion_signals", []),
+            key_quotes=parsed.get("key_quotes", []),
+            engagement_score=int(parsed.get("engagement_score", 50)),
+            was_positive=was_positive,
+        )
+    except Exception as e:
+        logger.warning(f"AI sentiment analysis failed, using basic analysis: {e}")
+        # Fallback: basic keyword-based sentiment
+        positive_words = {"great", "excellent", "happy", "thank", "good", "love", "perfect", "awesome"}
+        negative_words = {"bad", "terrible", "unhappy", "cancel", "frustrated", "angry", "worst", "issue", "problem"}
+        words = set(text_content.lower().split())
+        pos_count = len(words & positive_words)
+        neg_count = len(words & negative_words)
+        if pos_count > neg_count:
+            score, label = 0.5, SentimentLabel.POSITIVE
+        elif neg_count > pos_count:
+            score, label = -0.5, SentimentLabel.NEGATIVE
+        else:
+            score, label = 0.0, SentimentLabel.NEUTRAL
+
+        analysis = TouchpointSentimentAnalysis(
+            touchpoint_id=touchpoint_id,
+            sentiment_score=score,
+            sentiment_label=label,
+            sentiment_confidence=0.3,
+            key_topics=[],
+            action_items=[],
+            risk_signals=[],
+            expansion_signals=[],
+            key_quotes=[],
+            engagement_score=50,
+            was_positive=score > 0,
+        )
 
     return analysis
 

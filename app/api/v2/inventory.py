@@ -7,6 +7,7 @@ import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.inventory import InventoryItem
+from app.models.inventory_transaction import InventoryTransaction
 from app.schemas.inventory import (
     InventoryItemCreate,
     InventoryItemUpdate,
@@ -149,6 +150,58 @@ async def get_categories(
     return {"categories": sorted(categories)}
 
 
+@router.get("/{item_id}/transactions")
+async def get_item_transactions(
+    item_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """Get transaction history for an inventory item."""
+    # Verify item exists
+    result = await db.execute(select(InventoryItem).where(InventoryItem.id == item_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
+
+    # Count
+    count_q = select(func.count()).where(InventoryTransaction.item_id == item_id)
+    total = (await db.execute(count_q)).scalar()
+
+    # Fetch transactions
+    offset = (page - 1) * page_size
+    query = (
+        select(InventoryTransaction)
+        .where(InventoryTransaction.item_id == item_id)
+        .order_by(InventoryTransaction.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    )
+    result = await db.execute(query)
+    transactions = result.scalars().all()
+
+    return {
+        "transactions": [
+            {
+                "id": t.id,
+                "item_id": t.item_id,
+                "adjustment": t.adjustment,
+                "previous_quantity": t.previous_quantity,
+                "new_quantity": t.new_quantity,
+                "reason": t.reason,
+                "reference_type": t.reference_type,
+                "reference_id": t.reference_id,
+                "performed_by": t.performed_by,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+            for t in transactions
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
 @router.get("/{item_id}", response_model=InventoryItemResponse)
 async def get_inventory_item(
     item_id: str,
@@ -269,8 +322,21 @@ async def adjust_inventory(
             detail=f"Cannot reduce quantity below 0. Current: {item.quantity_on_hand}, Adjustment: {adjustment.adjustment}",
         )
 
+    previous_quantity = item.quantity_on_hand or 0
     item.quantity_on_hand = new_quantity
-    # TODO: Log adjustment with reason to an inventory_transactions table
+
+    # Log the adjustment to inventory_transactions
+    transaction = InventoryTransaction(
+        item_id=str(item.id),
+        adjustment=adjustment.adjustment,
+        previous_quantity=previous_quantity,
+        new_quantity=new_quantity,
+        reason=adjustment.reason,
+        reference_type=adjustment.reference_type,
+        reference_id=adjustment.reference_id,
+        performed_by=current_user.id,
+    )
+    db.add(transaction)
 
     await db.commit()
     await db.refresh(item)

@@ -20,8 +20,12 @@ import json
 from app.api.deps import DbSession, CurrentUser
 from app.models.signature import SignatureRequest, Signature, SignedDocument
 from app.models.quote import Quote
+from app.services.email_service import EmailService
+from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+FRONTEND_URL = getattr(settings, "FRONTEND_URL", "https://react.ecbtx.com")
 router = APIRouter()
 
 
@@ -205,15 +209,44 @@ async def send_signature_request(
             detail="Signature request not found",
         )
 
-    # TODO: Integrate with communications service to send email
-    # For now, just mark as sent
+    # Send signature request email
+    signing_url = f"{FRONTEND_URL}/sign/{sig_request.access_token}"
+    email_subject = f"Signature Requested: {sig_request.title}"
+    email_body = (
+        f"Dear {sig_request.signer_name},\n\n"
+        f"You have a document that requires your signature:\n\n"
+        f"  Document: {sig_request.title}\n"
+    )
+    if sig_request.message:
+        email_body += f"  Message: {sig_request.message}\n"
+    email_body += (
+        f"\nPlease click the link below to review and sign:\n"
+        f"{signing_url}\n\n"
+        f"This link will expire in 7 days.\n\n"
+        f"Thank you,\nMac Septic Services"
+    )
+
+    email_sent = False
+    try:
+        email_service = EmailService()
+        if email_service.is_configured:
+            result = await email_service.send_email(
+                to=sig_request.signer_email,
+                subject=email_subject,
+                body=email_body,
+            )
+            email_sent = result.get("success", False)
+    except Exception as e:
+        logger.error(f"Failed to send signature request email: {e}")
+
     sig_request.sent_at = datetime.utcnow()
     sig_request.status = "sent" if sig_request.status == "pending" else sig_request.status
     await db.commit()
 
     return {
         "status": "sent",
-        "signing_url": f"/sign/{sig_request.access_token}",
+        "email_sent": email_sent,
+        "signing_url": signing_url,
         "sent_to": sig_request.signer_email,
     }
 
@@ -240,13 +273,38 @@ async def send_reminder(
             detail="Document already signed",
         )
 
-    # TODO: Send reminder email
+    # Send reminder email
+    signing_url = f"{FRONTEND_URL}/sign/{sig_request.access_token}"
+    email_subject = f"Reminder: Signature Needed — {sig_request.title}"
+    email_body = (
+        f"Dear {sig_request.signer_name},\n\n"
+        f"This is a friendly reminder that you have a document waiting for your signature:\n\n"
+        f"  Document: {sig_request.title}\n\n"
+        f"Please click the link below to review and sign:\n"
+        f"{signing_url}\n\n"
+        f"Thank you,\nMac Septic Services"
+    )
+
+    email_sent = False
+    try:
+        email_service = EmailService()
+        if email_service.is_configured:
+            result = await email_service.send_email(
+                to=sig_request.signer_email,
+                subject=email_subject,
+                body=email_body,
+            )
+            email_sent = result.get("success", False)
+    except Exception as e:
+        logger.error(f"Failed to send signature reminder email: {e}")
+
     sig_request.reminder_count += 1
     sig_request.last_reminder_at = datetime.utcnow()
     await db.commit()
 
     return {
         "status": "reminder_sent",
+        "email_sent": email_sent,
         "reminder_count": sig_request.reminder_count,
     }
 
@@ -432,8 +490,26 @@ async def capture_signature(
 
     await db.commit()
 
-    # TODO: Generate PDF with embedded signature
-    # TODO: Send confirmation email
+    # Send confirmation email to signer
+    try:
+        email_service = EmailService()
+        if email_service.is_configured:
+            confirmation_subject = f"Document Signed: {sig_request.title}"
+            confirmation_body = (
+                f"Dear {sig_request.signer_name},\n\n"
+                f"Thank you for signing \"{sig_request.title}\".\n\n"
+                f"Signed at: {sig_request.signed_at.strftime('%B %d, %Y at %I:%M %p')}\n"
+                f"Document ID: {signed_doc.id}\n\n"
+                f"A copy of the signed document has been recorded for your records.\n\n"
+                f"Thank you,\nMac Septic Services"
+            )
+            await email_service.send_email(
+                to=sig_request.signer_email,
+                subject=confirmation_subject,
+                body=confirmation_body,
+            )
+    except Exception as e:
+        logger.error(f"Failed to send signature confirmation email: {e}")
 
     return {
         "status": "signed",

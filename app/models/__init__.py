@@ -74,6 +74,8 @@ from app.models.role_view import RoleView, UserRoleSession
 
 # Work Order Photos
 from app.models.work_order_photo import WorkOrderPhoto
+from app.models.system_settings import SystemSettingStore
+from app.models.inventory_transaction import InventoryTransaction
 
 # National Septic OCR Permit System
 from app.models.septic_permit import (

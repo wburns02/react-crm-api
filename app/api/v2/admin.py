@@ -16,6 +16,7 @@ import logging
 
 from app.api.deps import CurrentUser, DbSession, get_password_hash
 from app.models.user import User
+from app.models.system_settings import SystemSettingStore
 from app.security.rbac import require_admin, require_superuser
 from app.models.customer import Customer
 
@@ -217,104 +218,120 @@ class SecuritySettings(BaseModel):
     ip_whitelist: list[str] = []
 
 
+async def _get_settings(db, category: str, model_class):
+    """Load settings from DB, falling back to defaults."""
+    result = await db.execute(
+        select(SystemSettingStore).where(SystemSettingStore.category == category)
+    )
+    row = result.scalar_one_or_none()
+    if row and row.settings_data:
+        return model_class(**row.settings_data)
+    return model_class()
+
+
+async def _save_settings(db, category: str, settings, user_id: int):
+    """Save settings to DB (upsert)."""
+    result = await db.execute(
+        select(SystemSettingStore).where(SystemSettingStore.category == category)
+    )
+    row = result.scalar_one_or_none()
+    settings_dict = settings.model_dump()
+    if row:
+        row.settings_data = settings_dict
+        row.updated_by = user_id
+    else:
+        row = SystemSettingStore(
+            category=category,
+            settings_data=settings_dict,
+            updated_by=user_id,
+        )
+        db.add(row)
+    await db.commit()
+    return settings
+
+
 @router.get("/settings/system")
 async def get_system_settings(
+    db: DbSession,
     current_user: CurrentUser,
     _: None = Depends(require_admin),
 ) -> SystemSettings:
     """Get system settings. Requires admin access."""
-    return SystemSettings()
+    return await _get_settings(db, "system", SystemSettings)
 
 
 @router.patch("/settings/system")
 async def update_system_settings(
     settings: SystemSettings,
+    db: DbSession,
     current_user: CurrentUser,
     _: None = Depends(require_admin),
 ) -> SystemSettings:
     """Update system settings. Requires admin access."""
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "error": "feature_not_implemented",
-            "message": "System settings persistence is coming soon",
-        },
-    )
+    return await _save_settings(db, "system", settings, current_user.id)
 
 
 @router.get("/settings/notifications")
 async def get_notification_settings(
+    db: DbSession,
     current_user: CurrentUser,
     _: None = Depends(require_admin),
 ) -> NotificationSettings:
     """Get notification settings. Requires admin access."""
-    return NotificationSettings()
+    return await _get_settings(db, "notifications", NotificationSettings)
 
 
 @router.patch("/settings/notifications")
 async def update_notification_settings(
     settings: NotificationSettings,
+    db: DbSession,
     current_user: CurrentUser,
     _: None = Depends(require_admin),
 ) -> NotificationSettings:
     """Update notification settings. Requires admin access."""
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "error": "feature_not_implemented",
-            "message": "Notification settings persistence is coming soon",
-        },
-    )
+    return await _save_settings(db, "notifications", settings, current_user.id)
 
 
 @router.get("/settings/integrations")
 async def get_integration_settings(
+    db: DbSession,
     current_user: CurrentUser,
     _: None = Depends(require_admin),
 ) -> IntegrationSettings:
     """Get integration settings. Requires admin access."""
-    return IntegrationSettings()
+    return await _get_settings(db, "integrations", IntegrationSettings)
 
 
 @router.patch("/settings/integrations")
 async def update_integration_settings(
     settings: IntegrationSettings,
+    db: DbSession,
     current_user: CurrentUser,
     _: None = Depends(require_admin),
 ) -> IntegrationSettings:
     """Update integration settings. Requires admin access."""
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "error": "feature_not_implemented",
-            "message": "Integration settings persistence is coming soon",
-        },
-    )
+    return await _save_settings(db, "integrations", settings, current_user.id)
 
 
 @router.get("/settings/security")
 async def get_security_settings(
+    db: DbSession,
     current_user: CurrentUser,
     _: None = Depends(require_admin),
 ) -> SecuritySettings:
     """Get security settings. Requires admin access."""
-    return SecuritySettings()
+    return await _get_settings(db, "security", SecuritySettings)
 
 
 @router.patch("/settings/security")
 async def update_security_settings(
     settings: SecuritySettings,
+    db: DbSession,
     current_user: CurrentUser,
     _: None = Depends(require_admin),
 ) -> SecuritySettings:
     """Update security settings. Requires admin access."""
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "error": "feature_not_implemented",
-            "message": "Security settings persistence is coming soon",
-        },
-    )
+    return await _save_settings(db, "security", settings, current_user.id)
 
 
 # ============ Customer Success Seed Data ============

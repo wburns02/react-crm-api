@@ -211,11 +211,46 @@ class PermitSearchService:
             if request.query:
                 highlights = self._get_highlights(permit, request.query)
 
+            # Calculate relevance score based on match quality
+            keyword_score = 0.0
+            if request.query:
+                query_lower = request.query.lower()
+                query_terms = query_lower.split()
+                fields_to_check = [
+                    (permit.permit_number or "", 1.0),
+                    (permit.address or "", 0.8),
+                    (permit.owner_name or "", 0.7),
+                    (permit.city or "", 0.5),
+                ]
+                total_weight = 0.0
+                matched_weight = 0.0
+                for field_val, weight in fields_to_check:
+                    total_weight += weight
+                    field_lower = field_val.lower()
+                    if query_lower in field_lower:
+                        matched_weight += weight
+                    else:
+                        term_matches = sum(1 for t in query_terms if t in field_lower)
+                        if term_matches > 0:
+                            matched_weight += weight * (term_matches / len(query_terms)) * 0.7
+                keyword_score = round(matched_weight / total_weight, 3) if total_weight > 0 else 0.5
+            else:
+                keyword_score = 0.5  # No query = browsing, neutral score
+
+            # Boost score for permits with rich data
+            data_completeness = sum([
+                bool(has_property),
+                bool(permit.latitude),
+                bool(permit.pdf_url or permit.permit_url),
+                bool(permit.system_type_raw),
+            ]) / 4.0
+            score = round(keyword_score * 0.8 + data_completeness * 0.2, 3)
+
             search_results.append(
                 PermitSearchResult(
                     permit=summary,
-                    score=1.0,  # TODO: Calculate actual score
-                    keyword_score=0.0,
+                    score=score,
+                    keyword_score=keyword_score,
                     semantic_score=None,
                     highlights=highlights,
                 )

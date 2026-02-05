@@ -17,6 +17,8 @@ import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.pricing import ServiceCatalog, PricingZone, PricingRule, CustomerPricingTier
+from app.models.customer import Customer
+from app.models.system_settings import SystemSettingStore
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -425,7 +427,7 @@ async def calculate_price(
     rule_adjustments = []
     context = {
         "scheduled_date": request.scheduled_date,
-        "customer_tier": None,  # TODO: Look up customer tier
+        "customer_tier": request.customer_id,
     }
 
     running_total = subtotal + zone_adjustment
@@ -469,7 +471,31 @@ async def calculate_price(
     customer_discount = 0.0
     customer_tier = None
 
-    # TODO: Look up customer pricing tier and apply discount
+    if request.customer_id:
+        # Look up the customer's type, match to a pricing tier
+        cust_result = await db.execute(
+            select(Customer.customer_type).where(Customer.id == int(request.customer_id))
+        )
+        cust_type = cust_result.scalar_one_or_none()
+        if cust_type:
+            tier_result = await db.execute(
+                select(CustomerPricingTier).where(
+                    CustomerPricingTier.code == cust_type,
+                    CustomerPricingTier.is_active == True,
+                )
+            )
+            tier = tier_result.scalar_one_or_none()
+            if tier:
+                customer_tier = tier.name
+                # Check for service-specific discount first
+                svc_discount_pct = None
+                if tier.service_discounts and request.service_code in tier.service_discounts:
+                    svc_discount_pct = tier.service_discounts[request.service_code]
+                discount_pct = svc_discount_pct if svc_discount_pct is not None else (tier.default_discount_percent or 0.0)
+                customer_discount = running_total * (discount_pct / 100.0)
+                # Waive travel fee for qualifying tiers
+                if tier.waive_travel_fee:
+                    travel_fee = 0.0
 
     # Calculate totals
     total_before_tax = running_total + travel_fee - customer_discount
@@ -480,8 +506,16 @@ async def calculate_price(
     if service.max_price and total_before_tax > service.max_price:
         total_before_tax = service.max_price
 
-    # Tax
-    tax_rate = 0.0825  # Default 8.25% - TODO: Make configurable
+    # Tax — load configurable rate from system settings, fallback to 8.25%
+    tax_rate = 0.0825
+    settings_result = await db.execute(
+        select(SystemSettingStore).where(SystemSettingStore.category == "billing")
+    )
+    billing_settings = settings_result.scalar_one_or_none()
+    if billing_settings and billing_settings.settings_data:
+        configured_rate = billing_settings.settings_data.get("tax_rate")
+        if configured_rate is not None:
+            tax_rate = float(configured_rate) / 100.0  # stored as percentage (e.g. 8.25)
     tax_amount = total_before_tax * tax_rate if service.is_taxable else 0.0
 
     total = total_before_tax + tax_amount

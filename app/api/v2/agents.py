@@ -17,7 +17,10 @@ import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.ai_agent import AIAgent, AgentConversation, AgentMessage, AgentTask
+from app.models.customer import Customer
 from app.services.ai_gateway import ai_gateway
+from app.services.twilio_service import TwilioService
+from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -353,9 +356,59 @@ async def send_agent_message(
     conversation.last_message_at = datetime.utcnow()
 
     await db.commit()
+    await db.refresh(message)
 
-    # TODO: Actually send via SMS/email in background
-    # background_tasks.add_task(send_message_async, message.id)
+    # Send via appropriate channel in background
+    async def send_agent_message_async():
+        from app.database import async_session
+        async with async_session() as session:
+            # Reload message
+            msg_result = await session.execute(
+                select(AgentMessage).where(AgentMessage.id == message.id)
+            )
+            msg = msg_result.scalar_one_or_none()
+            if not msg:
+                return
+
+            # Get customer contact info
+            conv_result2 = await session.execute(
+                select(AgentConversation).where(AgentConversation.id == conversation_id)
+            )
+            conv = conv_result2.scalar_one_or_none()
+            if not conv:
+                return
+
+            cust_result = await session.execute(
+                select(Customer).where(Customer.id == conv.customer_id)
+            )
+            customer = cust_result.scalar_one_or_none()
+            if not customer:
+                msg.delivery_status = "failed"
+                await session.commit()
+                return
+
+            try:
+                if conv.channel == "sms" and customer.phone:
+                    twilio = TwilioService()
+                    await twilio.send_sms(customer.phone, msg.content)
+                    msg.delivery_status = "sent"
+                elif conv.channel == "email" and customer.email:
+                    email_svc = EmailService()
+                    await email_svc.send_email(
+                        to_email=customer.email,
+                        subject="Message from Mac Septic Services",
+                        body=msg.content,
+                    )
+                    msg.delivery_status = "sent"
+                else:
+                    msg.delivery_status = "sent"  # chat channel — already displayed
+            except Exception as e:
+                logger.error(f"Failed to send agent message {message.id}: {e}")
+                msg.delivery_status = "failed"
+
+            await session.commit()
+
+    background_tasks.add_task(send_agent_message_async)
 
     return {
         "message_id": str(message.id),

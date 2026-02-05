@@ -699,16 +699,56 @@ async def upload_photo(
     db: DbSession = None,
     current_user: CurrentUser = None,
 ):
-    """Upload a photo for a job."""
-    # TODO: Actually store the file (S3, local, etc.)
-    # For now, just acknowledge
+    """Upload a photo for a job. Accepts multipart file upload, stores as Base64 in DB."""
+    import base64
+    import uuid as uuid_mod
+    from app.models.work_order_photo import WorkOrderPhoto
+
+    # Verify work order exists
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+    work_order = wo_result.scalar_one_or_none()
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    # Validate file type
+    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
+    if file.content_type and file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type: {file.content_type}. Allowed: {', '.join(allowed_types)}",
+        )
+
+    # Read and encode file
+    contents = await file.read()
+
+    # Validate file size (max 10MB)
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
+
+    base64_data = base64.b64encode(contents).decode("utf-8")
+    mime_type = file.content_type or "image/jpeg"
+    data_uri = f"data:{mime_type};base64,{base64_data}"
+
+    # Create photo record
+    photo = WorkOrderPhoto(
+        id=str(uuid_mod.uuid4()),
+        work_order_id=work_order_id,
+        photo_type=photo_type,
+        data=data_uri,
+        timestamp=datetime.utcnow(),
+    )
+    db.add(photo)
+    await db.commit()
+    await db.refresh(photo)
+
+    logger.info(f"Photo uploaded via employee portal for work order {work_order_id}: {photo.id}")
 
     return {
         "status": "uploaded",
+        "photo_id": photo.id,
         "work_order_id": work_order_id,
         "photo_type": photo_type,
         "filename": file.filename,
-        "message": "Photo upload endpoint ready - storage integration pending",
     }
 
 
@@ -719,26 +759,44 @@ async def capture_customer_signature(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Capture customer signature for job completion."""
+    """Capture customer signature for job completion. Stores signature as photo and updates work order."""
+    import uuid as uuid_mod
+    from app.models.work_order_photo import WorkOrderPhoto
+
     wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
     work_order = wo_result.scalar_one_or_none()
 
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
 
-    # TODO: Store signature data and create signed document
-    # For now, mark job as signed
+    now = datetime.utcnow()
 
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+    # Store signature as a photo record (type=signature)
+    signature_photo = WorkOrderPhoto(
+        id=str(uuid_mod.uuid4()),
+        work_order_id=work_order_id,
+        photo_type="signature",
+        data=request.signature_data,  # Base64 image data
+        timestamp=now,
+        gps_lat=request.latitude,
+        gps_lng=request.longitude,
+    )
+    db.add(signature_photo)
+
+    # Update work order notes with signature record
+    timestamp_str = now.strftime("%Y-%m-%d %H:%M")
     notes = work_order.notes or ""
-    work_order.notes = f"{notes}\n[{timestamp}] Signed by: {request.signer_name}".strip()
+    work_order.notes = f"{notes}\n[{timestamp_str}] Signed by: {request.signer_name}".strip()
 
     await db.commit()
 
+    logger.info(f"Customer signature captured for work order {work_order_id} by {request.signer_name}")
+
     return {
         "status": "signature_captured",
+        "signature_photo_id": signature_photo.id,
         "signer_name": request.signer_name,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": now.isoformat(),
     }
 
 

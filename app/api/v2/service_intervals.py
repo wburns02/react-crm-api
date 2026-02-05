@@ -1,5 +1,6 @@
 """Service Intervals API - Recurring service scheduling and reminders."""
 
+import logging
 from datetime import date, timedelta, datetime
 from typing import List, Optional
 from uuid import uuid4, UUID
@@ -13,6 +14,10 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_db, get_current_user
 from app.models import Customer
 from app.models.service_interval import ServiceInterval, CustomerServiceSchedule, ServiceReminder
+from app.services.twilio_service import TwilioService
+from app.services.email_service import EmailService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -600,26 +605,114 @@ async def send_service_reminder(
     # Calculate days before due
     days_before = (schedule.next_due_date - date.today()).days
 
-    # Create reminder record
+    # Look up customer for contact info
+    customer_result = await db.execute(select(Customer).where(Customer.id == schedule.customer_id))
+    customer = customer_result.scalar_one_or_none()
+
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found for this schedule")
+
+    # Look up service interval for name
+    interval_result = await db.execute(
+        select(ServiceInterval).where(ServiceInterval.id == schedule.service_interval_id)
+    )
+    interval = interval_result.scalar_one_or_none()
+
+    # Build message content
+    customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip() or "Valued Customer"
+    service_name = interval.name if interval else "Scheduled Service"
+    due_date_str = schedule.next_due_date.strftime("%B %d, %Y") if schedule.next_due_date else "soon"
+
+    sms_body = (
+        f"Hi {customer_name}! This is a reminder from Mac Septic Services. "
+        f"Your {service_name} service is due on {due_date_str}. "
+        f"Please call us at (512) 555-0123 to schedule your appointment. Thank you!"
+    )
+
+    email_subject = f"Service Reminder: {service_name} Due {due_date_str}"
+    email_body = (
+        f"Dear {customer_name},\n\n"
+        f"This is a friendly reminder that your {service_name} service is scheduled to be due on {due_date_str}.\n\n"
+        f"To ensure your septic system continues to operate efficiently, we recommend scheduling your service appointment soon.\n\n"
+        f"Please contact us at:\n"
+        f"- Phone: (512) 555-0123\n"
+        f"- Email: service@macseptic.com\n\n"
+        f"Thank you for choosing Mac Septic Services!\n\n"
+        f"Best regards,\nMac Septic Services Team"
+    )
+
+    # Send via requested channel
+    sent = False
+    error_message = None
+
+    if request.reminder_type == "sms":
+        if not customer.phone:
+            raise HTTPException(status_code=400, detail="Customer has no phone number on file")
+        try:
+            twilio = TwilioService()
+            if twilio.is_configured:
+                await twilio.send_sms(to=customer.phone, body=sms_body)
+                sent = True
+                logger.info(f"Manual SMS reminder sent to {customer.phone[-4:]} for schedule {schedule.id}")
+            else:
+                error_message = "Twilio is not configured"
+        except Exception as e:
+            error_message = str(e)
+            logger.error(f"Failed to send manual SMS reminder: {e}")
+
+    elif request.reminder_type == "email":
+        if not customer.email:
+            raise HTTPException(status_code=400, detail="Customer has no email address on file")
+        try:
+            email_service = EmailService()
+            if email_service.is_configured:
+                result = await email_service.send_email(
+                    to=customer.email, subject=email_subject, body=email_body
+                )
+                if result.get("success"):
+                    sent = True
+                    logger.info(f"Manual email reminder sent to {customer.email} for schedule {schedule.id}")
+                else:
+                    error_message = result.get("error", "Email send failed")
+            else:
+                error_message = "Email service is not configured"
+        except Exception as e:
+            error_message = str(e)
+            logger.error(f"Failed to send manual email reminder: {e}")
+
+    elif request.reminder_type == "push":
+        error_message = "Push notifications not yet supported for service reminders"
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid reminder type: {request.reminder_type}")
+
+    # Create reminder record with actual status
     reminder = ServiceReminder(
         schedule_id=schedule.id,
         customer_id=schedule.customer_id,
         reminder_type=request.reminder_type,
         days_before_due=days_before,
-        status="sent",
+        status="sent" if sent else "failed",
+        error_message=error_message,
+        sent_at=datetime.utcnow() if sent else None,
     )
 
     db.add(reminder)
 
-    # Update schedule
-    schedule.reminder_sent = True
-    schedule.last_reminder_sent_at = datetime.utcnow()
+    # Update schedule only if actually sent
+    if sent:
+        schedule.reminder_sent = True
+        schedule.last_reminder_sent_at = datetime.utcnow()
 
     await db.commit()
 
-    # TODO: Actually send SMS/email/push via Twilio/SendGrid
+    if not sent:
+        return {
+            "success": False,
+            "message": f"Failed to send reminder via {request.reminder_type}: {error_message}",
+        }
 
-    return {"success": True, "message": f"Reminder sent via {request.reminder_type}"}
+    return {"success": True, "message": f"Reminder sent via {request.reminder_type} to {customer_name}"}
 
 
 @router.post("/bulk-assign", response_model=dict)

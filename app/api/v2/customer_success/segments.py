@@ -19,7 +19,11 @@ import csv
 import io
 
 from app.api.deps import DbSession, CurrentUser
+from app.models.customer import Customer
+from app.models.work_order import WorkOrder
 from app.models.customer_success import Segment, CustomerSegment, SegmentSnapshot
+from uuid import uuid4
+from datetime import date
 from app.schemas.customer_success.segment import (
     SegmentCreate,
     SegmentUpdate,
@@ -977,21 +981,55 @@ async def export_segment(
     # Generate filename
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     safe_name = segment.name.replace(" ", "_").lower()[:30]
-    filename = f"segment_{safe_name}_{timestamp}.{request.format}"
+    filename = f"segment_{safe_name}_{timestamp}.csv"
 
-    # In a real implementation, this would:
-    # 1. Query customer data with specified fields
-    # 2. Generate CSV/Excel file
-    # 3. Upload to storage (S3, etc.)
-    # 4. Return download URL
+    # Query customer data for the segment
+    customers_result = await db.execute(
+        select(Customer).where(Customer.id.in_(customer_ids))
+    )
+    customers = customers_result.scalars().all()
 
-    # For now, return success with placeholder
-    return ExportResponse(
-        status="success",
-        message=f"Export queued for {len(customer_ids)} customers",
-        filename=filename,
-        download_url=f"/api/v2/cs/segments/{segment_id}/download/{filename}",
-        record_count=len(customer_ids),
+    # Build CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Build header from requested fields
+    field_map = {
+        "name": lambda c: f"{c.first_name or ''} {c.last_name or ''}".strip(),
+        "first_name": lambda c: c.first_name or "",
+        "last_name": lambda c: c.last_name or "",
+        "email": lambda c: c.email or "",
+        "phone": lambda c: c.phone or "",
+        "address": lambda c: f"{c.address_line1 or ''}, {c.city or ''}, {c.state or ''} {c.postal_code or ''}".strip(", "),
+        "city": lambda c: c.city or "",
+        "state": lambda c: c.state or "",
+        "postal_code": lambda c: c.postal_code or "",
+        "customer_type": lambda c: c.customer_type or "",
+        "tags": lambda c: c.tags or "",
+        "created_at": lambda c: c.created_at.isoformat() if c.created_at else "",
+    }
+    # Use requested fields, fall back to all contact fields
+    headers = request.fields if request.fields else ["name", "email", "phone"]
+    if request.include_contact_info and "email" not in headers:
+        headers.extend(["email", "phone"])
+    # Deduplicate while preserving order
+    seen = set()
+    unique_headers = []
+    for h in headers:
+        if h not in seen:
+            seen.add(h)
+            unique_headers.append(h)
+
+    writer.writerow(unique_headers)
+    for cust in customers:
+        row = [field_map.get(h, lambda c: "")(cust) for h in unique_headers]
+        writer.writerow(row)
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
@@ -1021,18 +1059,49 @@ async def bulk_schedule_segment(
 
     work_orders_created = 0
 
-    # In a real implementation, this would:
-    # 1. Create work orders for each customer if requested
-    # 2. Send notifications if requested
-    # 3. Handle assignment based on method
-
     if request.create_work_orders:
-        # Placeholder - would create actual work orders
-        work_orders_created = len(customer_ids)
+        # Generate next WO number base
+        max_wo = await db.execute(
+            select(func.max(WorkOrder.work_order_number))
+        )
+        last_wo = max_wo.scalar() or "WO-000000"
+        wo_counter = int(last_wo.replace("WO-", "")) if last_wo.startswith("WO-") else 0
+
+        # Get customer addresses for service location
+        customers_result = await db.execute(
+            select(Customer).where(Customer.id.in_(customer_ids))
+        )
+        customers = {c.id: c for c in customers_result.scalars().all()}
+
+        scheduled = date.fromisoformat(request.scheduled_date) if isinstance(request.scheduled_date, str) else request.scheduled_date
+
+        for cid in customer_ids:
+            cust = customers.get(cid)
+            if not cust:
+                continue
+            wo_counter += 1
+            wo = WorkOrder(
+                id=str(uuid4()),
+                work_order_number=f"WO-{wo_counter:06d}",
+                customer_id=cid,
+                job_type=request.service_type,
+                priority=request.priority,
+                status="scheduled",
+                scheduled_date=scheduled,
+                notes=request.notes,
+                service_address_line1=cust.address_line1,
+                service_city=cust.city,
+                service_state=cust.state,
+                service_postal_code=cust.postal_code,
+            )
+            db.add(wo)
+            work_orders_created += 1
+
+        await db.commit()
 
     return BulkScheduleResponse(
         status="success",
-        message=f"Scheduled {len(customer_ids)} services for {request.scheduled_date}",
+        message=f"Scheduled {work_orders_created} services for {request.scheduled_date}",
         work_orders_created=work_orders_created,
         scheduled_date=request.scheduled_date,
         customers_affected=len(customer_ids),
@@ -1060,16 +1129,34 @@ async def bulk_tag_segment(
             tag=request.tag,
         )
 
-    # In a real implementation, this would:
-    # 1. Add/remove tag from each customer
-    # 2. Update customer tags in database
+    # Update customer tags in database
+    customers_result = await db.execute(
+        select(Customer).where(Customer.id.in_(customer_ids))
+    )
+    customers = customers_result.scalars().all()
+    updated_count = 0
+
+    for cust in customers:
+        existing_tags = [t.strip() for t in (cust.tags or "").split(",") if t.strip()]
+        if request.action == "add":
+            if request.tag not in existing_tags:
+                existing_tags.append(request.tag)
+                cust.tags = ", ".join(existing_tags)
+                updated_count += 1
+        else:  # remove
+            if request.tag in existing_tags:
+                existing_tags.remove(request.tag)
+                cust.tags = ", ".join(existing_tags) if existing_tags else None
+                updated_count += 1
+
+    await db.commit()
 
     action_verb = "added to" if request.action == "add" else "removed from"
 
     return BulkTagResponse(
         status="success",
-        message=f"Tag '{request.tag}' {action_verb} {len(customer_ids)} customers",
-        customers_updated=len(customer_ids),
+        message=f"Tag '{request.tag}' {action_verb} {updated_count} customers",
+        customers_updated=updated_count,
         tag=request.tag,
     )
 

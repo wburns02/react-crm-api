@@ -18,6 +18,7 @@ import math
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
 from app.models.technician import Technician
+from app.models.gps_tracking import TechnicianLocation
 from app.models.customer import Customer
 from app.models.gps_tracking import TechnicianLocation
 from app.services.websocket_manager import manager
@@ -109,25 +110,36 @@ async def get_technician_locations(
     result = await db.execute(query)
     technicians = result.scalars().all()
 
-    return {
-        "technicians": [
-            {
-                "id": str(t.id),
-                "name": f"{t.first_name} {t.last_name}".strip(),
-                "home_latitude": t.home_latitude,
-                "home_longitude": t.home_longitude,
-                "home_address": t.home_address,
-                "home_city": t.home_city,
-                "assigned_vehicle": t.assigned_vehicle,
-                # Current location would come from GPS tracking
-                "current_latitude": t.home_latitude,  # Placeholder
-                "current_longitude": t.home_longitude,
-                "last_update": None,
-            }
-            for t in technicians
-            if t.home_latitude and t.home_longitude
-        ],
-    }
+    # Fetch latest GPS locations for all technicians
+    gps_result = await db.execute(select(TechnicianLocation))
+    gps_locations = {str(loc.technician_id): loc for loc in gps_result.scalars().all()}
+
+    tech_list = []
+    for t in technicians:
+        lat = t.home_latitude
+        lon = t.home_longitude
+        if not lat or not lon:
+            continue
+
+        gps = gps_locations.get(str(t.id))
+        current_lat = gps.latitude if gps else lat
+        current_lon = gps.longitude if gps else lon
+        last_update = gps.captured_at.isoformat() if gps and gps.captured_at else None
+
+        tech_list.append({
+            "id": str(t.id),
+            "name": f"{t.first_name} {t.last_name}".strip(),
+            "home_latitude": lat,
+            "home_longitude": lon,
+            "home_address": t.home_address,
+            "home_city": t.home_city,
+            "assigned_vehicle": t.assigned_vehicle,
+            "current_latitude": current_lat,
+            "current_longitude": current_lon,
+            "last_update": last_update,
+        })
+
+    return {"technicians": tech_list}
 
 
 @router.get("/jobs")
