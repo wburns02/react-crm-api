@@ -2129,6 +2129,233 @@ async def get_payroll_stats(
     }
 
 
+# Summary Overview - period-agnostic aggregate
+
+
+@router.get("/summary/overview")
+async def get_payroll_summary_overview(
+    db: DbSession,
+    current_user: CurrentUser,
+    days: int = Query(30, ge=7, le=365),
+):
+    """Get period-agnostic payroll overview for the last N days.
+
+    Fallback endpoint when no specific period is selected or current period has no data.
+    Returns aggregate stats across all time entries and commissions in the date range.
+    """
+    try:
+        cutoff = date.today() - timedelta(days=days)
+
+        # Get time entries in range
+        entries_result = await db.execute(
+            select(TimeEntry).where(TimeEntry.entry_date >= cutoff)
+        )
+        entries = entries_result.scalars().all()
+
+        # Get commissions in range
+        comm_result = await db.execute(
+            select(Commission).where(Commission.earned_date >= cutoff)
+        )
+        commissions = comm_result.scalars().all()
+
+        # Get technician names
+        tech_result = await db.execute(select(Technician))
+        technicians = {t.id: t for t in tech_result.scalars().all()}
+
+        # Aggregate by technician
+        by_tech: dict = {}
+        for entry in entries:
+            if entry.technician_id not in by_tech:
+                tech = technicians.get(entry.technician_id)
+                name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{entry.technician_id[:8]}"
+                by_tech[entry.technician_id] = {
+                    "technician_id": entry.technician_id,
+                    "technician_name": name,
+                    "regular_hours": 0.0,
+                    "overtime_hours": 0.0,
+                    "total_commissions": 0.0,
+                    "entry_count": 0,
+                }
+            by_tech[entry.technician_id]["regular_hours"] += entry.regular_hours or 0
+            by_tech[entry.technician_id]["overtime_hours"] += entry.overtime_hours or 0
+            by_tech[entry.technician_id]["entry_count"] += 1
+
+        for comm in commissions:
+            if comm.technician_id not in by_tech:
+                tech = technicians.get(comm.technician_id)
+                name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{comm.technician_id[:8]}"
+                by_tech[comm.technician_id] = {
+                    "technician_id": comm.technician_id,
+                    "technician_name": name,
+                    "regular_hours": 0.0,
+                    "overtime_hours": 0.0,
+                    "total_commissions": 0.0,
+                    "entry_count": 0,
+                }
+            by_tech[comm.technician_id]["total_commissions"] += comm.commission_amount or 0
+
+        total_hours = sum(t["regular_hours"] + t["overtime_hours"] for t in by_tech.values())
+        total_commissions = sum(t["total_commissions"] for t in by_tech.values())
+        total_entries = sum(t["entry_count"] for t in by_tech.values())
+
+        return {
+            "date_range": {"start": cutoff.isoformat(), "end": date.today().isoformat()},
+            "days": days,
+            "total_hours": round(total_hours, 2),
+            "total_commissions": round(total_commissions, 2),
+            "total_entries": total_entries,
+            "technician_count": len(by_tech),
+            "technicians": list(by_tech.values()),
+        }
+    except Exception as e:
+        logger.error(f"Error in summary overview: {type(e).__name__}: {str(e)}")
+        return {
+            "date_range": {"start": "", "end": ""},
+            "days": days,
+            "total_hours": 0,
+            "total_commissions": 0,
+            "total_entries": 0,
+            "technician_count": 0,
+            "technicians": [],
+        }
+
+
+# Dashboard Aggregate - trends, pending counts, comparison
+
+
+@router.get("/dashboard")
+async def get_payroll_dashboard(
+    db: DbSession,
+    current_user: CurrentUser,
+    periods_count: int = Query(12, ge=2, le=26),
+):
+    """Get comprehensive dashboard data: overview stats, period trends, pending counts.
+
+    Returns everything the frontend dashboard needs in a single API call.
+    """
+    try:
+        today = date.today()
+
+        # 1. Get recent periods (ordered by start_date desc)
+        periods_result = await db.execute(
+            select(PayrollPeriod)
+            .order_by(PayrollPeriod.start_date.desc())
+            .limit(periods_count)
+        )
+        periods = list(periods_result.scalars().all())
+
+        # 2. Current period identification
+        current_period = None
+        for p in periods:
+            if p.start_date <= today <= p.end_date:
+                current_period = p
+                break
+        if not current_period and periods:
+            current_period = periods[0]
+
+        # 3. Previous period (for comparison)
+        previous_period = periods[1] if len(periods) > 1 else None
+
+        # 4. Pending approval counts
+        pending_te_result = await db.execute(
+            select(func.count()).select_from(TimeEntry).where(TimeEntry.status == "pending")
+        )
+        pending_comm_result = await db.execute(
+            select(func.count()).select_from(Commission).where(Commission.status == "pending")
+        )
+
+        # 5. Build trend data for each period
+        trends = []
+        for p in reversed(periods):  # chronological order
+            entries_result = await db.execute(
+                select(
+                    func.coalesce(func.sum(TimeEntry.regular_hours), 0),
+                    func.coalesce(func.sum(TimeEntry.overtime_hours), 0),
+                    func.count(TimeEntry.id),
+                ).where(
+                    or_(
+                        TimeEntry.payroll_period_id == str(p.id),
+                        and_(
+                            TimeEntry.entry_date >= p.start_date,
+                            TimeEntry.entry_date <= p.end_date,
+                        )
+                    )
+                )
+            )
+            reg_hours, ot_hours, entry_count = entries_result.first() or (0, 0, 0)
+
+            comm_result = await db.execute(
+                select(
+                    func.coalesce(func.sum(Commission.commission_amount), 0),
+                    func.count(Commission.id),
+                ).where(
+                    or_(
+                        Commission.payroll_period_id == str(p.id),
+                        and_(
+                            Commission.earned_date >= p.start_date,
+                            Commission.earned_date <= p.end_date,
+                        )
+                    )
+                )
+            )
+            total_comm, comm_count = comm_result.first() or (0, 0)
+
+            trends.append({
+                "period_id": str(p.id),
+                "start_date": p.start_date.isoformat(),
+                "end_date": p.end_date.isoformat(),
+                "label": f"{p.start_date.strftime('%b %d')} - {p.end_date.strftime('%b %d')}",
+                "regular_hours": round(float(reg_hours or 0), 2),
+                "overtime_hours": round(float(ot_hours or 0), 2),
+                "total_hours": round(float(reg_hours or 0) + float(ot_hours or 0), 2),
+                "total_commissions": round(float(total_comm or 0), 2),
+                "entry_count": int(entry_count or 0),
+                "commission_count": int(comm_count or 0),
+                "gross_pay": round(float(p.total_gross_pay or 0), 2),
+                "status": p.status,
+            })
+
+        # 6. Period-over-period comparison
+        comparison = None
+        if current_period and previous_period:
+            def safe_pct(curr: float, prev: float) -> float:
+                if prev and prev > 0:
+                    return round(((curr - prev) / prev) * 100, 1)
+                return 0.0 if curr == 0 else 100.0
+
+            curr_trend = next((t for t in trends if t["period_id"] == str(current_period.id)), None)
+            prev_trend = next((t for t in trends if t["period_id"] == str(previous_period.id)), None)
+
+            if curr_trend and prev_trend:
+                comparison = {
+                    "hours_change_pct": safe_pct(curr_trend["total_hours"], prev_trend["total_hours"]),
+                    "commissions_change_pct": safe_pct(curr_trend["total_commissions"], prev_trend["total_commissions"]),
+                    "gross_pay_change_pct": safe_pct(curr_trend["gross_pay"], prev_trend["gross_pay"]),
+                    "overtime_change_pct": safe_pct(curr_trend["overtime_hours"], prev_trend["overtime_hours"]),
+                    "previous_period": _format_period(previous_period),
+                }
+
+        return {
+            "current_period": _format_period(current_period) if current_period else None,
+            "pending_counts": {
+                "time_entries": pending_te_result.scalar() or 0,
+                "commissions": pending_comm_result.scalar() or 0,
+            },
+            "comparison": comparison,
+            "trends": trends,
+            "period_count": len(periods),
+        }
+    except Exception as e:
+        logger.error(f"Error in payroll dashboard: {type(e).__name__}: {str(e)}")
+        return {
+            "current_period": None,
+            "pending_counts": {"time_entries": 0, "commissions": 0},
+            "comparison": None,
+            "trends": [],
+            "period_count": 0,
+        }
+
+
 # Period detail - MUST be after all fixed-path GET routes to avoid catching
 # /time-entries, /commissions, /pay-rates, /stats as period_id
 
