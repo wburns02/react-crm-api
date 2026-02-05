@@ -14,13 +14,10 @@ from app.api.deps import CurrentUser
 
 
 def _feature_not_implemented(feature_name: str):
-    """Raise 503 for unimplemented features."""
+    """Return 501 with clear message for unimplemented features."""
     raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "error": "feature_not_implemented",
-            "message": f"{feature_name} is coming soon",
-        },
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail=f"Email marketing ({feature_name}) is not yet available. This feature has been removed from navigation.",
     )
 
 router = APIRouter()
