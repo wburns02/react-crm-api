@@ -257,82 +257,90 @@ async def sync_clover_payments(
     db: DbSession,
     current_user: CurrentUser,
 ) -> dict:
-    """Sync Clover payments to CRM Payment records.
-
-    Fetches recent payments from Clover and creates matching CRM records
-    for any that don't already exist (matched by Clover payment ID stored
-    in stripe_payment_intent_id field).
-    """
+    """Sync Clover payments to CRM Payment records."""
     clover = get_clover_service()
     if not clover.is_configured():
         raise HTTPException(status_code=503, detail="Clover is not configured")
 
-    data = await clover.list_payments(limit=100)
-    if data is None:
-        raise HTTPException(status_code=502, detail="Failed to fetch payments from Clover")
-
-    clover_payments = data.get("elements", [])
-    synced = 0
-    skipped = 0
-    errors = 0
-
-    for cp in clover_payments:
-        clover_id = cp.get("id")
-        if not clover_id:
-            continue
-
-        # Check if already synced
-        existing = await db.execute(
-            select(Payment).where(Payment.stripe_payment_intent_id == clover_id)
-        )
-        if existing.scalar_one_or_none():
-            skipped += 1
-            continue
-
-        # Only sync successful payments
-        if cp.get("result") != "SUCCESS":
-            skipped += 1
-            continue
-
-        try:
-            amount_cents = cp.get("amount", 0) or 0
-            tender = cp.get("tender") or {}
-            created_ms = cp.get("createdTime") or 0
-            created_dt = datetime.fromtimestamp(created_ms / 1000, tz=timezone.utc) if created_ms else datetime.now(timezone.utc)
-
-            amount_dec = Decimal(str(round(amount_cents / 100, 2)))
-            method_label = (tender.get("label") or "card").lower()[:50]
-
-            payment = Payment(
-                amount=amount_dec,
-                currency="USD",
-                payment_method=method_label,
-                status="completed",
-                stripe_payment_intent_id=clover_id,
-                description="Clover POS payment (synced)",
-                payment_date=created_dt,
-                processed_at=created_dt,
-            )
-            db.add(payment)
-            synced += 1
-        except Exception as e:
-            logger.error(f"Error syncing Clover payment {clover_id}: {e}")
-            errors += 1
-
     try:
+        data = await clover.list_payments(limit=100)
+        if data is None:
+            raise HTTPException(status_code=502, detail="Failed to fetch payments from Clover")
+
+        clover_payments = data.get("elements", [])
+        synced = 0
+        skipped = 0
+        errors = 0
+        error_details = []
+
+        for cp in clover_payments:
+            clover_id = cp.get("id")
+            if not clover_id:
+                continue
+
+            # Check if already synced
+            existing = await db.execute(
+                select(Payment).where(Payment.stripe_payment_intent_id == clover_id)
+            )
+            if existing.scalar_one_or_none():
+                skipped += 1
+                continue
+
+            # Only sync successful payments
+            if cp.get("result") != "SUCCESS":
+                skipped += 1
+                continue
+
+            try:
+                amount_cents = cp.get("amount", 0) or 0
+                tender = cp.get("tender") or {}
+                created_ms = cp.get("createdTime") or 0
+                # Use naive UTC datetime (no timezone info) for SQLAlchemy DateTime columns
+                created_dt = datetime.utcfromtimestamp(created_ms / 1000) if created_ms else datetime.utcnow()
+
+                amount_dec = Decimal(str(round(amount_cents / 100, 2)))
+                method_label = (tender.get("label") or "card").lower()[:50]
+
+                payment = Payment(
+                    amount=amount_dec,
+                    currency="USD",
+                    payment_method=method_label,
+                    status="completed",
+                    stripe_payment_intent_id=clover_id,
+                    description="Clover POS payment (synced)",
+                    payment_date=created_dt,
+                    processed_at=created_dt,
+                )
+                db.add(payment)
+                synced += 1
+            except Exception as e:
+                logger.error(f"Error syncing Clover payment {clover_id}: {e}")
+                error_details.append(f"{clover_id}: {str(e)}")
+                errors += 1
+
         if synced > 0:
             await db.commit()
-    except Exception as e:
-        logger.error(f"Sync commit failed: {e}")
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Sync commit failed: {str(e)}")
 
-    return {
-        "synced": synced,
-        "skipped": skipped,
-        "errors": errors,
-        "total_clover_payments": len(clover_payments),
-    }
+        return {
+            "synced": synced,
+            "skipped": skipped,
+            "errors": errors,
+            "total_clover_payments": len(clover_payments),
+            "error_details": error_details[:5] if error_details else [],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Sync failed: {e}", exc_info=True)
+        await db.rollback()
+        return {
+            "synced": 0,
+            "skipped": 0,
+            "errors": 1,
+            "total_clover_payments": 0,
+            "error_details": [str(e)],
+        }
 
 
 @router.get("/reconciliation")
