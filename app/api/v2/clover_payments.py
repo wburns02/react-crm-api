@@ -11,7 +11,8 @@ Handles:
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
-from datetime import datetime
+from datetime import datetime, timezone
+from decimal import Decimal
 from pydantic import BaseModel, Field
 from typing import Optional
 import uuid
@@ -294,18 +295,21 @@ async def sync_clover_payments(
             continue
 
         try:
-            amount_cents = cp.get("amount", 0)
-            tender = cp.get("tender", {})
-            created_ms = cp.get("createdTime", 0)
-            created_dt = datetime.fromtimestamp(created_ms / 1000) if created_ms else datetime.utcnow()
+            amount_cents = cp.get("amount", 0) or 0
+            tender = cp.get("tender") or {}
+            created_ms = cp.get("createdTime") or 0
+            created_dt = datetime.fromtimestamp(created_ms / 1000, tz=timezone.utc) if created_ms else datetime.now(timezone.utc)
+
+            amount_dec = Decimal(str(round(amount_cents / 100, 2)))
+            method_label = (tender.get("label") or "card").lower()[:50]
 
             payment = Payment(
-                amount=round(amount_cents / 100, 2),
+                amount=amount_dec,
                 currency="USD",
-                payment_method=tender.get("label", "card").lower(),
+                payment_method=method_label,
                 status="completed",
                 stripe_payment_intent_id=clover_id,
-                description=f"Clover POS payment (synced)",
+                description="Clover POS payment (synced)",
                 payment_date=created_dt,
                 processed_at=created_dt,
             )
@@ -315,8 +319,13 @@ async def sync_clover_payments(
             logger.error(f"Error syncing Clover payment {clover_id}: {e}")
             errors += 1
 
-    if synced > 0:
-        await db.commit()
+    try:
+        if synced > 0:
+            await db.commit()
+    except Exception as e:
+        logger.error(f"Sync commit failed: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Sync commit failed: {str(e)}")
 
     return {
         "synced": synced,
