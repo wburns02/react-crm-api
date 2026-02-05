@@ -591,10 +591,10 @@ async def create_technician(
         await db.refresh(technician)
         return technician_to_response(technician)
     except Exception as e:
-        logger.error(f"Error creating technician: {e}")
+        logger.error(f"Error creating technician: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create technician",
+            detail=f"DEBUG: {type(e).__name__}: {e}",
         )
 
 
