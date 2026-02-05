@@ -335,11 +335,26 @@ async def calculate_payroll(
     total_overtime = sum(e.overtime_hours or 0 for e in entries)
     total_commissions = sum(c.commission_amount or 0 for c in commissions)
 
-    # Get pay rates and calculate gross pay
+    # 100% commission with backboard guarantee
+    # Backboard: $60K annual / 26 biweekly = $2,307.69
+    ANNUAL_GUARANTEE = 60000.0
+    BIWEEKLY_BACKBOARD = round(ANNUAL_GUARANTEE / 26, 2)
+
+    # Get all technician IDs from both entries and commissions
     technician_ids = set(e.technician_id for e in entries)
+    technician_ids.update(c.technician_id for c in commissions)
+
     total_gross = 0.0
+    total_backboard = 0.0
+    total_commission_pay = 0.0
 
     for tech_id in technician_ids:
+        # Get this tech's commissions for the period
+        tech_commissions = sum(
+            c.commission_amount or 0 for c in commissions if c.technician_id == tech_id
+        )
+
+        # Get custom guarantee from pay rate if set
         rate_result = await db.execute(
             select(TechnicianPayRate).where(
                 TechnicianPayRate.technician_id == tech_id,
@@ -347,13 +362,17 @@ async def calculate_payroll(
             )
         )
         rate = rate_result.scalar_one_or_none()
+        guarantee = BIWEEKLY_BACKBOARD
+        if rate and rate.salary_amount and rate.salary_amount > 0:
+            guarantee = round(rate.salary_amount / 26, 2)
 
-        tech_regular = sum(e.regular_hours or 0 for e in entries if e.technician_id == tech_id)
-        tech_overtime = sum(e.overtime_hours or 0 for e in entries if e.technician_id == tech_id)
-
-        if rate:
-            total_gross += tech_regular * rate.hourly_rate
-            total_gross += tech_overtime * rate.hourly_rate * rate.overtime_multiplier
+        # Apply backboard logic
+        if tech_commissions >= guarantee:
+            total_gross += tech_commissions
+            total_commission_pay += tech_commissions
+        else:
+            total_gross += guarantee
+            total_backboard += guarantee
 
     # Update period totals
     period.total_regular_hours = total_regular
@@ -377,6 +396,9 @@ async def calculate_payroll(
             "overtime_hours": total_overtime,
             "gross_pay": total_gross,
             "commissions": total_commissions,
+            "commission_pay": total_commission_pay,
+            "backboard_total": total_backboard,
+            "backboard_threshold": BIWEEKLY_BACKBOARD,
             "technicians": len(technician_ids),
         },
     }
@@ -1093,6 +1115,10 @@ async def get_period_summary(
         # 7. Build summaries by technician
         by_technician = {}
 
+        # Backboard guarantee: $60K annual / 26 biweekly periods = $2,307.69
+        ANNUAL_GUARANTEE = 60000.0
+        BIWEEKLY_BACKBOARD = round(ANNUAL_GUARANTEE / 26, 2)  # $2,307.69
+
         def get_or_create_tech(tech_id: str):
             if tech_id not in by_technician:
                 tech = technicians.get(tech_id)
@@ -1105,6 +1131,10 @@ async def get_period_summary(
                     "regular_pay": 0.0,
                     "overtime_pay": 0.0,
                     "total_commissions": 0.0,
+                    "commission_pay": 0.0,
+                    "backboard_applied": False,
+                    "backboard_amount": 0.0,
+                    "backboard_threshold": BIWEEKLY_BACKBOARD,
                     "gross_pay": 0.0,
                     "deductions": 0.0,
                     "net_pay": 0.0,
@@ -1128,29 +1158,36 @@ async def get_period_summary(
             summary = get_or_create_tech(tech_id)
             summary["jobs_completed"] = job_count
 
-        # 8. Calculate pay for each technician using their pay rates
+        # 8. Calculate pay: 100% commission with backboard guarantee
+        # If commissions >= threshold: pay = commissions (no backboard)
+        # If commissions < threshold: pay = backboard amount (no commission)
         for tech_id, summary in by_technician.items():
             pay_rate = pay_rates.get(tech_id)
+            commission_total = summary["total_commissions"]
 
-            if pay_rate and pay_rate.pay_type == "hourly":
-                hourly = pay_rate.hourly_rate or 0
-                # Use overtime_multiplier to calculate OT rate (model has multiplier, not rate)
-                multiplier = pay_rate.overtime_multiplier or 1.5
-                overtime_rate = hourly * multiplier
-                summary["regular_pay"] = summary["regular_hours"] * hourly
-                summary["overtime_pay"] = summary["overtime_hours"] * overtime_rate
-            elif pay_rate and pay_rate.pay_type == "salary":
-                # For salaried, prorate based on period (assume biweekly = 1/26 of annual)
-                salary = pay_rate.salary_amount or 0
-                summary["regular_pay"] = salary / 26  # Biweekly
-                summary["overtime_pay"] = 0  # Salaried typically no OT
+            # Use custom guarantee from pay rate salary_amount, or default $60K
+            guarantee = BIWEEKLY_BACKBOARD
+            if pay_rate and pay_rate.salary_amount and pay_rate.salary_amount > 0:
+                guarantee = round(pay_rate.salary_amount / 26, 2)
+            summary["backboard_threshold"] = guarantee
 
-            summary["gross_pay"] = (
-                summary["regular_pay"] +
-                summary["overtime_pay"] +
-                summary["total_commissions"]
-            )
-            summary["deductions"] = 0  # Future: tax withholding calculations
+            if commission_total >= guarantee:
+                # Commissions exceed backboard threshold - pay full commissions
+                summary["commission_pay"] = commission_total
+                summary["backboard_applied"] = False
+                summary["backboard_amount"] = 0.0
+                summary["gross_pay"] = commission_total
+            else:
+                # Below threshold - pay backboard guarantee, no commission
+                summary["commission_pay"] = 0.0
+                summary["backboard_applied"] = True
+                summary["backboard_amount"] = guarantee
+                summary["gross_pay"] = guarantee
+
+            # No hourly/salary pay - 100% commission-based with backboard
+            summary["regular_pay"] = 0.0
+            summary["overtime_pay"] = 0.0
+            summary["deductions"] = 0.0
             summary["net_pay"] = summary["gross_pay"] - summary["deductions"]
 
         return {"summaries": list(by_technician.values())}
