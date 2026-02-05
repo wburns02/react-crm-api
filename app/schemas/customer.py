@@ -81,7 +81,7 @@ class CustomerUpdate(CustomerBase):
 class CustomerResponse(CustomerBase):
     """Schema for customer response."""
 
-    id: int
+    id: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     first_touch_ts: Optional[datetime] = None

@@ -190,7 +190,7 @@ class GeofenceUpdate(BaseModel):
 class GeofenceResponse(BaseModel):
     """Geofence response"""
 
-    id: int
+    id: str
     name: str
     description: Optional[str] = None
     geofence_type: str
@@ -215,8 +215,8 @@ class GeofenceResponse(BaseModel):
 class GeofenceEventResponse(BaseModel):
     """Geofence event log entry"""
 
-    id: int
-    geofence_id: int
+    id: str
+    geofence_id: str
     geofence_name: str
     technician_id: str
     technician_name: str
@@ -248,7 +248,7 @@ class TrackingLinkCreate(BaseModel):
 class TrackingLinkResponse(BaseModel):
     """Tracking link response (for internal use)"""
 
-    id: int
+    id: str
     token: str
     tracking_url: str
     work_order_id: str
@@ -368,7 +368,7 @@ class GPSConfigUpdate(BaseModel):
 class GPSConfigResponse(BaseModel):
     """GPS configuration response"""
 
-    id: int
+    id: str
     technician_id: Optional[str] = None
     active_interval: int
     idle_interval: int

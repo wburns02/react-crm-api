@@ -58,7 +58,7 @@ class PublicCustomerUpdate(PublicCustomerBase):
 class PublicCustomerResponse(PublicCustomerBase):
     """Schema for customer response in public API."""
 
-    id: int
+    id: str
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -177,7 +177,7 @@ async def list_customers(
     """,
 )
 async def get_customer(
-    customer_id: int,
+    customer_id: str,
     response: Response,
     db: DbSession,
     client: PublicAPIClient,
@@ -266,7 +266,7 @@ async def create_customer(
     """,
 )
 async def update_customer(
-    customer_id: int,
+    customer_id: str,
     customer_data: PublicCustomerUpdate,
     response: Response,
     db: DbSession,
@@ -322,7 +322,7 @@ async def update_customer(
     """,
 )
 async def delete_customer(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     client: PublicAPIClient,
 ):

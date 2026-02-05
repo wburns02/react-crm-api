@@ -31,7 +31,7 @@ router = APIRouter(prefix="/work-orders", tags=["Public API - Work Orders"])
 class PublicWorkOrderBase(BaseModel):
     """Base work order schema for public API."""
 
-    customer_id: int
+    customer_id: str
     technician_id: Optional[str] = None
     job_type: str
     status: Optional[str] = "draft"
@@ -73,7 +73,7 @@ class PublicWorkOrderCreate(PublicWorkOrderBase):
 class PublicWorkOrderUpdate(BaseModel):
     """Schema for updating a work order via public API."""
 
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     technician_id: Optional[str] = None
     job_type: Optional[str] = None
     status: Optional[str] = None
@@ -205,7 +205,7 @@ async def list_work_orders(
     client: PublicAPIClient,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    customer_id: Optional[int] = Query(None, description="Filter by customer ID"),
+    customer_id: Optional[str] = Query(None, description="Filter by customer ID"),
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
     job_type: Optional[str] = Query(None, description="Filter by job type"),
     priority: Optional[str] = Query(None, description="Filter by priority"),
