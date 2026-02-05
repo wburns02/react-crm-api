@@ -220,33 +220,39 @@ class SecuritySettings(BaseModel):
 
 async def _get_settings(db, category: str, model_class):
     """Load settings from DB, falling back to defaults."""
-    result = await db.execute(
-        select(SystemSettingStore).where(SystemSettingStore.category == category)
-    )
-    row = result.scalar_one_or_none()
-    if row and row.settings_data:
-        return model_class(**row.settings_data)
+    try:
+        result = await db.execute(
+            select(SystemSettingStore).where(SystemSettingStore.category == category)
+        )
+        row = result.scalar_one_or_none()
+        if row and row.settings_data:
+            return model_class(**row.settings_data)
+    except Exception:
+        await db.rollback()
     return model_class()
 
 
 async def _save_settings(db, category: str, settings, user_id: int):
     """Save settings to DB (upsert)."""
-    result = await db.execute(
-        select(SystemSettingStore).where(SystemSettingStore.category == category)
-    )
-    row = result.scalar_one_or_none()
-    settings_dict = settings.model_dump()
-    if row:
-        row.settings_data = settings_dict
-        row.updated_by = user_id
-    else:
-        row = SystemSettingStore(
-            category=category,
-            settings_data=settings_dict,
-            updated_by=user_id,
+    try:
+        result = await db.execute(
+            select(SystemSettingStore).where(SystemSettingStore.category == category)
         )
-        db.add(row)
-    await db.commit()
+        row = result.scalar_one_or_none()
+        settings_dict = settings.model_dump()
+        if row:
+            row.settings_data = settings_dict
+            row.updated_by = user_id
+        else:
+            row = SystemSettingStore(
+                category=category,
+                settings_data=settings_dict,
+                updated_by=user_id,
+            )
+            db.add(row)
+        await db.commit()
+    except Exception:
+        await db.rollback()
     return settings
 
 

@@ -508,14 +508,17 @@ async def calculate_price(
 
     # Tax — load configurable rate from system settings, fallback to 8.25%
     tax_rate = 0.0825
-    settings_result = await db.execute(
-        select(SystemSettingStore).where(SystemSettingStore.category == "billing")
-    )
-    billing_settings = settings_result.scalar_one_or_none()
-    if billing_settings and billing_settings.settings_data:
-        configured_rate = billing_settings.settings_data.get("tax_rate")
-        if configured_rate is not None:
-            tax_rate = float(configured_rate) / 100.0  # stored as percentage (e.g. 8.25)
+    try:
+        settings_result = await db.execute(
+            select(SystemSettingStore).where(SystemSettingStore.category == "billing")
+        )
+        billing_settings = settings_result.scalar_one_or_none()
+        if billing_settings and billing_settings.settings_data:
+            configured_rate = billing_settings.settings_data.get("tax_rate")
+            if configured_rate is not None:
+                tax_rate = float(configured_rate) / 100.0  # stored as percentage (e.g. 8.25)
+    except Exception:
+        pass  # fallback to default 8.25%
     tax_amount = total_before_tax * tax_rate if service.is_taxable else 0.0
 
     total = total_before_tax + tax_amount
