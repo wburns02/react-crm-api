@@ -14,8 +14,6 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from uuid import uuid4
 import os
-import json
-
 from app.api.deps import DbSession, CurrentUser
 
 
@@ -164,20 +162,8 @@ async def get_user_subscriptions(
     current_user: CurrentUser,
 ) -> dict:
     """Get all subscriptions for current user."""
-    # Mock data
-    subscriptions = [
-        SubscriptionResponse(
-            id="sub_abc123",
-            user_id=str(current_user.id),
-            device_name="Chrome on Windows",
-            device_type="web",
-            created_at=(datetime.utcnow()).isoformat(),
-            last_used=(datetime.utcnow()).isoformat(),
-            is_active=True,
-        ),
-    ]
-
-    return {"subscriptions": [s.model_dump() for s in subscriptions]}
+    # TODO: Query subscriptions from database
+    return {"subscriptions": []}
 
 
 # =============================================================================
@@ -195,31 +181,19 @@ async def send_push_notification(
     if not VAPID_PRIVATE_KEY:
         raise HTTPException(status_code=503, detail="Push notifications not configured (missing VAPID private key)")
 
-    # In production:
-    # 1. Get subscriptions for target users
+    # TODO: Implement actual push notification delivery
+    # 1. Get subscriptions for target users from database
     # 2. Build notification payload
     # 3. Send via web-push library
     # 4. Log results
-
-    # Mock response
-    delivered = 0
-    failed = 0
-
-    if request.all_users:
-        delivered = 50
-        failed = 2
-    elif request.user_ids:
-        delivered = len(request.user_ids)
-    elif request.role:
-        delivered = 15
 
     notification_id = f"notif_{uuid4().hex[:12]}"
 
     return {
         "notification_id": notification_id,
         "title": request.title,
-        "delivered": delivered,
-        "failed": failed,
+        "delivered": 0,
+        "failed": 0,
         "sent_at": datetime.utcnow().isoformat(),
     }
 
@@ -322,30 +296,8 @@ async def get_notification_history(
     page_size: int = 20,
 ) -> dict:
     """Get notification history."""
-    logs = [
-        NotificationLog(
-            id="notif_001",
-            title="New Work Order Assigned",
-            body="Work order #WO-123 assigned to Mike Johnson",
-            sent_at=(datetime.utcnow()).isoformat(),
-            delivered_count=1,
-            failed_count=0,
-            click_count=1,
-            sent_by="system",
-        ),
-        NotificationLog(
-            id="notif_002",
-            title="Payment Received",
-            body="Payment of $350.00 received from John Smith",
-            sent_at=(datetime.utcnow()).isoformat(),
-            delivered_count=3,
-            failed_count=0,
-            click_count=2,
-            sent_by="system",
-        ),
-    ]
-
-    return {"notifications": [n.model_dump() for n in logs], "total": len(logs), "page": page, "page_size": page_size}
+    # TODO: Query notification history from database
+    return {"notifications": [], "total": 0, "page": page, "page_size": page_size}
 
 
 @router.get("/stats")
@@ -354,14 +306,15 @@ async def get_notification_stats(
     current_user: CurrentUser,
 ) -> dict:
     """Get notification delivery statistics."""
+    # TODO: Calculate stats from database
     return {
-        "total_sent_today": 45,
-        "total_sent_week": 312,
-        "total_sent_month": 1250,
-        "delivery_rate": 0.97,
-        "click_rate": 0.42,
-        "active_subscriptions": 85,
-        "by_type": {"work_order": 150, "payment": 80, "schedule": 120, "system": 45},
+        "total_sent_today": 0,
+        "total_sent_week": 0,
+        "total_sent_month": 0,
+        "delivery_rate": 0.0,
+        "click_rate": 0.0,
+        "active_subscriptions": 0,
+        "by_type": {},
     }
 
 

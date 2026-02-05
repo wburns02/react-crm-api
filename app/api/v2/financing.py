@@ -95,37 +95,8 @@ class TechnicianPayout(BaseModel):
 
 
 # =============================================================================
-# Mock Data
+# NOTE: Not yet DB-backed. Returns empty results until database models are added.
 # =============================================================================
-
-FINANCING_OFFERS = [
-    FinancingOffer(
-        id="offer-wisetack",
-        provider="wisetack",
-        min_amount=500,
-        max_amount=25000,
-        terms=[
-            FinancingTerm(term_months=6, apr=0.0, monthly_payment_per_1000=166.67),
-            FinancingTerm(term_months=12, apr=9.99, monthly_payment_per_1000=87.92),
-            FinancingTerm(term_months=24, apr=14.99, monthly_payment_per_1000=48.49),
-            FinancingTerm(term_months=36, apr=17.99, monthly_payment_per_1000=36.15),
-        ],
-        promo_apr=0.0,
-        promo_term_months=6,
-    ),
-    FinancingOffer(
-        id="offer-greensky",
-        provider="greensky",
-        min_amount=1000,
-        max_amount=50000,
-        terms=[
-            FinancingTerm(term_months=12, apr=7.99, monthly_payment_per_1000=86.99),
-            FinancingTerm(term_months=24, apr=12.99, monthly_payment_per_1000=47.54),
-            FinancingTerm(term_months=36, apr=14.99, monthly_payment_per_1000=34.67),
-            FinancingTerm(term_months=48, apr=17.99, monthly_payment_per_1000=29.29),
-        ],
-    ),
-]
 
 
 # =============================================================================
@@ -140,8 +111,8 @@ async def get_financing_offers(
     amount: float = Query(..., gt=0),
 ) -> dict:
     """Get available financing offers for an amount."""
-    offers = [o for o in FINANCING_OFFERS if o.min_amount <= amount <= o.max_amount]
-    return {"offers": [o.model_dump() for o in offers]}
+    # TODO: Query financing offers from database
+    return {"offers": []}
 
 
 @router.get("/applications")
@@ -151,21 +122,8 @@ async def get_financing_applications(
     customer_id: Optional[str] = None,
 ) -> dict:
     """Get financing applications."""
-    applications = [
-        FinancingApplication(
-            id="app-001",
-            customer_id=customer_id or "cust-123",
-            amount=5000.00,
-            provider="wisetack",
-            status="approved",
-            approved_amount=5000.00,
-            term_months=12,
-            apr=9.99,
-            monthly_payment=439.58,
-            created_at="2024-02-15T00:00:00Z",
-        ),
-    ]
-    return {"applications": [a.model_dump() for a in applications]}
+    # TODO: Query financing applications from database
+    return {"applications": []}
 
 
 @router.get("/applications/{application_id}")
@@ -175,19 +133,8 @@ async def get_financing_application(
     application_id: str,
 ) -> dict:
     """Get single financing application."""
-    application = FinancingApplication(
-        id=application_id,
-        customer_id="cust-123",
-        amount=5000.00,
-        provider="wisetack",
-        status="approved",
-        approved_amount=5000.00,
-        term_months=12,
-        apr=9.99,
-        monthly_payment=439.58,
-        created_at="2024-02-15T00:00:00Z",
-    )
-    return {"application": application.model_dump()}
+    # TODO: Query financing application from database
+    raise HTTPException(status_code=404, detail="Financing application not found")
 
 
 @router.post("/prequalify")
@@ -254,20 +201,21 @@ async def get_technician_earnings(
     today = date.today()
     start = date.fromisoformat(period_start) if period_start else today.replace(day=1)
 
+    # TODO: Calculate earnings from database
     earnings = TechnicianEarnings(
         technician_id=technician_id,
         period_start=start.isoformat(),
         period_end=today.isoformat(),
-        base_pay=2800.00,
-        overtime_pay=450.00,
-        commission=1250.00,
-        bonuses=200.00,
-        deductions=150.00,
-        total_gross=4550.00,
-        available_for_payout=3200.00,
-        pending_payout=0.00,
-        last_payout_date="2024-02-28",
-        job_count=32,
+        base_pay=0.0,
+        overtime_pay=0.0,
+        commission=0.0,
+        bonuses=0.0,
+        deductions=0.0,
+        total_gross=0.0,
+        available_for_payout=0.0,
+        pending_payout=0.0,
+        last_payout_date=None,
+        job_count=0,
     )
     return {"earnings": earnings.model_dump()}
 
@@ -279,31 +227,8 @@ async def get_technician_payouts(
     technician_id: str,
 ) -> dict:
     """Get technician payout history."""
-    payouts = [
-        TechnicianPayout(
-            id="pay-001",
-            technician_id=technician_id,
-            amount=2500.00,
-            fee=0.00,
-            net_amount=2500.00,
-            method="standard",
-            status="completed",
-            initiated_at="2024-02-28T00:00:00Z",
-            completed_at="2024-03-01T00:00:00Z",
-        ),
-        TechnicianPayout(
-            id="pay-002",
-            technician_id=technician_id,
-            amount=500.00,
-            fee=5.00,
-            net_amount=495.00,
-            method="instant",
-            status="completed",
-            initiated_at="2024-02-15T00:00:00Z",
-            completed_at="2024-02-15T00:05:00Z",
-        ),
-    ]
-    return {"payouts": [p.model_dump() for p in payouts]}
+    # TODO: Query payouts from database
+    return {"payouts": []}
 
 
 @router.post("/instant")

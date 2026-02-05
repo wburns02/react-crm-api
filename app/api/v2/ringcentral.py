@@ -1651,30 +1651,33 @@ async def get_agent_performance(
             agents_data[agent_id]["total_calls"] += 1
             agents_data[agent_id]["calls"].append(call)
 
-        # Convert to response format with simulated metrics
-        import random
-
+        # Calculate real metrics from actual call data
         agents = []
 
         for agent_data in agents_data.values():
             total_calls = agent_data["total_calls"]
+            agent_calls = agent_data["calls"]
 
-            # Simulate realistic agent metrics
-            random.seed(hash(agent_data["agent_id"]))  # Consistent per agent
+            # Calculate actual metrics from call records
+            answered = sum(1 for c in agent_calls if getattr(c, 'status', '') != 'missed')
+            durations = [getattr(c, 'duration', 0) or 0 for c in agent_calls]
+            avg_duration = round(sum(durations) / len(durations)) if durations else 0
+            quality_scores = [c.quality_score for c in agent_calls if getattr(c, 'quality_score', None)]
+            avg_quality = round(sum(quality_scores) / len(quality_scores)) if quality_scores else 0
 
             agents.append(
                 {
                     "agent_id": agent_data["agent_id"],
                     "agent_name": agent_data["agent_name"],
                     "total_calls": total_calls,
-                    "answered_calls": max(0, total_calls - random.randint(0, 2)),
-                    "avg_call_duration": random.randint(180, 600),  # 3-10 minutes
-                    "quality_score": random.randint(75, 95),
-                    "sentiment_score": round(random.uniform(65, 85), 1),
-                    "resolution_rate": round(random.uniform(0.8, 0.95), 2),
-                    "escalation_rate": round(random.uniform(0.05, 0.2), 2),
-                    "csat_prediction": round(random.uniform(3.5, 4.8), 1),
-                    "recent_trend": random.choice(["improving", "stable", "declining"]),
+                    "answered_calls": answered,
+                    "avg_call_duration": avg_duration,
+                    "quality_score": avg_quality,
+                    "sentiment_score": 0,
+                    "resolution_rate": 0,
+                    "escalation_rate": 0,
+                    "csat_prediction": 0,
+                    "recent_trend": "stable",
                 }
             )
 
@@ -1706,33 +1709,16 @@ async def get_coaching_insights(
     - insights.recommended_training: Array of {module, priority, agents_affected}
     """
     try:
-        # This would normally analyze call transcripts and performance data
-        # For now, return realistic coaching recommendations in the correct format
-
+        # Coaching insights require AI transcript analysis - not yet implemented
         return {
             "insights": {
-                "top_strengths": [
-                    {"name": "Active Listening", "count": 45, "percentage": 78},
-                    {"name": "Problem Resolution", "count": 38, "percentage": 65},
-                    {"name": "Clear Communication", "count": 32, "percentage": 55},
-                ],
-                "top_improvements": [
-                    {"name": "Technical Knowledge", "count": 15, "percentage": 26},
-                    {"name": "Call Efficiency", "count": 12, "percentage": 21},
-                    {"name": "Product Knowledge", "count": 8, "percentage": 14},
-                ],
-                "trending_topics": [
-                    {"topic": "Billing Questions", "count": 28, "trend": "up"},
-                    {"topic": "Service Issues", "count": 22, "trend": "stable"},
-                    {"topic": "New Customer Setup", "count": 18, "trend": "up"},
-                ],
-                "recommended_training": [
-                    {"module": "Technical Troubleshooting", "priority": "high", "agents_affected": 5},
-                    {"module": "Product Knowledge Deep Dive", "priority": "medium", "agents_affected": 3},
-                    {"module": "Call Efficiency Best Practices", "priority": "low", "agents_affected": 2},
-                ],
+                "top_strengths": [],
+                "top_improvements": [],
+                "trending_topics": [],
+                "recommended_training": [],
             },
             "period": "last_7_days",
+            "message": "Coaching insights require AI transcript analysis. Connect call recordings to enable.",
         }
 
     except Exception as e:
@@ -1756,29 +1742,27 @@ async def get_quality_heatmap(
         )
         calls = result.scalars().all()
 
-        # Generate heatmap data
+        # Generate heatmap data from actual call records
         heatmap_data = []
         agents = set(call.assigned_to for call in calls if call.assigned_to)
-
-        import random
 
         for agent_id in agents:
             agent_calls = [call for call in calls if call.assigned_to == agent_id]
 
             for i in range(days):
-                date = (datetime.utcnow() - timedelta(days=days - 1 - i)).date()
-                day_calls = [call for call in agent_calls if call.call_date == date]
+                current_date = (datetime.utcnow() - timedelta(days=days - 1 - i)).date()
+                day_calls = [call for call in agent_calls if call.call_date == current_date]
 
-                # Simulate quality score based on call count
-                random.seed(hash(f"{agent_id}-{date}"))
-                quality_score = random.randint(70, 95) if day_calls else 0
+                # Use actual quality_score from call logs if available, otherwise 0
+                quality_scores = [c.quality_score for c in day_calls if getattr(c, 'quality_score', None)]
+                avg_quality = round(sum(quality_scores) / len(quality_scores)) if quality_scores else 0
 
                 heatmap_data.append(
                     {
                         "agent_id": agent_id,
                         "agent_name": f"Agent {agent_id}",
-                        "date": date.strftime("%Y-%m-%d"),
-                        "quality_score": quality_score,
+                        "date": current_date.strftime("%Y-%m-%d"),
+                        "quality_score": avg_quality,
                         "call_count": len(day_calls),
                     }
                 )

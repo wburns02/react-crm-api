@@ -8,8 +8,8 @@ Connected equipment and predictive maintenance:
 - Equipment health scoring
 """
 
-from fastapi import APIRouter, Query, HTTPException
-from datetime import datetime, date, timedelta
+from fastapi import APIRouter, HTTPException
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional
 from uuid import uuid4
@@ -121,37 +121,7 @@ class IoTProviderConnection(BaseModel):
 
 
 # =============================================================================
-# Mock Data
-# =============================================================================
-
-MOCK_DEVICES = [
-    Device(
-        id="dev-001",
-        device_type="thermostat",
-        provider="ecobee",
-        name="Main Floor Thermostat",
-        customer_id="cust-123",
-        equipment_id="equip-hvac-1",
-        is_online=True,
-        last_reading_at=datetime.utcnow().isoformat(),
-        created_at="2024-01-15T00:00:00Z",
-    ),
-    Device(
-        id="dev-002",
-        device_type="septic_monitor",
-        provider="custom",
-        name="Septic Tank Level Monitor",
-        customer_id="cust-456",
-        equipment_id="equip-septic-1",
-        is_online=True,
-        last_reading_at=datetime.utcnow().isoformat(),
-        created_at="2024-02-01T00:00:00Z",
-    ),
-]
-
-
-# =============================================================================
-# Device Endpoints
+# Device Endpoints - Not in sidebar nav, returns empty (no DB model yet)
 # =============================================================================
 
 
@@ -161,11 +131,8 @@ async def get_devices(
     current_user: CurrentUser,
     customer_id: Optional[str] = None,
 ) -> dict:
-    """Get all connected devices."""
-    devices = MOCK_DEVICES.copy()
-    if customer_id:
-        devices = [d for d in devices if d.customer_id == customer_id]
-    return {"devices": [d.model_dump() for d in devices]}
+    """Get all connected devices. Returns empty - IoT not yet implemented."""
+    return {"devices": []}
 
 
 @router.get("/devices/{device_id}")
@@ -175,9 +142,6 @@ async def get_device(
     device_id: str,
 ) -> dict:
     """Get single device."""
-    for d in MOCK_DEVICES:
-        if d.id == device_id:
-            return {"device": d.model_dump()}
     raise HTTPException(status_code=404, detail="Device not found")
 
 
@@ -191,23 +155,8 @@ async def get_device_telemetry(
     resolution: str = "hour",
     metrics: Optional[str] = None,
 ) -> dict:
-    """Get device telemetry readings."""
-    readings = []
-    now = datetime.utcnow()
-    for i in range(24):
-        readings.append(
-            DeviceReading(
-                id=f"reading-{i}",
-                device_id=device_id,
-                timestamp=(now - timedelta(hours=i)).isoformat(),
-                metrics={
-                    "temperature": 72 + (i % 5),
-                    "humidity": 45 + (i % 10),
-                    "level": 65 - (i * 0.5) if "septic" in device_id else None,
-                },
-            )
-        )
-    return {"readings": [r.model_dump() for r in readings]}
+    """Get device telemetry readings. Returns empty - IoT not yet implemented."""
+    return {"readings": []}
 
 
 @router.get("/devices/{device_id}/latest")
@@ -216,14 +165,8 @@ async def get_latest_reading(
     current_user: CurrentUser,
     device_id: str,
 ) -> dict:
-    """Get latest reading for a device."""
-    reading = DeviceReading(
-        id="latest",
-        device_id=device_id,
-        timestamp=datetime.utcnow().isoformat(),
-        metrics={"temperature": 72, "humidity": 48, "level": 62},
-    )
-    return {"reading": reading.model_dump()}
+    """Get latest reading for a device. Returns empty - IoT not yet implemented."""
+    return {"reading": None}
 
 
 @router.post("/devices")
@@ -258,13 +201,6 @@ async def update_device(
     is_active: Optional[bool] = None,
 ) -> dict:
     """Update device settings."""
-    for d in MOCK_DEVICES:
-        if d.id == device_id:
-            if name:
-                d.name = name
-            if is_active is not None:
-                d.is_active = is_active
-            return {"device": d.model_dump()}
     raise HTTPException(status_code=404, detail="Device not found")
 
 
@@ -290,37 +226,8 @@ async def get_device_alerts(
     acknowledged: Optional[bool] = None,
     severity: Optional[str] = None,
 ) -> dict:
-    """Get device alerts."""
-    alerts = [
-        DeviceAlert(
-            id="alert-001",
-            device_id="dev-002",
-            device_name="Septic Tank Level Monitor",
-            alert_type="high_level",
-            severity="warning",
-            message="Tank level at 85% - schedule pumping soon",
-            acknowledged=False,
-            created_at=datetime.utcnow().isoformat(),
-        ),
-        DeviceAlert(
-            id="alert-002",
-            device_id="dev-001",
-            device_name="Main Floor Thermostat",
-            alert_type="offline",
-            severity="info",
-            message="Device was offline for 2 hours",
-            acknowledged=True,
-            acknowledged_at=(datetime.utcnow() - timedelta(hours=1)).isoformat(),
-            created_at=(datetime.utcnow() - timedelta(hours=3)).isoformat(),
-        ),
-    ]
-
-    if acknowledged is not None:
-        alerts = [a for a in alerts if a.acknowledged == acknowledged]
-    if severity:
-        alerts = [a for a in alerts if a.severity == severity]
-
-    return {"alerts": [a.model_dump() for a in alerts]}
+    """Get device alerts. Returns empty - IoT not yet implemented."""
+    return {"alerts": []}
 
 
 @router.post("/alerts/{alert_id}/acknowledge")
@@ -349,27 +256,8 @@ async def get_alert_rules(
     db: DbSession,
     current_user: CurrentUser,
 ) -> dict:
-    """Get alert rules."""
-    rules = [
-        AlertRule(
-            id="rule-001",
-            name="High Tank Level",
-            device_type="septic_monitor",
-            condition={"metric": "level", "operator": ">", "threshold": 80},
-            severity="warning",
-            notification_channels=["email", "sms"],
-            created_at="2024-01-01T00:00:00Z",
-        ),
-        AlertRule(
-            id="rule-002",
-            name="Device Offline",
-            condition={"metric": "online", "operator": "==", "threshold": False},
-            severity="info",
-            notification_channels=["email"],
-            created_at="2024-01-01T00:00:00Z",
-        ),
-    ]
-    return {"rules": [r.model_dump() for r in rules]}
+    """Get alert rules. Returns empty - IoT not yet implemented."""
+    return {"rules": []}
 
 
 @router.post("/alerts/rules")
@@ -432,20 +320,9 @@ async def get_equipment_health(
     db: DbSession,
     current_user: CurrentUser,
     equipment_id: str,
-) -> EquipmentHealth:
-    """Get equipment health score."""
-    return EquipmentHealth(
-        equipment_id=equipment_id,
-        equipment_type="septic_tank",
-        customer_id="cust-123",
-        health_score=78.5,
-        risk_level="medium",
-        last_reading={"level": 62, "temperature": 55},
-        trends={"level": "increasing", "temperature": "stable"},
-        issues=["Level trending higher than normal"],
-        recommendations=["Schedule pumping within 30 days"],
-        next_maintenance_date="2024-04-15",
-    )
+) -> dict:
+    """Get equipment health score. Returns empty - IoT not yet implemented."""
+    return {"equipment_id": equipment_id, "health_score": None, "risk_level": None, "message": "IoT health monitoring not yet connected."}
 
 
 @router.get("/health/customer/{customer_id}")
@@ -454,28 +331,8 @@ async def get_customer_equipment_health(
     current_user: CurrentUser,
     customer_id: str,
 ) -> dict:
-    """Get all equipment health for a customer."""
-    equipment = [
-        EquipmentHealth(
-            equipment_id="equip-1",
-            equipment_type="septic_tank",
-            customer_id=customer_id,
-            health_score=78.5,
-            risk_level="medium",
-            issues=["Approaching service date"],
-            recommendations=["Schedule pumping"],
-        ),
-        EquipmentHealth(
-            equipment_id="equip-2",
-            equipment_type="hvac",
-            customer_id=customer_id,
-            health_score=92.0,
-            risk_level="low",
-            issues=[],
-            recommendations=[],
-        ),
-    ]
-    return {"equipment": [e.model_dump() for e in equipment]}
+    """Get all equipment health for a customer. Returns empty - IoT not yet implemented."""
+    return {"equipment": []}
 
 
 @router.get("/maintenance/recommendations")
@@ -486,44 +343,8 @@ async def get_maintenance_recommendations(
     status: Optional[str] = None,
     customer_id: Optional[str] = None,
 ) -> dict:
-    """Get maintenance recommendations."""
-    recommendations = [
-        MaintenanceRecommendation(
-            id="rec-001",
-            equipment_id="equip-1",
-            equipment_type="septic_tank",
-            customer_id="cust-123",
-            customer_name="John Smith",
-            priority="high",
-            issue="Tank level at 85%",
-            recommendation="Schedule pumping service",
-            estimated_cost=350.00,
-            status="pending",
-            created_at="2024-03-01T00:00:00Z",
-        ),
-        MaintenanceRecommendation(
-            id="rec-002",
-            equipment_id="equip-2",
-            equipment_type="hvac",
-            customer_id="cust-456",
-            customer_name="Jane Doe",
-            priority="medium",
-            issue="Filter replacement due",
-            recommendation="Replace air filter",
-            estimated_cost=75.00,
-            status="pending",
-            created_at="2024-02-28T00:00:00Z",
-        ),
-    ]
-
-    if priority:
-        recommendations = [r for r in recommendations if r.priority == priority]
-    if status:
-        recommendations = [r for r in recommendations if r.status == status]
-    if customer_id:
-        recommendations = [r for r in recommendations if r.customer_id == customer_id]
-
-    return {"recommendations": [r.model_dump() for r in recommendations]}
+    """Get maintenance recommendations. Returns empty - IoT not yet implemented."""
+    return {"recommendations": []}
 
 
 @router.post("/maintenance/recommendations/{recommendation_id}/schedule")
@@ -564,18 +385,8 @@ async def get_provider_connections(
     db: DbSession,
     current_user: CurrentUser,
 ) -> dict:
-    """Get IoT provider connections."""
-    connections = [
-        IoTProviderConnection(
-            provider="ecobee",
-            connected=True,
-            account_name="HVAC Pro Account",
-            device_count=15,
-            last_sync=datetime.utcnow().isoformat(),
-        ),
-        IoTProviderConnection(provider="nest", connected=False, device_count=0),
-    ]
-    return {"connections": [c.model_dump() for c in connections]}
+    """Get IoT provider connections. Returns empty - IoT not yet implemented."""
+    return {"connections": []}
 
 
 @router.post("/providers/{provider}/connect")

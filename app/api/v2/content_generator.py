@@ -35,7 +35,8 @@ from app.schemas.content_generator import (
 
 router = APIRouter()
 
-# In-memory storage for demo (production would use database)
+# In-memory storage (content persists only during server session, lost on restart)
+# TODO: Migrate to database-backed storage when ContentLibrary model is created
 _saved_content: dict = {}
 _user_preferences: dict = {}
 
@@ -147,9 +148,7 @@ async def list_saved_ideas(
     content_type: Optional[ContentType] = None,
     limit: int = Query(default=20, le=100),
 ) -> List[ContentIdea]:
-    """List previously generated/saved ideas."""
-    # For now, return empty list (ideas could be persisted to DB)
-    # This endpoint is a placeholder for future enhancement
+    """List previously generated/saved ideas. Returns empty - idea persistence not yet implemented."""
     return []
 
 

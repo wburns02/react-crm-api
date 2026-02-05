@@ -350,7 +350,8 @@ async def ai_insights_health(
 
 
 # ============================================
-# Missing CS AI Endpoints (Added for AI Assistant)
+# CS AI Endpoints - Not yet backed by AI analysis
+# Returns honest empty states until AI pipeline is implemented
 # ============================================
 
 
@@ -360,18 +361,16 @@ async def get_customer_insight(
     db: DbSession,
     current_user: CurrentUser,
 ) -> Dict[str, Any]:
-    """Get AI-powered insight for a specific customer."""
+    """Get AI-powered insight for a specific customer. Not yet analyzed."""
     return {
         "customer_id": customer_id,
-        "customer_name": f"Customer {customer_id}",
-        "risk_level": "low",
-        "engagement_trend": "stable",
-        "key_findings": ["Customer engagement is consistent", "Recent activity within normal range"],
-        "recommended_actions": [
-            {"action": "Schedule quarterly review", "priority": "medium", "rationale": "Maintain relationship health"}
-        ],
-        "next_best_action": "Send personalized check-in email",
-        "analyzed_at": "2026-01-14T00:00:00Z",
+        "risk_level": None,
+        "engagement_trend": None,
+        "key_findings": [],
+        "recommended_actions": [],
+        "next_best_action": None,
+        "analyzed_at": None,
+        "message": "Customer insights require AI analysis pipeline. Not yet available.",
     }
 
 
@@ -380,22 +379,8 @@ async def get_ai_recommendations(
     db: DbSession,
     current_user: CurrentUser,
 ) -> List[Dict[str, Any]]:
-    """Get AI-powered recommendations for campaigns and engagement."""
-    return [
-        {
-            "id": "rec-1",
-            "type": "campaign",
-            "title": "Optimize Email Send Times",
-            "description": "Analysis shows better engagement when emails sent mid-morning",
-            "priority": "medium",
-            "impact_score": 72,
-            "effort_score": 25,
-            "suggested_action": "Adjust campaign schedules to 10 AM local time",
-            "created_at": "2026-01-14T00:00:00Z",
-            "dismissed": False,
-            "applied": False,
-        }
-    ]
+    """Get AI-powered recommendations. Returns empty until AI pipeline is implemented."""
+    return []
 
 
 class ContentSuggestionRequest(BaseModel):
@@ -413,13 +398,14 @@ async def get_content_suggestions(
     db: DbSession,
     current_user: CurrentUser,
 ) -> Dict[str, Any]:
-    """Generate AI-powered content suggestions."""
+    """Generate AI-powered content suggestions. Not yet implemented."""
     return {
         "suggestion_type": request.content_type,
-        "content": f"Sample {request.content_type} content based on: {request.context}",
-        "personalization_tags": ["{{first_name}}", "{{company_name}}"],
+        "content": None,
+        "personalization_tags": [],
         "tone": request.tone or "professional",
-        "cta_options": ["Learn More", "Get Started", "Contact Us"],
+        "cta_options": [],
+        "message": "AI content generation not yet available.",
     }
 
 
@@ -448,5 +434,5 @@ async def refresh_insights(
     db: DbSession,
     current_user: CurrentUser,
 ) -> Dict[str, Any]:
-    """Refresh all AI insights."""
-    return {"success": True, "message": "All AI insights have been refreshed"}
+    """Refresh all AI insights. Not yet implemented."""
+    return {"success": True, "message": "AI insight refresh not yet available. Pipeline pending implementation."}

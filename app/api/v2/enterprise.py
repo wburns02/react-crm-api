@@ -9,8 +9,7 @@ Multi-region, franchise management, and RBAC:
 - Audit logging
 """
 
-from fastapi import APIRouter, Query, HTTPException, status
-from sqlalchemy import select, func, and_
+from fastapi import APIRouter, Query, HTTPException
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -156,68 +155,8 @@ class ComplianceReport(BaseModel):
 
 
 # =============================================================================
-# Mock Data (In production, use database)
+# NOTE: Not yet DB-backed. Returns empty results until database models are added.
 # =============================================================================
-
-MOCK_REGIONS = [
-    Region(
-        id="region-1",
-        name="Austin Metro",
-        code="ATX",
-        timezone="America/Chicago",
-        is_active=True,
-        manager_name="John Smith",
-        address="123 Main St, Austin, TX",
-        created_at="2024-01-01T00:00:00Z",
-    ),
-    Region(
-        id="region-2",
-        name="San Antonio",
-        code="SAT",
-        timezone="America/Chicago",
-        is_active=True,
-        manager_name="Jane Doe",
-        address="456 Oak Ave, San Antonio, TX",
-        created_at="2024-02-01T00:00:00Z",
-    ),
-]
-
-MOCK_ROLES = [
-    Role(
-        id="role-admin",
-        name="Administrator",
-        description="Full system access",
-        permissions=[{"resource": "*", "actions": ["*"], "scope": "all"}],
-        is_system_role=True,
-        user_count=2,
-        created_at="2024-01-01T00:00:00Z",
-    ),
-    Role(
-        id="role-manager",
-        name="Manager",
-        description="Regional management access",
-        permissions=[
-            {"resource": "work_orders", "actions": ["read", "write", "delete"], "scope": "region"},
-            {"resource": "technicians", "actions": ["read", "write"], "scope": "region"},
-            {"resource": "reports", "actions": ["read"], "scope": "region"},
-        ],
-        is_system_role=True,
-        user_count=5,
-        created_at="2024-01-01T00:00:00Z",
-    ),
-    Role(
-        id="role-technician",
-        name="Technician",
-        description="Field technician access",
-        permissions=[
-            {"resource": "work_orders", "actions": ["read", "update"], "scope": "assigned"},
-            {"resource": "customers", "actions": ["read"], "scope": "assigned"},
-        ],
-        is_system_role=True,
-        user_count=15,
-        created_at="2024-01-01T00:00:00Z",
-    ),
-]
 
 
 # =============================================================================
@@ -231,7 +170,8 @@ async def get_regions(
     current_user: CurrentUser,
 ) -> dict:
     """Get all regions."""
-    return {"regions": [r.model_dump() for r in MOCK_REGIONS]}
+    # TODO: Query regions from database
+    return {"regions": []}
 
 
 @router.get("/regions/{region_id}")
@@ -241,9 +181,7 @@ async def get_region(
     region_id: str,
 ) -> dict:
     """Get single region."""
-    for r in MOCK_REGIONS:
-        if r.id == region_id:
-            return {"region": r.model_dump()}
+    # TODO: Query region from database
     raise HTTPException(status_code=404, detail="Region not found")
 
 
@@ -275,14 +213,7 @@ async def update_region(
     is_active: Optional[bool] = None,
 ) -> dict:
     """Update a region."""
-    for r in MOCK_REGIONS:
-        if r.id == region_id:
-            if name:
-                r.name = name
-            if is_active is not None:
-                r.is_active = is_active
-            r.updated_at = datetime.utcnow().isoformat()
-            return {"region": r.model_dump()}
+    # TODO: Update region in database
     raise HTTPException(status_code=404, detail="Region not found")
 
 
@@ -293,25 +224,8 @@ async def get_region_performance(
     period: str = Query("month", description="Period: week, month, quarter, year"),
 ) -> dict:
     """Get performance metrics for all regions."""
-    performance = []
-    for r in MOCK_REGIONS:
-        perf = RegionPerformance(
-            region_id=r.id,
-            region_name=r.name,
-            revenue=125000.00,
-            revenue_target=150000.00,
-            revenue_pct=83.3,
-            jobs_completed=245,
-            jobs_scheduled=280,
-            technician_count=8,
-            customer_count=520,
-            avg_job_value=510.20,
-            first_time_fix_rate=87.5,
-            customer_satisfaction=4.6,
-            trend="up",
-        )
-        performance.append(perf)
-    return {"performance": [p.model_dump() for p in performance]}
+    # TODO: Calculate performance from database
+    return {"performance": []}
 
 
 @router.get("/regions/compare")
@@ -321,16 +235,13 @@ async def get_region_comparison(
     metric: str = Query(..., description="Metric to compare"),
 ) -> dict:
     """Get cross-region comparison for a metric."""
-    comparison = {
+    # TODO: Calculate from database
+    return {
         "metric": metric,
-        "regions": [
-            {"region_id": "region-1", "region_name": "Austin Metro", "value": 125000, "rank": 1},
-            {"region_id": "region-2", "region_name": "San Antonio", "value": 98000, "rank": 2},
-        ],
-        "average": 111500,
-        "leader": "region-1",
+        "regions": [],
+        "average": 0,
+        "leader": None,
     }
-    return comparison
 
 
 # =============================================================================
@@ -345,38 +256,8 @@ async def get_franchise_royalties(
     franchise_id: Optional[str] = None,
 ) -> dict:
     """Get franchise royalty reports."""
-    royalties = [
-        FranchiseRoyalty(
-            id="roy-001",
-            franchise_id="franchise-1",
-            franchise_name="Austin North Franchise",
-            period_start="2024-01-01",
-            period_end="2024-01-31",
-            gross_revenue=85000.00,
-            royalty_rate=0.06,
-            royalty_amount=5100.00,
-            marketing_fee=1700.00,
-            total_due=6800.00,
-            status="paid",
-            due_date="2024-02-15",
-            paid_date="2024-02-12",
-        ),
-        FranchiseRoyalty(
-            id="roy-002",
-            franchise_id="franchise-1",
-            franchise_name="Austin North Franchise",
-            period_start="2024-02-01",
-            period_end="2024-02-29",
-            gross_revenue=92000.00,
-            royalty_rate=0.06,
-            royalty_amount=5520.00,
-            marketing_fee=1840.00,
-            total_due=7360.00,
-            status="pending",
-            due_date="2024-03-15",
-        ),
-    ]
-    return {"royalties": [r.model_dump() for r in royalties]}
+    # TODO: Query royalties from database
+    return {"royalties": []}
 
 
 @router.post("/franchise/royalties/generate")
@@ -388,21 +269,8 @@ async def generate_royalty_invoice(
     period_end: str,
 ) -> dict:
     """Generate royalty invoice for a franchise."""
-    royalty = FranchiseRoyalty(
-        id=f"roy-{uuid4().hex[:8]}",
-        franchise_id=franchise_id,
-        franchise_name="Generated Franchise",
-        period_start=period_start,
-        period_end=period_end,
-        gross_revenue=75000.00,
-        royalty_rate=0.06,
-        royalty_amount=4500.00,
-        marketing_fee=1500.00,
-        total_due=6000.00,
-        status="invoiced",
-        due_date=(datetime.now() + timedelta(days=15)).strftime("%Y-%m-%d"),
-    )
-    return {"royalty": royalty.model_dump()}
+    # TODO: Generate royalty from database records
+    raise HTTPException(status_code=501, detail="Franchise royalty generation not yet implemented")
 
 
 @router.post("/franchise/royalties/{royalty_id}/paid")
@@ -414,22 +282,8 @@ async def mark_royalty_paid(
     reference: Optional[str] = None,
 ) -> dict:
     """Mark royalty as paid."""
-    royalty = FranchiseRoyalty(
-        id=royalty_id,
-        franchise_id="franchise-1",
-        franchise_name="Franchise",
-        period_start="2024-01-01",
-        period_end="2024-01-31",
-        gross_revenue=75000.00,
-        royalty_rate=0.06,
-        royalty_amount=4500.00,
-        marketing_fee=1500.00,
-        total_due=6000.00,
-        status="paid",
-        paid_date=paid_date,
-        payment_reference=reference,
-    )
-    return {"royalty": royalty.model_dump()}
+    # TODO: Update royalty status in database
+    raise HTTPException(status_code=404, detail="Royalty not found")
 
 
 # =============================================================================
@@ -444,29 +298,8 @@ async def get_territories(
     region_id: Optional[str] = None,
 ) -> dict:
     """Get territories."""
-    territories = [
-        Territory(
-            id="territory-1",
-            name="North Austin",
-            region_id="region-1",
-            region_name="Austin Metro",
-            zip_codes=["78701", "78702", "78703"],
-            assigned_technicians=["tech-1", "tech-2"],
-            created_at="2024-01-01T00:00:00Z",
-        ),
-        Territory(
-            id="territory-2",
-            name="South Austin",
-            region_id="region-1",
-            region_name="Austin Metro",
-            zip_codes=["78704", "78745", "78748"],
-            assigned_technicians=["tech-3"],
-            created_at="2024-01-15T00:00:00Z",
-        ),
-    ]
-    if region_id:
-        territories = [t for t in territories if t.region_id == region_id]
-    return {"territories": [t.model_dump() for t in territories]}
+    # TODO: Query territories from database
+    return {"territories": []}
 
 
 @router.post("/territories")
@@ -497,14 +330,8 @@ async def update_territory(
     zip_codes: Optional[list[str]] = None,
 ) -> dict:
     """Update a territory."""
-    territory = Territory(
-        id=territory_id,
-        name=name or "Updated Territory",
-        region_id="region-1",
-        zip_codes=zip_codes or [],
-        created_at="2024-01-01T00:00:00Z",
-    )
-    return {"territory": territory.model_dump()}
+    # TODO: Update territory in database
+    raise HTTPException(status_code=404, detail="Territory not found")
 
 
 # =============================================================================
@@ -518,7 +345,8 @@ async def get_roles(
     current_user: CurrentUser,
 ) -> dict:
     """Get all roles."""
-    return {"roles": [r.model_dump() for r in MOCK_ROLES]}
+    # TODO: Query roles from database
+    return {"roles": []}
 
 
 @router.get("/roles/{role_id}")
@@ -528,9 +356,7 @@ async def get_role(
     role_id: str,
 ) -> dict:
     """Get single role."""
-    for r in MOCK_ROLES:
-        if r.id == role_id:
-            return {"role": r.model_dump()}
+    # TODO: Query role from database
     raise HTTPException(status_code=404, detail="Role not found")
 
 
@@ -563,16 +389,7 @@ async def update_role(
     permissions: Optional[list[dict]] = None,
 ) -> dict:
     """Update a role."""
-    for r in MOCK_ROLES:
-        if r.id == role_id:
-            if r.is_system_role:
-                raise HTTPException(status_code=400, detail="Cannot modify system roles")
-            if name:
-                r.name = name
-            if permissions is not None:
-                r.permissions = permissions
-            r.updated_at = datetime.utcnow().isoformat()
-            return {"role": r.model_dump()}
+    # TODO: Update role in database
     raise HTTPException(status_code=404, detail="Role not found")
 
 
@@ -583,11 +400,7 @@ async def delete_role(
     role_id: str,
 ) -> dict:
     """Delete a role."""
-    for r in MOCK_ROLES:
-        if r.id == role_id:
-            if r.is_system_role:
-                raise HTTPException(status_code=400, detail="Cannot delete system roles")
-            return {"deleted": True}
+    # TODO: Delete role from database
     raise HTTPException(status_code=404, detail="Role not found")
 
 
@@ -598,33 +411,8 @@ async def get_role_assignments(
     user_id: Optional[str] = None,
 ) -> dict:
     """Get user role assignments."""
-    assignments = [
-        UserRoleAssignment(
-            id="assign-1",
-            user_id="user-1",
-            user_name="John Admin",
-            user_email="john@example.com",
-            role_id="role-admin",
-            role_name="Administrator",
-            assigned_by="system",
-            assigned_at="2024-01-01T00:00:00Z",
-        ),
-        UserRoleAssignment(
-            id="assign-2",
-            user_id="user-2",
-            user_name="Jane Manager",
-            user_email="jane@example.com",
-            role_id="role-manager",
-            role_name="Manager",
-            region_id="region-1",
-            region_name="Austin Metro",
-            assigned_by="user-1",
-            assigned_at="2024-01-15T00:00:00Z",
-        ),
-    ]
-    if user_id:
-        assignments = [a for a in assignments if a.user_id == user_id]
-    return {"assignments": [a.model_dump() for a in assignments]}
+    # TODO: Query role assignments from database
+    return {"assignments": []}
 
 
 @router.post("/role-assignments")
@@ -693,30 +481,8 @@ async def get_audit_logs(
     page_size: int = 50,
 ) -> dict:
     """Get audit logs."""
-    logs = [
-        AuditLog(
-            id="log-1",
-            timestamp="2024-03-01T10:30:00Z",
-            user_id="user-1",
-            user_name="John Admin",
-            action="update",
-            resource_type="work_order",
-            resource_id="wo-123",
-            old_values={"status": "scheduled"},
-            new_values={"status": "completed"},
-        ),
-        AuditLog(
-            id="log-2",
-            timestamp="2024-03-01T11:15:00Z",
-            user_id="user-2",
-            user_name="Jane Manager",
-            action="create",
-            resource_type="customer",
-            resource_id="cust-456",
-            new_values={"name": "New Customer"},
-        ),
-    ]
-    return {"logs": [l.model_dump() for l in logs], "total": len(logs), "page": page, "page_size": page_size}
+    # TODO: Query audit logs from database
+    return {"logs": [], "total": 0, "page": page, "page_size": page_size}
 
 
 @router.post("/audit/export")
@@ -740,28 +506,13 @@ async def get_compliance_report(
     region_id: Optional[str] = None,
 ) -> ComplianceReport:
     """Get compliance report."""
+    # TODO: Generate compliance report from database
     return ComplianceReport(
         generated_at=datetime.utcnow().isoformat(),
         period_start=(date.today() - timedelta(days=30)).isoformat(),
         period_end=date.today().isoformat(),
-        overall_score=87.5,
-        categories=[
-            {"name": "Data Privacy", "score": 92.0, "status": "compliant"},
-            {"name": "Access Control", "score": 88.0, "status": "compliant"},
-            {"name": "Audit Trail", "score": 95.0, "status": "compliant"},
-            {"name": "License Compliance", "score": 75.0, "status": "needs_attention"},
-        ],
-        issues=[
-            {
-                "category": "License Compliance",
-                "severity": "medium",
-                "description": "3 technician licenses expiring within 30 days",
-                "action_required": "Renew licenses before expiration",
-            }
-        ],
-        recommendations=[
-            "Schedule license renewals for upcoming expirations",
-            "Review access permissions for inactive users",
-            "Enable two-factor authentication for admin accounts",
-        ],
+        overall_score=0.0,
+        categories=[],
+        issues=[],
+        recommendations=[],
     )

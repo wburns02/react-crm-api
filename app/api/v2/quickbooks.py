@@ -96,8 +96,7 @@ async def get_quickbooks_status(
     current_user: CurrentUser,
 ) -> QBOConnectionStatus:
     """Get QuickBooks connection status."""
-    # In production: check database for OAuth tokens
-    # Mock response
+    # TODO: Check database for OAuth tokens
     return QBOConnectionStatus(connected=False, company_name=None, company_id=None, last_sync=None, expires_at=None)
 
 
@@ -177,27 +176,10 @@ async def get_customer_mappings(
     page_size: int = 50,
 ) -> dict:
     """Get customer mappings between CRM and QuickBooks."""
-    # Mock data
-    mappings = [
-        QBOCustomerMapping(
-            crm_customer_id=1,
-            qbo_customer_id="123",
-            display_name="John Smith",
-            sync_status="synced",
-            last_synced=datetime.utcnow().isoformat(),
-        ),
-        QBOCustomerMapping(
-            crm_customer_id=2,
-            qbo_customer_id="124",
-            display_name="Jane Doe",
-            sync_status="synced",
-            last_synced=datetime.utcnow().isoformat(),
-        ),
-    ]
-
+    # TODO: Query customer mappings from database
     return {
-        "mappings": [m.model_dump() for m in mappings],
-        "total": len(mappings),
+        "mappings": [],
+        "total": 0,
         "page": page,
         "page_size": page_size,
     }
@@ -210,12 +192,8 @@ async def sync_customers_to_quickbooks(
     customer_ids: Optional[list[int]] = None,
 ) -> QBOSyncResult:
     """Sync customers to QuickBooks."""
-    # In production:
-    # 1. Fetch customers from CRM database
-    # 2. For each customer, create or update in QuickBooks
-    # 3. Store mapping
-
-    return QBOSyncResult(entity_type="customer", synced=10, created=3, updated=7, errors=0)
+    # TODO: Implement actual QuickBooks sync
+    return QBOSyncResult(entity_type="customer", synced=0, created=0, updated=0, errors=0)
 
 
 @router.post("/customers/import")
@@ -224,7 +202,8 @@ async def import_customers_from_quickbooks(
     current_user: CurrentUser,
 ) -> QBOSyncResult:
     """Import customers from QuickBooks to CRM."""
-    return QBOSyncResult(entity_type="customer", synced=15, created=15, updated=0, errors=0)
+    # TODO: Implement actual QuickBooks import
+    return QBOSyncResult(entity_type="customer", synced=0, created=0, updated=0, errors=0)
 
 
 # =============================================================================
@@ -240,20 +219,10 @@ async def get_invoice_mappings(
     page_size: int = 50,
 ) -> dict:
     """Get invoice mappings between CRM and QuickBooks."""
-    mappings = [
-        QBOInvoiceMapping(
-            crm_invoice_id="inv-001",
-            qbo_invoice_id="1001",
-            doc_number="INV-1001",
-            total_amount=1500.00,
-            sync_status="synced",
-            last_synced=datetime.utcnow().isoformat(),
-        ),
-    ]
-
+    # TODO: Query invoice mappings from database
     return {
-        "mappings": [m.model_dump() for m in mappings],
-        "total": len(mappings),
+        "mappings": [],
+        "total": 0,
         "page": page,
         "page_size": page_size,
     }
@@ -266,7 +235,8 @@ async def sync_invoices_to_quickbooks(
     invoice_ids: Optional[list[str]] = None,
 ) -> QBOSyncResult:
     """Sync invoices to QuickBooks."""
-    return QBOSyncResult(entity_type="invoice", synced=5, created=2, updated=3, errors=0)
+    # TODO: Implement actual QuickBooks invoice sync
+    return QBOSyncResult(entity_type="invoice", synced=0, created=0, updated=0, errors=0)
 
 
 @router.post("/invoices/{invoice_id}/push")
@@ -299,7 +269,8 @@ async def sync_payments_to_quickbooks(
     payment_ids: Optional[list[str]] = None,
 ) -> QBOSyncResult:
     """Sync payments to QuickBooks."""
-    return QBOSyncResult(entity_type="payment", synced=3, created=3, updated=0, errors=0)
+    # TODO: Implement actual QuickBooks payment sync
+    return QBOSyncResult(entity_type="payment", synced=0, created=0, updated=0, errors=0)
 
 
 @router.get("/payments/unsynced")
@@ -308,17 +279,10 @@ async def get_unsynced_payments(
     current_user: CurrentUser,
 ) -> dict:
     """Get payments not yet synced to QuickBooks."""
+    # TODO: Query unsynced payments from database
     return {
-        "payments": [
-            {
-                "id": "pay-001",
-                "invoice_id": "inv-001",
-                "amount": 500.00,
-                "payment_date": datetime.utcnow().isoformat(),
-                "method": "card",
-            }
-        ],
-        "count": 1,
+        "payments": [],
+        "count": 0,
     }
 
 
@@ -333,13 +297,14 @@ async def get_sync_settings(
     current_user: CurrentUser,
 ) -> dict:
     """Get QuickBooks sync settings."""
+    # TODO: Query sync settings from database
     return {
-        "auto_sync_customers": True,
-        "auto_sync_invoices": True,
-        "auto_sync_payments": True,
+        "auto_sync_customers": False,
+        "auto_sync_invoices": False,
+        "auto_sync_payments": False,
         "sync_interval_minutes": 60,
-        "default_income_account": "Services",
-        "default_payment_account": "Undeposited Funds",
+        "default_income_account": None,
+        "default_payment_account": None,
     }
 
 
@@ -363,30 +328,8 @@ async def get_sync_history(
     limit: int = 20,
 ) -> dict:
     """Get sync history/logs."""
-    history = [
-        {
-            "id": "sync-001",
-            "entity_type": "customer",
-            "direction": "push",
-            "status": "success",
-            "records_affected": 5,
-            "started_at": (datetime.utcnow() - timedelta(hours=1)).isoformat(),
-            "completed_at": (datetime.utcnow() - timedelta(minutes=58)).isoformat(),
-            "initiated_by": current_user.email,
-        },
-        {
-            "id": "sync-002",
-            "entity_type": "invoice",
-            "direction": "push",
-            "status": "success",
-            "records_affected": 3,
-            "started_at": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
-            "completed_at": (datetime.utcnow() - timedelta(hours=2, minutes=-2)).isoformat(),
-            "initiated_by": "system",
-        },
-    ]
-
-    return {"history": history, "total": len(history)}
+    # TODO: Query sync history from database
+    return {"history": [], "total": 0}
 
 
 # =============================================================================
@@ -400,9 +343,10 @@ async def get_reconciliation_report(
     current_user: CurrentUser,
 ) -> dict:
     """Get reconciliation report comparing CRM and QuickBooks data."""
+    # TODO: Generate reconciliation from actual data
     return {
-        "customers": {"crm_count": 150, "qbo_count": 148, "matched": 145, "unmatched_crm": 5, "unmatched_qbo": 3},
-        "invoices": {"crm_total": 25000.00, "qbo_total": 24800.00, "difference": 200.00, "pending_sync": 2},
-        "payments": {"crm_total": 22000.00, "qbo_total": 22000.00, "difference": 0.00, "pending_sync": 0},
+        "customers": {"crm_count": 0, "qbo_count": 0, "matched": 0, "unmatched_crm": 0, "unmatched_qbo": 0},
+        "invoices": {"crm_total": 0.0, "qbo_total": 0.0, "difference": 0.0, "pending_sync": 0},
+        "payments": {"crm_total": 0.0, "qbo_total": 0.0, "difference": 0.0, "pending_sync": 0},
         "generated_at": datetime.utcnow().isoformat(),
     }
