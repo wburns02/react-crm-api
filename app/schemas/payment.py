@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
-from decimal import Decimal
 
 
 class PaymentBase(BaseModel):
@@ -9,11 +8,12 @@ class PaymentBase(BaseModel):
 
     customer_id: Optional[int] = None
     work_order_id: Optional[str] = None  # Flask uses work_order_id not invoice_id
-    amount: Decimal = Field(..., decimal_places=2)
+    amount: float = Field(..., description="Payment amount")
     currency: Optional[str] = Field("USD", max_length=3)
     payment_method: Optional[str] = Field(None, max_length=50)
     status: Optional[str] = Field("pending", max_length=30)
     description: Optional[str] = None
+    payment_date: Optional[datetime] = None
 
     # Stripe fields (optional)
     stripe_payment_intent_id: Optional[str] = None
@@ -30,20 +30,23 @@ class PaymentCreate(PaymentBase):
 class PaymentUpdate(BaseModel):
     """Schema for updating a payment."""
 
-    amount: Optional[Decimal] = None
+    amount: Optional[float] = None
     payment_method: Optional[str] = None
     status: Optional[str] = None
     description: Optional[str] = None
     receipt_url: Optional[str] = None
+    payment_date: Optional[datetime] = None
 
 
 class PaymentResponse(PaymentBase):
     """Schema for payment response."""
 
     id: int
+    invoice_id: Optional[str] = None
+    customer_name: Optional[str] = None
     receipt_url: Optional[str] = None
     failure_reason: Optional[str] = None
-    refund_amount: Optional[Decimal] = None
+    refund_amount: Optional[float] = None
     refund_reason: Optional[str] = None
     refunded: Optional[bool] = False
     refund_id: Optional[str] = None

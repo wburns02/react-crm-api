@@ -10,6 +10,7 @@ import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.payment import Payment
+from app.models.customer import Customer
 from app.schemas.payment import (
     PaymentCreate,
     PaymentUpdate,
@@ -64,8 +65,49 @@ async def list_payments(
         result = await db.execute(query)
         payments = result.scalars().all()
 
+        # Batch-fetch customer names for display
+        customer_ids = {p.customer_id for p in payments if p.customer_id}
+        customers_map = {}
+        if customer_ids:
+            cust_result = await db.execute(
+                select(Customer).where(Customer.id.in_(customer_ids))
+            )
+            for c in cust_result.scalars().all():
+                name = f"{c.first_name or ''} {c.last_name or ''}".strip()
+                customers_map[c.id] = name or None
+
+        # Build response with computed fields
+        items = []
+        for p in payments:
+            items.append(PaymentResponse(
+                id=p.id,
+                customer_id=p.customer_id,
+                customer_name=customers_map.get(p.customer_id),
+                work_order_id=p.work_order_id,
+                amount=float(p.amount) if p.amount else 0,
+                currency=p.currency,
+                payment_method=p.payment_method,
+                status=p.status,
+                description=p.description,
+                payment_date=p.payment_date,
+                invoice_id=str(p.invoice_id) if p.invoice_id else None,
+                stripe_payment_intent_id=p.stripe_payment_intent_id,
+                stripe_charge_id=p.stripe_charge_id,
+                stripe_customer_id=p.stripe_customer_id,
+                receipt_url=p.receipt_url,
+                failure_reason=p.failure_reason,
+                refund_amount=float(p.refund_amount) if p.refund_amount else None,
+                refund_reason=p.refund_reason,
+                refunded=p.refunded,
+                refund_id=p.refund_id,
+                refunded_at=p.refunded_at,
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+                processed_at=p.processed_at,
+            ))
+
         return PaymentListResponse(
-            items=payments,
+            items=items,
             total=total,
             page=page,
             page_size=page_size,
@@ -94,7 +136,42 @@ async def get_payment(
             detail="Payment not found",
         )
 
-    return payment
+    # Fetch customer name
+    customer_name = None
+    if payment.customer_id:
+        cust_result = await db.execute(
+            select(Customer).where(Customer.id == payment.customer_id)
+        )
+        customer = cust_result.scalar_one_or_none()
+        if customer:
+            customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip() or None
+
+    return PaymentResponse(
+        id=payment.id,
+        customer_id=payment.customer_id,
+        customer_name=customer_name,
+        work_order_id=payment.work_order_id,
+        amount=float(payment.amount) if payment.amount else 0,
+        currency=payment.currency,
+        payment_method=payment.payment_method,
+        status=payment.status,
+        description=payment.description,
+        payment_date=payment.payment_date,
+        invoice_id=str(payment.invoice_id) if payment.invoice_id else None,
+        stripe_payment_intent_id=payment.stripe_payment_intent_id,
+        stripe_charge_id=payment.stripe_charge_id,
+        stripe_customer_id=payment.stripe_customer_id,
+        receipt_url=payment.receipt_url,
+        failure_reason=payment.failure_reason,
+        refund_amount=float(payment.refund_amount) if payment.refund_amount else None,
+        refund_reason=payment.refund_reason,
+        refunded=payment.refunded,
+        refund_id=payment.refund_id,
+        refunded_at=payment.refunded_at,
+        created_at=payment.created_at,
+        updated_at=payment.updated_at,
+        processed_at=payment.processed_at,
+    )
 
 
 @router.post("/", response_model=PaymentResponse, status_code=http_status.HTTP_201_CREATED)

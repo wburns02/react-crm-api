@@ -68,7 +68,7 @@ class CloverService:
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
-                    f"{self.rest_url}/v3/merchants/current",
+                    f"{self.rest_url}/v3/merchants/{self.merchant_id}",
                     headers=self._get_headers(),
                     timeout=15.0,
                 )
