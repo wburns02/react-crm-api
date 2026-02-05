@@ -571,9 +571,8 @@ async def create_technician(
     from datetime import datetime
 
     try:
-        # Generate UUID string for the technician ID (DB column is VARCHAR(36))
         tech_data = technician_data.model_dump()
-        tech_data["id"] = str(uuid.uuid4())
+        tech_data["id"] = uuid.uuid4()  # UUID object (not string) — DB column is native uuid
         tech_data["created_at"] = datetime.utcnow()
         tech_data["updated_at"] = datetime.utcnow()
 
@@ -594,7 +593,7 @@ async def create_technician(
         logger.error(f"Error creating technician: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"DEBUG: {type(e).__name__}: {e}",
+            detail="Failed to create technician",
         )
 
 
