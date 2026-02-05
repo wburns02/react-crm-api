@@ -17,6 +17,12 @@ branch_labels = None
 depends_on = None
 
 
+def _table_exists(conn, table_name):
+    return conn.execute(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = :t)"
+    ), {"t": table_name}).scalar()
+
+
 def upgrade() -> None:
     conn = op.get_bind()
 
@@ -35,12 +41,14 @@ def upgrade() -> None:
         ("inventory_transactions", "inventory_transactions_item_id_fkey"),
     ]
     for table, constraint in fk_drops:
-        conn.execute(sa.text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {constraint}"))
+        if _table_exists(conn, table):
+            conn.execute(sa.text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {constraint}"))
 
     # ── Step 2: Convert Primary Keys from VARCHAR(36) to native UUID ──
     pk_tables = ["technicians", "work_orders", "bookings", "work_order_photos", "inventory_transactions"]
     for table in pk_tables:
-        conn.execute(sa.text(f"ALTER TABLE {table} ALTER COLUMN id TYPE UUID USING id::uuid"))
+        if _table_exists(conn, table):
+            conn.execute(sa.text(f"ALTER TABLE {table} ALTER COLUMN id TYPE UUID USING id::uuid"))
 
     # ── Step 3: Convert FK/reference columns from VARCHAR(36) to UUID ──
     # Group A: Columns with actual FK constraints (will be re-created)
@@ -113,11 +121,12 @@ def upgrade() -> None:
         ("inventory_transactions", "item_id", "inventory_items", "id"),
     ]
     for child_table, child_col, parent_table, parent_col in fk_creates:
-        constraint_name = f"{child_table}_{child_col}_fkey"
-        conn.execute(sa.text(
-            f"ALTER TABLE {child_table} ADD CONSTRAINT {constraint_name} "
-            f"FOREIGN KEY ({child_col}) REFERENCES {parent_table}({parent_col})"
-        ))
+        if _table_exists(conn, child_table) and _table_exists(conn, parent_table):
+            constraint_name = f"{child_table}_{child_col}_fkey"
+            conn.execute(sa.text(
+                f"ALTER TABLE {child_table} ADD CONSTRAINT {constraint_name} "
+                f"FOREIGN KEY ({child_col}) REFERENCES {parent_table}({parent_col})"
+            ))
 
 
 def downgrade() -> None:
@@ -134,12 +143,14 @@ def downgrade() -> None:
         ("inventory_transactions", "inventory_transactions_item_id_fkey"),
     ]
     for table, constraint in fk_drops:
-        conn.execute(sa.text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {constraint}"))
+        if _table_exists(conn, table):
+            conn.execute(sa.text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {constraint}"))
 
     # Revert PKs back to VARCHAR(36)
     pk_tables = ["technicians", "work_orders", "bookings", "work_order_photos", "inventory_transactions"]
     for table in pk_tables:
-        conn.execute(sa.text(f"ALTER TABLE {table} ALTER COLUMN id TYPE VARCHAR(36) USING id::text"))
+        if _table_exists(conn, table):
+            conn.execute(sa.text(f"ALTER TABLE {table} ALTER COLUMN id TYPE VARCHAR(36) USING id::text"))
 
     # Revert FK columns back to VARCHAR(36)
     varchar_columns = [
@@ -173,8 +184,9 @@ def downgrade() -> None:
         ("tickets", "work_order_id", "work_orders", "id"),
     ]
     for child_table, child_col, parent_table, parent_col in fk_creates:
-        constraint_name = f"{child_table}_{child_col}_fkey"
-        conn.execute(sa.text(
-            f"ALTER TABLE {child_table} ADD CONSTRAINT {constraint_name} "
-            f"FOREIGN KEY ({child_col}) REFERENCES {parent_table}({parent_col})"
-        ))
+        if _table_exists(conn, child_table) and _table_exists(conn, parent_table):
+            constraint_name = f"{child_table}_{child_col}_fkey"
+            conn.execute(sa.text(
+                f"ALTER TABLE {child_table} ADD CONSTRAINT {constraint_name} "
+                f"FOREIGN KEY ({child_col}) REFERENCES {parent_table}({parent_col})"
+            ))
