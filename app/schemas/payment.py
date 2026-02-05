@@ -7,7 +7,7 @@ from decimal import Decimal
 class PaymentBase(BaseModel):
     """Base payment schema - matches Flask database."""
 
-    customer_id: int
+    customer_id: Optional[int] = None
     work_order_id: Optional[str] = None  # Flask uses work_order_id not invoice_id
     amount: Decimal = Field(..., decimal_places=2)
     currency: Optional[str] = Field("USD", max_length=3)
@@ -24,7 +24,7 @@ class PaymentBase(BaseModel):
 class PaymentCreate(PaymentBase):
     """Schema for creating a payment."""
 
-    pass
+    customer_id: int  # Required when creating a payment
 
 
 class PaymentUpdate(BaseModel):
