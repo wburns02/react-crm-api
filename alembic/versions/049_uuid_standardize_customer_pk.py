@@ -111,9 +111,11 @@ def upgrade() -> None:
     for table in dependent_tables:
         if not _table_exists(conn, table) or not _column_exists(conn, table, "customer_id_new"):
             continue
+        # Cast both sides to text for comparison since customer_id may be
+        # Integer or VARCHAR depending on the table
         conn.execute(sa.text(
             f"UPDATE {table} t SET customer_id_new = c.customer_uuid "
-            f"FROM customers c WHERE t.customer_id = c.id"
+            f"FROM customers c WHERE t.customer_id::text = c.id::text"
         ))
 
     # ══════════════════════════════════════════════════════════════════
