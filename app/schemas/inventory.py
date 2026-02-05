@@ -3,6 +3,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from app.schemas.types import UUIDStr
+
 
 class InventoryItemBase(BaseModel):
     """Base inventory item schema."""
@@ -63,7 +65,7 @@ class InventoryItemUpdate(BaseModel):
 class InventoryItemResponse(BaseModel):
     """Schema for inventory item response."""
 
-    id: str
+    id: UUIDStr
     sku: str
     name: str
     description: Optional[str] = None
@@ -82,7 +84,7 @@ class InventoryItemResponse(BaseModel):
     supplier_sku: Optional[str] = None
     supplier_phone: Optional[str] = None
     warehouse_location: Optional[str] = None
-    vehicle_id: Optional[str] = None
+    vehicle_id: Optional[UUIDStr] = None
     is_active: bool
     is_taxable: bool
     notes: Optional[str] = None

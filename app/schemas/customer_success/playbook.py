@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Optional
 from enum import Enum
 
+from app.schemas.types import UUIDStr
+
 
 class PlaybookCategory(str, Enum):
     ONBOARDING = "onboarding"
@@ -282,7 +284,7 @@ class PlaybookListResponse(BaseModel):
 class PlaybookExecutionBase(BaseModel):
     """Base playbook execution schema."""
 
-    customer_id: str
+    customer_id: UUIDStr
     playbook_id: int
     triggered_by: Optional[str] = None
     trigger_reason: Optional[str] = None
@@ -352,7 +354,7 @@ class PlaybookExecutionListResponse(BaseModel):
 class PlaybookTriggerRequest(BaseModel):
     """Request to trigger a playbook for a customer."""
 
-    customer_id: str
+    customer_id: UUIDStr
     playbook_id: int
     reason: Optional[str] = None
     assigned_to_user_id: Optional[int] = None

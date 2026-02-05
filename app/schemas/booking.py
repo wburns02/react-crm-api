@@ -7,6 +7,8 @@ from typing import Optional
 from decimal import Decimal
 from pydantic import BaseModel, Field, EmailStr
 
+from app.schemas.types import UUIDStr
+
 
 class BookingCreate(BaseModel):
     """Schema for creating a new booking."""
@@ -40,9 +42,9 @@ class BookingCreate(BaseModel):
 class BookingResponse(BaseModel):
     """Schema for booking response."""
 
-    id: str
-    customer_id: Optional[str] = None
-    work_order_id: Optional[str] = None
+    id: UUIDStr
+    customer_id: Optional[UUIDStr] = None
+    work_order_id: Optional[UUIDStr] = None
     customer_first_name: str
     customer_last_name: str
     customer_email: Optional[str]
@@ -83,7 +85,7 @@ class BookingCaptureRequest(BaseModel):
 class BookingCaptureResponse(BaseModel):
     """Schema for capture response."""
 
-    id: str
+    id: UUIDStr
     actual_gallons: int
     overage_gallons: int
     overage_amount: Decimal

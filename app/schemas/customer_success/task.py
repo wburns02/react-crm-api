@@ -7,6 +7,8 @@ from datetime import datetime, date
 from typing import Optional
 from enum import Enum
 
+from app.schemas.types import UUIDStr
+
 
 class TaskType(str, Enum):
     CALL = "call"
@@ -118,7 +120,7 @@ class CSTaskBase(BaseModel):
 class CSTaskCreate(CSTaskBase):
     """Schema for creating a CS task."""
 
-    customer_id: str
+    customer_id: UUIDStr
     assigned_to_user_id: Optional[int] = None
 
 
@@ -165,7 +167,7 @@ class CSTaskResponse(CSTaskBase):
     """CS task response schema."""
 
     id: int
-    customer_id: str
+    customer_id: UUIDStr
     status: TaskStatus
 
     # Assignment

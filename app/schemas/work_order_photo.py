@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 
+from app.schemas.types import UUIDStr
+
 
 class WorkOrderPhotoBase(BaseModel):
     """Base work order photo schema."""
@@ -24,8 +26,8 @@ class WorkOrderPhotoCreate(WorkOrderPhotoBase):
 class WorkOrderPhotoResponse(WorkOrderPhotoBase):
     """Schema for work order photo response."""
 
-    id: str
-    work_order_id: str
+    id: UUIDStr
+    work_order_id: UUIDStr
     data_url: Optional[str] = None  # base64 data URL for display
     thumbnail_url: Optional[str] = None  # base64 thumbnail URL for display
     created_at: datetime

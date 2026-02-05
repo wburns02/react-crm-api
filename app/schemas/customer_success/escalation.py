@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Optional
 from enum import Enum
 
+from app.schemas.types import UUIDStr
+
 
 class EscalationType(str, Enum):
     TECHNICAL = "technical"
@@ -126,7 +128,7 @@ class EscalationBase(BaseModel):
 class EscalationCreate(EscalationBase):
     """Schema for creating an escalation."""
 
-    customer_id: str
+    customer_id: UUIDStr
     assigned_to_user_id: Optional[int] = None
     escalated_to_user_id: Optional[int] = None
 
@@ -159,7 +161,7 @@ class EscalationResponse(EscalationBase):
     """Escalation response schema."""
 
     id: int
-    customer_id: str
+    customer_id: UUIDStr
     customer_name: Optional[str] = None
     status: EscalationStatus = EscalationStatus.OPEN
 

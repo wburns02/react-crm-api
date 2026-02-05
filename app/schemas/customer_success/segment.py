@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Optional, Literal, Any, Union
 from enum import Enum
 
+from app.schemas.types import UUIDStr
+
 
 class SegmentType(str, Enum):
     STATIC = "static"
@@ -183,7 +185,7 @@ class SegmentListResponse(BaseModel):
 class CustomerSegmentBase(BaseModel):
     """Base customer segment membership schema."""
 
-    customer_id: str
+    customer_id: UUIDStr
     segment_id: int
     entry_reason: Optional[str] = None
 
@@ -307,7 +309,7 @@ class SegmentMembershipResponse(BaseModel):
 
     id: int
     segment_id: int
-    customer_id: str
+    customer_id: UUIDStr
     is_active: bool
     entered_at: Optional[datetime] = None
     exited_at: Optional[datetime] = None

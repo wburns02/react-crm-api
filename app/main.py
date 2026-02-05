@@ -1066,24 +1066,30 @@ async def run_uuid_migrations():
             except Exception:
                 results["version_before"] = None
 
-        # Step 2: Stamp at 045 (sets version without running migrations)
+        # Step 2: Only stamp+upgrade if not already at 049+
         os.chdir("/app")
-        proc = subprocess.run(["alembic", "stamp", "045"], capture_output=True, text=True, timeout=60)
-        results["stamp"] = proc.returncode == 0
-        if proc.stderr:
-            results["stamp_stderr"] = proc.stderr[-1000:]
+        current = results.get("version_before")
+        if current and current >= "049":
+            results["stamp"] = True
+            results["upgrade"] = True
+            results["skipped"] = "Already at migration 049 or later"
+        else:
+            proc = subprocess.run(["alembic", "stamp", "045"], capture_output=True, text=True, timeout=60)
+            results["stamp"] = proc.returncode == 0
+            if proc.stderr:
+                results["stamp_stderr"] = proc.stderr[-1000:]
 
-        if not results["stamp"]:
-            results["errors"].append("alembic stamp 045 failed")
-            return results
+            if not results["stamp"]:
+                results["errors"].append("alembic stamp 045 failed")
+                return results
 
-        # Step 3: Upgrade from 045 to head (runs 046, 047, 048, 049)
-        proc = subprocess.run(["alembic", "upgrade", "head"], capture_output=True, text=True, timeout=600)
-        results["upgrade"] = proc.returncode == 0
-        if proc.stdout:
-            results["upgrade_stdout"] = proc.stdout[-2000:]
-        if proc.stderr:
-            results["upgrade_stderr"] = proc.stderr[-2000:]
+            # Step 3: Upgrade from 045 to head (runs 046, 047, 048, 049)
+            proc = subprocess.run(["alembic", "upgrade", "head"], capture_output=True, text=True, timeout=600)
+            results["upgrade"] = proc.returncode == 0
+            if proc.stdout:
+                results["upgrade_stdout"] = proc.stdout[-2000:]
+            if proc.stderr:
+                results["upgrade_stderr"] = proc.stderr[-2000:]
 
         # Step 4: Check version after
         async with async_session_maker() as session:

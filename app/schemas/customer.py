@@ -3,6 +3,8 @@ from datetime import datetime, date
 from typing import Optional
 from decimal import Decimal
 
+from app.schemas.types import UUIDStr
+
 
 class CustomerBase(BaseModel):
     """Base customer schema."""
@@ -81,7 +83,7 @@ class CustomerUpdate(CustomerBase):
 class CustomerResponse(CustomerBase):
     """Schema for customer response."""
 
-    id: str
+    id: UUIDStr
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     first_touch_ts: Optional[datetime] = None

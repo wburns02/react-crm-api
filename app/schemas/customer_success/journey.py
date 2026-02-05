@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Optional, Any
 from enum import Enum
 
+from app.schemas.types import UUIDStr
+
 
 class JourneyStatus(str, Enum):
     DRAFT = "draft"
@@ -264,7 +266,7 @@ class JourneyListResponse(BaseModel):
 class JourneyEnrollmentBase(BaseModel):
     """Base journey enrollment schema."""
 
-    customer_id: str
+    customer_id: UUIDStr
     journey_id: int
     enrolled_by: Optional[str] = None
     enrollment_reason: Optional[str] = None
@@ -359,7 +361,7 @@ class JourneyStepExecutionResponse(BaseModel):
 class JourneyEnrollRequest(BaseModel):
     """Request to enroll a customer in a journey."""
 
-    customer_id: str
+    customer_id: UUIDStr
     journey_id: int
     reason: Optional[str] = None
     start_immediately: bool = True

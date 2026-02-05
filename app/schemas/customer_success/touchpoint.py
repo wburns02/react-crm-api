@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Optional
 from enum import Enum
 
+from app.schemas.types import UUIDStr
+
 
 class TouchpointType(str, Enum):
     # Communication
@@ -163,7 +165,7 @@ class TouchpointBase(BaseModel):
 class TouchpointCreate(TouchpointBase):
     """Schema for creating a touchpoint."""
 
-    customer_id: str
+    customer_id: UUIDStr
 
     # Related entities
     task_id: Optional[int] = None
@@ -228,7 +230,7 @@ class TouchpointResponse(TouchpointBase):
     """Touchpoint response schema."""
 
     id: int
-    customer_id: str
+    customer_id: UUIDStr
 
     # Related entities
     task_id: Optional[int] = None
@@ -293,7 +295,7 @@ class TouchpointSentimentAnalysis(BaseModel):
 class TouchpointTimelineResponse(BaseModel):
     """Customer touchpoint timeline response."""
 
-    customer_id: str
+    customer_id: UUIDStr
     touchpoints: list[TouchpointResponse]
     total: int
     period_start: Optional[datetime] = None

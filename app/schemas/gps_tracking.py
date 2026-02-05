@@ -8,6 +8,8 @@ from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
+from app.schemas.types import UUIDStr
+
 
 class GeofenceTypeEnum(str, Enum):
     customer_site = "customer_site"
@@ -61,7 +63,7 @@ class LocationUpdateBatch(BaseModel):
 class TechnicianLocationResponse(BaseModel):
     """Current technician location response"""
 
-    technician_id: str
+    technician_id: UUIDStr
     technician_name: str
     latitude: float
     longitude: float
@@ -71,7 +73,7 @@ class TechnicianLocationResponse(BaseModel):
     is_online: bool
     battery_level: Optional[int] = None
     current_status: str
-    current_work_order_id: Optional[str] = None
+    current_work_order_id: Optional[UUIDStr] = None
     captured_at: datetime
     received_at: datetime
     minutes_since_update: int
@@ -111,7 +113,7 @@ class LocationHistoryPoint(BaseModel):
 class LocationHistoryResponse(BaseModel):
     """Location history for a technician"""
 
-    technician_id: str
+    technician_id: UUIDStr
     technician_name: str
     date: str
     points: List[LocationHistoryPoint]
@@ -123,8 +125,8 @@ class LocationHistoryResponse(BaseModel):
 class RouteVerification(BaseModel):
     """Route verification for a work order"""
 
-    work_order_id: str
-    technician_id: str
+    work_order_id: UUIDStr
+    technician_id: UUIDStr
     expected_route_miles: float
     actual_route_miles: float
     deviation_percent: float
@@ -190,7 +192,7 @@ class GeofenceUpdate(BaseModel):
 class GeofenceResponse(BaseModel):
     """Geofence response"""
 
-    id: str
+    id: UUIDStr
     name: str
     description: Optional[str] = None
     geofence_type: str
@@ -199,8 +201,8 @@ class GeofenceResponse(BaseModel):
     center_longitude: Optional[float] = None
     radius_meters: Optional[float] = None
     polygon_coordinates: Optional[List[List[float]]] = None
-    customer_id: Optional[str] = None
-    work_order_id: Optional[str] = None
+    customer_id: Optional[UUIDStr] = None
+    work_order_id: Optional[UUIDStr] = None
     entry_action: str
     exit_action: str
     notify_on_entry: bool
@@ -215,10 +217,10 @@ class GeofenceResponse(BaseModel):
 class GeofenceEventResponse(BaseModel):
     """Geofence event log entry"""
 
-    id: str
-    geofence_id: str
+    id: UUIDStr
+    geofence_id: UUIDStr
     geofence_name: str
-    technician_id: str
+    technician_id: UUIDStr
     technician_name: str
     event_type: str
     latitude: float
@@ -248,12 +250,12 @@ class TrackingLinkCreate(BaseModel):
 class TrackingLinkResponse(BaseModel):
     """Tracking link response (for internal use)"""
 
-    id: str
+    id: UUIDStr
     token: str
     tracking_url: str
-    work_order_id: str
-    customer_id: str
-    technician_id: str
+    work_order_id: UUIDStr
+    customer_id: UUIDStr
+    technician_id: UUIDStr
     status: str
     expires_at: datetime
     view_count: int
@@ -266,7 +268,7 @@ class TrackingLinkResponse(BaseModel):
 class PublicTrackingInfo(BaseModel):
     """Public tracking information for customers"""
 
-    work_order_id: str
+    work_order_id: UUIDStr
     service_type: str
     scheduled_date: str
 
@@ -304,8 +306,8 @@ class ETARequest(BaseModel):
 class ETAResponse(BaseModel):
     """ETA calculation response"""
 
-    work_order_id: str
-    technician_id: str
+    work_order_id: UUIDStr
+    technician_id: UUIDStr
     technician_name: str
 
     # Current positions
@@ -333,8 +335,8 @@ class ETAResponse(BaseModel):
 class ETANotification(BaseModel):
     """ETA notification to send to customer"""
 
-    work_order_id: str
-    customer_id: str
+    work_order_id: UUIDStr
+    customer_id: UUIDStr
     customer_phone: str
     customer_email: Optional[str] = None
     technician_name: str
@@ -368,8 +370,8 @@ class GPSConfigUpdate(BaseModel):
 class GPSConfigResponse(BaseModel):
     """GPS configuration response"""
 
-    id: str
-    technician_id: Optional[str] = None
+    id: UUIDStr
+    technician_id: Optional[UUIDStr] = None
     active_interval: int
     idle_interval: int
     background_interval: int
@@ -396,12 +398,12 @@ class GPSConfigResponse(BaseModel):
 class DispatchMapTechnician(BaseModel):
     """Technician info for dispatch map"""
 
-    id: str
+    id: UUIDStr
     name: str
     latitude: float
     longitude: float
     status: str
-    current_work_order_id: Optional[str] = None
+    current_work_order_id: Optional[UUIDStr] = None
     current_job_address: Optional[str] = None
     battery_level: Optional[int] = None
     speed: Optional[float] = None
@@ -412,14 +414,14 @@ class DispatchMapTechnician(BaseModel):
 class DispatchMapWorkOrder(BaseModel):
     """Work order info for dispatch map"""
 
-    id: str
+    id: UUIDStr
     customer_name: str
     address: str
     latitude: float
     longitude: float
     status: str
     scheduled_time: Optional[datetime] = None
-    assigned_technician_id: Optional[str] = None
+    assigned_technician_id: Optional[UUIDStr] = None
     assigned_technician_name: Optional[str] = None
     service_type: str
     priority: str

@@ -3,6 +3,8 @@ from datetime import datetime, date
 from typing import Optional, Literal
 from decimal import Decimal
 
+from app.schemas.types import UUIDStr
+
 
 # Valid invoice status values
 INVOICE_STATUSES = Literal["draft", "sent", "paid", "overdue", "void"]
@@ -22,7 +24,7 @@ class LineItem(BaseModel):
 class CustomerSummary(BaseModel):
     """Minimal customer info for invoice response."""
 
-    id: str
+    id: UUIDStr
     first_name: str
     last_name: str
     email: Optional[str] = None
@@ -32,8 +34,8 @@ class CustomerSummary(BaseModel):
 class InvoiceBase(BaseModel):
     """Base invoice schema."""
 
-    customer_id: str
-    work_order_id: Optional[str] = None  # UUID as string
+    customer_id: UUIDStr
+    work_order_id: Optional[UUIDStr] = None  # UUID as string
     status: Optional[str] = None  # Don't send default - let DB handle
     line_items: Optional[list[LineItem]] = []
     notes: Optional[str] = None
@@ -67,12 +69,12 @@ class InvoiceUpdate(BaseModel):
 class InvoiceResponse(BaseModel):
     """Schema for invoice response."""
 
-    id: str  # UUID as string
+    id: UUIDStr  # UUID as string
     invoice_number: Optional[str] = None
-    customer_id: str  # UUID derived from integer customer ID
+    customer_id: UUIDStr  # UUID derived from integer customer ID
     customer_name: Optional[str] = None
     customer: Optional[CustomerSummary] = None
-    work_order_id: Optional[str] = None  # UUID as string
+    work_order_id: Optional[UUIDStr] = None  # UUID as string
     status: str
     line_items: Optional[list[LineItem]] = []
 

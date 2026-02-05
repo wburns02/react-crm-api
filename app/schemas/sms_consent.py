@@ -2,11 +2,13 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 
+from app.schemas.types import UUIDStr
+
 
 class SMSConsentBase(BaseModel):
     """Base SMS consent schema."""
 
-    customer_id: str
+    customer_id: UUIDStr
     phone_number: str = Field(..., max_length=20)
     consent_status: Optional[str] = Field("pending", max_length=20)
     consent_source: Optional[str] = Field(None, max_length=50)
@@ -30,7 +32,7 @@ class SMSConsentUpdate(BaseModel):
 class SMSConsentResponse(SMSConsentBase):
     """Schema for SMS consent response."""
 
-    id: str
+    id: UUIDStr
     opt_in_timestamp: Optional[datetime] = None
     opt_in_ip_address: Optional[str] = None
     double_opt_in_confirmed: Optional[bool] = None

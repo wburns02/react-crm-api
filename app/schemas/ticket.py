@@ -3,6 +3,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
+from app.schemas.types import UUIDStr
+
 
 TicketStatus = Literal["open", "in_progress", "pending", "resolved", "closed"]
 TicketPriority = Literal["low", "normal", "high", "urgent"]
@@ -12,8 +14,8 @@ TicketCategory = Literal["complaint", "request", "inquiry", "feedback", "other"]
 class TicketBase(BaseModel):
     """Base ticket schema."""
 
-    customer_id: str = Field(..., description="Customer ID")
-    work_order_id: Optional[str] = None
+    customer_id: UUIDStr = Field(..., description="Customer ID")
+    work_order_id: Optional[UUIDStr] = None
     subject: str = Field(..., min_length=1, max_length=255)
     description: str = Field(..., min_length=1)
     category: Optional[TicketCategory] = None
@@ -43,9 +45,9 @@ class TicketUpdate(BaseModel):
 class TicketResponse(BaseModel):
     """Schema for ticket response."""
 
-    id: str
-    customer_id: str
-    work_order_id: Optional[str] = None
+    id: UUIDStr
+    customer_id: UUIDStr
+    work_order_id: Optional[UUIDStr] = None
     subject: str
     description: str
     category: Optional[str] = None

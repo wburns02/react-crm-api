@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Optional
 from enum import Enum
 
+from app.schemas.types import UUIDStr
+
 
 class ResourceType(str, Enum):
     DOCUMENT = "document"
@@ -195,7 +197,7 @@ class TeamNoteBase(BaseModel):
 class TeamNoteCreate(TeamNoteBase):
     """Schema for creating a note."""
 
-    customer_id: Optional[str] = None
+    customer_id: Optional[UUIDStr] = None
 
 
 class TeamNoteUpdate(BaseModel):
@@ -214,7 +216,7 @@ class TeamNoteResponse(TeamNoteBase):
     """Team note response schema."""
 
     id: int
-    customer_id: Optional[str] = None
+    customer_id: Optional[UUIDStr] = None
     customer_name: Optional[str] = None
     created_by_user_id: int
     created_by_name: Optional[str] = None
@@ -247,7 +249,7 @@ class ActivityCreate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     activity_data: Optional[dict] = None
-    customer_id: Optional[str] = None
+    customer_id: Optional[UUIDStr] = None
 
 
 class ActivityResponse(BaseModel):
@@ -262,7 +264,7 @@ class ActivityResponse(BaseModel):
     activity_data: Optional[dict] = None
     user_id: int
     user_name: Optional[str] = None
-    customer_id: Optional[str] = None
+    customer_id: Optional[UUIDStr] = None
     customer_name: Optional[str] = None
     created_at: Optional[datetime] = None
 

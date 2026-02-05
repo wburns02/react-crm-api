@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from app.schemas.types import UUIDStr
+
 
 class TechnicianBase(BaseModel):
     """Base technician schema."""
@@ -86,7 +88,7 @@ class TechnicianUpdate(BaseModel):
 class TechnicianResponse(TechnicianBase):
     """Schema for technician response."""
 
-    id: str  # Frontend expects string ID
+    id: UUIDStr  # Frontend expects string ID
     full_name: Optional[str] = None
     # Accept both datetime and string for flexibility
     created_at: Optional[str] = None
@@ -113,7 +115,7 @@ class TechnicianListResponse(BaseModel):
 class TechnicianPerformanceStats(BaseModel):
     """Aggregated performance statistics for a technician."""
 
-    technician_id: str
+    technician_id: UUIDStr
     total_jobs_completed: int = 0
     total_revenue: float = 0.0
     returns_count: int = 0  # Jobs at same customer within 30 days of previous
@@ -134,10 +136,10 @@ class TechnicianPerformanceStats(BaseModel):
 class TechnicianJobDetail(BaseModel):
     """Detailed information about a single job performed by a technician."""
 
-    id: str
+    id: UUIDStr
     scheduled_date: Optional[str] = None
     completed_date: Optional[str] = None
-    customer_id: Optional[str] = None
+    customer_id: Optional[UUIDStr] = None
     customer_name: Optional[str] = None
     service_location: Optional[str] = None
     job_type: Optional[str] = None

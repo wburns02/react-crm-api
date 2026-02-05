@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, Literal
 from datetime import datetime
 
+from app.schemas.types import UUIDStr
+
 
 ActivityType = Literal["call", "email", "sms", "note", "meeting", "task"]
 
@@ -11,7 +13,7 @@ ActivityType = Literal["call", "email", "sms", "note", "meeting", "task"]
 class ActivityBase(BaseModel):
     """Base activity schema."""
 
-    customer_id: str = Field(..., description="Customer ID")
+    customer_id: UUIDStr = Field(..., description="Customer ID")
     activity_type: ActivityType
     description: str = Field(..., min_length=1)
     activity_date: Optional[str] = None
@@ -34,7 +36,7 @@ class ActivityUpdate(BaseModel):
 class ActivityResponse(ActivityBase):
     """Schema for activity response."""
 
-    id: str
+    id: UUIDStr
     created_by: Optional[str] = None
     created_at: str
     updated_at: Optional[str] = None

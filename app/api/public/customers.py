@@ -12,6 +12,8 @@ from fastapi import APIRouter, HTTPException, status, Query, Depends, Response
 from sqlalchemy import select, func, or_
 from pydantic import BaseModel, EmailStr, Field
 
+from app.schemas.types import UUIDStr
+
 from app.api.public.deps import PublicAPIClient, DbSession, require_scope
 from app.models.customer import Customer
 from app.core.rate_limit import get_public_api_rate_limiter
@@ -58,7 +60,7 @@ class PublicCustomerUpdate(PublicCustomerBase):
 class PublicCustomerResponse(PublicCustomerBase):
     """Schema for customer response in public API."""
 
-    id: str
+    id: UUIDStr
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

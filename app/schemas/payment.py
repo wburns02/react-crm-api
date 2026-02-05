@@ -2,12 +2,14 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 
+from app.schemas.types import UUIDStr
+
 
 class PaymentBase(BaseModel):
     """Base payment schema - matches Flask database."""
 
-    customer_id: Optional[str] = None
-    work_order_id: Optional[str] = None  # Flask uses work_order_id not invoice_id
+    customer_id: Optional[UUIDStr] = None
+    work_order_id: Optional[UUIDStr] = None  # Flask uses work_order_id not invoice_id
     amount: float = Field(..., description="Payment amount")
     currency: Optional[str] = Field("USD", max_length=3)
     payment_method: Optional[str] = Field(None, max_length=50)
@@ -41,15 +43,15 @@ class PaymentUpdate(BaseModel):
 class PaymentResponse(PaymentBase):
     """Schema for payment response."""
 
-    id: str
-    invoice_id: Optional[str] = None
+    id: UUIDStr
+    invoice_id: Optional[UUIDStr] = None
     customer_name: Optional[str] = None
     receipt_url: Optional[str] = None
     failure_reason: Optional[str] = None
     refund_amount: Optional[float] = None
     refund_reason: Optional[str] = None
     refunded: Optional[bool] = False
-    refund_id: Optional[str] = None
+    refund_id: Optional[UUIDStr] = None
     refunded_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

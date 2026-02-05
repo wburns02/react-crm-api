@@ -14,6 +14,8 @@ from datetime import datetime
 from typing import Optional, Any
 from enum import Enum
 
+from app.schemas.types import UUIDStr
+
 
 class SurveyType(str, Enum):
     NPS = "nps"
@@ -254,7 +256,7 @@ class SurveyAnswerCreate(BaseModel):
 class SurveySubmissionCreate(BaseModel):
     """Schema for submitting a survey response."""
 
-    customer_id: str
+    customer_id: UUIDStr
     answers: list[SurveyAnswerCreate]
     source: Optional[str] = None
     device: Optional[str] = None
@@ -279,7 +281,7 @@ class SurveySubmissionResponse(BaseModel):
 
     id: int
     survey_id: int
-    customer_id: str
+    customer_id: UUIDStr
     customer_name: Optional[str] = None
     overall_score: Optional[float] = None
     sentiment: Optional[Sentiment] = None
@@ -346,7 +348,7 @@ class UrgentIssue(BaseModel):
     """Individual urgent issue detected by AI."""
 
     text: str
-    customer_id: str
+    customer_id: UUIDStr
     customer_name: Optional[str] = None
     severity: str  # 'critical', 'high', 'medium', 'low'
     response_id: Optional[int] = None
@@ -358,7 +360,7 @@ class ChurnRiskIndicator(BaseModel):
     indicator: str  # e.g., 'competitor_mention', 'low_score', 'negative_feedback'
     weight: float  # 0 to 1
     details: Optional[str] = None
-    customer_id: Optional[str] = None
+    customer_id: Optional[UUIDStr] = None
 
 
 class CompetitorMention(BaseModel):
@@ -366,7 +368,7 @@ class CompetitorMention(BaseModel):
 
     competitor: str
     context: str
-    customer_id: str
+    customer_id: UUIDStr
     customer_name: Optional[str] = None
     response_id: Optional[int] = None
 
@@ -375,7 +377,7 @@ class ActionRecommendation(BaseModel):
     """AI-generated action recommendation."""
 
     type: str  # 'callback', 'task', 'ticket', 'offer', 'escalation'
-    customer_id: str
+    customer_id: UUIDStr
     customer_name: Optional[str] = None
     reason: str
     priority: str  # 'critical', 'high', 'medium', 'low'
@@ -439,7 +441,7 @@ class DetractorItem(BaseModel):
     response_id: int
     survey_id: int
     survey_name: str
-    customer_id: str
+    customer_id: UUIDStr
     customer_name: str
     score: float
     sentiment: Optional[Sentiment] = None
@@ -506,7 +508,7 @@ class SurveyActionCreate(BaseModel):
 
     response_id: Optional[int] = None
     analysis_id: Optional[int] = None
-    customer_id: str
+    customer_id: UUIDStr
     action_type: SurveyActionType
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
@@ -536,7 +538,7 @@ class SurveyActionResponse(BaseModel):
     survey_id: int
     response_id: Optional[int] = None
     analysis_id: Optional[int] = None
-    customer_id: str
+    customer_id: UUIDStr
     customer_name: Optional[str] = None
 
     action_type: SurveyActionType

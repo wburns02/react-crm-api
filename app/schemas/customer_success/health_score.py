@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Optional, Literal
 from enum import Enum
 
+from app.schemas.types import UUIDStr
+
 
 class HealthStatus(str, Enum):
     HEALTHY = "healthy"
@@ -65,7 +67,7 @@ class HealthScoreBase(BaseModel):
 class HealthScoreCreate(HealthScoreBase):
     """Schema for creating a health score."""
 
-    customer_id: str
+    customer_id: UUIDStr
 
 
 class HealthScoreUpdate(BaseModel):
@@ -97,7 +99,7 @@ class HealthScoreResponse(HealthScoreBase):
     """Health score response schema."""
 
     id: int
-    customer_id: str
+    customer_id: UUIDStr
 
     # Thresholds (at time of scoring)
     healthy_threshold: int
@@ -190,7 +192,7 @@ class HealthScoreBulkCalculateRequest(BaseModel):
 class HealthScoreTrendResponse(BaseModel):
     """Health score trend data for charts."""
 
-    customer_id: str
+    customer_id: UUIDStr
     data_points: list[dict]  # [{"date": "2024-01-01", "score": 75, "status": "healthy"}]
     period_start: datetime
     period_end: datetime

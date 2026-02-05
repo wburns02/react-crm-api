@@ -3,6 +3,8 @@ from datetime import datetime, date
 from typing import Optional, List, Any, Union
 from decimal import Decimal
 
+from app.schemas.types import UUIDStr
+
 
 class QuoteLineItem(BaseModel):
     """Schema for quote line item."""
@@ -17,7 +19,7 @@ class QuoteLineItem(BaseModel):
 class QuoteBase(BaseModel):
     """Base quote schema."""
 
-    customer_id: str
+    customer_id: UUIDStr
     title: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
     line_items: Optional[List[Any]] = []
@@ -123,7 +125,7 @@ class QuoteUpdate(BaseModel):
 class QuoteResponse(QuoteBase):
     """Schema for quote response."""
 
-    id: str
+    id: UUIDStr
     quote_number: Optional[str] = None
     # Customer details (populated from JOIN with customers table)
     customer_name: Optional[str] = None
@@ -137,7 +139,7 @@ class QuoteResponse(QuoteBase):
     approval_status: Optional[str] = None
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
-    converted_to_work_order_id: Optional[str] = None
+    converted_to_work_order_id: Optional[UUIDStr] = None
     converted_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -198,5 +200,5 @@ class QuoteConvertResponse(BaseModel):
     """Response after converting a quote to a work order."""
 
     quote: QuoteResponse
-    work_order_id: str
+    work_order_id: UUIDStr
     message: str

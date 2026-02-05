@@ -3,12 +3,14 @@ from datetime import datetime, date, time
 from typing import Optional, Any
 from decimal import Decimal
 
+from app.schemas.types import UUIDStr
+
 
 class WorkOrderBase(BaseModel):
     """Base work order schema."""
 
-    customer_id: str
-    technician_id: Optional[str] = None
+    customer_id: UUIDStr
+    technician_id: Optional[UUIDStr] = None
     job_type: str
     status: Optional[str] = "draft"
     priority: Optional[str] = "normal"
@@ -104,7 +106,7 @@ class WorkOrderUpdate(BaseModel):
 class WorkOrderResponse(WorkOrderBase):
     """Schema for work order response."""
 
-    id: str  # Flask uses VARCHAR(36) UUID
+    id: UUIDStr  # Flask uses VARCHAR(36) UUID
     work_order_number: Optional[str] = None  # Human-readable WO-NNNNNN format
     customer_name: Optional[str] = None  # Populated from Customer JOIN
     created_at: Optional[datetime] = None

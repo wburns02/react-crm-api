@@ -14,6 +14,8 @@ from fastapi import APIRouter, HTTPException, status, Query, Depends, Response
 from sqlalchemy import select, func, cast, String
 from pydantic import BaseModel, Field
 
+from app.schemas.types import UUIDStr
+
 from app.api.public.deps import PublicAPIClient, DbSession, require_scope
 from app.models.work_order import WorkOrder
 from app.core.rate_limit import get_public_api_rate_limiter
@@ -31,8 +33,8 @@ router = APIRouter(prefix="/work-orders", tags=["Public API - Work Orders"])
 class PublicWorkOrderBase(BaseModel):
     """Base work order schema for public API."""
 
-    customer_id: str
-    technician_id: Optional[str] = None
+    customer_id: UUIDStr
+    technician_id: Optional[UUIDStr] = None
     job_type: str
     status: Optional[str] = "draft"
     priority: Optional[str] = "normal"
@@ -115,7 +117,7 @@ class PublicWorkOrderStatusUpdate(BaseModel):
 class PublicWorkOrderResponse(PublicWorkOrderBase):
     """Schema for work order response in public API."""
 
-    id: str
+    id: UUIDStr
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

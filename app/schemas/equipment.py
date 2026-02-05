@@ -3,6 +3,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
+from app.schemas.types import UUIDStr
+
 
 EquipmentType = Literal[
     "septic_tank", "pump", "drain_field", "grease_trap", "lift_station", "distribution_box", "other"
@@ -13,7 +15,7 @@ EquipmentCondition = Literal["excellent", "good", "fair", "poor", "needs_replace
 class EquipmentBase(BaseModel):
     """Base equipment schema."""
 
-    customer_id: str = Field(..., description="Customer ID")
+    customer_id: UUIDStr = Field(..., description="Customer ID")
     equipment_type: str = Field(..., min_length=1, max_length=100)
     manufacturer: Optional[str] = Field(None, max_length=100)
     model: Optional[str] = Field(None, max_length=100)
@@ -68,8 +70,8 @@ class EquipmentUpdate(BaseModel):
 class EquipmentResponse(BaseModel):
     """Schema for equipment response."""
 
-    id: str
-    customer_id: str
+    id: UUIDStr
+    customer_id: UUIDStr
     equipment_type: str
     manufacturer: Optional[str] = None
     model: Optional[str] = None

@@ -3,11 +3,13 @@ from datetime import datetime
 from typing import Optional, Union
 from app.models.message import MessageType, MessageDirection, MessageStatus
 
+from app.schemas.types import UUIDStr
+
 
 class MessageBase(BaseModel):
     """Base message schema."""
 
-    customer_id: Optional[str] = None
+    customer_id: Optional[UUIDStr] = None
     type: MessageType
     direction: MessageDirection
     to_address: str
@@ -76,8 +78,8 @@ class SendEmailRequest(BaseModel):
 class MessageResponse(BaseModel):
     """Schema for message response."""
 
-    id: str
-    customer_id: Optional[str] = None
+    id: UUIDStr
+    customer_id: Optional[UUIDStr] = None
     type: MessageType
     direction: MessageDirection
     status: MessageStatus
