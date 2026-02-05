@@ -30,10 +30,26 @@ def _column_exists(conn, table_name, column_name):
     ), {"t": table_name, "c": column_name}).scalar()
 
 
+def _drop_all_fks_referencing(conn, target_table):
+    """Drop ALL foreign key constraints that reference the given table."""
+    fks = conn.execute(sa.text("""
+        SELECT tc.table_name, tc.constraint_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
+        JOIN information_schema.table_constraints tc2 ON rc.unique_constraint_name = tc2.constraint_name
+        WHERE tc2.table_name = :target AND tc.constraint_type = 'FOREIGN KEY'
+    """), {"target": target_table}).fetchall()
+    for table_name, constraint_name in fks:
+        conn.execute(sa.text(f'ALTER TABLE "{table_name}" DROP CONSTRAINT IF EXISTS "{constraint_name}"'))
+
+
 def _convert_int_pk_to_uuid(conn, table_name):
-    """Convert an Integer PK to UUID for a table with no inbound FK references."""
+    """Convert an Integer PK to UUID, dropping dependent FKs first."""
     if not _table_exists(conn, table_name):
         return
+
+    # Drop any FK constraints from other tables that reference this table's PK
+    _drop_all_fks_referencing(conn, table_name)
 
     conn.execute(sa.text(f"ALTER TABLE {table_name} ADD COLUMN new_id UUID DEFAULT gen_random_uuid()"))
     conn.execute(sa.text(f"UPDATE {table_name} SET new_id = gen_random_uuid() WHERE new_id IS NULL"))
@@ -159,6 +175,19 @@ def upgrade() -> None:
 
     for table in standalone_tables:
         _convert_int_pk_to_uuid(conn, table)
+
+    # Re-create FKs that were dropped from dependent tables during PK conversion
+    # call_disposition_history.call_log_id → call_logs.id
+    if _table_exists(conn, "call_disposition_history") and _column_exists(conn, "call_disposition_history", "call_log_id"):
+        # Convert call_log_id from Integer to UUID (it still points to old int)
+        conn.execute(sa.text("ALTER TABLE call_disposition_history ADD COLUMN call_log_id_new UUID"))
+        # Cannot map old Integer IDs to new random UUIDs, so leave NULL
+        conn.execute(sa.text("ALTER TABLE call_disposition_history DROP COLUMN call_log_id"))
+        conn.execute(sa.text("ALTER TABLE call_disposition_history RENAME COLUMN call_log_id_new TO call_log_id"))
+        conn.execute(sa.text(
+            "ALTER TABLE call_disposition_history ADD CONSTRAINT call_disposition_history_call_log_id_fkey "
+            "FOREIGN KEY (call_log_id) REFERENCES call_logs(id)"
+        ))
 
 
 def downgrade() -> None:
