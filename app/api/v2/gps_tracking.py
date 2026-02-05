@@ -95,21 +95,38 @@ async def get_technician_location(
     return location
 
 
-@router.get("/locations", response_model=AllTechniciansLocationResponse)
+@router.get("/locations")
 async def get_all_locations(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Get all technician locations for dispatch map.
     Returns current position, status, and online/offline count.
+    Includes Samsara vehicle counts in online/offline totals.
     """
     service = GPSTrackingService(db)
     data = service.get_all_technician_locations()
 
-    return AllTechniciansLocationResponse(
-        technicians=data["technicians"],
-        total_online=data["total_online"],
-        total_offline=data["total_offline"],
-        last_refresh=data["last_refresh"],
-    )
+    # Include Samsara vehicle counts for combined stats
+    vehicle_online = 0
+    vehicle_offline = 0
+    try:
+        from app.api.v2.samsara import _vehicle_store, _vehicle_store_lock
+        async with _vehicle_store_lock:
+            for v in _vehicle_store.values():
+                if v.status == "offline":
+                    vehicle_offline += 1
+                else:
+                    vehicle_online += 1
+    except Exception:
+        pass
+
+    return {
+        "technicians": [t.model_dump() if hasattr(t, 'model_dump') else t for t in data["technicians"]],
+        "total_online": data["total_online"] + vehicle_online,
+        "total_offline": data["total_offline"] + vehicle_offline,
+        "vehicle_online": vehicle_online,
+        "vehicle_offline": vehicle_offline,
+        "last_refresh": data["last_refresh"],
+    }
 
 
 # ==================== Location History ====================
@@ -673,10 +690,32 @@ async def get_dispatch_map_data(
                 }
             )
 
-        # Calculate map center
-        all_points = [(t["latitude"], t["longitude"]) for t in technicians] + [
-            (w["latitude"], w["longitude"]) for w in work_orders
-        ]
+        # Include Samsara vehicles for real-time fleet positions
+        vehicles_data = []
+        try:
+            from app.api.v2.samsara import _vehicle_store, _vehicle_store_lock
+            async with _vehicle_store_lock:
+                for v in _vehicle_store.values():
+                    if v.location.lat != 0 and v.location.lng != 0:
+                        vehicles_data.append({
+                            "id": v.id,
+                            "name": v.name,
+                            "latitude": v.location.lat,
+                            "longitude": v.location.lng,
+                            "speed": v.location.speed,
+                            "heading": v.location.heading,
+                            "status": v.status,
+                            "updated_at": v.location.updated_at,
+                        })
+        except Exception as ve:
+            logger.warning(f"Could not fetch Samsara vehicles for dispatch map: {ve}")
+
+        # Calculate map center from all data sources
+        all_points = (
+            [(t["latitude"], t["longitude"]) for t in technicians]
+            + [(w["latitude"], w["longitude"]) for w in work_orders]
+            + [(v["latitude"], v["longitude"]) for v in vehicles_data]
+        )
         if all_points:
             center_lat = sum(p[0] for p in all_points) / len(all_points)
             center_lng = sum(p[1] for p in all_points) / len(all_points)
@@ -687,6 +726,7 @@ async def get_dispatch_map_data(
         return {
             "technicians": technicians,
             "work_orders": work_orders,
+            "vehicles": vehicles_data,
             "geofences": [],
             "center_latitude": center_lat,
             "center_longitude": center_lng,
@@ -703,6 +743,7 @@ async def get_dispatch_map_data(
             "error": "An internal error occurred while fetching fleet data",
             "technicians": [],
             "work_orders": [],
+            "vehicles": [],
             "geofences": [],
             "center_latitude": 30.27,
             "center_longitude": -97.74,
