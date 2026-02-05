@@ -106,14 +106,6 @@ class SavedPaymentMethod(BaseModel):
     is_default: bool = False
 
 
-class SavePaymentMethodRequest(BaseModel):
-    """Request to save payment method."""
-
-    customer_id: int
-    payment_method_id: str
-    set_as_default: bool = False
-
-
 class SetupACHRequest(BaseModel):
     """Request to set up ACH payment."""
 
@@ -312,44 +304,10 @@ async def get_customer_payment_methods(
     return {"payment_methods": []}
 
 
-@router.post("/save-payment-method")
-async def save_payment_method(
-    request: SavePaymentMethodRequest,
-    db: DbSession,
-    current_user: CurrentUser,
-) -> SavedPaymentMethod:
-    """Save a payment method to customer account."""
-    if not is_stripe_configured():
-        raise HTTPException(status_code=503, detail="Stripe is not configured")
 
-    # TODO: Implement saved payment methods with Stripe Customer objects
-    raise HTTPException(status_code=501, detail="Saved payment methods not yet implemented")
-
-
-@router.delete("/payment-methods/{payment_method_id}")
-async def delete_payment_method(
-    payment_method_id: str,
-    db: DbSession,
-    current_user: CurrentUser,
-) -> dict:
-    """Delete a saved payment method."""
-    if not is_stripe_configured():
-        raise HTTPException(status_code=503, detail="Stripe is not configured")
-
-    # TODO: Implement payment method deletion
-    raise HTTPException(status_code=501, detail="Not yet implemented")
-
-
-@router.post("/set-default-payment-method")
-async def set_default_payment_method(
-    customer_id: int = Query(...),
-    payment_method_id: str = Query(...),
-    db: DbSession = None,
-    current_user: CurrentUser = None,
-) -> dict:
-    """Set a payment method as the default for a customer."""
-    # TODO: Implement default payment method
-    raise HTTPException(status_code=501, detail="Not yet implemented")
+# NOTE: Saved payment method endpoints (save, delete, set-default) removed 2026-02-05.
+# Stripe payment methods are deprecated in favor of Clover POS integration.
+# See /payments/clover/ endpoints for current payment processing.
 
 
 # =============================================================================

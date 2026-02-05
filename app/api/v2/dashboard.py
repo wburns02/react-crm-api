@@ -3,11 +3,14 @@ from sqlalchemy import select, func, and_, text
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import Optional
+import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
 from app.models.work_order import WorkOrder
 from app.models.invoice import Invoice
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -162,21 +165,21 @@ async def get_dashboard_stats(
         )
         total_prospects = total_prospects_result.scalar() or 0
     except Exception:
-        pass
+        logger.warning("Dashboard query failed", exc_info=True)
 
     try:
         # Total customers (won)
         total_customers_result = await db.execute(select(func.count()).where(Customer.prospect_stage == "won"))
         total_customers = total_customers_result.scalar() or 0
     except Exception:
-        pass
+        logger.warning("Dashboard query failed", exc_info=True)
 
     try:
         # Work order stats
         total_wo_result = await db.execute(select(func.count()).select_from(WorkOrder))
         total_work_orders = total_wo_result.scalar() or 0
     except Exception:
-        pass
+        logger.warning("Dashboard query failed", exc_info=True)
 
     try:
         scheduled_wo_result = await db.execute(
@@ -184,7 +187,7 @@ async def get_dashboard_stats(
         )
         scheduled_work_orders = scheduled_wo_result.scalar() or 0
     except Exception:
-        pass
+        logger.warning("Dashboard query failed", exc_info=True)
 
     try:
         in_progress_wo_result = await db.execute(
@@ -192,13 +195,13 @@ async def get_dashboard_stats(
         )
         in_progress_work_orders = in_progress_wo_result.scalar() or 0
     except Exception:
-        pass
+        logger.warning("Dashboard query failed", exc_info=True)
 
     try:
         today_jobs_result = await db.execute(select(func.count()).where(WorkOrder.scheduled_date == today))
         today_jobs_count = today_jobs_result.scalar() or 0
     except Exception:
-        pass
+        logger.warning("Dashboard query failed", exc_info=True)
 
     # Invoice queries - table may not exist
     try:
@@ -219,7 +222,7 @@ async def get_dashboard_stats(
         overdue_result = await db.execute(select(func.count()).where(Invoice.status == "overdue"))
         invoices_overdue = overdue_result.scalar() or 0
     except Exception:
-        pass
+        logger.warning("Dashboard query failed", exc_info=True)
 
     # Recent prospects - order by id if created_at is unreliable
     try:
@@ -228,7 +231,7 @@ async def get_dashboard_stats(
         )
         recent_prospects_models = recent_prospects_result.scalars().all()
     except Exception:
-        pass
+        logger.warning("Dashboard query failed", exc_info=True)
 
     recent_prospects = [
         RecentProspect(
@@ -250,7 +253,7 @@ async def get_dashboard_stats(
         )
         recent_customers_models = recent_customers_result.scalars().all()
     except Exception:
-        pass
+        logger.warning("Dashboard query failed", exc_info=True)
 
     recent_customers = [
         RecentCustomer(
@@ -270,7 +273,7 @@ async def get_dashboard_stats(
         today_jobs_query = await db.execute(select(WorkOrder).where(WorkOrder.scheduled_date == today).limit(10))
         today_jobs_models = today_jobs_query.scalars().all()
     except Exception:
-        pass
+        logger.warning("Dashboard query failed", exc_info=True)
 
     today_jobs_list = [
         TodayJob(

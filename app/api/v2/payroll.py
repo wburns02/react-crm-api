@@ -576,20 +576,11 @@ async def export_payroll(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    elif format == "nacha":
-        raise HTTPException(
-            status_code=501,
-            detail="NACHA format export not yet implemented. Use CSV for now.",
-        )
-
-    elif format == "pdf":
-        raise HTTPException(
-            status_code=501,
-            detail="PDF format export not yet implemented. Use CSV for now.",
-        )
-
     else:
-        raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported format: {format}. Currently only CSV is supported.",
+        )
 
 
 # Time Entry Endpoints
