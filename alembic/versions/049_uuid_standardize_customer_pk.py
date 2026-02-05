@@ -33,6 +33,20 @@ def _column_exists(conn, table_name, column_name):
     ), {"t": table_name, "c": column_name}).scalar()
 
 
+def _drop_all_fks_referencing(conn, target_table):
+    """Drop ALL foreign key constraints that reference the given table."""
+    fks = conn.execute(sa.text("""
+        SELECT tc.table_name, tc.constraint_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
+        JOIN information_schema.table_constraints tc2 ON rc.unique_constraint_name = tc2.constraint_name
+        WHERE tc2.table_name = :target AND tc.constraint_type = 'FOREIGN KEY'
+    """), {"target": target_table}).fetchall()
+    for table_name, constraint_name in fks:
+        conn.execute(sa.text(f'ALTER TABLE "{table_name}" DROP CONSTRAINT IF EXISTS "{constraint_name}"'))
+    return fks
+
+
 def upgrade() -> None:
     conn = op.get_bind()
 
@@ -73,6 +87,7 @@ def upgrade() -> None:
             ), {"uuid": str(cuuid), "id": cid})
 
     # Verify invoice customer_ids match (critical for FK creation)
+    orphans = 0
     if _table_exists(conn, "invoices"):
         orphans = conn.execute(sa.text(
             "SELECT COUNT(*) FROM invoices i "
@@ -80,7 +95,6 @@ def upgrade() -> None:
             "WHERE c.customer_uuid IS NULL AND i.customer_id IS NOT NULL"
         )).scalar()
         if orphans > 0:
-            # Log warning but don't fail - will skip Invoice FK creation
             import logging
             logging.getLogger(__name__).warning(
                 f"Found {orphans} invoices with customer_ids not matching any customer_uuid. "
@@ -119,19 +133,10 @@ def upgrade() -> None:
         ))
 
     # ══════════════════════════════════════════════════════════════════
-    # STEP 3: Drop all FK constraints referencing customers.id
+    # STEP 3: Drop ALL FK constraints referencing customers (dynamic)
     # ══════════════════════════════════════════════════════════════════
 
-    fk_tables = [
-        "work_orders", "messages", "activities", "quotes", "tickets",
-        "equipment", "bookings", "sms_consent", "customer_service_schedules",
-        "service_reminders", "geofences", "customer_tracking_links",
-    ]
-    for table in fk_tables:
-        if _table_exists(conn, table):
-            conn.execute(sa.text(
-                f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {table}_customer_id_fkey"
-            ))
+    _drop_all_fks_referencing(conn, "customers")
 
     # ══════════════════════════════════════════════════════════════════
     # STEP 4: Swap Customer PK
@@ -172,10 +177,10 @@ def upgrade() -> None:
         ))
 
     # ══════════════════════════════════════════════════════════════════
-    # STEP 6: Re-create FK constraints
+    # STEP 6: Re-create FK constraints for ALL dependent tables
     # ══════════════════════════════════════════════════════════════════
 
-    for table in fk_tables:
+    for table in dependent_tables:
         if _table_exists(conn, table) and _column_exists(conn, table, "customer_id"):
             conn.execute(sa.text(
                 f"ALTER TABLE {table} ADD CONSTRAINT {table}_customer_id_fkey "
@@ -188,22 +193,6 @@ def upgrade() -> None:
             "ALTER TABLE invoices ADD CONSTRAINT invoices_customer_id_fkey "
             "FOREIGN KEY (customer_id) REFERENCES customers(id)"
         ))
-
-    # Also add FK for payments.customer_id (no constraint existed before, was nullable)
-    if _table_exists(conn, "payments") and _column_exists(conn, "payments", "customer_id"):
-        conn.execute(sa.text(
-            "ALTER TABLE payments ADD CONSTRAINT payments_customer_id_fkey "
-            "FOREIGN KEY (customer_id) REFERENCES customers(id)"
-        ))
-
-    # Add FK for tables that previously had NO FK constraint
-    no_fk_tables = ["contracts", "call_logs", "inspections"]
-    for table in no_fk_tables:
-        if _table_exists(conn, table) and _column_exists(conn, table, "customer_id"):
-            conn.execute(sa.text(
-                f"ALTER TABLE {table} ADD CONSTRAINT {table}_customer_id_fkey "
-                f"FOREIGN KEY (customer_id) REFERENCES customers(id)"
-            ))
 
 
 def downgrade() -> None:
