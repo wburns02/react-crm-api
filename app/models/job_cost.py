@@ -16,7 +16,7 @@ class JobCost(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
     # Work order reference
-    work_order_id = Column(String(36), nullable=False, index=True)
+    work_order_id = Column(UUID(as_uuid=True), nullable=False, index=True)
 
     # Cost identification
     cost_type = Column(
@@ -39,7 +39,7 @@ class JobCost(Base):
     billable_amount = Column(Float, nullable=True)
 
     # Technician assignment (for labor costs)
-    technician_id = Column(String(36), nullable=True, index=True)
+    technician_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     technician_name = Column(String(255), nullable=True)
 
     # Date tracking
@@ -48,7 +48,7 @@ class JobCost(Base):
     # Status
     is_billable = Column(Boolean, default=True)
     is_billed = Column(Boolean, default=False)
-    invoice_id = Column(String(36), nullable=True)
+    invoice_id = Column(UUID(as_uuid=True), nullable=True)
 
     # Vendor/supplier (for materials, subcontractor)
     vendor_name = Column(String(255), nullable=True)

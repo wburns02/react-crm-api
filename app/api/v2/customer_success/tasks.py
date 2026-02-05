@@ -36,7 +36,7 @@ async def list_tasks(
     task_type: Optional[str] = None,
     category: Optional[str] = None,
     assigned_to_user_id: Optional[int] = None,
-    customer_id: Optional[int] = None,
+    customer_id: Optional[str] = None,
     due_before: Optional[date] = None,
     due_after: Optional[date] = None,
     search: Optional[str] = None,
@@ -407,7 +407,7 @@ async def bulk_update_tasks(
 
 @router.get("/customer/{customer_id}")
 async def list_customer_tasks(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
     status: Optional[str] = None,

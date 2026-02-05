@@ -204,7 +204,7 @@ async def enroll_customer(
     existing = await db.execute(
         select(WorkflowEnrollment).where(
             WorkflowEnrollment.workflow_id == workflow_id,
-            WorkflowEnrollment.customer_id == int(customer_id),
+            WorkflowEnrollment.customer_id == customer_id,
             WorkflowEnrollment.status == "active",
         )
     )
@@ -213,7 +213,7 @@ async def enroll_customer(
 
     enrollment = WorkflowEnrollment(
         workflow_id=workflow.id,
-        customer_id=int(customer_id),
+        customer_id=customer_id,
     )
     db.add(enrollment)
 

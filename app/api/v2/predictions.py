@@ -88,13 +88,13 @@ async def get_lead_score(
     calculate_if_missing: bool = Query(True, description="Calculate score on-demand if not exists"),
 ):
     """Get lead score for a customer. Optionally calculates on-demand if missing."""
-    result = await db.execute(select(LeadScore).where(LeadScore.customer_id == int(customer_id)))
+    result = await db.execute(select(LeadScore).where(LeadScore.customer_id == customer_id))
     score = result.scalar_one_or_none()
 
     if not score:
         if calculate_if_missing:
             # Calculate on-demand
-            customer_result = await db.execute(select(Customer).where(Customer.id == int(customer_id)))
+            customer_result = await db.execute(select(Customer).where(Customer.id == customer_id))
             customer = customer_result.scalar_one_or_none()
 
             if not customer:
@@ -163,7 +163,7 @@ async def calculate_lead_scores(
     """
     customer_ids = None
     if request and request.customer_ids:
-        customer_ids = [int(cid) for cid in request.customer_ids]
+        customer_ids = request.customer_ids
 
     try:
         results = await calculate_lead_scores_batch(db, customer_ids)
@@ -262,7 +262,7 @@ async def get_churn_prediction(
     current_user: CurrentUser,
 ):
     """Get churn prediction for a customer."""
-    result = await db.execute(select(ChurnPrediction).where(ChurnPrediction.customer_id == int(customer_id)))
+    result = await db.execute(select(ChurnPrediction).where(ChurnPrediction.customer_id == customer_id))
     prediction = result.scalar_one_or_none()
 
     if not prediction:

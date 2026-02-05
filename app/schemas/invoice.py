@@ -30,9 +30,9 @@ class CustomerSummary(BaseModel):
 
 
 class InvoiceBase(BaseModel):
-    """Base invoice schema - customer_id is integer, work_order_id is UUID."""
+    """Base invoice schema."""
 
-    customer_id: int  # Integer FK to customers.id
+    customer_id: str
     work_order_id: Optional[str] = None  # UUID as string
     status: Optional[str] = None  # Don't send default - let DB handle
     line_items: Optional[list[LineItem]] = []
@@ -52,7 +52,7 @@ class InvoiceCreate(InvoiceBase):
 class InvoiceUpdate(BaseModel):
     """Schema for updating an invoice (all fields optional)."""
 
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     work_order_id: Optional[str] = None
     status: Optional[str] = None
     line_items: Optional[list[LineItem]] = None

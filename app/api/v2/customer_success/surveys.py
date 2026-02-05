@@ -1404,7 +1404,7 @@ async def update_survey_action(
 
 @router.get("/customers/{customer_id}/survey-eligibility")
 async def check_survey_eligibility(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
     min_days_between: int = Query(30, ge=1, le=365, description="Minimum days between surveys"),

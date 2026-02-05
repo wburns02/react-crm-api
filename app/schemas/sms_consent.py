@@ -6,7 +6,7 @@ from typing import Optional
 class SMSConsentBase(BaseModel):
     """Base SMS consent schema."""
 
-    customer_id: int
+    customer_id: str
     phone_number: str = Field(..., max_length=20)
     consent_status: Optional[str] = Field("pending", max_length=20)
     consent_source: Optional[str] = Field(None, max_length=50)
@@ -30,7 +30,7 @@ class SMSConsentUpdate(BaseModel):
 class SMSConsentResponse(SMSConsentBase):
     """Schema for SMS consent response."""
 
-    id: int
+    id: str
     opt_in_timestamp: Optional[datetime] = None
     opt_in_ip_address: Optional[str] = None
     double_opt_in_confirmed: Optional[bool] = None

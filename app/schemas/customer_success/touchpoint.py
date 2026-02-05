@@ -163,7 +163,7 @@ class TouchpointBase(BaseModel):
 class TouchpointCreate(TouchpointBase):
     """Schema for creating a touchpoint."""
 
-    customer_id: int
+    customer_id: str
 
     # Related entities
     task_id: Optional[int] = None
@@ -228,7 +228,7 @@ class TouchpointResponse(TouchpointBase):
     """Touchpoint response schema."""
 
     id: int
-    customer_id: int
+    customer_id: str
 
     # Related entities
     task_id: Optional[int] = None
@@ -293,7 +293,7 @@ class TouchpointSentimentAnalysis(BaseModel):
 class TouchpointTimelineResponse(BaseModel):
     """Customer touchpoint timeline response."""
 
-    customer_id: int
+    customer_id: str
     touchpoints: list[TouchpointResponse]
     total: int
     period_start: Optional[datetime] = None

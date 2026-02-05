@@ -118,7 +118,7 @@ class CSTaskBase(BaseModel):
 class CSTaskCreate(CSTaskBase):
     """Schema for creating a CS task."""
 
-    customer_id: int
+    customer_id: str
     assigned_to_user_id: Optional[int] = None
 
 
@@ -165,7 +165,7 @@ class CSTaskResponse(CSTaskBase):
     """CS task response schema."""
 
     id: int
-    customer_id: int
+    customer_id: str
     status: TaskStatus
 
     # Assignment

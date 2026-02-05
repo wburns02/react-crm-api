@@ -17,7 +17,7 @@ class QuoteLineItem(BaseModel):
 class QuoteBase(BaseModel):
     """Base quote schema."""
 
-    customer_id: int
+    customer_id: str
     title: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
     line_items: Optional[List[Any]] = []
@@ -123,7 +123,7 @@ class QuoteUpdate(BaseModel):
 class QuoteResponse(QuoteBase):
     """Schema for quote response."""
 
-    id: int
+    id: str
     quote_number: Optional[str] = None
     # Customer details (populated from JOIN with customers table)
     customer_name: Optional[str] = None

@@ -47,7 +47,7 @@ class CustomerServiceSchedule(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
     # Foreign keys
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
     service_interval_id = Column(UUID(as_uuid=True), ForeignKey("service_intervals.id"), nullable=False, index=True)
 
     # Schedule dates
@@ -88,7 +88,7 @@ class ServiceReminder(Base):
 
     # Foreign keys
     schedule_id = Column(UUID(as_uuid=True), ForeignKey("customer_service_schedules.id"), nullable=False, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
 
     # Reminder details
     reminder_type = Column(String(20), nullable=False)  # sms, email, push
@@ -99,7 +99,7 @@ class ServiceReminder(Base):
     error_message = Column(Text, nullable=True)
 
     # Link to message record
-    message_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
+    message_id = Column(UUID(as_uuid=True), ForeignKey("messages.id"), nullable=True)
 
     # Timestamps
     sent_at = Column(DateTime(timezone=True), server_default=func.now())

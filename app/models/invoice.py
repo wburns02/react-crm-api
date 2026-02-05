@@ -32,10 +32,8 @@ class Invoice(Base):
 
     __tablename__ = "invoices"
 
-    # Primary key and customer_id are UUIDs (legacy Flask schema)
-    # Note: customer_id stores a deterministic UUID derived from integer customer ID
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    customer_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # No FK constraint due to type mismatch
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
     work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True, index=True)
 
     invoice_number = Column(String(50), unique=True, index=True)
@@ -74,10 +72,8 @@ class Invoice(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationships - note: Customer.id is also UUID in Flask
-    # We can't define relationship here as Customer model uses Integer id
-    # customer = relationship("Customer", backref="invoices")
-    # work_order = relationship("WorkOrder", backref="invoices")
+    # Relationships
+    customer = relationship("Customer", backref="invoices")
 
     def __repr__(self):
         return f"<Invoice {self.invoice_number}>"

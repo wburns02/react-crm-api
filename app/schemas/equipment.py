@@ -13,7 +13,7 @@ EquipmentCondition = Literal["excellent", "good", "fair", "poor", "needs_replace
 class EquipmentBase(BaseModel):
     """Base equipment schema."""
 
-    customer_id: str = Field(..., description="Customer ID (string, converted to int)")
+    customer_id: str = Field(..., description="Customer ID")
     equipment_type: str = Field(..., min_length=1, max_length=100)
     manufacturer: Optional[str] = Field(None, max_length=100)
     model: Optional[str] = Field(None, max_length=100)

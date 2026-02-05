@@ -126,7 +126,7 @@ class EscalationBase(BaseModel):
 class EscalationCreate(EscalationBase):
     """Schema for creating an escalation."""
 
-    customer_id: int
+    customer_id: str
     assigned_to_user_id: Optional[int] = None
     escalated_to_user_id: Optional[int] = None
 
@@ -159,7 +159,7 @@ class EscalationResponse(EscalationBase):
     """Escalation response schema."""
 
     id: int
-    customer_id: int
+    customer_id: str
     customer_name: Optional[str] = None
     status: EscalationStatus = EscalationStatus.OPEN
 

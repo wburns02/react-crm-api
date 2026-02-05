@@ -14,7 +14,7 @@ class Equipment(Base):
     __tablename__ = "equipment"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
 
     # Equipment details
     equipment_type = Column(String(100), nullable=False, index=True)  # septic_tank, pump, drain_field, grease_trap

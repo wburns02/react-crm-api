@@ -74,7 +74,7 @@ async def list_health_scores(
 
 @router.get("/customer/{customer_id}", response_model=HealthScoreResponse)
 async def get_customer_health_score(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -142,7 +142,7 @@ async def create_health_score(
 
 @router.patch("/customer/{customer_id}", response_model=HealthScoreResponse)
 async def update_health_score(
-    customer_id: int,
+    customer_id: str,
     data: HealthScoreUpdate,
     db: DbSession,
     current_user: CurrentUser,
@@ -202,7 +202,7 @@ async def update_health_score(
 
 @router.get("/customer/{customer_id}/events", response_model=HealthScoreEventListResponse)
 async def list_health_score_events(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
@@ -243,7 +243,7 @@ async def list_health_score_events(
 
 @router.get("/customer/{customer_id}/trend", response_model=HealthScoreTrendResponse)
 async def get_health_score_trend(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
     days: int = Query(30, ge=7, le=365),

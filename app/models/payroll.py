@@ -51,8 +51,8 @@ class TimeEntry(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
     # References
-    technician_id = Column(String(36), nullable=False, index=True)
-    work_order_id = Column(String(36), nullable=True, index=True)
+    technician_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    work_order_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     payroll_period_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
     # Time
@@ -94,9 +94,9 @@ class Commission(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
     # References
-    technician_id = Column(String(36), nullable=False, index=True)
-    work_order_id = Column(String(36), nullable=True)
-    invoice_id = Column(String(36), nullable=True)
+    technician_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    work_order_id = Column(UUID(as_uuid=True), nullable=True)
+    invoice_id = Column(UUID(as_uuid=True), nullable=True)
     payroll_period_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
     # Dump site reference (for pumping jobs)
@@ -136,7 +136,7 @@ class TechnicianPayRate(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
-    technician_id = Column(String(36), nullable=False, index=True)  # Not unique - techs can have multiple rate records
+    technician_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # Not unique - techs can have multiple rate records
 
     # Pay type: hourly or salary
     pay_type = Column(String(20), default="hourly")  # 'hourly' or 'salary'

@@ -357,7 +357,7 @@ async def ai_insights_health(
 
 @router.get("/customers/{customer_id}/insight")
 async def get_customer_insight(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ) -> Dict[str, Any]:

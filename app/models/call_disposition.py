@@ -1,7 +1,9 @@
 """CallDisposition model for categorizing call outcomes."""
 
 from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
+import uuid
 
 from app.database import Base
 
@@ -23,7 +25,7 @@ class CallDisposition(Base):
 
     __tablename__ = "call_dispositions"
 
-    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
     # Disposition details
     name = Column(String(100), nullable=False, unique=True, index=True)

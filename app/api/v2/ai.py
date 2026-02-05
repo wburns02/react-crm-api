@@ -596,7 +596,7 @@ class DispatchSuggestion(BaseModel):
     work_order_id: str
     work_order_job_type: str
     work_order_priority: str
-    customer_id: int
+    customer_id: str
     customer_name: Optional[str] = None
     service_address: Optional[str] = None
     technician_id: str

@@ -29,7 +29,7 @@ async def list_payments(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
-    customer_id: Optional[int] = None,
+    customer_id: Optional[str] = None,
     work_order_id: Optional[str] = None,  # Flask uses work_order_id not invoice_id
     payment_status: Optional[str] = None,
     payment_method: Optional[str] = None,

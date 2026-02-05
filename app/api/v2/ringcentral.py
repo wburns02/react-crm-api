@@ -641,7 +641,7 @@ async def list_calls(
         if direction:
             query = query.where(CallLog.direction == direction)
         if customer_id:
-            query = query.where(CallLog.customer_id == int(customer_id))
+            query = query.where(CallLog.customer_id == customer_id)
         if status_filter:
             # Use actual column name: call_disposition
             query = query.where(CallLog.call_disposition == status_filter)

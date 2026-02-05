@@ -65,7 +65,7 @@ async def list_escalations(
     escalation_type: Optional[str] = None,
     severity: Optional[str] = None,
     status: Optional[str] = None,
-    customer_id: Optional[int] = None,
+    customer_id: Optional[str] = None,
     assigned_to_user_id: Optional[int] = None,
     search: Optional[str] = None,
 ):

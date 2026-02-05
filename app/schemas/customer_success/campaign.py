@@ -230,7 +230,7 @@ class CampaignListResponse(BaseModel):
 class CampaignEnrollmentCreate(BaseModel):
     """Schema for enrolling a customer."""
 
-    customer_id: int
+    customer_id: str
 
 
 class CampaignEnrollmentUpdate(BaseModel):
@@ -245,7 +245,7 @@ class CampaignEnrollmentResponse(BaseModel):
 
     id: int
     campaign_id: int
-    customer_id: int
+    customer_id: str
     customer_name: Optional[str] = None
     status: EnrollmentStatus = EnrollmentStatus.ACTIVE
     current_step_id: Optional[int] = None

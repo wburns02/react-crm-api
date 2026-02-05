@@ -41,7 +41,7 @@ class CallResponse(BaseModel):
     ring_duration: Optional[int] = None
     recording_url: Optional[str] = None
     notes: Optional[str] = None
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     answered_by: Optional[str] = None
     created_at: Optional[datetime] = None
 
@@ -121,7 +121,7 @@ async def list_calls(
     page_size: int = Query(20, ge=1, le=100),
     direction: Optional[str] = Query(None, description="Filter by direction: inbound, outbound"),
     disposition: Optional[str] = Query(None, description="Filter by disposition"),
-    customer_id: Optional[int] = Query(None, description="Filter by customer"),
+    customer_id: Optional[str] = Query(None, description="Filter by customer"),
     date_from: Optional[date] = Query(None, description="Filter calls from this date"),
     date_to: Optional[date] = Query(None, description="Filter calls to this date"),
     search: Optional[str] = Query(None, description="Search by phone number"),

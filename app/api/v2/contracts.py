@@ -32,7 +32,7 @@ router = APIRouter()
 class ContractCreate(BaseModel):
     name: str
     contract_type: str
-    customer_id: int
+    customer_id: str
     customer_name: Optional[str] = None
     template_id: Optional[str] = None
     start_date: date
@@ -72,7 +72,7 @@ class ContractResponse(BaseModel):
     contract_number: str
     name: str
     contract_type: str
-    customer_id: int
+    customer_id: str
     customer_name: Optional[str] = None
     start_date: date
     end_date: date
@@ -148,7 +148,7 @@ class ListResponse(BaseModel):
 # Generate from template request
 class GenerateContractRequest(BaseModel):
     template_id: str
-    customer_id: int
+    customer_id: str
     customer_name: Optional[str] = None
     start_date: date
     total_value: Optional[float] = None
@@ -180,7 +180,7 @@ async def list_contracts(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    customer_id: Optional[int] = Query(None),
+    customer_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     contract_type: Optional[str] = Query(None),
     expiring_within_days: Optional[int] = Query(None),

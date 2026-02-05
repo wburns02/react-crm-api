@@ -264,7 +264,7 @@ class JourneyListResponse(BaseModel):
 class JourneyEnrollmentBase(BaseModel):
     """Base journey enrollment schema."""
 
-    customer_id: int
+    customer_id: str
     journey_id: int
     enrolled_by: Optional[str] = None
     enrollment_reason: Optional[str] = None
@@ -359,7 +359,7 @@ class JourneyStepExecutionResponse(BaseModel):
 class JourneyEnrollRequest(BaseModel):
     """Request to enroll a customer in a journey."""
 
-    customer_id: int
+    customer_id: str
     journey_id: int
     reason: Optional[str] = None
     start_immediately: bool = True
@@ -370,7 +370,7 @@ class JourneyBulkEnrollRequest(BaseModel):
     """Request to bulk enroll customers in a journey."""
 
     journey_id: int
-    customer_ids: Optional[list[int]] = None
+    customer_ids: Optional[list[str]] = None
     segment_id: Optional[int] = None
     reason: Optional[str] = None
     start_immediately: bool = True

@@ -195,7 +195,7 @@ class TeamNoteBase(BaseModel):
 class TeamNoteCreate(TeamNoteBase):
     """Schema for creating a note."""
 
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
 
 
 class TeamNoteUpdate(BaseModel):
@@ -214,7 +214,7 @@ class TeamNoteResponse(TeamNoteBase):
     """Team note response schema."""
 
     id: int
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     customer_name: Optional[str] = None
     created_by_user_id: int
     created_by_name: Optional[str] = None
@@ -247,7 +247,7 @@ class ActivityCreate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     activity_data: Optional[dict] = None
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
 
 
 class ActivityResponse(BaseModel):
@@ -262,7 +262,7 @@ class ActivityResponse(BaseModel):
     activity_data: Optional[dict] = None
     user_id: int
     user_name: Optional[str] = None
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     customer_name: Optional[str] = None
     created_at: Optional[datetime] = None
 

@@ -152,7 +152,7 @@ async def list_signature_requests(
     if document_type:
         query = query.where(SignatureRequest.document_type == document_type)
     if customer_id:
-        query = query.where(SignatureRequest.customer_id == int(customer_id))
+        query = query.where(SignatureRequest.customer_id == customer_id)
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())

@@ -442,7 +442,7 @@ async def list_segment_customers(
 @router.post("/{segment_id}/customers/{customer_id}")
 async def add_customer_to_segment(
     segment_id: int,
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
     reason: Optional[str] = None,
@@ -498,7 +498,7 @@ async def add_customer_to_segment(
 @router.delete("/{segment_id}/customers/{customer_id}")
 async def remove_customer_from_segment(
     segment_id: int,
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
     reason: Optional[str] = None,
@@ -945,7 +945,7 @@ async def _get_segment_or_404(segment_id: int, db: DbSession) -> Segment:
     return segment
 
 
-async def _get_segment_customer_ids(segment_id: int, db: DbSession) -> List[int]:
+async def _get_segment_customer_ids(segment_id: int, db: DbSession) -> List[str]:
     """Get all active customer IDs in a segment."""
     result = await db.execute(
         select(CustomerSegment.customer_id).where(

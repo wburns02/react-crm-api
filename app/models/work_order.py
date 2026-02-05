@@ -15,8 +15,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import ENUM
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 from app.database import Base
+import uuid
 
 # PostgreSQL ENUM types - must match database schema exactly
 WorkOrderStatusEnum = ENUM(
@@ -56,12 +57,11 @@ class WorkOrder(Base):
 
     __tablename__ = "work_orders"
 
-    # Flask uses VARCHAR(36) UUID for work order IDs
-    id = Column(String(36), primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     # Human-readable work order number (WO-000001 format)
     work_order_number = Column(String(20), unique=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
-    technician_id = Column(String(36), ForeignKey("technicians.id"), index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
+    technician_id = Column(UUID(as_uuid=True), ForeignKey("technicians.id"), nullable=True, index=True)
 
     # Job details - PostgreSQL ENUM types
     job_type = Column(WorkOrderJobTypeEnum, nullable=False)

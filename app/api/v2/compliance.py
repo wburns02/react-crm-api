@@ -133,7 +133,7 @@ class CertificationResponse(BaseModel):
 # Inspection Schemas
 class InspectionCreate(BaseModel):
     inspection_type: str
-    customer_id: int
+    customer_id: str
     property_address: Optional[str] = None
     system_type: Optional[str] = None
     system_age_years: Optional[int] = None
@@ -172,7 +172,7 @@ class InspectionResponse(BaseModel):
     id: str
     inspection_number: str
     inspection_type: str
-    customer_id: int
+    customer_id: str
     property_address: Optional[str] = None
     system_type: Optional[str] = None
     scheduled_date: Optional[date] = None
@@ -636,7 +636,7 @@ async def list_inspections(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    customer_id: Optional[int] = Query(None),
+    customer_id: Optional[str] = Query(None),
     technician_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     inspection_type: Optional[str] = Query(None),

@@ -20,7 +20,7 @@ class Inspection(Base):
     inspection_type = Column(String(100), nullable=False)  # annual, sale, complaint, permit, routine
 
     # Customer/Property
-    customer_id = Column(Integer, nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     property_address = Column(String(500), nullable=True)
 
     # System info
@@ -33,11 +33,11 @@ class Inspection(Base):
     completed_date = Column(Date, nullable=True)
 
     # Assignment
-    technician_id = Column(String(36), nullable=True, index=True)
+    technician_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     technician_name = Column(String(255), nullable=True)
 
     # Work order link
-    work_order_id = Column(String(36), nullable=True, index=True)
+    work_order_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
     # Results
     status = Column(String(20), default="pending")  # pending, scheduled, in_progress, completed, failed

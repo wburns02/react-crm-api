@@ -26,84 +26,6 @@ def generate_invoice_number() -> str:
     return f"INV-{date_part}-{random_part}"
 
 
-# Namespace for deterministic customer UUID generation
-# This allows converting integer customer IDs to UUIDs consistently
-CUSTOMER_UUID_NAMESPACE = uuid.UUID("12345678-1234-5678-1234-567812345678")
-
-
-def customer_id_to_uuid(customer_id: int) -> uuid.UUID:
-    """Convert integer customer ID to deterministic UUID.
-
-    Since invoices.customer_id is UUID but customers.id is Integer,
-    we generate a deterministic UUID from the integer.
-    """
-    return uuid.uuid5(CUSTOMER_UUID_NAMESPACE, str(customer_id))
-
-
-async def find_customer_by_invoice_uuid(db, invoice_customer_id: uuid.UUID) -> Optional[Customer]:
-    """Find the Customer by computing UUID from their integer ID.
-
-    Since invoice.customer_id is a UUID derived from customer.id via uuid5,
-    we compute the UUID for each customer and match.
-
-    NOTE: After migration 040 runs and customer_uuid column is re-added to model,
-    this can be optimized to use indexed lookup instead of O(n) scan.
-
-    Args:
-        db: Database session
-        invoice_customer_id: The UUID stored in invoice.customer_id
-
-    Returns:
-        Customer instance if found, None otherwise
-    """
-    if not invoice_customer_id:
-        return None
-
-    try:
-        result = await db.execute(select(Customer))
-        all_customers = result.scalars().all()
-        for customer in all_customers:
-            if customer_id_to_uuid(customer.id) == invoice_customer_id:
-                return customer
-    except Exception as e:
-        logger.warning(f"Error finding customer for invoice UUID: {e}")
-
-    return None
-
-
-async def build_customer_uuid_map(db, invoice_customer_ids: set) -> dict:
-    """Build a mapping of invoice customer UUIDs to Customer objects.
-
-    Loads all customers and computes UUIDs from their integer IDs.
-
-    NOTE: After migration 040 runs and customer_uuid column is re-added to model,
-    this can be optimized to use indexed IN clause instead of O(n) scan.
-
-    Args:
-        db: Database session
-        invoice_customer_ids: Set of customer UUIDs from invoices
-
-    Returns:
-        Dict mapping invoice customer UUID to Customer instance
-    """
-    if not invoice_customer_ids:
-        return {}
-
-    uuid_map = {}
-
-    try:
-        result = await db.execute(select(Customer))
-        all_customers = result.scalars().all()
-        for customer in all_customers:
-            computed_uuid = customer_id_to_uuid(customer.id)
-            if computed_uuid in invoice_customer_ids:
-                uuid_map[computed_uuid] = customer
-    except Exception as e:
-        logger.warning(f"Error building customer UUID map: {e}")
-
-    return uuid_map
-
-
 def invoice_to_response(invoice: Invoice, customer: Optional[Customer] = None) -> dict:
     """Convert Invoice model to response dict.
 
@@ -138,7 +60,7 @@ def invoice_to_response(invoice: Invoice, customer: Optional[Customer] = None) -
         customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip() or None
         # CustomerSummary schema expects: id as str, first_name/last_name as required str
         customer_data = {
-            "id": str(customer.id),  # Convert int to string for schema
+            "id": str(customer.id),
             "first_name": customer.first_name or "",  # Required, default to empty
             "last_name": customer.last_name or "",  # Required, default to empty
             "email": customer.email,
@@ -199,7 +121,7 @@ async def list_invoices(
         if customer_id:
             query = query.where(Invoice.customer_id == uuid.UUID(customer_id))
 
-        # Handle search - requires finding matching customer UUIDs first
+        # Handle search - find matching customers and invoices
         if search:
             search_term = search.strip()
             if search_term:
@@ -216,13 +138,10 @@ async def list_invoices(
                 customer_result = await db.execute(customer_query)
                 matching_customer_ids = [row[0] for row in customer_result.fetchall()]
 
-                # Convert matching customer IDs to UUIDs
-                matching_customer_uuids = [customer_id_to_uuid(cid) for cid in matching_customer_ids]
-
-                # Apply search filter: invoice_number OR matching customer
+                # Apply search filter: invoice_number OR matching customer UUID
                 invoice_number_filter = Invoice.invoice_number.ilike(f"%{search_term}%")
-                if matching_customer_uuids:
-                    query = query.where(or_(invoice_number_filter, Invoice.customer_id.in_(matching_customer_uuids)))
+                if matching_customer_ids:
+                    query = query.where(or_(invoice_number_filter, Invoice.customer_id.in_(matching_customer_ids)))
                 else:
                     # No customer matches, only search invoice number
                     query = query.where(invoice_number_filter)
@@ -255,9 +174,18 @@ async def list_invoices(
         result = await db.execute(query)
         invoices = result.scalars().all()
 
-        # Build customer UUID map for efficient enrichment (ONE query for all invoices)
+        # Batch-fetch customers for efficient enrichment (ONE query for all invoices)
         invoice_customer_ids = {inv.customer_id for inv in invoices if inv.customer_id}
-        customer_map = await build_customer_uuid_map(db, invoice_customer_ids)
+        customer_map = {}
+        if invoice_customer_ids:
+            try:
+                cust_result = await db.execute(
+                    select(Customer).where(Customer.id.in_(invoice_customer_ids))
+                )
+                for c in cust_result.scalars().all():
+                    customer_map[c.id] = c
+            except Exception as e:
+                logger.warning(f"Error batch-fetching customers: {e}")
 
         # Build response items with customer enrichment
         items = []
@@ -298,7 +226,8 @@ async def get_invoice(
         # Fetch customer data to enrich response
         customer = None
         if invoice.customer_id:
-            customer = await find_customer_by_invoice_uuid(db, invoice.customer_id)
+            cust_result = await db.execute(select(Customer).where(Customer.id == invoice.customer_id))
+            customer = cust_result.scalar_one_or_none()
 
         return invoice_to_response(invoice, customer)
     except HTTPException:
@@ -320,8 +249,9 @@ async def create_invoice(
     try:
         data = invoice_data.model_dump(exclude_unset=True)
 
-        # Convert integer customer_id to UUID (database column is UUID type)
-        data["customer_id"] = customer_id_to_uuid(data["customer_id"])
+        # Convert customer_id string to UUID (database column is UUID type)
+        if data.get("customer_id"):
+            data["customer_id"] = uuid.UUID(str(data["customer_id"]))
 
         # Convert work_order_id string to UUID if provided
         if data.get("work_order_id"):
@@ -381,9 +311,9 @@ async def update_invoice(
         # Update only provided fields
         update_data = invoice_data.model_dump(exclude_unset=True)
 
-        # Convert integer customer_id to UUID if provided
+        # Convert customer_id string to UUID if provided
         if "customer_id" in update_data and update_data["customer_id"]:
-            update_data["customer_id"] = customer_id_to_uuid(update_data["customer_id"])
+            update_data["customer_id"] = uuid.UUID(str(update_data["customer_id"]))
 
         # Convert work_order_id string to UUID if provided
         if "work_order_id" in update_data and update_data["work_order_id"]:

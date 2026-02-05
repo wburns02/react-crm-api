@@ -88,21 +88,8 @@ async def get_customer(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get a single customer by ID.
-
-    Accepts customer_id as string and attempts to parse as integer.
-    Returns 404 if ID is not a valid integer or customer not found.
-    """
-    # Try to parse customer_id as integer
-    try:
-        customer_id_int = int(customer_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Customer not found (invalid ID format: {customer_id})",
-        )
-
-    result = await db.execute(select(Customer).where(Customer.id == customer_id_int))
+    """Get a single customer by ID."""
+    result = await db.execute(select(Customer).where(Customer.id == customer_id))
     customer = result.scalar_one_or_none()
 
     if not customer:
@@ -141,7 +128,7 @@ async def create_customer(
 
 @router.patch("/{customer_id}", response_model=CustomerResponse)
 async def update_customer(
-    customer_id: int,
+    customer_id: str,
     customer_data: CustomerUpdate,
     db: DbSession,
     current_user: CurrentUser,
@@ -168,7 +155,7 @@ async def update_customer(
 
 @router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_customer(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):

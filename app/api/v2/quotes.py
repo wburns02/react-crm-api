@@ -113,7 +113,7 @@ async def list_quotes(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
-    customer_id: Optional[int] = None,
+    customer_id: Optional[str] = None,
     status: Optional[str] = None,
 ):
     """List quotes with pagination and filtering."""

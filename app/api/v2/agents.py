@@ -262,7 +262,7 @@ async def list_conversations(
     if agent_id:
         query = query.where(AgentConversation.agent_id == agent_id)
     if customer_id:
-        query = query.where(AgentConversation.customer_id == int(customer_id))
+        query = query.where(AgentConversation.customer_id == customer_id)
     if status_filter:
         query = query.where(AgentConversation.status == status_filter)
 

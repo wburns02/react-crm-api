@@ -7,7 +7,7 @@ from app.models.message import MessageType, MessageDirection, MessageStatus
 class MessageBase(BaseModel):
     """Base message schema."""
 
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     type: MessageType
     direction: MessageDirection
     to_address: str
@@ -25,7 +25,7 @@ class MessageCreate(MessageBase):
 class SendSMSRequest(BaseModel):
     """Schema for sending SMS."""
 
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     to: str = Field(..., description="Phone number to send to")
     body: str = Field(..., min_length=1, description="Message content")
     source: str = "react"
@@ -38,7 +38,7 @@ class SendEmailRequest(BaseModel):
     for backwards compatibility with deployed frontends.
     """
 
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     to: Optional[str] = Field(None, description="Email address")
     email: Optional[str] = Field(None, description="Email address (legacy)")
     subject: str = Field(..., min_length=1)
@@ -53,11 +53,8 @@ class SendEmailRequest(BaseModel):
         if v == "" or v is None:
             return None
         if isinstance(v, str):
-            try:
-                return int(v)
-            except ValueError:
-                return None
-        return v
+            return v
+        return str(v) if v is not None else None
 
     @model_validator(mode="after")
     def normalize_fields(self):
@@ -79,8 +76,8 @@ class SendEmailRequest(BaseModel):
 class MessageResponse(BaseModel):
     """Schema for message response."""
 
-    id: int
-    customer_id: Optional[int] = None
+    id: str
+    customer_id: Optional[str] = None
     type: MessageType
     direction: MessageDirection
     status: MessageStatus

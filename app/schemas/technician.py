@@ -137,7 +137,7 @@ class TechnicianJobDetail(BaseModel):
     id: str
     scheduled_date: Optional[str] = None
     completed_date: Optional[str] = None
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     customer_name: Optional[str] = None
     service_location: Optional[str] = None
     job_type: Optional[str] = None

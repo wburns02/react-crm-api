@@ -28,7 +28,7 @@ async def list_sms_consents(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
-    customer_id: Optional[int] = None,
+    customer_id: Optional[str] = None,
     consent_status: Optional[str] = None,
     search: Optional[str] = None,
 ):
@@ -201,7 +201,7 @@ async def record_opt_in(
 
 @router.post("/opt-out", response_model=SMSConsentResponse)
 async def record_opt_out(
-    customer_id: int,
+    customer_id: str,
     phone_number: str,
     reason: Optional[str] = None,
     request: Request = None,

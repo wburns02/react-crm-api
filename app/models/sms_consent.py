@@ -1,7 +1,9 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
+import uuid
 
 
 class SMSConsent(Base):
@@ -9,8 +11,8 @@ class SMSConsent(Base):
 
     __tablename__ = "sms_consent"
 
-    id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
     phone_number = Column(String(20), nullable=False, index=True)
 
     # Consent status
@@ -47,8 +49,8 @@ class SMSConsentAudit(Base):
 
     __tablename__ = "sms_consent_audit"
 
-    id = Column(Integer, primary_key=True, index=True)
-    consent_id = Column(Integer, ForeignKey("sms_consent.id"), nullable=False, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    consent_id = Column(UUID(as_uuid=True), ForeignKey("sms_consent.id"), nullable=False, index=True)
 
     # Audit details
     action = Column(String(30), nullable=False)  # opt_in, opt_out, update, verify

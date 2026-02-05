@@ -4,6 +4,7 @@ Booking model for direct book & pay services.
 
 import uuid
 from sqlalchemy import Column, String, Integer, Date, Time, Numeric, DateTime, Boolean, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -15,9 +16,9 @@ class Booking(Base):
 
     __tablename__ = "bookings"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
-    work_order_id = Column(String(36), ForeignKey("work_orders.id"), nullable=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True)
 
     # Customer info (for non-registered customers)
     customer_first_name = Column(String(100), nullable=False)

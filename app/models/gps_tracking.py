@@ -4,10 +4,12 @@ Real-time technician location tracking, geofencing, and customer tracking links
 """
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, JSON, Index, Enum as SQLEnum
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
+import uuid
 from datetime import datetime
 import secrets
 
@@ -51,8 +53,8 @@ class TechnicianLocation(Base):
 
     __tablename__ = "technician_locations"
 
-    id = Column(Integer, primary_key=True, index=True)
-    technician_id = Column(Integer, ForeignKey("technicians.id"), nullable=False, unique=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    technician_id = Column(UUID(as_uuid=True), ForeignKey("technicians.id"), nullable=False, unique=True)
 
     # GPS coordinates
     latitude = Column(Float, nullable=False)
@@ -73,7 +75,7 @@ class TechnicianLocation(Base):
     received_at = Column(DateTime, default=func.now())  # When server received it
 
     # Current context
-    current_work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True)
+    current_work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True)
     current_status = Column(String(50), default="available")  # available, en_route, on_site, break
 
     # Relationships
@@ -93,9 +95,9 @@ class LocationHistory(Base):
 
     __tablename__ = "location_history"
 
-    id = Column(Integer, primary_key=True, index=True)
-    technician_id = Column(Integer, ForeignKey("technicians.id"), nullable=False)
-    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    technician_id = Column(UUID(as_uuid=True), ForeignKey("technicians.id"), nullable=False)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True)
 
     # GPS coordinates
     latitude = Column(Float, nullable=False)
@@ -131,7 +133,7 @@ class Geofence(Base):
 
     __tablename__ = "geofences"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
 
@@ -148,8 +150,8 @@ class Geofence(Base):
     polygon_coordinates = Column(JSON, nullable=True)  # Array of [lat, lng] pairs
 
     # Associated entities
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
-    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True)
 
     # Actions
     entry_action = Column(SQLEnum(GeofenceAction), default=GeofenceAction.LOG_ONLY)
@@ -186,10 +188,10 @@ class GeofenceEvent(Base):
 
     __tablename__ = "geofence_events"
 
-    id = Column(Integer, primary_key=True, index=True)
-    geofence_id = Column(Integer, ForeignKey("geofences.id"), nullable=False)
-    technician_id = Column(Integer, ForeignKey("technicians.id"), nullable=False)
-    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    geofence_id = Column(UUID(as_uuid=True), ForeignKey("geofences.id"), nullable=False)
+    technician_id = Column(UUID(as_uuid=True), ForeignKey("technicians.id"), nullable=False)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True)
 
     # Event details
     event_type = Column(String(20), nullable=False)  # entry or exit
@@ -219,15 +221,15 @@ class CustomerTrackingLink(Base):
 
     __tablename__ = "customer_tracking_links"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
     # Unique token for public URL
     token = Column(String(64), unique=True, nullable=False, index=True)
 
     # Associated entities
-    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=False)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
-    technician_id = Column(Integer, ForeignKey("technicians.id"), nullable=False)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=False)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False)
+    technician_id = Column(UUID(as_uuid=True), ForeignKey("technicians.id"), nullable=False)
 
     # Status
     status = Column(SQLEnum(TrackingLinkStatus), default=TrackingLinkStatus.ACTIVE)
@@ -273,9 +275,9 @@ class ETACalculation(Base):
 
     __tablename__ = "eta_calculations"
 
-    id = Column(Integer, primary_key=True, index=True)
-    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=False, unique=True)
-    technician_id = Column(Integer, ForeignKey("technicians.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=False, unique=True)
+    technician_id = Column(UUID(as_uuid=True), ForeignKey("technicians.id"), nullable=False)
 
     # Origin (technician location)
     origin_latitude = Column(Float, nullable=False)
@@ -317,8 +319,8 @@ class GPSTrackingConfig(Base):
 
     __tablename__ = "gps_tracking_config"
 
-    id = Column(Integer, primary_key=True, index=True)
-    technician_id = Column(Integer, ForeignKey("technicians.id"), nullable=True, unique=True)  # NULL = global config
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    technician_id = Column(UUID(as_uuid=True), ForeignKey("technicians.id"), nullable=True, unique=True)  # NULL = global config
 
     # Tracking intervals (in seconds)
     active_interval = Column(Integer, default=30)  # When en route or on job

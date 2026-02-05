@@ -54,7 +54,7 @@ async def log_activity(
     title: str = None,
     description: str = None,
     activity_data: dict = None,
-    customer_id: int = None,
+    customer_id: str = None,
 ):
     activity = CSActivity(
         activity_type=activity_type,
@@ -429,7 +429,7 @@ async def list_notes(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    customer_id: Optional[int] = None,
+    customer_id: Optional[str] = None,
     category: Optional[str] = None,
     search: Optional[str] = None,
     is_pinned: Optional[bool] = None,
@@ -685,7 +685,7 @@ async def list_activity(
     page_size: int = Query(50, ge=1, le=100),
     activity_type: Optional[str] = None,
     entity_type: Optional[str] = None,
-    customer_id: Optional[int] = None,
+    customer_id: Optional[str] = None,
 ):
     """List team activity feed."""
     try:

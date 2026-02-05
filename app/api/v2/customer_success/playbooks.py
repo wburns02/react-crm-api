@@ -542,7 +542,7 @@ async def cancel_execution(
 
 @router.get("/customer/{customer_id}/executions")
 async def list_customer_executions(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
     status: Optional[str] = None,

@@ -49,7 +49,7 @@ class LocationUpdate(BaseModel):
     battery_level: Optional[int] = Field(None, ge=0, le=100)
     captured_at: datetime
     current_status: Optional[str] = "available"
-    work_order_id: Optional[int] = None
+    work_order_id: Optional[str] = None
 
 
 class LocationUpdateBatch(BaseModel):
@@ -61,7 +61,7 @@ class LocationUpdateBatch(BaseModel):
 class TechnicianLocationResponse(BaseModel):
     """Current technician location response"""
 
-    technician_id: int
+    technician_id: str
     technician_name: str
     latitude: float
     longitude: float
@@ -71,7 +71,7 @@ class TechnicianLocationResponse(BaseModel):
     is_online: bool
     battery_level: Optional[int] = None
     current_status: str
-    current_work_order_id: Optional[int] = None
+    current_work_order_id: Optional[str] = None
     captured_at: datetime
     received_at: datetime
     minutes_since_update: int
@@ -111,7 +111,7 @@ class LocationHistoryPoint(BaseModel):
 class LocationHistoryResponse(BaseModel):
     """Location history for a technician"""
 
-    technician_id: int
+    technician_id: str
     technician_name: str
     date: str
     points: List[LocationHistoryPoint]
@@ -123,8 +123,8 @@ class LocationHistoryResponse(BaseModel):
 class RouteVerification(BaseModel):
     """Route verification for a work order"""
 
-    work_order_id: int
-    technician_id: int
+    work_order_id: str
+    technician_id: str
     expected_route_miles: float
     actual_route_miles: float
     deviation_percent: float
@@ -151,8 +151,8 @@ class GeofenceCreate(BaseModel):
     polygon_coordinates: Optional[List[List[float]]] = None
 
     # Associations
-    customer_id: Optional[int] = None
-    work_order_id: Optional[int] = None
+    customer_id: Optional[str] = None
+    work_order_id: Optional[str] = None
 
     # Actions
     entry_action: GeofenceActionEnum = GeofenceActionEnum.log_only
@@ -199,8 +199,8 @@ class GeofenceResponse(BaseModel):
     center_longitude: Optional[float] = None
     radius_meters: Optional[float] = None
     polygon_coordinates: Optional[List[List[float]]] = None
-    customer_id: Optional[int] = None
-    work_order_id: Optional[int] = None
+    customer_id: Optional[str] = None
+    work_order_id: Optional[str] = None
     entry_action: str
     exit_action: str
     notify_on_entry: bool
@@ -218,7 +218,7 @@ class GeofenceEventResponse(BaseModel):
     id: int
     geofence_id: int
     geofence_name: str
-    technician_id: int
+    technician_id: str
     technician_name: str
     event_type: str
     latitude: float
@@ -237,7 +237,7 @@ class GeofenceEventResponse(BaseModel):
 class TrackingLinkCreate(BaseModel):
     """Create a customer tracking link"""
 
-    work_order_id: int
+    work_order_id: str
     show_technician_name: bool = True
     show_technician_photo: bool = True
     show_live_map: bool = True
@@ -251,9 +251,9 @@ class TrackingLinkResponse(BaseModel):
     id: int
     token: str
     tracking_url: str
-    work_order_id: int
-    customer_id: int
-    technician_id: int
+    work_order_id: str
+    customer_id: str
+    technician_id: str
     status: str
     expires_at: datetime
     view_count: int
@@ -266,7 +266,7 @@ class TrackingLinkResponse(BaseModel):
 class PublicTrackingInfo(BaseModel):
     """Public tracking information for customers"""
 
-    work_order_id: int
+    work_order_id: str
     service_type: str
     scheduled_date: str
 
@@ -297,15 +297,15 @@ class PublicTrackingInfo(BaseModel):
 class ETARequest(BaseModel):
     """Request ETA calculation"""
 
-    work_order_id: int
+    work_order_id: str
     recalculate: bool = False
 
 
 class ETAResponse(BaseModel):
     """ETA calculation response"""
 
-    work_order_id: int
-    technician_id: int
+    work_order_id: str
+    technician_id: str
     technician_name: str
 
     # Current positions
@@ -333,8 +333,8 @@ class ETAResponse(BaseModel):
 class ETANotification(BaseModel):
     """ETA notification to send to customer"""
 
-    work_order_id: int
-    customer_id: int
+    work_order_id: str
+    customer_id: str
     customer_phone: str
     customer_email: Optional[str] = None
     technician_name: str
@@ -369,7 +369,7 @@ class GPSConfigResponse(BaseModel):
     """GPS configuration response"""
 
     id: int
-    technician_id: Optional[int] = None
+    technician_id: Optional[str] = None
     active_interval: int
     idle_interval: int
     background_interval: int
@@ -396,12 +396,12 @@ class GPSConfigResponse(BaseModel):
 class DispatchMapTechnician(BaseModel):
     """Technician info for dispatch map"""
 
-    id: int
+    id: str
     name: str
     latitude: float
     longitude: float
     status: str
-    current_work_order_id: Optional[int] = None
+    current_work_order_id: Optional[str] = None
     current_job_address: Optional[str] = None
     battery_level: Optional[int] = None
     speed: Optional[float] = None
@@ -412,14 +412,14 @@ class DispatchMapTechnician(BaseModel):
 class DispatchMapWorkOrder(BaseModel):
     """Work order info for dispatch map"""
 
-    id: int
+    id: str
     customer_name: str
     address: str
     latitude: float
     longitude: float
     status: str
     scheduled_time: Optional[datetime] = None
-    assigned_technician_id: Optional[int] = None
+    assigned_technician_id: Optional[str] = None
     assigned_technician_name: Optional[str] = None
     service_type: str
     priority: str

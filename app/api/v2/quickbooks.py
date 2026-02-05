@@ -49,7 +49,7 @@ class QBOConnectionStatus(BaseModel):
 class QBOCustomerMapping(BaseModel):
     """Customer mapping between CRM and QuickBooks."""
 
-    crm_customer_id: int
+    crm_customer_id: str
     qbo_customer_id: str
     display_name: str
     sync_status: str  # synced, pending, error
@@ -189,7 +189,7 @@ async def get_customer_mappings(
 async def sync_customers_to_quickbooks(
     db: DbSession,
     current_user: CurrentUser,
-    customer_ids: Optional[list[int]] = None,
+    customer_ids: Optional[list[str]] = None,
 ) -> QBOSyncResult:
     """Sync customers to QuickBooks."""
     # TODO: Implement actual QuickBooks sync

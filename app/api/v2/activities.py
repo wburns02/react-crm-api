@@ -50,7 +50,7 @@ async def list_activities(
 
         # Apply filters
         if customer_id:
-            query = query.where(Activity.customer_id == int(customer_id))
+            query = query.where(Activity.customer_id == customer_id)
 
         if activity_type:
             query = query.where(Activity.activity_type == activity_type)

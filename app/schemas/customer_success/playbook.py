@@ -282,7 +282,7 @@ class PlaybookListResponse(BaseModel):
 class PlaybookExecutionBase(BaseModel):
     """Base playbook execution schema."""
 
-    customer_id: int
+    customer_id: str
     playbook_id: int
     triggered_by: Optional[str] = None
     trigger_reason: Optional[str] = None
@@ -352,7 +352,7 @@ class PlaybookExecutionListResponse(BaseModel):
 class PlaybookTriggerRequest(BaseModel):
     """Request to trigger a playbook for a customer."""
 
-    customer_id: int
+    customer_id: str
     playbook_id: int
     reason: Optional[str] = None
     assigned_to_user_id: Optional[int] = None
@@ -363,7 +363,7 @@ class PlaybookBulkTriggerRequest(BaseModel):
     """Request to bulk trigger a playbook."""
 
     playbook_id: int
-    customer_ids: Optional[list[int]] = None
+    customer_ids: Optional[list[str]] = None
     segment_id: Optional[int] = None
     reason: Optional[str] = None
     skip_cooldown: bool = False

@@ -59,7 +59,7 @@ class ServiceIntervalResponse(ServiceIntervalBase):
 
 class CustomerServiceScheduleResponse(BaseModel):
     id: str
-    customer_id: int
+    customer_id: str
     customer_name: str
     service_interval_id: str
     service_interval_name: str
@@ -82,14 +82,14 @@ class ServiceIntervalStats(BaseModel):
 
 
 class AssignIntervalRequest(BaseModel):
-    customer_id: int
+    customer_id: str
     service_interval_id: str
     last_service_date: Optional[str] = None
     notes: Optional[str] = None
 
 
 class BulkAssignRequest(BaseModel):
-    customer_ids: List[int]
+    customer_ids: List[str]
     service_interval_id: str
 
 
@@ -196,7 +196,7 @@ async def create_service_interval(
 @router.get("/schedules", response_model=dict)
 async def list_customer_schedules(
     status: Optional[str] = Query(None),
-    customer_id: Optional[int] = Query(None),
+    customer_id: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -249,7 +249,7 @@ async def list_customer_schedules(
 
 @router.get("/customer/{customer_id}/schedules", response_model=dict)
 async def get_customer_schedules(
-    customer_id: int,
+    customer_id: str,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

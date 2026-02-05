@@ -109,7 +109,7 @@ class SavedPaymentMethod(BaseModel):
 class SetupACHRequest(BaseModel):
     """Request to set up ACH payment."""
 
-    customer_id: int
+    customer_id: str
     email: str
 
 
@@ -294,7 +294,7 @@ async def confirm_payment(
 
 @router.get("/customer/{customer_id}/payment-methods")
 async def get_customer_payment_methods(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ) -> dict:

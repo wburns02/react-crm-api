@@ -7,7 +7,7 @@ from decimal import Decimal
 class WorkOrderBase(BaseModel):
     """Base work order schema."""
 
-    customer_id: int
+    customer_id: str
     technician_id: Optional[str] = None
     job_type: str
     status: Optional[str] = "draft"
@@ -58,7 +58,7 @@ class WorkOrderCreate(WorkOrderBase):
 class WorkOrderUpdate(BaseModel):
     """Schema for updating a work order (all fields optional)."""
 
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     technician_id: Optional[str] = None
     job_type: Optional[str] = None
     status: Optional[str] = None

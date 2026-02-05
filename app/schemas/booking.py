@@ -41,7 +41,7 @@ class BookingResponse(BaseModel):
     """Schema for booking response."""
 
     id: str
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     work_order_id: Optional[str] = None
     customer_first_name: str
     customer_last_name: str

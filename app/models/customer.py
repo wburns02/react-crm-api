@@ -4,11 +4,8 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 from app.database import Base
+import uuid
 import uuid as uuid_module
-
-
-# Namespace for deterministic UUID generation (must match invoices.py)
-CUSTOMER_UUID_NAMESPACE = uuid_module.UUID("12345678-1234-5678-1234-567812345678")
 
 
 class Customer(Base):
@@ -16,12 +13,8 @@ class Customer(Base):
 
     __tablename__ = "customers"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
-    # NOTE: customer_uuid column removed from model until migration 040 runs
-    # The invoices.py code computes UUIDs dynamically using customer_id_to_uuid()
-    # After migration runs, this column can be re-added for O(1) lookups
-    # customer_uuid = Column(UUID(as_uuid=True), unique=True, index=True, nullable=True)
     first_name = Column(String(100))
     last_name = Column(String(100))
     email = Column(String(255), index=True)
@@ -89,24 +82,9 @@ class Customer(Base):
     work_orders = relationship("WorkOrder", back_populates="customer")
     messages = relationship("Message", back_populates="customer")
     bookings = relationship("Booking", back_populates="customer", foreign_keys="Booking.customer_id")
-    # NOTE: Invoice relationship removed - use invoices.py helper functions instead
-    # The old relationship via customer_uuid caused errors when migration hasn't run
 
     def __repr__(self):
         return f"<Customer {self.first_name} {self.last_name}>"
-
-    def compute_uuid(self) -> uuid_module.UUID:
-        """Compute the deterministic UUID from this customer's integer ID."""
-        return uuid_module.uuid5(CUSTOMER_UUID_NAMESPACE, str(self.id))
-
-    def ensure_uuid(self) -> None:
-        """Ensure customer_uuid is set (compute if missing).
-
-        NOTE: This is a no-op until migration 040 runs and customer_uuid
-        column is added back to the model.
-        """
-        # Column removed until migration runs
-        pass
 
     @property
     def full_name(self):

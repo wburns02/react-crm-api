@@ -65,7 +65,7 @@ class HealthScoreBase(BaseModel):
 class HealthScoreCreate(HealthScoreBase):
     """Schema for creating a health score."""
 
-    customer_id: int
+    customer_id: str
 
 
 class HealthScoreUpdate(BaseModel):
@@ -97,7 +97,7 @@ class HealthScoreResponse(HealthScoreBase):
     """Health score response schema."""
 
     id: int
-    customer_id: int
+    customer_id: str
 
     # Thresholds (at time of scoring)
     healthy_threshold: int
@@ -182,7 +182,7 @@ class HealthScoreEventListResponse(BaseModel):
 class HealthScoreBulkCalculateRequest(BaseModel):
     """Request to bulk calculate health scores."""
 
-    customer_ids: Optional[list[int]] = Field(None, description="Specific customer IDs, or None for all")
+    customer_ids: Optional[list[str]] = Field(None, description="Specific customer IDs, or None for all")
     segment_id: Optional[int] = Field(None, description="Calculate for all customers in segment")
     force_recalculate: bool = Field(False, description="Recalculate even if recently calculated")
 
@@ -190,7 +190,7 @@ class HealthScoreBulkCalculateRequest(BaseModel):
 class HealthScoreTrendResponse(BaseModel):
     """Health score trend data for charts."""
 
-    customer_id: int
+    customer_id: str
     data_points: list[dict]  # [{"date": "2024-01-01", "score": 75, "status": "healthy"}]
     period_start: datetime
     period_end: datetime

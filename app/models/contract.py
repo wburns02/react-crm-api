@@ -1,6 +1,6 @@
 """Contract model for customer service agreements."""
 
-from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Boolean, Float, JSON
+from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Boolean, Float, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -21,7 +21,7 @@ class Contract(Base):
     contract_type = Column(String(50), nullable=False)  # maintenance, service, annual, multi-year
 
     # Customer
-    customer_id = Column(Integer, nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
     customer_name = Column(String(255), nullable=True)
 
     # Template reference

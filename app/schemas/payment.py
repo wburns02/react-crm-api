@@ -6,7 +6,7 @@ from typing import Optional
 class PaymentBase(BaseModel):
     """Base payment schema - matches Flask database."""
 
-    customer_id: Optional[int] = None
+    customer_id: Optional[str] = None
     work_order_id: Optional[str] = None  # Flask uses work_order_id not invoice_id
     amount: float = Field(..., description="Payment amount")
     currency: Optional[str] = Field("USD", max_length=3)
@@ -24,7 +24,7 @@ class PaymentBase(BaseModel):
 class PaymentCreate(PaymentBase):
     """Schema for creating a payment."""
 
-    customer_id: int  # Required when creating a payment
+    customer_id: str  # Required when creating a payment
 
 
 class PaymentUpdate(BaseModel):
@@ -41,7 +41,7 @@ class PaymentUpdate(BaseModel):
 class PaymentResponse(PaymentBase):
     """Schema for payment response."""
 
-    id: int
+    id: str
     invoice_id: Optional[str] = None
     customer_name: Optional[str] = None
     receipt_url: Optional[str] = None

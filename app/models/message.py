@@ -1,7 +1,9 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
+import uuid
 from app.database import Base
 
 
@@ -36,9 +38,9 @@ class Message(Base):
 
     __tablename__ = "messages"
 
-    id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), index=True)
-    work_order_id = Column(String(36))  # UUID reference to work_orders
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), index=True)
+    work_order_id = Column(UUID(as_uuid=True), nullable=True)
 
     # Type, direction, status - stored as VARCHAR in DB
     message_type = Column(String(50), nullable=False)  # sms, email, call, note

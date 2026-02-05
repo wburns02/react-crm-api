@@ -84,7 +84,7 @@ async def list_equipment(
 
         # Apply filters
         if customer_id:
-            query = query.where(Equipment.customer_id == int(customer_id))
+            query = query.where(Equipment.customer_id == customer_id)
 
         if equipment_type:
             query = query.where(Equipment.equipment_type == equipment_type)
@@ -153,8 +153,7 @@ async def create_equipment(
     """Create a new equipment record."""
     data = equipment_data.model_dump()
 
-    # Convert customer_id from string to int
-    data["customer_id"] = int(data["customer_id"])
+    # customer_id is now a UUID string, use directly
 
     # Parse date fields
     for date_field in ["install_date", "warranty_expiry", "last_service_date", "next_service_date"]:
@@ -232,7 +231,7 @@ async def get_customer_service_due(
     query = (
         select(Equipment)
         .where(
-            Equipment.customer_id == int(customer_id),
+            Equipment.customer_id == customer_id,
             Equipment.next_service_date <= today,
             Equipment.is_active == "active",
         )

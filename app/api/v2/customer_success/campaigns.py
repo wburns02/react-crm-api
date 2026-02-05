@@ -700,7 +700,7 @@ async def get_send_time_analysis(
 
 @router.post("/customers/{customer_id}/optimize-send-time")
 async def calculate_customer_send_profile(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -726,7 +726,7 @@ async def calculate_customer_send_profile(
 
 @router.get("/customers/{customer_id}/send-time-profile")
 async def get_customer_send_profile(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -751,7 +751,7 @@ async def get_customer_send_profile(
 
 @router.get("/customers/{customer_id}/optimal-send-time")
 async def get_optimal_send_time(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
     channel: str = "email",

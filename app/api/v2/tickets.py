@@ -59,7 +59,7 @@ async def list_tickets(
 
         # Apply filters
         if customer_id:
-            query = query.where(Ticket.customer_id == int(customer_id))
+            query = query.where(Ticket.customer_id == customer_id)
 
         if status:
             query = query.where(Ticket.status == status)

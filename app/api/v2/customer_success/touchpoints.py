@@ -36,7 +36,7 @@ async def list_touchpoints(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    customer_id: Optional[int] = None,
+    customer_id: Optional[str] = None,
     touchpoint_type: Optional[str] = None,
     channel: Optional[str] = None,
     direction: Optional[str] = None,
@@ -192,7 +192,7 @@ async def delete_touchpoint(
 
 @router.get("/customer/{customer_id}/timeline", response_model=TouchpointTimelineResponse)
 async def get_customer_timeline(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
     days: int = Query(90, ge=7, le=365),
@@ -406,7 +406,7 @@ Content:
 async def get_touchpoint_summary(
     db: DbSession,
     current_user: CurrentUser,
-    customer_id: Optional[int] = None,
+    customer_id: Optional[str] = None,
     days: int = Query(30, ge=1, le=365),
 ):
     """Get touchpoint summary statistics."""
@@ -478,7 +478,7 @@ async def get_recent_activity(
     db: DbSession,
     current_user: CurrentUser,
     limit: int = Query(20, ge=1, le=100),
-    customer_id: Optional[int] = None,
+    customer_id: Optional[str] = None,
     exclude_internal: bool = True,
 ):
     """Get recent touchpoint activity."""

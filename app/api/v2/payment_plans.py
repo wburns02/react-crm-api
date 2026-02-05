@@ -30,7 +30,7 @@ class PaymentPlan(BaseModel):
 
     id: int
     customer_name: str
-    customer_id: int
+    customer_id: str
     invoice_id: int
     total_amount: float
     amount_paid: float
@@ -55,7 +55,7 @@ class PaymentPlanListResponse(BaseModel):
 class PaymentPlanCreate(BaseModel):
     """Create payment plan request."""
 
-    customer_id: int
+    customer_id: str
     invoice_id: int
     total_amount: float
     installments: int
@@ -82,7 +82,7 @@ async def list_payment_plans(
     db: DbSession,
     user: CurrentUser,
     status: Optional[str] = Query(None, description="Filter by status"),
-    customer_id: Optional[int] = Query(None, description="Filter by customer"),
+    customer_id: Optional[str] = Query(None, description="Filter by customer"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaymentPlanListResponse:

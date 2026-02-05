@@ -78,7 +78,7 @@ class EquipmentHealthItem(BaseModel):
 
     equipment_id: str
     equipment_type: str
-    customer_id: int
+    customer_id: str
     customer_name: Optional[str] = None
     manufacturer: Optional[str] = None
     model: Optional[str] = None
@@ -107,7 +107,7 @@ class EquipmentHealthResponse(BaseModel):
 class CustomerIntelligenceItem(BaseModel):
     """Intelligence metrics for a single customer."""
 
-    customer_id: int
+    customer_id: str
     customer_name: str
     email: Optional[str] = None
     phone: Optional[str] = None

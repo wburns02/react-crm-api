@@ -12,7 +12,7 @@ TicketCategory = Literal["complaint", "request", "inquiry", "feedback", "other"]
 class TicketBase(BaseModel):
     """Base ticket schema."""
 
-    customer_id: str = Field(..., description="Customer ID (string, converted to int)")
+    customer_id: str = Field(..., description="Customer ID")
     work_order_id: Optional[str] = None
     subject: str = Field(..., min_length=1, max_length=255)
     description: str = Field(..., min_length=1)

@@ -565,7 +565,7 @@ async def exit_enrollment(
 
 @router.get("/customer/{customer_id}/enrollments")
 async def list_customer_enrollments(
-    customer_id: int,
+    customer_id: str,
     db: DbSession,
     current_user: CurrentUser,
     status: Optional[str] = None,

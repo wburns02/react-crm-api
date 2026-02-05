@@ -183,7 +183,7 @@ class SegmentListResponse(BaseModel):
 class CustomerSegmentBase(BaseModel):
     """Base customer segment membership schema."""
 
-    customer_id: int
+    customer_id: str
     segment_id: int
     entry_reason: Optional[str] = None
 
@@ -307,7 +307,7 @@ class SegmentMembershipResponse(BaseModel):
 
     id: int
     segment_id: int
-    customer_id: int
+    customer_id: str
     is_active: bool
     entered_at: Optional[datetime] = None
     exited_at: Optional[datetime] = None

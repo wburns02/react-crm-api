@@ -7,19 +7,13 @@ import uuid as uuid_module
 
 
 class Payment(Base):
-    """Payment model - matches existing Flask database schema.
-
-    NOTE: Flask database uses:
-    - Integer for id and customer_id
-    - VARCHAR for work_order_id (not invoice_id)
-    - Includes Stripe integration fields
-    """
+    """Payment model."""
 
     __tablename__ = "payments"
 
-    id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
-    work_order_id = Column(String(36), ForeignKey("work_orders.id"), nullable=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid_module.uuid4, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True, index=True)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True, index=True)
 
     # Invoice reference (UUID to match invoices.id)
     invoice_id = Column(UUID(as_uuid=True), nullable=True, index=True)
