@@ -1,9 +1,11 @@
 """
-Clover Payment Processing API Endpoints for Invoices
+Clover Payment Processing API Endpoints
 
 Handles:
-- Payment creation for invoices
-- Payment confirmation
+- REST API data access (merchant, payments, orders, items)
+- Payment sync from Clover to CRM
+- Payment reconciliation
+- Payment creation for invoices (ecommerce - future)
 - Payment history
 """
 
@@ -35,8 +37,11 @@ class CloverConfig(BaseModel):
     """Clover configuration for frontend."""
 
     merchant_id: str
-    environment: str  # "sandbox" or "production"
+    merchant_name: Optional[str] = None
+    environment: str
     is_configured: bool
+    rest_api_available: bool = False
+    ecommerce_available: bool = False
 
 
 class CreatePaymentRequest(BaseModel):
@@ -48,7 +53,7 @@ class CreatePaymentRequest(BaseModel):
     customer_email: Optional[str] = None
 
 
-class PaymentResult(BaseModel):
+class PaymentResultSchema(BaseModel):
     """Payment result."""
 
     success: bool
@@ -78,8 +83,8 @@ class PaymentHistoryItem(BaseModel):
 async def get_clover_config(
     db: DbSession,
     current_user: CurrentUser,
-) -> CloverConfig:
-    """Get Clover configuration for frontend."""
+) -> dict:
+    """Get Clover configuration for frontend with capability detection."""
     clover = get_clover_service()
 
     if not clover.is_configured():
@@ -88,11 +93,309 @@ async def get_clover_config(
             detail="Clover is not configured. Please set CLOVER_MERCHANT_ID and CLOVER_API_KEY.",
         )
 
-    return CloverConfig(
-        merchant_id=settings.CLOVER_MERCHANT_ID or "",
-        environment=settings.CLOVER_ENVIRONMENT,
-        is_configured=True,
+    # Check REST API access by fetching merchant info
+    merchant = await clover.get_merchant()
+    rest_available = merchant is not None
+    merchant_name = merchant.get("name") if merchant else None
+
+    # Check ecommerce access
+    ecomm_available = await clover.check_ecommerce_access()
+
+    return {
+        "merchant_id": settings.CLOVER_MERCHANT_ID or "",
+        "merchant_name": merchant_name,
+        "environment": settings.CLOVER_ENVIRONMENT,
+        "is_configured": True,
+        "rest_api_available": rest_available,
+        "ecommerce_available": ecomm_available,
+    }
+
+
+# =============================================================================
+# REST API Data Endpoints (read-only, works with current token)
+# =============================================================================
+
+
+@router.get("/merchant")
+async def get_merchant_info(
+    current_user: CurrentUser,
+) -> dict:
+    """Get merchant profile from Clover."""
+    clover = get_clover_service()
+    if not clover.is_configured():
+        raise HTTPException(status_code=503, detail="Clover is not configured")
+
+    merchant = await clover.get_merchant()
+    if not merchant:
+        raise HTTPException(status_code=502, detail="Failed to fetch merchant data from Clover")
+
+    return {
+        "id": merchant.get("id"),
+        "name": merchant.get("name"),
+        "website": merchant.get("website"),
+        "owner": merchant.get("owner", {}).get("id") if isinstance(merchant.get("owner"), dict) else merchant.get("owner"),
+        "address": merchant.get("address"),
+        "phone": merchant.get("phoneNumber"),
+    }
+
+
+@router.get("/payments")
+async def list_clover_payments(
+    current_user: CurrentUser,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """List payments from Clover POS device."""
+    clover = get_clover_service()
+    if not clover.is_configured():
+        raise HTTPException(status_code=503, detail="Clover is not configured")
+
+    data = await clover.list_payments(limit=limit, offset=offset)
+    if data is None:
+        raise HTTPException(status_code=502, detail="Failed to fetch payments from Clover")
+
+    elements = data.get("elements", [])
+    payments = []
+    for p in elements:
+        tender = p.get("tender", {})
+        payments.append({
+            "id": p.get("id"),
+            "amount": p.get("amount", 0),
+            "amount_dollars": round(p.get("amount", 0) / 100, 2),
+            "tip_amount": p.get("tipAmount", 0),
+            "tax_amount": p.get("taxAmount", 0),
+            "result": p.get("result"),
+            "tender_label": tender.get("label", "Unknown"),
+            "tender_id": tender.get("id"),
+            "order_id": p.get("order", {}).get("id") if isinstance(p.get("order"), dict) else None,
+            "employee_id": p.get("employee", {}).get("id") if isinstance(p.get("employee"), dict) else None,
+            "created_time": p.get("createdTime"),
+            "offline": p.get("offline", False),
+        })
+
+    return {"payments": payments, "total": len(payments)}
+
+
+@router.get("/orders")
+async def list_clover_orders(
+    current_user: CurrentUser,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """List orders from Clover with line items."""
+    clover = get_clover_service()
+    if not clover.is_configured():
+        raise HTTPException(status_code=503, detail="Clover is not configured")
+
+    data = await clover.list_orders(limit=limit, offset=offset)
+    if data is None:
+        raise HTTPException(status_code=502, detail="Failed to fetch orders from Clover")
+
+    elements = data.get("elements", [])
+    orders = []
+    for o in elements:
+        line_items_data = o.get("lineItems", {}).get("elements", [])
+        line_items = [
+            {
+                "id": li.get("id"),
+                "name": li.get("name"),
+                "price": li.get("price", 0),
+                "price_dollars": round(li.get("price", 0) / 100, 2),
+            }
+            for li in line_items_data
+        ]
+        orders.append({
+            "id": o.get("id"),
+            "total": o.get("total", 0),
+            "total_dollars": round(o.get("total", 0) / 100, 2),
+            "state": o.get("state"),
+            "payment_state": o.get("paymentState"),
+            "currency": o.get("currency", "USD"),
+            "line_items": line_items,
+            "created_time": o.get("createdTime"),
+            "modified_time": o.get("modifiedTime"),
+        })
+
+    return {"orders": orders, "total": len(orders)}
+
+
+@router.get("/items")
+async def list_clover_items(
+    current_user: CurrentUser,
+) -> dict:
+    """List service catalog items from Clover inventory."""
+    clover = get_clover_service()
+    if not clover.is_configured():
+        raise HTTPException(status_code=503, detail="Clover is not configured")
+
+    data = await clover.list_items()
+    if data is None:
+        raise HTTPException(status_code=502, detail="Failed to fetch items from Clover")
+
+    elements = data.get("elements", [])
+    items = [
+        {
+            "id": item.get("id"),
+            "name": item.get("name"),
+            "price": item.get("price", 0),
+            "price_dollars": round(item.get("price", 0) / 100, 2),
+            "price_type": item.get("priceType", "FIXED"),
+            "color_code": item.get("colorCode"),
+            "available": item.get("available", True),
+            "hidden": item.get("hidden", False),
+        }
+        for item in elements
+        if not item.get("deleted", False)
+    ]
+
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/sync")
+async def sync_clover_payments(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Sync Clover payments to CRM Payment records.
+
+    Fetches recent payments from Clover and creates matching CRM records
+    for any that don't already exist (matched by Clover payment ID stored
+    in stripe_payment_intent_id field).
+    """
+    clover = get_clover_service()
+    if not clover.is_configured():
+        raise HTTPException(status_code=503, detail="Clover is not configured")
+
+    data = await clover.list_payments(limit=100)
+    if data is None:
+        raise HTTPException(status_code=502, detail="Failed to fetch payments from Clover")
+
+    clover_payments = data.get("elements", [])
+    synced = 0
+    skipped = 0
+    errors = 0
+
+    for cp in clover_payments:
+        clover_id = cp.get("id")
+        if not clover_id:
+            continue
+
+        # Check if already synced
+        existing = await db.execute(
+            select(Payment).where(Payment.stripe_payment_intent_id == clover_id)
+        )
+        if existing.scalar_one_or_none():
+            skipped += 1
+            continue
+
+        # Only sync successful payments
+        if cp.get("result") != "SUCCESS":
+            skipped += 1
+            continue
+
+        try:
+            amount_cents = cp.get("amount", 0)
+            tender = cp.get("tender", {})
+            created_ms = cp.get("createdTime", 0)
+            created_dt = datetime.fromtimestamp(created_ms / 1000) if created_ms else datetime.utcnow()
+
+            payment = Payment(
+                amount=round(amount_cents / 100, 2),
+                currency="USD",
+                payment_method=tender.get("label", "card").lower(),
+                status="completed",
+                stripe_payment_intent_id=clover_id,
+                description=f"Clover POS payment (synced)",
+                payment_date=created_dt,
+                processed_at=created_dt,
+            )
+            db.add(payment)
+            synced += 1
+        except Exception as e:
+            logger.error(f"Error syncing Clover payment {clover_id}: {e}")
+            errors += 1
+
+    if synced > 0:
+        await db.commit()
+
+    return {
+        "synced": synced,
+        "skipped": skipped,
+        "errors": errors,
+        "total_clover_payments": len(clover_payments),
+    }
+
+
+@router.get("/reconciliation")
+async def get_reconciliation(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Compare CRM payments vs Clover payments for reconciliation."""
+    clover = get_clover_service()
+    if not clover.is_configured():
+        raise HTTPException(status_code=503, detail="Clover is not configured")
+
+    # Fetch Clover payments
+    clover_data = await clover.list_payments(limit=100)
+    clover_payments = clover_data.get("elements", []) if clover_data else []
+
+    # Fetch CRM payments that have Clover IDs
+    result = await db.execute(
+        select(Payment).where(Payment.stripe_payment_intent_id.isnot(None))
     )
+    crm_payments = result.scalars().all()
+
+    # Build lookup maps
+    clover_ids = {p.get("id") for p in clover_payments}
+    crm_clover_ids = {p.stripe_payment_intent_id for p in crm_payments if p.stripe_payment_intent_id}
+
+    matched = []
+    unmatched_clover = []
+    unmatched_crm = []
+
+    for cp in clover_payments:
+        cid = cp.get("id")
+        tender = cp.get("tender", {})
+        entry = {
+            "clover_id": cid,
+            "amount_dollars": round(cp.get("amount", 0) / 100, 2),
+            "result": cp.get("result"),
+            "tender": tender.get("label", "Unknown"),
+            "created_time": cp.get("createdTime"),
+        }
+        if cid in crm_clover_ids:
+            matched.append(entry)
+        else:
+            unmatched_clover.append(entry)
+
+    for crm_p in crm_payments:
+        if crm_p.stripe_payment_intent_id and crm_p.stripe_payment_intent_id not in clover_ids:
+            unmatched_crm.append({
+                "crm_id": crm_p.id,
+                "clover_id": crm_p.stripe_payment_intent_id,
+                "amount_dollars": float(crm_p.amount) if crm_p.amount else 0,
+                "status": crm_p.status,
+                "method": crm_p.payment_method,
+            })
+
+    clover_total = sum(cp.get("amount", 0) for cp in clover_payments if cp.get("result") == "SUCCESS")
+    crm_total = sum(float(p.amount or 0) for p in crm_payments if p.status == "completed")
+
+    return {
+        "matched": matched,
+        "unmatched_clover": unmatched_clover,
+        "unmatched_crm": unmatched_crm,
+        "summary": {
+            "total_clover_payments": len(clover_payments),
+            "total_crm_payments": len(crm_payments),
+            "matched_count": len(matched),
+            "unmatched_clover_count": len(unmatched_clover),
+            "unmatched_crm_count": len(unmatched_crm),
+            "clover_total_dollars": round(clover_total / 100, 2),
+            "crm_total_dollars": round(crm_total, 2),
+        },
+    }
 
 
 # =============================================================================
@@ -105,7 +408,7 @@ async def charge_invoice(
     request: CreatePaymentRequest,
     db: DbSession,
     current_user: CurrentUser,
-) -> PaymentResult:
+) -> PaymentResultSchema:
     """Charge a payment for an invoice using Clover."""
     clover = get_clover_service()
 
@@ -140,7 +443,7 @@ async def charge_invoice(
         )
 
         if not payment_result.success:
-            return PaymentResult(
+            return PaymentResultSchema(
                 success=False,
                 invoice_id=request.invoice_id,
                 amount=amount_cents,
@@ -156,7 +459,7 @@ async def charge_invoice(
         )
 
         if not capture_result.success:
-            return PaymentResult(
+            return PaymentResultSchema(
                 success=False,
                 invoice_id=request.invoice_id,
                 amount=amount_cents,
@@ -190,7 +493,7 @@ async def charge_invoice(
 
         logger.info(f"Payment captured for invoice {invoice.id}: ${amount_dollars}")
 
-        return PaymentResult(
+        return PaymentResultSchema(
             success=True,
             payment_id=str(payment.id),
             invoice_id=str(invoice.id),

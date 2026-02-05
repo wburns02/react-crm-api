@@ -1,5 +1,6 @@
 """
-Clover payment service for handling pre-authorizations and captures.
+Clover payment service for handling pre-authorizations, captures,
+and REST API data access (merchant info, orders, payments, items).
 
 Supports both live Clover API and test mode for development.
 """
@@ -27,11 +28,15 @@ class PaymentResult:
 
 
 class CloverService:
-    """Service for Clover payment processing."""
+    """Service for Clover payment processing and REST API data access."""
 
-    # Clover API endpoints
+    # Ecommerce API endpoints (for charges/refunds - requires ecommerce key)
     SANDBOX_URL = "https://scl-sandbox.dev.clover.com"
     PRODUCTION_URL = "https://scl.clover.com"
+
+    # REST API endpoints (for reading merchant data - works with any API key)
+    REST_SANDBOX_URL = "https://apisandbox.dev.clover.com"
+    REST_PRODUCTION_URL = "https://api.clover.com"
 
     def __init__(self):
         self.merchant_id = getattr(settings, "CLOVER_MERCHANT_ID", None)
@@ -39,6 +44,7 @@ class CloverService:
         self.environment = getattr(settings, "CLOVER_ENVIRONMENT", "sandbox")
 
         self.base_url = self.PRODUCTION_URL if self.environment == "production" else self.SANDBOX_URL
+        self.rest_url = self.REST_PRODUCTION_URL if self.environment == "production" else self.REST_SANDBOX_URL
 
     def _get_headers(self) -> dict:
         """Get headers for Clover API requests."""
@@ -50,6 +56,163 @@ class CloverService:
     def is_configured(self) -> bool:
         """Check if Clover is properly configured."""
         return bool(self.merchant_id and self.api_key)
+
+    # =========================================================================
+    # REST API Methods (read-only, works with current token)
+    # =========================================================================
+
+    async def get_merchant(self) -> dict | None:
+        """Get merchant profile from Clover REST API."""
+        if not self.is_configured():
+            return None
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{self.rest_url}/v3/merchants/current",
+                    headers=self._get_headers(),
+                    timeout=15.0,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(f"get_merchant failed: {resp.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"get_merchant exception: {e}")
+            return None
+
+    async def list_payments(self, limit: int = 50, offset: int = 0) -> dict | None:
+        """List payments from Clover REST API."""
+        if not self.is_configured():
+            return None
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{self.rest_url}/v3/merchants/{self.merchant_id}/payments",
+                    headers=self._get_headers(),
+                    params={"limit": limit, "offset": offset, "expand": "tender"},
+                    timeout=15.0,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(f"list_payments failed: {resp.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"list_payments exception: {e}")
+            return None
+
+    async def get_payment(self, payment_id: str) -> dict | None:
+        """Get a single payment from Clover REST API."""
+        if not self.is_configured():
+            return None
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{self.rest_url}/v3/merchants/{self.merchant_id}/payments/{payment_id}",
+                    headers=self._get_headers(),
+                    params={"expand": "tender,order"},
+                    timeout=15.0,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                return None
+        except Exception as e:
+            logger.error(f"get_payment exception: {e}")
+            return None
+
+    async def list_orders(self, limit: int = 50, offset: int = 0) -> dict | None:
+        """List orders from Clover REST API with line items."""
+        if not self.is_configured():
+            return None
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{self.rest_url}/v3/merchants/{self.merchant_id}/orders",
+                    headers=self._get_headers(),
+                    params={"limit": limit, "offset": offset, "expand": "lineItems"},
+                    timeout=15.0,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(f"list_orders failed: {resp.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"list_orders exception: {e}")
+            return None
+
+    async def get_order(self, order_id: str) -> dict | None:
+        """Get a single order from Clover REST API."""
+        if not self.is_configured():
+            return None
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{self.rest_url}/v3/merchants/{self.merchant_id}/orders/{order_id}",
+                    headers=self._get_headers(),
+                    params={"expand": "lineItems,payments"},
+                    timeout=15.0,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                return None
+        except Exception as e:
+            logger.error(f"get_order exception: {e}")
+            return None
+
+    async def list_items(self) -> dict | None:
+        """List inventory items (service catalog) from Clover REST API."""
+        if not self.is_configured():
+            return None
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{self.rest_url}/v3/merchants/{self.merchant_id}/items",
+                    headers=self._get_headers(),
+                    params={"limit": 100},
+                    timeout=15.0,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(f"list_items failed: {resp.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"list_items exception: {e}")
+            return None
+
+    async def list_customers(self, limit: int = 100) -> dict | None:
+        """List customers from Clover REST API."""
+        if not self.is_configured():
+            return None
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{self.rest_url}/v3/merchants/{self.merchant_id}/customers",
+                    headers=self._get_headers(),
+                    params={"limit": limit},
+                    timeout=15.0,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                return None
+        except Exception as e:
+            logger.error(f"list_customers exception: {e}")
+            return None
+
+    async def check_ecommerce_access(self) -> bool:
+        """Test if ecommerce API (scl.clover.com) is accessible with current key."""
+        if not self.is_configured():
+            return False
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{self.base_url}/v1/charges",
+                    headers=self._get_headers(),
+                    timeout=10.0,
+                )
+                # 405 = method not allowed (GET on POST endpoint) means we have access
+                # 401 = unauthorized means no ecommerce access
+                return resp.status_code != 401
+        except Exception:
+            return False
 
     async def preauthorize(
         self, amount_cents: int, token: str, description: str = "Service pre-authorization", test_mode: bool = False
