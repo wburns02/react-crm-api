@@ -6,17 +6,20 @@ Integrates with Samsara's Fleet API to provide:
 - Vehicle status (moving, idling, stopped, offline)
 - Driver assignments
 - Location history/breadcrumb trails
+- Server-Sent Events (SSE) for real-time push updates
 
 API Documentation: https://developers.samsara.com/reference
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
 import httpx
 import logging
 import asyncio
+import json
 
 from app.api.deps import CurrentUser
 from app.config import settings
@@ -27,15 +30,31 @@ logger = logging.getLogger(__name__)
 # Samsara API base URL
 SAMSARA_API_BASE = "https://api.samsara.com"
 
-# Simple in-memory cache with TTL
+# ── Vehicle cache & SSE infrastructure ──────────────────────────────────────
+
+# In-memory vehicle store (updated by feed poller)
+_vehicle_store: dict[str, "Vehicle"] = {}
+_vehicle_store_lock = asyncio.Lock()
+_last_update_time: datetime | None = None
+
+# SSE client management
+_sse_clients: set[asyncio.Queue] = set()
+_sse_clients_lock = asyncio.Lock()
+
+# Feed poller state
+_feed_cursor: str | None = None
+_feed_poller_task: asyncio.Task | None = None
+
+# Legacy cache for /vehicles endpoint fallback
 _vehicle_cache: dict = {"data": None, "expires": None}
 _cache_lock = asyncio.Lock()
-CACHE_TTL_SECONDS = 15  # Cache for 15 seconds to avoid rate limits
+CACHE_TTL_SECONDS = 15
 
+
+# ── Models ──────────────────────────────────────────────────────────────────
 
 class VehicleLocation(BaseModel):
     """Vehicle location with GPS data and status."""
-
     lat: float
     lng: float
     heading: float
@@ -45,7 +64,6 @@ class VehicleLocation(BaseModel):
 
 class Vehicle(BaseModel):
     """Full vehicle data matching frontend schema."""
-
     id: str
     name: str
     vin: Optional[str] = None
@@ -57,12 +75,13 @@ class Vehicle(BaseModel):
 
 class LocationHistoryPoint(BaseModel):
     """Single point in location history."""
-
     lat: float
     lng: float
     timestamp: str
     speed: float
 
+
+# ── Status logic ────────────────────────────────────────────────────────────
 
 def determine_vehicle_status(speed_mph: float, time_since_update_minutes: float) -> str:
     """
@@ -81,6 +100,8 @@ def determine_vehicle_status(speed_mph: float, time_since_update_minutes: float)
         return "idling"
     return "stopped"
 
+
+# ── Samsara API calls ──────────────────────────────────────────────────────
 
 async def fetch_vehicles_from_samsara() -> list[Vehicle]:
     """
@@ -184,22 +205,218 @@ async def fetch_vehicles_from_samsara() -> list[Vehicle]:
         return vehicles
 
 
+# ── Feed poller (background task) ──────────────────────────────────────────
+
+async def _poll_samsara_feed():
+    """
+    Background task that polls Samsara feed API every 5 seconds.
+    Uses cursor-based pagination to only get changed data.
+    Falls back to full fetch if feed API is unavailable.
+    """
+    global _feed_cursor, _last_update_time
+
+    logger.info("Samsara feed poller started")
+
+    while True:
+        try:
+            if not settings.SAMSARA_API_TOKEN:
+                await asyncio.sleep(30)
+                continue
+
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                params = {"types": "gps"}
+                if _feed_cursor:
+                    params["after"] = _feed_cursor
+
+                response = await client.get(
+                    f"{SAMSARA_API_BASE}/fleet/vehicles/stats/feed",
+                    headers={"Authorization": f"Bearer {settings.SAMSARA_API_TOKEN}"},
+                    params=params,
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    new_cursor = data.get("pagination", {}).get("endCursor")
+                    if new_cursor:
+                        _feed_cursor = new_cursor
+
+                    changed_vehicles = data.get("data", [])
+                    if changed_vehicles:
+                        await _process_feed_update(changed_vehicles)
+                elif response.status_code == 429:
+                    # Rate limited - back off
+                    logger.warning("Samsara API rate limited, backing off 30s")
+                    await asyncio.sleep(30)
+                    continue
+                else:
+                    # Feed endpoint may not be available - fall back to full fetch
+                    logger.debug(f"Feed API returned {response.status_code}, using full fetch")
+                    await _do_full_fetch()
+
+        except httpx.RequestError as e:
+            logger.warning(f"Samsara feed poll failed: {e}")
+            # Try full fetch as fallback
+            try:
+                await _do_full_fetch()
+            except Exception:
+                pass
+        except asyncio.CancelledError:
+            logger.info("Samsara feed poller cancelled")
+            return
+        except Exception as e:
+            logger.error(f"Unexpected error in feed poller: {e}")
+
+        await asyncio.sleep(5)
+
+
+async def _do_full_fetch():
+    """Full fetch of all vehicles (fallback when feed API unavailable)."""
+    global _last_update_time
+
+    try:
+        vehicles = await fetch_vehicles_from_samsara()
+        now = datetime.now(timezone.utc)
+
+        async with _vehicle_store_lock:
+            _vehicle_store.clear()
+            for v in vehicles:
+                _vehicle_store[v.id] = v
+            _last_update_time = now
+
+        # Update legacy cache too
+        async with _cache_lock:
+            _vehicle_cache["data"] = vehicles
+            _vehicle_cache["expires"] = now + timedelta(seconds=CACHE_TTL_SECONDS)
+
+        # Broadcast to SSE clients
+        await _broadcast_vehicles(vehicles)
+        logger.debug(f"Full fetch: {len(vehicles)} vehicles")
+    except Exception as e:
+        logger.warning(f"Full fetch failed: {e}")
+
+
+async def _process_feed_update(changed_data: list):
+    """Process incremental feed update and broadcast changes."""
+    global _last_update_time
+    now = datetime.now(timezone.utc)
+    updated_vehicles = []
+
+    async with _vehicle_store_lock:
+        for v in changed_data:
+            vehicle_id = v.get("id", "")
+            gps_data = v.get("gps", {})
+
+            if not gps_data:
+                continue
+
+            updated_at_str = gps_data.get("time", now.isoformat())
+            try:
+                updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
+                time_since_update = (now - updated_at).total_seconds() / 60
+            except Exception:
+                time_since_update = 0
+
+            speed_mph = gps_data.get("speedMilesPerHour", 0) or 0
+            status = determine_vehicle_status(speed_mph, time_since_update)
+
+            # Update existing or create new entry
+            existing = _vehicle_store.get(vehicle_id)
+            vehicle = Vehicle(
+                id=vehicle_id,
+                name=v.get("name", existing.name if existing else "Unknown Vehicle"),
+                vin=existing.vin if existing else None,
+                driver_id=existing.driver_id if existing else None,
+                driver_name=existing.driver_name if existing else None,
+                location=VehicleLocation(
+                    lat=gps_data.get("latitude", 0),
+                    lng=gps_data.get("longitude", 0),
+                    heading=gps_data.get("headingDegrees", 0) or 0,
+                    speed=round(speed_mph, 1),
+                    updated_at=updated_at_str,
+                ),
+                status=status,
+            )
+            _vehicle_store[vehicle_id] = vehicle
+            updated_vehicles.append(vehicle)
+
+        _last_update_time = now
+
+    if updated_vehicles:
+        # Broadcast full vehicle list (all vehicles, not just changes)
+        all_vehicles = list(_vehicle_store.values())
+        await _broadcast_vehicles(all_vehicles)
+
+        # Update legacy cache
+        async with _cache_lock:
+            _vehicle_cache["data"] = all_vehicles
+            _vehicle_cache["expires"] = now + timedelta(seconds=CACHE_TTL_SECONDS)
+
+        logger.debug(f"Feed update: {len(updated_vehicles)} vehicles changed")
+
+
+# ── SSE broadcasting ───────────────────────────────────────────────────────
+
+async def _broadcast_vehicles(vehicles: list[Vehicle]):
+    """Send vehicle data to all connected SSE clients."""
+    if not _sse_clients:
+        return
+
+    data = json.dumps([v.model_dump() for v in vehicles])
+    message = f"event: vehicles\ndata: {data}\n\n"
+
+    dead_clients = []
+    async with _sse_clients_lock:
+        for queue in _sse_clients:
+            try:
+                queue.put_nowait(message)
+            except asyncio.QueueFull:
+                dead_clients.append(queue)
+
+        for q in dead_clients:
+            _sse_clients.discard(q)
+
+
+def start_feed_poller():
+    """Start the Samsara feed poller background task."""
+    global _feed_poller_task
+    if _feed_poller_task is not None:
+        return
+    _feed_poller_task = asyncio.create_task(_poll_samsara_feed())
+    logger.info("Samsara feed poller background task created")
+
+
+def stop_feed_poller():
+    """Stop the Samsara feed poller background task."""
+    global _feed_poller_task
+    if _feed_poller_task:
+        _feed_poller_task.cancel()
+        _feed_poller_task = None
+        logger.info("Samsara feed poller stopped")
+
+
+# ── API Endpoints ──────────────────────────────────────────────────────────
+
 @router.get("/vehicles")
 async def get_vehicles(current_user: CurrentUser) -> list[Vehicle]:
     """
     Get all vehicle locations from Samsara.
 
     Calls Samsara Fleet API to get real-time vehicle positions.
-    Uses caching to avoid rate limits (15 second TTL).
+    Uses feed poller cache if available, falls back to direct fetch.
     Returns empty list if Samsara is not configured.
     """
     if not settings.SAMSARA_API_TOKEN:
         logger.warning("SAMSARA_API_TOKEN not configured - returning empty vehicle list")
         return []
 
+    # Try vehicle store first (populated by feed poller)
+    async with _vehicle_store_lock:
+        if _vehicle_store:
+            return list(_vehicle_store.values())
+
+    # Fall back to legacy cache / direct fetch
     global _vehicle_cache
 
-    # Check cache first
     async with _cache_lock:
         now = datetime.now(timezone.utc)
         if _vehicle_cache["data"] is not None and _vehicle_cache["expires"] and _vehicle_cache["expires"] > now:
@@ -209,7 +426,11 @@ async def get_vehicles(current_user: CurrentUser) -> list[Vehicle]:
     try:
         vehicles = await fetch_vehicles_from_samsara()
 
-        # Update cache
+        # Update both stores
+        async with _vehicle_store_lock:
+            for v in vehicles:
+                _vehicle_store[v.id] = v
+
         async with _cache_lock:
             _vehicle_cache["data"] = vehicles
             _vehicle_cache["expires"] = datetime.now(timezone.utc) + timedelta(seconds=CACHE_TTL_SECONDS)
@@ -225,6 +446,63 @@ async def get_vehicles(current_user: CurrentUser) -> list[Vehicle]:
     except Exception as e:
         logger.error(f"Unexpected error fetching vehicles: {e}")
         raise HTTPException(status_code=503, detail="Fleet tracking service error")
+
+
+@router.get("/stream")
+async def stream_vehicles(request: Request, current_user: CurrentUser):
+    """
+    Server-Sent Events endpoint for real-time vehicle updates.
+
+    Streams vehicle location updates as they arrive from the Samsara feed poller.
+    Sends heartbeat every 15 seconds to keep connection alive.
+    """
+    queue: asyncio.Queue = asyncio.Queue(maxsize=50)
+
+    async with _sse_clients_lock:
+        _sse_clients.add(queue)
+    logger.info(f"SSE client connected (total: {len(_sse_clients)})")
+
+    async def event_generator():
+        try:
+            # Send initial data immediately
+            async with _vehicle_store_lock:
+                if _vehicle_store:
+                    vehicles = list(_vehicle_store.values())
+                    data = json.dumps([v.model_dump() for v in vehicles])
+                    yield f"event: vehicles\ndata: {data}\n\n"
+
+            # Send connection confirmation
+            yield f"event: connected\ndata: {{\"status\": \"ok\", \"clients\": {len(_sse_clients)}}}\n\n"
+
+            heartbeat_interval = 15
+            while True:
+                try:
+                    # Wait for messages with timeout for heartbeat
+                    message = await asyncio.wait_for(queue.get(), timeout=heartbeat_interval)
+                    yield message
+                except asyncio.TimeoutError:
+                    # Send heartbeat
+                    yield f"event: heartbeat\ndata: {{\"time\": \"{datetime.now(timezone.utc).isoformat()}\"}}\n\n"
+                except asyncio.CancelledError:
+                    break
+
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    break
+        finally:
+            async with _sse_clients_lock:
+                _sse_clients.discard(queue)
+            logger.info(f"SSE client disconnected (remaining: {len(_sse_clients)})")
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/vehicles/{vehicle_id}/history")
@@ -328,6 +606,9 @@ async def get_samsara_status(current_user: CurrentUser) -> dict:
                     "message": "Samsara API connected successfully",
                     "token_prefix": token_prefix,
                     "vehicle_count": vehicle_count,
+                    "sse_clients": len(_sse_clients),
+                    "feed_poller_active": _feed_poller_task is not None and not _feed_poller_task.done(),
+                    "cached_vehicles": len(_vehicle_store),
                 }
             elif response.status_code == 401:
                 return {

@@ -744,6 +744,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start reminder scheduler: {e}")
 
+    # Start Samsara feed poller background task
+    try:
+        from app.api.v2.samsara import start_feed_poller, stop_feed_poller
+        start_feed_poller()
+        logger.info("Samsara feed poller started")
+    except Exception as e:
+        logger.warning(f"Failed to start Samsara feed poller: {e}")
+
     # Pre-warm database connection pool for faster first request
     logger.info("Pre-warming database connections...")
     try:
@@ -772,6 +780,10 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down React CRM API...")
     stop_auto_sync()
     stop_reminder_scheduler()
+    try:
+        stop_feed_poller()
+    except Exception:
+        pass
 
 
 # SECURITY: Conditionally enable docs based on settings
