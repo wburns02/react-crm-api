@@ -595,7 +595,7 @@ async def create_technician(
         logger.error(f"Error creating technician: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create technician",
+            detail=f"Failed to create technician: {type(e).__name__}: {str(e)}",
         )
 
 
