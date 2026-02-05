@@ -1,5 +1,4 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric, ARRAY
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -7,11 +6,11 @@ import uuid
 
 
 class Technician(Base):
-    """Technician model - matches Flask database schema."""
+    """Technician model - matches Flask database schema (id is VARCHAR(36), not native UUID)."""
 
     __tablename__ = "technicians"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     email = Column(String(255), index=True)

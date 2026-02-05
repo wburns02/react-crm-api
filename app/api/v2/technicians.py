@@ -569,10 +569,9 @@ async def create_technician(
     """Create a new technician."""
     import uuid
     from datetime import datetime
-    import traceback
 
     try:
-        # Generate UUID for the technician ID
+        # Generate UUID string for the technician ID (DB column is VARCHAR(36))
         tech_data = technician_data.model_dump()
         tech_data["id"] = str(uuid.uuid4())
         tech_data["created_at"] = datetime.utcnow()
@@ -592,10 +591,10 @@ async def create_technician(
         await db.refresh(technician)
         return technician_to_response(technician)
     except Exception as e:
-        logger.error(f"Error creating technician: {traceback.format_exc()}")
+        logger.error(f"Error creating technician: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create technician: {type(e).__name__}: {str(e)}",
+            detail="Failed to create technician",
         )
 
 
