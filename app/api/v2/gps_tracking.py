@@ -102,37 +102,43 @@ async def get_all_locations(db: Session = Depends(get_db), current_user=Depends(
     Returns current position, status, and online/offline count.
     Includes Samsara vehicle counts in online/offline totals.
     """
-    service = GPSTrackingService(db)
-    data = service.get_all_technician_locations()
-
-    # Build base response using Pydantic model for proper serialization
-    base = AllTechniciansLocationResponse(
-        technicians=data["technicians"],
-        total_online=data["total_online"],
-        total_offline=data["total_offline"],
-        last_refresh=data["last_refresh"],
-    )
-    result = base.model_dump(mode="json")
-
-    # Include Samsara vehicle counts for combined stats
-    vehicle_online = 0
-    vehicle_offline = 0
     try:
-        from app.api.v2.samsara import _vehicle_store, _vehicle_store_lock
-        async with _vehicle_store_lock:
-            for v in _vehicle_store.values():
-                if v.status == "offline":
-                    vehicle_offline += 1
-                else:
-                    vehicle_online += 1
-    except Exception:
-        pass
+        service = GPSTrackingService(db)
+        data = service.get_all_technician_locations()
 
-    result["total_online"] = result["total_online"] + vehicle_online
-    result["total_offline"] = result["total_offline"] + vehicle_offline
-    result["vehicle_online"] = vehicle_online
-    result["vehicle_offline"] = vehicle_offline
-    return result
+        # Serialize technicians to dicts for JSON response
+        technicians_list = []
+        for t in data["technicians"]:
+            if hasattr(t, 'model_dump'):
+                technicians_list.append(t.model_dump(mode="json"))
+            else:
+                technicians_list.append(t)
+
+        # Include Samsara vehicle counts for combined stats
+        vehicle_online = 0
+        vehicle_offline = 0
+        try:
+            from app.api.v2.samsara import _vehicle_store, _vehicle_store_lock
+            async with _vehicle_store_lock:
+                for v in _vehicle_store.values():
+                    if v.status == "offline":
+                        vehicle_offline += 1
+                    else:
+                        vehicle_online += 1
+        except Exception:
+            pass
+
+        return {
+            "technicians": technicians_list,
+            "total_online": data["total_online"] + vehicle_online,
+            "total_offline": data["total_offline"] + vehicle_offline,
+            "vehicle_online": vehicle_online,
+            "vehicle_offline": vehicle_offline,
+            "last_refresh": data["last_refresh"].isoformat() if hasattr(data["last_refresh"], 'isoformat') else str(data["last_refresh"]),
+        }
+    except Exception as e:
+        logger.error(f"Error in get_all_locations: {type(e).__name__}: {e}")
+        raise
 
 
 # ==================== Location History ====================
