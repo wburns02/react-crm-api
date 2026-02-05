@@ -1066,10 +1066,31 @@ async def run_uuid_migrations():
             except Exception:
                 results["version_before"] = None
 
-        # Step 2: Only stamp+upgrade if not already at 049+
+        # Step 2: Detect actual DB state and handle accordingly
         os.chdir("/app")
         current = results.get("version_before")
-        if current and current >= "049":
+
+        # Check if migrations already ran (customer PK is UUID)
+        already_migrated = False
+        async with async_session_maker() as session:
+            try:
+                col_type = await session.execute(text(
+                    "SELECT data_type FROM information_schema.columns "
+                    "WHERE table_name = 'customers' AND column_name = 'id'"
+                ))
+                dtype = col_type.scalar_one_or_none()
+                already_migrated = dtype == "uuid"
+                results["customer_id_type"] = dtype
+            except Exception:
+                pass
+
+        if already_migrated:
+            # DB is already at 049 schema - just fix alembic version
+            proc = subprocess.run(["alembic", "stamp", "049"], capture_output=True, text=True, timeout=60)
+            results["stamp"] = proc.returncode == 0
+            results["upgrade"] = True
+            results["skipped"] = "DB already migrated (customer.id is UUID), stamped to 049"
+        elif current and current >= "049":
             results["stamp"] = True
             results["upgrade"] = True
             results["skipped"] = "Already at migration 049 or later"
