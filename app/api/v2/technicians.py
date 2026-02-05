@@ -594,7 +594,8 @@ async def create_technician(
     except Exception as e:
         logger.error(f"Error creating technician: {traceback.format_exc()}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create technician: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create technician",
         )
 
 
@@ -606,23 +607,32 @@ async def update_technician(
     current_user: CurrentUser,
 ):
     """Update a technician."""
-    result = await db.execute(select(Technician).where(Technician.id == technician_id))
-    technician = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(Technician).where(Technician.id == technician_id))
+        technician = result.scalar_one_or_none()
 
-    if not technician:
+        if not technician:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Technician not found",
+            )
+
+        # Update only provided fields
+        update_data = technician_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(technician, field, value)
+
+        await db.commit()
+        await db.refresh(technician)
+        return technician_to_response(technician)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating technician {technician_id}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Technician not found",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update technician",
         )
-
-    # Update only provided fields
-    update_data = technician_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(technician, field, value)
-
-    await db.commit()
-    await db.refresh(technician)
-    return technician_to_response(technician)
 
 
 @router.delete("/{technician_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -632,15 +642,24 @@ async def delete_technician(
     current_user: CurrentUser,
 ):
     """Delete a technician (soft delete - sets is_active=false)."""
-    result = await db.execute(select(Technician).where(Technician.id == technician_id))
-    technician = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(Technician).where(Technician.id == technician_id))
+        technician = result.scalar_one_or_none()
 
-    if not technician:
+        if not technician:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Technician not found",
+            )
+
+        # Soft delete - set is_active to False
+        technician.is_active = False
+        await db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting technician {technician_id}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Technician not found",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete technician",
         )
-
-    # Soft delete - set is_active to False
-    technician.is_active = False
-    await db.commit()
