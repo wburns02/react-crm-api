@@ -4,15 +4,10 @@ Revision ID: 050
 Revises: 049
 Create Date: 2026-02-06
 
-This migration creates tables for compliance tracking and service intervals.
-These tables were defined in earlier migrations (008, 034) but were never
-actually created in the production database. This migration creates them
-with the current UUID-based schema.
+This migration creates tables for compliance tracking and service intervals using raw SQL.
 """
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 revision = "050"
 down_revision = "049"
@@ -21,198 +16,194 @@ depends_on = None
 
 
 def upgrade() -> None:
-    conn = op.get_bind()
+    # Create licenses table
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS licenses (
+            id UUID PRIMARY KEY,
+            license_number VARCHAR(100) NOT NULL,
+            license_type VARCHAR(100) NOT NULL,
+            issuing_authority VARCHAR(255),
+            issuing_state VARCHAR(2),
+            holder_type VARCHAR(20) NOT NULL DEFAULT 'business',
+            holder_id VARCHAR(36),
+            holder_name VARCHAR(255),
+            issue_date DATE,
+            expiry_date DATE NOT NULL,
+            status VARCHAR(20) DEFAULT 'active',
+            renewal_reminder_sent BOOLEAN DEFAULT false,
+            renewal_reminder_date DATE,
+            document_url VARCHAR(500),
+            notes TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_licenses_license_number ON licenses(license_number)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_licenses_expiry_date ON licenses(expiry_date)")
 
-    # Check if tables already exist
-    tables_to_check = ['licenses', 'certifications', 'inspections',
-                       'service_intervals', 'customer_service_schedules', 'service_reminders']
+    # Create certifications table
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS certifications (
+            id UUID PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            certification_type VARCHAR(100) NOT NULL,
+            certification_number VARCHAR(100),
+            issuing_organization VARCHAR(255),
+            technician_id VARCHAR(36) NOT NULL,
+            technician_name VARCHAR(255),
+            issue_date DATE,
+            expiry_date DATE,
+            status VARCHAR(20) DEFAULT 'active',
+            renewal_reminder_sent BOOLEAN DEFAULT false,
+            requires_renewal BOOLEAN DEFAULT true,
+            renewal_interval_months INTEGER,
+            training_hours INTEGER,
+            training_date DATE,
+            training_provider VARCHAR(255),
+            document_url VARCHAR(500),
+            notes TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_certifications_technician_id ON certifications(technician_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_certifications_expiry_date ON certifications(expiry_date)")
 
-    for table_name in tables_to_check:
-        exists = conn.execute(sa.text(
-            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = :t)"
-        ), {"t": table_name}).scalar()
+    # Create inspections table
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS inspections (
+            id UUID PRIMARY KEY,
+            inspection_number VARCHAR(50) UNIQUE NOT NULL,
+            inspection_type VARCHAR(100) NOT NULL,
+            customer_id UUID NOT NULL,
+            property_address VARCHAR(500),
+            system_type VARCHAR(100),
+            system_age_years INTEGER,
+            tank_size_gallons INTEGER,
+            scheduled_date DATE,
+            completed_date DATE,
+            technician_id UUID,
+            technician_name VARCHAR(255),
+            work_order_id UUID,
+            status VARCHAR(20) DEFAULT 'pending',
+            result VARCHAR(20),
+            overall_condition VARCHAR(20),
+            checklist JSONB,
+            sludge_depth_inches REAL,
+            scum_depth_inches REAL,
+            liquid_depth_inches REAL,
+            requires_followup BOOLEAN DEFAULT false,
+            followup_due_date DATE,
+            violations_found JSONB,
+            corrective_actions TEXT,
+            county VARCHAR(100),
+            permit_number VARCHAR(100),
+            filed_with_county BOOLEAN DEFAULT false,
+            county_filing_date DATE,
+            photos JSONB,
+            report_url VARCHAR(500),
+            notes TEXT,
+            inspection_fee REAL,
+            fee_collected BOOLEAN DEFAULT false,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_inspections_inspection_number ON inspections(inspection_number)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_inspections_customer_id ON inspections(customer_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_inspections_scheduled_date ON inspections(scheduled_date)")
 
-        if exists:
-            print(f"Table {table_name} already exists, skipping")
-            continue
+    # Create service_intervals table
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS service_intervals (
+            id UUID PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            service_type VARCHAR(50) NOT NULL,
+            interval_months INTEGER NOT NULL,
+            reminder_days_before JSONB DEFAULT '[30, 14, 7]',
+            is_active BOOLEAN DEFAULT true,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE
+        )
+    """)
 
-        # Create table based on its name
-        if table_name == 'licenses':
-            op.create_table(
-                'licenses',
-                sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-                sa.Column('license_number', sa.String(100), nullable=False, index=True),
-                sa.Column('license_type', sa.String(100), nullable=False),
-                sa.Column('issuing_authority', sa.String(255), nullable=True),
-                sa.Column('issuing_state', sa.String(2), nullable=True),
-                sa.Column('holder_type', sa.String(20), nullable=False, server_default='business'),
-                sa.Column('holder_id', sa.String(36), nullable=True, index=True),
-                sa.Column('holder_name', sa.String(255), nullable=True),
-                sa.Column('issue_date', sa.Date, nullable=True),
-                sa.Column('expiry_date', sa.Date, nullable=False, index=True),
-                sa.Column('status', sa.String(20), server_default='active'),
-                sa.Column('renewal_reminder_sent', sa.Boolean, server_default='false'),
-                sa.Column('renewal_reminder_date', sa.Date, nullable=True),
-                sa.Column('document_url', sa.String(500), nullable=True),
-                sa.Column('notes', sa.Text, nullable=True),
-                sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-                sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
-            )
+    # Create customer_service_schedules table
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS customer_service_schedules (
+            id UUID PRIMARY KEY,
+            customer_id UUID NOT NULL,
+            service_interval_id UUID NOT NULL,
+            last_service_date DATE,
+            next_due_date DATE NOT NULL,
+            status VARCHAR(30) DEFAULT 'upcoming',
+            scheduled_work_order_id VARCHAR(36),
+            reminder_sent BOOLEAN DEFAULT false,
+            last_reminder_sent_at TIMESTAMP WITH TIME ZONE,
+            notes TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_customer_service_schedules_customer_id ON customer_service_schedules(customer_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_customer_service_schedules_next_due_date ON customer_service_schedules(next_due_date)")
 
-        elif table_name == 'certifications':
-            op.create_table(
-                'certifications',
-                sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-                sa.Column('name', sa.String(255), nullable=False),
-                sa.Column('certification_type', sa.String(100), nullable=False),
-                sa.Column('certification_number', sa.String(100), nullable=True),
-                sa.Column('issuing_organization', sa.String(255), nullable=True),
-                sa.Column('technician_id', sa.String(36), nullable=False, index=True),
-                sa.Column('technician_name', sa.String(255), nullable=True),
-                sa.Column('issue_date', sa.Date, nullable=True),
-                sa.Column('expiry_date', sa.Date, nullable=True, index=True),
-                sa.Column('status', sa.String(20), server_default='active'),
-                sa.Column('renewal_reminder_sent', sa.Boolean, server_default='false'),
-                sa.Column('requires_renewal', sa.Boolean, server_default='true'),
-                sa.Column('renewal_interval_months', sa.Integer, nullable=True),
-                sa.Column('training_hours', sa.Integer, nullable=True),
-                sa.Column('training_date', sa.Date, nullable=True),
-                sa.Column('training_provider', sa.String(255), nullable=True),
-                sa.Column('document_url', sa.String(500), nullable=True),
-                sa.Column('notes', sa.Text, nullable=True),
-                sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-                sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
-            )
+    # Create service_reminders table
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS service_reminders (
+            id UUID PRIMARY KEY,
+            schedule_id UUID NOT NULL,
+            customer_id UUID NOT NULL,
+            reminder_type VARCHAR(20) NOT NULL,
+            days_before_due INTEGER,
+            status VARCHAR(20) DEFAULT 'sent',
+            error_message TEXT,
+            message_id UUID,
+            sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            delivered_at TIMESTAMP WITH TIME ZONE
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_service_reminders_schedule_id ON service_reminders(schedule_id)")
 
-        elif table_name == 'inspections':
-            op.create_table(
-                'inspections',
-                sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-                sa.Column('inspection_number', sa.String(50), unique=True, nullable=False, index=True),
-                sa.Column('inspection_type', sa.String(100), nullable=False),
-                sa.Column('customer_id', postgresql.UUID(as_uuid=True), nullable=False, index=True),
-                sa.Column('property_address', sa.String(500), nullable=True),
-                sa.Column('system_type', sa.String(100), nullable=True),
-                sa.Column('system_age_years', sa.Integer, nullable=True),
-                sa.Column('tank_size_gallons', sa.Integer, nullable=True),
-                sa.Column('scheduled_date', sa.Date, nullable=True, index=True),
-                sa.Column('completed_date', sa.Date, nullable=True),
-                sa.Column('technician_id', postgresql.UUID(as_uuid=True), nullable=True, index=True),
-                sa.Column('technician_name', sa.String(255), nullable=True),
-                sa.Column('work_order_id', postgresql.UUID(as_uuid=True), nullable=True, index=True),
-                sa.Column('status', sa.String(20), server_default='pending'),
-                sa.Column('result', sa.String(20), nullable=True),
-                sa.Column('overall_condition', sa.String(20), nullable=True),
-                sa.Column('checklist', postgresql.JSON, nullable=True),
-                sa.Column('sludge_depth_inches', sa.Float, nullable=True),
-                sa.Column('scum_depth_inches', sa.Float, nullable=True),
-                sa.Column('liquid_depth_inches', sa.Float, nullable=True),
-                sa.Column('requires_followup', sa.Boolean, server_default='false'),
-                sa.Column('followup_due_date', sa.Date, nullable=True),
-                sa.Column('violations_found', postgresql.JSON, nullable=True),
-                sa.Column('corrective_actions', sa.Text, nullable=True),
-                sa.Column('county', sa.String(100), nullable=True),
-                sa.Column('permit_number', sa.String(100), nullable=True),
-                sa.Column('filed_with_county', sa.Boolean, server_default='false'),
-                sa.Column('county_filing_date', sa.Date, nullable=True),
-                sa.Column('photos', postgresql.JSON, nullable=True),
-                sa.Column('report_url', sa.String(500), nullable=True),
-                sa.Column('notes', sa.Text, nullable=True),
-                sa.Column('inspection_fee', sa.Float, nullable=True),
-                sa.Column('fee_collected', sa.Boolean, server_default='false'),
-                sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-                sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
-            )
-
-        elif table_name == 'service_intervals':
-            op.create_table(
-                'service_intervals',
-                sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-                sa.Column('name', sa.String(255), nullable=False),
-                sa.Column('description', sa.Text, nullable=True),
-                sa.Column('service_type', sa.String(50), nullable=False),
-                sa.Column('interval_months', sa.Integer, nullable=False),
-                sa.Column('reminder_days_before', postgresql.JSON, server_default='[30, 14, 7]'),
-                sa.Column('is_active', sa.Boolean, server_default='true'),
-                sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-                sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
-            )
-
-        elif table_name == 'customer_service_schedules':
-            op.create_table(
-                'customer_service_schedules',
-                sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-                sa.Column('customer_id', postgresql.UUID(as_uuid=True), nullable=False, index=True),
-                sa.Column('service_interval_id', postgresql.UUID(as_uuid=True), nullable=False, index=True),
-                sa.Column('last_service_date', sa.Date, nullable=True),
-                sa.Column('next_due_date', sa.Date, nullable=False, index=True),
-                sa.Column('status', sa.String(30), server_default='upcoming', index=True),
-                sa.Column('scheduled_work_order_id', sa.String(36), nullable=True, index=True),
-                sa.Column('reminder_sent', sa.Boolean, server_default='false'),
-                sa.Column('last_reminder_sent_at', sa.DateTime(timezone=True), nullable=True),
-                sa.Column('notes', sa.Text, nullable=True),
-                sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-                sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
-            )
-            # Add FK constraints after all tables are created
-
-        elif table_name == 'service_reminders':
-            op.create_table(
-                'service_reminders',
-                sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-                sa.Column('schedule_id', postgresql.UUID(as_uuid=True), nullable=False, index=True),
-                sa.Column('customer_id', postgresql.UUID(as_uuid=True), nullable=False, index=True),
-                sa.Column('reminder_type', sa.String(20), nullable=False),
-                sa.Column('days_before_due', sa.Integer, nullable=True),
-                sa.Column('status', sa.String(20), server_default='sent'),
-                sa.Column('error_message', sa.Text, nullable=True),
-                sa.Column('message_id', postgresql.UUID(as_uuid=True), nullable=True),
-                sa.Column('sent_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-                sa.Column('delivered_at', sa.DateTime(timezone=True), nullable=True),
-            )
-            # FK constraints will be added after all tables exist
-
-
-    # Add FK constraints after all tables are created
-    if conn.execute(sa.text(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'customer_service_schedules')"
-    )).scalar():
-        try:
-            op.create_foreign_key(
-                'customer_service_schedules_customer_id_fkey',
-                'customer_service_schedules', 'customers',
-                ['customer_id'], ['id']
-            )
-            op.create_foreign_key(
-                'customer_service_schedules_service_interval_id_fkey',
-                'customer_service_schedules', 'service_intervals',
-                ['service_interval_id'], ['id']
-            )
-        except Exception:
-            pass  # FK may already exist
-
-    if conn.execute(sa.text(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'service_reminders')"
-    )).scalar():
-        try:
-            op.create_foreign_key(
-                'service_reminders_schedule_id_fkey',
-                'service_reminders', 'customer_service_schedules',
-                ['schedule_id'], ['id']
-            )
-            op.create_foreign_key(
-                'service_reminders_customer_id_fkey',
-                'service_reminders', 'customers',
-                ['customer_id'], ['id']
-            )
-        except Exception:
-            pass  # FK may already exist
+    # Add FK constraints (skip if exist)
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE customer_service_schedules
+            ADD CONSTRAINT customer_service_schedules_customer_id_fkey
+            FOREIGN KEY (customer_id) REFERENCES customers(id);
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE customer_service_schedules
+            ADD CONSTRAINT customer_service_schedules_service_interval_id_fkey
+            FOREIGN KEY (service_interval_id) REFERENCES service_intervals(id);
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE service_reminders
+            ADD CONSTRAINT service_reminders_schedule_id_fkey
+            FOREIGN KEY (schedule_id) REFERENCES customer_service_schedules(id);
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE service_reminders
+            ADD CONSTRAINT service_reminders_customer_id_fkey
+            FOREIGN KEY (customer_id) REFERENCES customers(id);
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """)
 
 
 def downgrade() -> None:
-    op.drop_table('service_reminders', if_exists=True)
-    op.drop_table('customer_service_schedules', if_exists=True)
-    op.drop_table('service_intervals', if_exists=True)
-    op.drop_table('inspections', if_exists=True)
-    op.drop_table('certifications', if_exists=True)
-    op.drop_table('licenses', if_exists=True)
+    op.execute("DROP TABLE IF EXISTS service_reminders CASCADE")
+    op.execute("DROP TABLE IF EXISTS customer_service_schedules CASCADE")
+    op.execute("DROP TABLE IF NOT EXISTS service_intervals CASCADE")
+    op.execute("DROP TABLE IF EXISTS inspections CASCADE")
+    op.execute("DROP TABLE IF EXISTS certifications CASCADE")
+    op.execute("DROP TABLE IF EXISTS licenses CASCADE")
