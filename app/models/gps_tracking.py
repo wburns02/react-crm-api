@@ -252,7 +252,8 @@ class CustomerTrackingLink(Base):
     created_at = Column(DateTime, default=func.now())
 
     # Relationships
-    work_order = relationship("WorkOrder", backref="tracking_links")
+    # Note: backref disabled to avoid cascade delete issues when table doesn't exist
+    work_order = relationship("WorkOrder")
     customer = relationship("Customer")
     technician = relationship("Technician")
 
@@ -306,7 +307,8 @@ class ETACalculation(Base):
     calculated_at = Column(DateTime, default=func.now())
 
     # Relationships
-    work_order = relationship("WorkOrder", backref="eta_calculation")
+    # Note: backref disabled to avoid cascade delete issues when table doesn't exist
+    work_order = relationship("WorkOrder")
     technician = relationship("Technician")
 
     __table_args__ = (Index("idx_eta_work_order", "work_order_id"),)
