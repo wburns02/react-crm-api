@@ -35,7 +35,8 @@ class WorkOrderPhoto(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    work_order = relationship("WorkOrder", backref="photos")
+    # Note: backref disabled to avoid cascade delete issues when table doesn't exist
+    work_order = relationship("WorkOrder")
 
     def __repr__(self):
         return f"<WorkOrderPhoto {self.id} - {self.photo_type}>"
