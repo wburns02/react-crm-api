@@ -134,7 +134,7 @@ async def get_employee_dashboard(
         select(func.count())
         .select_from(WorkOrder)
         .where(
-            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.technician_id == technician.id,
             WorkOrder.is_clocked_in == True,
         )
     )
@@ -193,7 +193,7 @@ async def get_employee_jobs(
     if not technician:
         return {"jobs": []}
 
-    query = select(WorkOrder).where(WorkOrder.technician_id == str(technician.id))
+    query = select(WorkOrder).where(WorkOrder.technician_id == technician.id)
 
     if date_filter:
         query = query.where(WorkOrder.scheduled_date == date.fromisoformat(date_filter))
@@ -442,7 +442,7 @@ async def get_timeclock_status(
         clocked_in_result = await db.execute(
             select(WorkOrder)
             .where(
-                WorkOrder.technician_id == str(technician.id),
+                WorkOrder.technician_id == technician.id,
                 WorkOrder.is_clocked_in == True,
             )
             .limit(1)
@@ -499,7 +499,7 @@ async def get_timeclock_history(
         return {"entries": []}
 
     query = select(WorkOrder).where(
-        WorkOrder.technician_id == str(technician.id),
+        WorkOrder.technician_id == technician.id,
         WorkOrder.actual_start_time.isnot(None),
     )
 
@@ -540,7 +540,7 @@ async def get_my_jobs(
     if not technician:
         return {"jobs": [], "message": "No technician profile found"}
 
-    query = select(WorkOrder).where(WorkOrder.technician_id == str(technician.id))
+    query = select(WorkOrder).where(WorkOrder.technician_id == technician.id)
 
     if date_filter:
         query = query.where(WorkOrder.scheduled_date == date_filter)
@@ -993,7 +993,7 @@ async def get_my_stats(
         select(func.count())
         .select_from(WorkOrder)
         .where(
-            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.technician_id == technician.id,
             WorkOrder.status == "completed",
             WorkOrder.scheduled_date >= start_date,
         )
@@ -1003,7 +1003,7 @@ async def get_my_stats(
     # Get total labor minutes
     labor_result = await db.execute(
         select(func.sum(WorkOrder.total_labor_minutes)).where(
-            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.technician_id == technician.id,
             WorkOrder.scheduled_date >= start_date,
         )
     )
