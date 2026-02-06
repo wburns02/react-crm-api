@@ -427,10 +427,14 @@ async def get_timeclock_status(
 
         if time_entry:
             return {
-                "status": "clocked_in",
-                "clock_in": time_entry.clock_in.isoformat() if time_entry.clock_in else None,
-                "entry_id": str(time_entry.id),
-                "work_order_id": str(time_entry.work_order_id) if time_entry.work_order_id else None,
+                "entry": {
+                    "id": str(time_entry.id),
+                    "technician_id": str(time_entry.technician_id),
+                    "clock_in": time_entry.clock_in.isoformat() if time_entry.clock_in else None,
+                    "clock_out": None,
+                    "status": "clocked_in",
+                    "work_order_id": str(time_entry.work_order_id) if time_entry.work_order_id else None,
+                }
             }
 
     # Also check for any clocked-in work order (legacy support)
@@ -447,12 +451,17 @@ async def get_timeclock_status(
 
         if clocked_in_wo:
             return {
-                "status": "clocked_in",
-                "clock_in": clocked_in_wo.actual_start_time.isoformat() if clocked_in_wo.actual_start_time else None,
-                "work_order_id": str(clocked_in_wo.id),
+                "entry": {
+                    "id": str(clocked_in_wo.id),
+                    "technician_id": str(technician.id),
+                    "clock_in": clocked_in_wo.actual_start_time.isoformat() if clocked_in_wo.actual_start_time else None,
+                    "clock_out": None,
+                    "status": "clocked_in",
+                    "work_order_id": str(clocked_in_wo.id),
+                }
             }
 
-    return {"status": "clocked_out"}
+    return {"entry": None}
 
 
 @router.post("/timeclock/clock-in")
