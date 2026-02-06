@@ -148,25 +148,34 @@ class MarketingPlanRequest(BaseModel):
 
 async def _get_setting(db: AsyncSession, category: str) -> dict:
     """Load a settings category from system_settings."""
-    result = await db.execute(
-        select(SystemSettingStore).where(SystemSettingStore.category == category)
-    )
-    row = result.scalar_one_or_none()
-    return row.settings_data if row else {}
+    try:
+        result = await db.execute(
+            select(SystemSettingStore).where(SystemSettingStore.category == category)
+        )
+        row = result.scalar_one_or_none()
+        return row.settings_data if row else {}
+    except Exception as e:
+        logger.warning(f"Failed to read setting {category}: {e}")
+        await db.rollback()
+        return {}
 
 
 async def _save_setting(db: AsyncSession, category: str, data: dict):
     """Upsert a settings category in system_settings."""
-    result = await db.execute(
-        select(SystemSettingStore).where(SystemSettingStore.category == category)
-    )
-    row = result.scalar_one_or_none()
-    if row:
-        row.settings_data = data
-    else:
-        row = SystemSettingStore(category=category, settings_data=data)
-        db.add(row)
-    await db.commit()
+    try:
+        result = await db.execute(
+            select(SystemSettingStore).where(SystemSettingStore.category == category)
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            row.settings_data = data
+        else:
+            row = SystemSettingStore(category=category, settings_data=data)
+            db.add(row)
+        await db.commit()
+    except Exception as e:
+        logger.error(f"Failed to save setting {category}: {e}")
+        await db.rollback()
 
 
 # ============================================================================
@@ -189,7 +198,7 @@ async def _get_segment_query(db: AsyncSession, segment_id: str):
                 SELECT 1 FROM work_orders wo
                 WHERE wo.customer_id = customers.id
                 AND wo.status = 'completed'
-                AND wo.completed_date >= :cutoff
+                AND wo.actual_end_time >= :cutoff
             )
         """).bindparams(cutoff=twelve_months_ago)
         return [Customer.email.isnot(None), Customer.email != "", sub]
@@ -201,7 +210,7 @@ async def _get_segment_query(db: AsyncSession, segment_id: str):
                 SELECT 1 FROM work_orders wo
                 WHERE wo.customer_id = customers.id
                 AND wo.status = 'completed'
-                AND wo.completed_date >= :cutoff
+                AND wo.actual_end_time >= :cutoff
             )
         """).bindparams(cutoff=twelve_months_ago)
         return [Customer.email.isnot(None), Customer.email != "", sub]
@@ -219,7 +228,7 @@ async def _get_segment_query(db: AsyncSession, segment_id: str):
                 SELECT 1 FROM work_orders wo
                 WHERE wo.customer_id = customers.id
                 AND wo.status = 'completed'
-                AND wo.completed_date BETWEEN :start AND :end
+                AND wo.actual_end_time BETWEEN :start AND :end
             )
             AND NOT EXISTS (
                 SELECT 1 FROM work_orders wo2
@@ -243,10 +252,15 @@ async def _get_segment_query(db: AsyncSession, segment_id: str):
 
 async def _get_segment_count(db: AsyncSession, segment_id: str) -> int:
     """Get count of customers in a segment."""
-    conditions = await _get_segment_query(db, segment_id)
-    q = select(sa_func.count(Customer.id)).where(*conditions)
-    result = await db.execute(q)
-    return result.scalar() or 0
+    try:
+        conditions = await _get_segment_query(db, segment_id)
+        q = select(sa_func.count(Customer.id)).where(*conditions)
+        result = await db.execute(q)
+        return result.scalar() or 0
+    except Exception as e:
+        logger.warning(f"Failed to count segment {segment_id}: {e}")
+        await db.rollback()
+        return 0
 
 
 # ============================================================================
@@ -334,6 +348,14 @@ async def fix_email_marketing_tables(db: DbSession, current_user: CurrentUser) -
     results = []
 
     migrations = [
+        # Create system_settings table if missing (used for subscription/profile)
+        """CREATE TABLE IF NOT EXISTS system_settings (
+            id SERIAL PRIMARY KEY,
+            category VARCHAR(50) UNIQUE NOT NULL,
+            settings_data JSONB NOT NULL DEFAULT '{}',
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_by INTEGER
+        )""",
         # Create marketing_campaigns table if missing
         """CREATE TABLE IF NOT EXISTS marketing_campaigns (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
