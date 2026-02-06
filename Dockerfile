@@ -23,5 +23,5 @@ USER appuser
 # Railway provides PORT env var - expose a default but app uses $PORT
 EXPOSE 8080
 
-# Run migrations then start server
-CMD ["sh", "-c", "echo '=== Running Alembic migrations ===' && alembic upgrade head && echo '=== Migrations complete ===' && echo '=== Starting uvicorn ===' && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Use shell form with explicit sh -c for environment variable expansion
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
