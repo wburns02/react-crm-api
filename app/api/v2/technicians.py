@@ -316,10 +316,8 @@ async def list_technicians(
         }
     except Exception as e:
         import traceback
-        import sentry_sdk
 
         logger.error(f"Error in list_technicians: {traceback.format_exc()}")
-        sentry_sdk.capture_exception(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while fetching technicians",

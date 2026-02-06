@@ -793,10 +793,8 @@ async def get_dispatch_map_data(
         }
 
     except Exception as e:
-        import sentry_sdk
 
         logger.error(f"Error in get_fleet_data_v2: {traceback.format_exc()}")
-        sentry_sdk.capture_exception(e)
         return {
             "error": "An internal error occurred while fetching fleet data",
             "technicians": [],
@@ -1171,8 +1169,6 @@ async def seed_demo_data(db: Session = Depends(get_db), current_user=Depends(get
         }
 
     except Exception as e:
-        import sentry_sdk
 
         logger.error(f"Error in seed_technician_locations: {traceback.format_exc()}")
-        sentry_sdk.capture_exception(e)
         return {"success": False, "error": "An internal error occurred while seeding locations"}

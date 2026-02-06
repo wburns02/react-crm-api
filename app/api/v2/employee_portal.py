@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File
 from sqlalchemy import select, func, and_
 from typing import Optional, List
 from pydantic import BaseModel, Field
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 import logging
 
 from app.api.deps import DbSession, CurrentUser
@@ -305,7 +305,7 @@ async def patch_employee_job(
 
     if request.notes:
         existing_notes = work_order.notes or ""
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         work_order.notes = f"{existing_notes}\n[{timestamp}] {request.notes}".strip()
 
     await db.commit()
@@ -335,7 +335,7 @@ async def start_job(
         work_order.status = "en_route"
     elif work_order.status == "en_route":
         work_order.status = "in_progress"
-        work_order.actual_start_time = datetime.utcnow()
+        work_order.actual_start_time = datetime.now(timezone.utc)
         work_order.is_clocked_in = True
         if latitude and longitude:
             work_order.clock_in_gps_lat = latitude
@@ -369,7 +369,7 @@ async def complete_job(
         raise HTTPException(status_code=404, detail="Job not found")
 
     work_order.status = "completed"
-    work_order.actual_end_time = datetime.utcnow()
+    work_order.actual_end_time = datetime.now(timezone.utc)
     work_order.is_clocked_in = False
 
     if latitude and longitude:
@@ -377,12 +377,12 @@ async def complete_job(
         work_order.clock_out_gps_lon = longitude
 
     if work_order.actual_start_time:
-        duration = datetime.utcnow() - work_order.actual_start_time
+        duration = datetime.now(timezone.utc) - work_order.actual_start_time
         work_order.total_labor_minutes = int(duration.total_seconds() / 60)
 
     if notes:
         existing_notes = work_order.notes or ""
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         work_order.notes = f"{existing_notes}\n[{timestamp}] Completion: {notes}".strip()
 
     # Auto-create commission for completed work order
@@ -584,7 +584,7 @@ async def clock_in(
     current_user: CurrentUser,
 ):
     """Clock in to start work (GPS verified)."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Find technician
     tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
@@ -679,7 +679,7 @@ async def clock_out(
 ):
     """Clock out from work (GPS verified)."""
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Find technician (auto-create if missing for consistency, though shouldn't happen if they clocked in)
         tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
@@ -780,7 +780,7 @@ async def update_job_status(
 
     if request.notes:
         existing_notes = work_order.notes or ""
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         work_order.notes = f"{existing_notes}\n[{timestamp}] {request.notes}".strip()
 
     await db.commit()
@@ -861,7 +861,7 @@ async def upload_photo(
         work_order_id=work_order_id,
         photo_type=photo_type,
         data=data_uri,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
     db.add(photo)
     await db.commit()
@@ -895,7 +895,7 @@ async def capture_customer_signature(
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Store signature as a photo record (type=signature)
     signature_photo = WorkOrderPhoto(
@@ -962,7 +962,7 @@ async def sync_offline_data(
         "status": "synced",
         "processed": processed,
         "errors": errors,
-        "sync_time": datetime.utcnow().isoformat(),
+        "sync_time": datetime.now(timezone.utc).isoformat(),
     }
 
 

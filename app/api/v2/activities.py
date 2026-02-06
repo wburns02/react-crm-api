@@ -76,10 +76,8 @@ async def list_activities(
         }
     except Exception as e:
         import traceback
-        import sentry_sdk
 
         logger.error(f"Error in list_activities: {traceback.format_exc()}")
-        sentry_sdk.capture_exception(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while fetching activities",
@@ -135,10 +133,8 @@ async def create_activity(
         return activity_to_response(activity)
     except Exception as e:
         import traceback
-        import sentry_sdk
 
         logger.error(f"Error creating activity: {traceback.format_exc()}")
-        sentry_sdk.capture_exception(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create activity",
