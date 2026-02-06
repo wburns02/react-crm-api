@@ -147,34 +147,42 @@ async def list_clover_payments(
     offset: int = Query(0, ge=0),
 ) -> dict:
     """List payments from Clover POS device."""
-    clover = get_clover_service()
-    if not clover.is_configured():
-        raise HTTPException(status_code=503, detail="Clover is not configured")
+    try:
+        clover = get_clover_service()
+        if not clover.is_configured():
+            # Return empty list instead of 503 - not configured is not an error
+            return {"payments": [], "total": 0, "error": "Clover not configured"}
 
-    data = await clover.list_payments(limit=limit, offset=offset)
-    if data is None:
-        raise HTTPException(status_code=502, detail="Failed to fetch payments from Clover")
+        data = await clover.list_payments(limit=limit, offset=offset)
+        if data is None:
+            # Return empty list instead of 502 - failed API calls shouldn't break UI
+            return {"payments": [], "total": 0, "error": "Could not fetch from Clover API"}
 
-    elements = data.get("elements", [])
-    payments = []
-    for p in elements:
-        tender = p.get("tender", {})
-        payments.append({
-            "id": p.get("id"),
-            "amount": p.get("amount", 0),
-            "amount_dollars": round(p.get("amount", 0) / 100, 2),
-            "tip_amount": p.get("tipAmount", 0),
-            "tax_amount": p.get("taxAmount", 0),
-            "result": p.get("result"),
-            "tender_label": tender.get("label", "Unknown"),
-            "tender_id": tender.get("id"),
-            "order_id": p.get("order", {}).get("id") if isinstance(p.get("order"), dict) else None,
-            "employee_id": p.get("employee", {}).get("id") if isinstance(p.get("employee"), dict) else None,
-            "created_time": p.get("createdTime"),
-            "offline": p.get("offline", False),
-        })
+        elements = data.get("elements", [])
+        payments = []
+        for p in elements:
+            tender = p.get("tender", {})
+            payments.append({
+                "id": p.get("id"),
+                "amount": p.get("amount", 0),
+                "amount_dollars": round(p.get("amount", 0) / 100, 2),
+                "tip_amount": p.get("tipAmount", 0),
+                "tax_amount": p.get("taxAmount", 0),
+                "result": p.get("result"),
+                "tender_label": tender.get("label", "Unknown"),
+                "tender_id": tender.get("id"),
+                "order_id": p.get("order", {}).get("id") if isinstance(p.get("order"), dict) else None,
+                "employee_id": p.get("employee", {}).get("id") if isinstance(p.get("employee"), dict) else None,
+                "created_time": p.get("createdTime"),
+                "offline": p.get("offline", False),
+            })
 
-    return {"payments": payments, "total": len(payments)}
+        return {"payments": payments, "total": len(payments)}
+    except Exception as e:
+        import logging
+        logging.error(f"Clover payments endpoint error: {e}")
+        # Return empty list instead of 500 - don't break UI
+        return {"payments": [], "total": 0, "error": str(e)}
 
 
 @router.get("/orders")
