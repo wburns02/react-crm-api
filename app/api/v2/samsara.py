@@ -124,6 +124,12 @@ async def fetch_vehicles_from_samsara() -> list[Vehicle]:
             raise HTTPException(status_code=503, detail="Fleet tracking service unavailable")
 
         vehicles_data = vehicles_response.json()
+
+        # Check if response is a dict before accessing keys
+        if not isinstance(vehicles_data, dict):
+            logger.error(f"Unexpected Samsara vehicles response format: {type(vehicles_data).__name__}")
+            return []
+
         vehicle_info = {v["id"]: v for v in vehicles_data.get("data", [])}
 
         # Then get GPS stats for all vehicles
@@ -139,6 +145,11 @@ async def fetch_vehicles_from_samsara() -> list[Vehicle]:
             stats_data = {"data": []}
         else:
             stats_data = stats_response.json()
+
+            # Check if response is a dict before accessing keys
+            if not isinstance(stats_data, dict):
+                logger.warning(f"Unexpected Samsara stats response format: {type(stats_data).__name__}, using empty data")
+                stats_data = {"data": []}
 
         vehicles = []
         now = datetime.now(timezone.utc)
