@@ -690,6 +690,42 @@ async def list_calls(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/user/calls")
+async def get_user_calls(
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """Get calls for the current user's extension.
+
+    This is a stub endpoint for the Phone page that filters calls by user.
+    In a full implementation, this would filter by the user's RingCentral extension.
+    """
+    # For now, just return all calls (same as /calls endpoint)
+    # TODO: Filter by current_user.phone_extension once user extensions are tracked
+    query = select(CallLog).order_by(CallLog.created_at.desc())
+
+    # Count
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+
+    # Paginate
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+
+    result = await db.execute(query)
+    calls = result.scalars().all()
+
+    return {
+        "items": [call_log_to_response(c) for c in calls],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
 # NOTE: /calls/analytics MUST be defined BEFORE /calls/{call_id}
 # Otherwise FastAPI will match "analytics" as a call_id parameter
 @router.get("/calls/analytics")
