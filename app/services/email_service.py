@@ -23,9 +23,28 @@ class EmailService:
     """Service for sending emails via Brevo API."""
 
     def __init__(self):
-        self.api_key = settings.BREVO_API_KEY
+        self.api_key = self._extract_api_key(settings.BREVO_API_KEY)
         self.from_address = settings.EMAIL_FROM_ADDRESS
         self.from_name = settings.EMAIL_FROM_NAME
+
+    @staticmethod
+    def _extract_api_key(raw_key: str | None) -> str | None:
+        """Extract raw API key from potential base64 JSON wrapper."""
+        if not raw_key:
+            return None
+        # If it starts with xkeysib-, it's already a raw key
+        if raw_key.startswith("xkeysib-"):
+            return raw_key
+        # Try base64 decode (MCP-wrapped keys are base64 JSON)
+        try:
+            import base64, json
+            decoded = base64.b64decode(raw_key + "==").decode()
+            data = json.loads(decoded)
+            if isinstance(data, dict) and "api_key" in data:
+                return data["api_key"]
+        except Exception:
+            pass
+        return raw_key
 
     @property
     def is_configured(self) -> bool:
