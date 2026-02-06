@@ -127,8 +127,11 @@ async def get_revenue_report(
         )
     except Exception as e:
         import logging
+        import traceback
         logging.error(f"Error generating revenue report: {e}")
-        raise
+        logging.error(traceback.format_exc())
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Revenue report error: {str(e)}")
 
 
 @router.get("/technician", response_model=TechnicianReport)
