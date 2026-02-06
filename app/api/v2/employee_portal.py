@@ -584,12 +584,19 @@ async def clock_in(
     # Auto-create technician profile if missing
     if not technician:
         logger.info(f"Auto-creating Technician profile for {current_user.email}")
+        # Extract name from email (e.g., "will.burns" -> "Will" "Burns")
+        email_name = current_user.email.split("@")[0]
+        name_parts = email_name.replace(".", " ").split()
+        first_name = name_parts[0].title() if name_parts else "Employee"
+        last_name = name_parts[1].title() if len(name_parts) > 1 else "User"
+
         technician = Technician(
             id=uuid_mod.uuid4(),
             email=current_user.email,
-            name=current_user.email.split("@")[0].replace(".", " ").title(),
+            first_name=first_name,
+            last_name=last_name,
             is_active=True,
-            specializations=["General"],
+            skills=["General"],
         )
         db.add(technician)
         await db.flush()  # Get the ID without committing yet
