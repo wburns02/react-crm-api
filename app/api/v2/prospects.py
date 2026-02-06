@@ -3,6 +3,7 @@ Prospects API - Customers in prospect stages (not yet won).
 Prospects are customers with prospect_stage != 'won'.
 """
 
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, or_
 from typing import Optional
@@ -79,7 +80,7 @@ async def list_prospects(
 
 @router.get("/{prospect_id}", response_model=CustomerResponse)
 async def get_prospect(
-    prospect_id: int,
+    prospect_id: UUID,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -117,7 +118,7 @@ async def create_prospect(
 
 @router.patch("/{prospect_id}", response_model=CustomerResponse)
 async def update_prospect(
-    prospect_id: int,
+    prospect_id: UUID,
     prospect_data: CustomerUpdate,
     db: DbSession,
     current_user: CurrentUser,
@@ -144,7 +145,7 @@ async def update_prospect(
 
 @router.patch("/{prospect_id}/stage", response_model=CustomerResponse)
 async def update_prospect_stage(
-    prospect_id: int,
+    prospect_id: UUID,
     stage: str,
     db: DbSession,
     current_user: CurrentUser,
@@ -167,7 +168,7 @@ async def update_prospect_stage(
 
 @router.delete("/{prospect_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_prospect(
-    prospect_id: int,
+    prospect_id: UUID,
     db: DbSession,
     current_user: CurrentUser,
 ):
