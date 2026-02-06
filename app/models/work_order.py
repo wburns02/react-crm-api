@@ -63,10 +63,10 @@ class WorkOrder(Base):
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
     technician_id = Column(UUID(as_uuid=True), ForeignKey("technicians.id"), nullable=True, index=True)
 
-    # Job details - PostgreSQL ENUM types
-    job_type = Column(WorkOrderJobTypeEnum, nullable=False)
-    priority = Column(WorkOrderPriorityEnum)
-    status = Column(WorkOrderStatusEnum)
+    # Job details - use String to avoid asyncpg ENUM type mismatch errors
+    job_type = Column(String(50), nullable=False)
+    priority = Column(String(50))
+    status = Column(String(50))
 
     # Scheduling
     scheduled_date = Column(Date)

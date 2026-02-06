@@ -93,9 +93,7 @@ async def get_revenue_report(
         end = date.today()
         start = end - timedelta(days=30)
 
-        from sqlalchemy import cast, String
-
-        wo_result = await db.execute(select(func.count()).where(cast(WorkOrder.status, String) == "completed"))
+        wo_result = await db.execute(select(func.count()).where(WorkOrder.status == "completed"))
         work_orders_completed = wo_result.scalar() or 0
         avg_job_value = 350.0
         total_revenue = work_orders_completed * avg_job_value
@@ -103,7 +101,7 @@ async def get_revenue_report(
         service_breakdown = []
         for job_type in JOB_TYPES:
             type_result = await db.execute(
-                select(func.count()).where(and_(cast(WorkOrder.job_type, String) == job_type, cast(WorkOrder.status, String) == "completed"))
+                select(func.count()).where(and_(WorkOrder.job_type == job_type, WorkOrder.status == "completed"))
             )
             count = type_result.scalar() or 0
             if count > 0:
