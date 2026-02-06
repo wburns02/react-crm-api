@@ -18,7 +18,9 @@ import logging
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
 from app.models.technician import Technician
+from app.models.payroll import TimeEntry
 from app.services.commission_service import auto_create_commission
+import uuid as uuid_mod
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -410,31 +412,47 @@ async def get_timeclock_status(
     tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
-    if not technician:
-        return {"entry": None}
-
-    # Check for any clocked-in work order
-    clocked_in_result = await db.execute(
-        select(WorkOrder)
-        .where(
-            WorkOrder.technician_id == str(technician.id),
-            WorkOrder.is_clocked_in == True,
+    # Check for active TimeEntry (clock_out is NULL)
+    if technician:
+        time_entry_result = await db.execute(
+            select(TimeEntry)
+            .where(
+                TimeEntry.technician_id == technician.id,
+                TimeEntry.clock_out.is_(None),
+            )
+            .order_by(TimeEntry.clock_in.desc())
+            .limit(1)
         )
-        .limit(1)
-    )
-    clocked_in_wo = clocked_in_result.scalar_one_or_none()
+        time_entry = time_entry_result.scalar_one_or_none()
 
-    if clocked_in_wo:
-        return {
-            "entry": {
-                "id": str(clocked_in_wo.id),
+        if time_entry:
+            return {
+                "status": "clocked_in",
+                "clock_in": time_entry.clock_in.isoformat() if time_entry.clock_in else None,
+                "entry_id": str(time_entry.id),
+                "work_order_id": str(time_entry.work_order_id) if time_entry.work_order_id else None,
+            }
+
+    # Also check for any clocked-in work order (legacy support)
+    if technician:
+        clocked_in_result = await db.execute(
+            select(WorkOrder)
+            .where(
+                WorkOrder.technician_id == str(technician.id),
+                WorkOrder.is_clocked_in == True,
+            )
+            .limit(1)
+        )
+        clocked_in_wo = clocked_in_result.scalar_one_or_none()
+
+        if clocked_in_wo:
+            return {
+                "status": "clocked_in",
                 "clock_in": clocked_in_wo.actual_start_time.isoformat() if clocked_in_wo.actual_start_time else None,
-                "clock_out": None,
                 "work_order_id": str(clocked_in_wo.id),
             }
-        }
 
-    return {"entry": None}
+    return {"status": "clocked_out"}
 
 
 @router.post("/timeclock/clock-in")
@@ -557,50 +575,82 @@ async def clock_in(
     current_user: CurrentUser,
 ):
     """Clock in to start work (GPS verified)."""
+    now = datetime.utcnow()
+
     # Find technician
     tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
-    # If work order specified, clock into that job
-    if request.work_order_id:
-        if not technician:
-            raise HTTPException(status_code=404, detail="Technician profile required for job clock-in")
+    if not technician:
+        # For users without technician profile, return success but no database record
+        return {
+            "status": "clocked_in",
+            "clock_in": now.isoformat(),
+            "location": {
+                "lat": request.latitude,
+                "lon": request.longitude,
+            } if request.latitude is not None else None,
+            "message": "Clock-in recorded (no technician profile)",
+        }
 
+    # Check for existing open time entry
+    existing_entry_result = await db.execute(
+        select(TimeEntry)
+        .where(
+            TimeEntry.technician_id == technician.id,
+            TimeEntry.clock_out.is_(None),
+        )
+        .limit(1)
+    )
+    existing_entry = existing_entry_result.scalar_one_or_none()
+
+    if existing_entry:
+        return {
+            "status": "clocked_in",
+            "clock_in": existing_entry.clock_in.isoformat(),
+            "entry_id": str(existing_entry.id),
+            "message": "Already clocked in",
+        }
+
+    # Create new time entry
+    time_entry = TimeEntry(
+        id=uuid_mod.uuid4(),
+        technician_id=technician.id,
+        entry_date=now.date(),
+        clock_in=now,
+        clock_in_lat=request.latitude,
+        clock_in_lon=request.longitude,
+        work_order_id=request.work_order_id if request.work_order_id else None,
+        entry_type="work",
+        status="pending",
+        notes=request.notes,
+    )
+    db.add(time_entry)
+
+    # If work order specified, also update work order
+    if request.work_order_id:
         wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == request.work_order_id))
         work_order = wo_result.scalar_one_or_none()
 
-        if not work_order:
-            raise HTTPException(status_code=404, detail="Work order not found")
+        if work_order:
+            work_order.is_clocked_in = True
+            work_order.actual_start_time = now
+            if request.latitude is not None:
+                work_order.clock_in_gps_lat = request.latitude
+            if request.longitude is not None:
+                work_order.clock_in_gps_lon = request.longitude
+            if work_order.status == "scheduled":
+                work_order.status = "in_progress"
 
-        work_order.is_clocked_in = True
-        work_order.actual_start_time = datetime.utcnow()
-        if request.latitude is not None:
-            work_order.clock_in_gps_lat = request.latitude
-        if request.longitude is not None:
-            work_order.clock_in_gps_lon = request.longitude
+    await db.commit()
+    await db.refresh(time_entry)
 
-        if work_order.status == "scheduled":
-            work_order.status = "in_progress"
-
-        await db.commit()
-
-        return {
-            "status": "clocked_in",
-            "clock_in": datetime.utcnow().isoformat(),
-            "work_order_id": request.work_order_id,
-            "location_verified": request.latitude is not None and request.longitude is not None,
-        }
-
-    # General clock in (start of day) - works even without technician profile
-    now = datetime.utcnow()
     return {
         "status": "clocked_in",
-        "clock_in": now.isoformat(),
-        "location": {
-            "lat": request.latitude,
-            "lon": request.longitude,
-        } if request.latitude is not None else None,
-        "technician_id": str(technician.id) if technician else None,
+        "clock_in": time_entry.clock_in.isoformat(),
+        "entry_id": str(time_entry.id),
+        "work_order_id": request.work_order_id,
+        "location_verified": request.latitude is not None and request.longitude is not None,
     }
 
 
@@ -613,42 +663,77 @@ async def clock_out(
     """Clock out from work (GPS verified)."""
     now = datetime.utcnow()
 
-    if request.work_order_id:
-        wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == request.work_order_id))
-        work_order = wo_result.scalar_one_or_none()
+    # Find technician
+    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
+    technician = tech_result.scalar_one_or_none()
 
-        if not work_order:
-            raise HTTPException(status_code=404, detail="Work order not found")
-
-        work_order.is_clocked_in = False
-        work_order.actual_end_time = now
-        if request.latitude is not None:
-            work_order.clock_out_gps_lat = request.latitude
-        if request.longitude is not None:
-            work_order.clock_out_gps_lon = request.longitude
-
-        # Calculate labor minutes
-        if work_order.actual_start_time:
-            duration = now - work_order.actual_start_time
-            work_order.total_labor_minutes = int(duration.total_seconds() / 60)
-
-        await db.commit()
-
+    if not technician:
         return {
             "status": "clocked_out",
             "clock_out": now.isoformat(),
-            "work_order_id": request.work_order_id,
-            "labor_minutes": work_order.total_labor_minutes,
+            "message": "Clock-out recorded (no technician profile)",
         }
 
-    # General clock out
+    # Find active time entry
+    time_entry_result = await db.execute(
+        select(TimeEntry)
+        .where(
+            TimeEntry.technician_id == technician.id,
+            TimeEntry.clock_out.is_(None),
+        )
+        .order_by(TimeEntry.clock_in.desc())
+        .limit(1)
+    )
+    time_entry = time_entry_result.scalar_one_or_none()
+
+    if not time_entry:
+        return {
+            "status": "clocked_out",
+            "clock_out": now.isoformat(),
+            "message": "No active clock-in found",
+        }
+
+    # Update time entry
+    time_entry.clock_out = now
+    time_entry.clock_out_lat = request.latitude
+    time_entry.clock_out_lon = request.longitude
+
+    # Calculate hours
+    duration = now - time_entry.clock_in
+    total_hours = duration.total_seconds() / 3600
+    time_entry.regular_hours = min(total_hours, 8.0)
+    time_entry.overtime_hours = max(0, total_hours - 8.0)
+
+    if request.notes:
+        time_entry.notes = f"{time_entry.notes or ''}\n{request.notes}".strip()
+
+    # If work order specified, also update work order
+    if request.work_order_id or time_entry.work_order_id:
+        work_order_id = request.work_order_id or time_entry.work_order_id
+        wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+        work_order = wo_result.scalar_one_or_none()
+
+        if work_order:
+            work_order.is_clocked_in = False
+            work_order.actual_end_time = now
+            if request.latitude is not None:
+                work_order.clock_out_gps_lat = request.latitude
+            if request.longitude is not None:
+                work_order.clock_out_gps_lon = request.longitude
+            if work_order.actual_start_time:
+                duration_minutes = (now - work_order.actual_start_time).total_seconds() / 60
+                work_order.total_labor_minutes = int(duration_minutes)
+
+    await db.commit()
+    await db.refresh(time_entry)
+
     return {
         "status": "clocked_out",
-        "clock_out": now.isoformat(),
-        "location": {
-            "lat": request.latitude,
-            "lon": request.longitude,
-        } if request.latitude is not None else None,
+        "clock_out": time_entry.clock_out.isoformat(),
+        "entry_id": str(time_entry.id),
+        "total_hours": round(time_entry.regular_hours + time_entry.overtime_hours, 2),
+        "regular_hours": round(time_entry.regular_hours, 2),
+        "overtime_hours": round(time_entry.overtime_hours, 2),
     }
 
 
