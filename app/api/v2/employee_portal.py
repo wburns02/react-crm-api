@@ -83,69 +83,80 @@ async def get_employee_dashboard(
     current_user: CurrentUser,
 ):
     """Get employee dashboard stats."""
-    # Find technician
-    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
-    technician = tech_result.scalar_one_or_none()
+    try:
+        # Find technician
+        tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
+        technician = tech_result.scalar_one_or_none()
 
-    if not technician:
+        if not technician:
+            return {
+                "jobs_today": 0,
+                "jobs_completed_today": 0,
+                "hours_today": 0,
+                "is_clocked_in": False,
+            }
+
+        today = date.today()
+        tech_id_str = str(technician.id)
+
+        # Jobs today
+        jobs_result = await db.execute(
+            select(func.count())
+            .select_from(WorkOrder)
+            .where(
+                WorkOrder.technician_id == tech_id_str,
+                WorkOrder.scheduled_date == today,
+            )
+        )
+        jobs_today = jobs_result.scalar() or 0
+
+        # Completed jobs today
+        completed_result = await db.execute(
+            select(func.count())
+            .select_from(WorkOrder)
+            .where(
+                WorkOrder.technician_id == tech_id_str,
+                WorkOrder.scheduled_date == today,
+                WorkOrder.status == "completed",
+            )
+        )
+        completed_today = completed_result.scalar() or 0
+
+        # Hours today
+        hours_result = await db.execute(
+            select(func.sum(WorkOrder.total_labor_minutes)).where(
+                WorkOrder.technician_id == tech_id_str,
+                WorkOrder.scheduled_date == today,
+            )
+        )
+        minutes_today = hours_result.scalar() or 0
+
+        # Check if clocked in via TimeEntry (more reliable)
+        time_entry_result = await db.execute(
+            select(func.count())
+            .select_from(TimeEntry)
+            .where(
+                TimeEntry.technician_id == technician.id,
+                TimeEntry.clock_out.is_(None),
+            )
+        )
+        is_clocked_in = (time_entry_result.scalar() or 0) > 0
+
+        return {
+            "jobs_today": jobs_today,
+            "jobs_completed_today": completed_today,
+            "hours_today": round(minutes_today / 60, 1) if minutes_today else 0.0,
+            "is_clocked_in": is_clocked_in,
+        }
+    except Exception as e:
+        logger.error(f"Dashboard error for {current_user.email}: {type(e).__name__}: {str(e)}")
+        # Return safe defaults rather than crashing
         return {
             "jobs_today": 0,
             "jobs_completed_today": 0,
-            "hours_today": 0,
+            "hours_today": 0.0,
             "is_clocked_in": False,
         }
-
-    today = date.today()
-
-    # Jobs today
-    jobs_result = await db.execute(
-        select(func.count())
-        .select_from(WorkOrder)
-        .where(
-            WorkOrder.technician_id == technician.id,  # Use UUID directly, not string
-            WorkOrder.scheduled_date == today,
-        )
-    )
-    jobs_today = jobs_result.scalar() or 0
-
-    # Completed jobs today
-    completed_result = await db.execute(
-        select(func.count())
-        .select_from(WorkOrder)
-        .where(
-            WorkOrder.technician_id == technician.id,  # Use UUID directly, not string
-            WorkOrder.scheduled_date == today,
-            WorkOrder.status == "completed",
-        )
-    )
-    completed_today = completed_result.scalar() or 0
-
-    # Hours today
-    hours_result = await db.execute(
-        select(func.sum(WorkOrder.total_labor_minutes)).where(
-            WorkOrder.technician_id == technician.id,  # Use UUID directly, not string
-            WorkOrder.scheduled_date == today,
-        )
-    )
-    minutes_today = hours_result.scalar() or 0
-
-    # Check if clocked in
-    clocked_in_result = await db.execute(
-        select(func.count())
-        .select_from(WorkOrder)
-        .where(
-            WorkOrder.technician_id == technician.id,
-            WorkOrder.is_clocked_in == True,
-        )
-    )
-    is_clocked_in = (clocked_in_result.scalar() or 0) > 0
-
-    return {
-        "jobs_today": jobs_today,
-        "jobs_completed_today": completed_today,
-        "hours_today": round(minutes_today / 60, 1),
-        "is_clocked_in": is_clocked_in,
-    }
 
 
 @router.get("/profile")
