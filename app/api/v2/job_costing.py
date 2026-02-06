@@ -726,7 +726,7 @@ async def list_technician_pay_rates(
             result.append(
                 {
                     "technician_id": tech.id,
-                    "name": tech.name,
+                    "name": f"{tech.first_name} {tech.last_name}",
                     "pay_type": pay_rate.pay_type if pay_rate else "hourly",
                     "hourly_rate": pay_rate.hourly_rate if pay_rate else None,
                     "salary_amount": pay_rate.salary_amount if pay_rate else None,

@@ -102,7 +102,7 @@ async def get_employee_dashboard(
         select(func.count())
         .select_from(WorkOrder)
         .where(
-            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.technician_id == technician.id,  # Use UUID directly, not string
             WorkOrder.scheduled_date == today,
         )
     )
@@ -113,7 +113,7 @@ async def get_employee_dashboard(
         select(func.count())
         .select_from(WorkOrder)
         .where(
-            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.technician_id == technician.id,  # Use UUID directly, not string
             WorkOrder.scheduled_date == today,
             WorkOrder.status == "completed",
         )
@@ -123,7 +123,7 @@ async def get_employee_dashboard(
     # Hours today
     hours_result = await db.execute(
         select(func.sum(WorkOrder.total_labor_minutes)).where(
-            WorkOrder.technician_id == str(technician.id),
+            WorkOrder.technician_id == technician.id,  # Use UUID directly, not string
             WorkOrder.scheduled_date == today,
         )
     )

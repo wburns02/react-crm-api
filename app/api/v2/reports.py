@@ -89,41 +89,46 @@ async def get_revenue_report(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ):
-    end = date.today()
-    start = end - timedelta(days=30)
+    try:
+        end = date.today()
+        start = end - timedelta(days=30)
 
-    wo_result = await db.execute(select(func.count()).where(WorkOrder.status == "completed"))
-    work_orders_completed = wo_result.scalar() or 0
-    avg_job_value = 350.0
-    total_revenue = work_orders_completed * avg_job_value
+        wo_result = await db.execute(select(func.count()).where(WorkOrder.status == "completed"))
+        work_orders_completed = wo_result.scalar() or 0
+        avg_job_value = 350.0
+        total_revenue = work_orders_completed * avg_job_value
 
-    service_breakdown = []
-    for job_type in JOB_TYPES:
-        type_result = await db.execute(
-            select(func.count()).where(and_(WorkOrder.job_type == job_type, WorkOrder.status == "completed"))
-        )
-        count = type_result.scalar() or 0
-        if count > 0:
-            service_breakdown.append(
-                ServiceBreakdown(
-                    service_type=job_type,
-                    count=count,
-                    revenue=count * avg_job_value,
-                    percentage=(count / work_orders_completed * 100) if work_orders_completed > 0 else 0,
-                )
+        service_breakdown = []
+        for job_type in JOB_TYPES:
+            type_result = await db.execute(
+                select(func.count()).where(and_(WorkOrder.job_type == job_type, WorkOrder.status == "completed"))
             )
+            count = type_result.scalar() or 0
+            if count > 0:
+                service_breakdown.append(
+                    ServiceBreakdown(
+                        service_type=job_type,
+                        count=count,
+                        revenue=count * avg_job_value,
+                        percentage=(count / work_orders_completed * 100) if work_orders_completed > 0 else 0,
+                    )
+                )
 
-    return RevenueReport(
-        metrics=RevenueMetrics(
-            total_revenue=total_revenue,
-            work_orders_completed=work_orders_completed,
-            average_job_value=avg_job_value,
-            new_customers=0,
-            repeat_customer_rate=0.0,
-        ),
-        service_breakdown=service_breakdown,
-        date_range={"start_date": start.isoformat(), "end_date": end.isoformat()},
-    )
+        return RevenueReport(
+            metrics=RevenueMetrics(
+                total_revenue=total_revenue,
+                work_orders_completed=work_orders_completed,
+                average_job_value=avg_job_value,
+                new_customers=0,
+                repeat_customer_rate=0.0,
+            ),
+            service_breakdown=service_breakdown,
+            date_range={"start_date": start.isoformat(), "end_date": end.isoformat()},
+        )
+    except Exception as e:
+        import logging
+        logging.error(f"Error generating revenue report: {e}")
+        raise
 
 
 @router.get("/technician", response_model=TechnicianReport)

@@ -182,38 +182,60 @@ def login(session: requests.Session, api_url: str) -> str:
     return resp.cookies.get("session", "")
 
 
-def send_batch(session: requests.Session, api_url: str, permits: list, source_code: str, batch_num: int, total_batches: int) -> dict:
-    """Send a batch of permits to the API."""
+def send_batch(session: requests.Session, api_url: str, permits: list, source_code: str, batch_num: int, total_batches: int, max_retries: int = 3) -> dict:
+    """Send a batch of permits to the API with retry logic."""
     payload = {
         "source_portal_code": source_code,
         "permits": permits,
     }
 
-    resp = session.post(
-        f"{api_url}/permits/batch",
-        json=payload,
-        timeout=300,
-    )
-
-    if resp.status_code != 200:
-        print(f"  Batch {batch_num}/{total_batches} FAILED: {resp.status_code}")
+    for attempt in range(max_retries):
         try:
-            detail = resp.json().get("detail", resp.text[:200])
-        except Exception:
-            detail = resp.text[:200]
-        print(f"  Error: {detail}")
-        return {"status": "failed", "error": detail}
+            resp = session.post(
+                f"{api_url}/permits/batch",
+                json=payload,
+                timeout=300,
+            )
 
-    result = resp.json()
-    stats = result.get("stats", {})
-    print(
-        f"  Batch {batch_num}/{total_batches}: "
-        f"inserted={stats.get('inserted', 0)}, "
-        f"updated={stats.get('updated', 0)}, "
-        f"skipped={stats.get('skipped', 0)}, "
-        f"errors={stats.get('errors', 0)}"
-    )
-    return result
+            if resp.status_code != 200:
+                print(f"  Batch {batch_num}/{total_batches} FAILED: {resp.status_code}")
+                try:
+                    detail = resp.json().get("detail", resp.text[:200])
+                except Exception:
+                    detail = resp.text[:200]
+                print(f"  Error: {detail}")
+                if attempt < max_retries - 1:
+                    print(f"  Retrying in {5 * (attempt + 1)}s...")
+                    time.sleep(5 * (attempt + 1))
+                    continue
+                return {"status": "failed", "error": detail}
+
+            result = resp.json()
+            stats = result.get("stats", {})
+            print(
+                f"  Batch {batch_num}/{total_batches}: "
+                f"inserted={stats.get('inserted', 0)}, "
+                f"updated={stats.get('updated', 0)}, "
+                f"skipped={stats.get('skipped', 0)}, "
+                f"errors={stats.get('errors', 0)}"
+            )
+            return result
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            print(f"  Batch {batch_num}/{total_batches} connection error (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                wait = 10 * (attempt + 1)
+                print(f"  Retrying in {wait}s...")
+                time.sleep(wait)
+                # Re-login in case session expired
+                try:
+                    login(session, api_url)
+                except Exception:
+                    pass
+            else:
+                return {"status": "failed", "error": str(e)}
+
+    return {"status": "failed", "error": "Max retries exceeded"}
 
 
 def main():
