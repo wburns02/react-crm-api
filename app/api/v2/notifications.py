@@ -356,6 +356,28 @@ async def create_notification(
     }
 
 
+@router.get("/preferences")
+async def get_notification_preferences(
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """Get user's notification preferences."""
+    # Return default preferences (stub - can be enhanced to store in DB)
+    from pydantic import BaseModel
+
+    class NotificationPreferences(BaseModel):
+        new_work_order: bool = True
+        work_order_assigned: bool = True
+        work_order_status_change: bool = True
+        payment_received: bool = True
+        invoice_overdue: bool = True
+        customer_message: bool = True
+        schedule_reminder: bool = True
+        system_alerts: bool = True
+
+    return NotificationPreferences()
+
+
 @router.delete("/{notification_id}")
 async def delete_notification(
     notification_id: str,
