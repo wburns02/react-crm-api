@@ -236,13 +236,20 @@ async def _poll_samsara_feed():
 
                 if response.status_code == 200:
                     data = response.json()
-                    new_cursor = data.get("pagination", {}).get("endCursor")
-                    if new_cursor:
-                        _feed_cursor = new_cursor
 
-                    changed_vehicles = data.get("data", [])
-                    if changed_vehicles:
-                        await _process_feed_update(changed_vehicles)
+                    # Check if response is a dict before accessing keys
+                    if isinstance(data, dict):
+                        new_cursor = data.get("pagination", {}).get("endCursor")
+                        if new_cursor:
+                            _feed_cursor = new_cursor
+
+                        changed_vehicles = data.get("data", [])
+                        if changed_vehicles:
+                            await _process_feed_update(changed_vehicles)
+                    else:
+                        # Unexpected response format (list or other type)
+                        logger.warning(f"Unexpected Samsara feed response format: {type(data).__name__}, falling back to full fetch")
+                        await _do_full_fetch()
                 elif response.status_code == 429:
                     # Rate limited - back off
                     logger.warning("Samsara API rate limited, backing off 30s")
