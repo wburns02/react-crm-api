@@ -28,15 +28,15 @@ router = APIRouter()
 
 
 class ClockInRequest(BaseModel):
-    latitude: float
-    longitude: float
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     work_order_id: Optional[str] = None
     notes: Optional[str] = None
 
 
 class ClockOutRequest(BaseModel):
-    latitude: float
-    longitude: float
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     work_order_id: Optional[str] = None
     notes: Optional[str] = None
 
@@ -561,11 +561,11 @@ async def clock_in(
     tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
-    if not technician:
-        raise HTTPException(status_code=404, detail="Technician profile not found")
-
     # If work order specified, clock into that job
     if request.work_order_id:
+        if not technician:
+            raise HTTPException(status_code=404, detail="Technician profile required for job clock-in")
+
         wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == request.work_order_id))
         work_order = wo_result.scalar_one_or_none()
 
@@ -574,8 +574,10 @@ async def clock_in(
 
         work_order.is_clocked_in = True
         work_order.actual_start_time = datetime.utcnow()
-        work_order.clock_in_gps_lat = request.latitude
-        work_order.clock_in_gps_lon = request.longitude
+        if request.latitude is not None:
+            work_order.clock_in_gps_lat = request.latitude
+        if request.longitude is not None:
+            work_order.clock_in_gps_lon = request.longitude
 
         if work_order.status == "scheduled":
             work_order.status = "in_progress"
@@ -584,16 +586,21 @@ async def clock_in(
 
         return {
             "status": "clocked_in",
+            "clock_in": datetime.utcnow().isoformat(),
             "work_order_id": request.work_order_id,
-            "time": datetime.utcnow().isoformat(),
-            "location_verified": True,
+            "location_verified": request.latitude is not None and request.longitude is not None,
         }
 
-    # General clock in (start of day)
+    # General clock in (start of day) - works even without technician profile
+    now = datetime.utcnow()
     return {
         "status": "clocked_in",
-        "time": datetime.utcnow().isoformat(),
-        "location": {"lat": request.latitude, "lon": request.longitude},
+        "clock_in": now.isoformat(),
+        "location": {
+            "lat": request.latitude,
+            "lon": request.longitude,
+        } if request.latitude is not None else None,
+        "technician_id": str(technician.id) if technician else None,
     }
 
 
@@ -604,6 +611,8 @@ async def clock_out(
     current_user: CurrentUser,
 ):
     """Clock out from work (GPS verified)."""
+    now = datetime.utcnow()
+
     if request.work_order_id:
         wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == request.work_order_id))
         work_order = wo_result.scalar_one_or_none()
@@ -612,27 +621,34 @@ async def clock_out(
             raise HTTPException(status_code=404, detail="Work order not found")
 
         work_order.is_clocked_in = False
-        work_order.actual_end_time = datetime.utcnow()
-        work_order.clock_out_gps_lat = request.latitude
-        work_order.clock_out_gps_lon = request.longitude
+        work_order.actual_end_time = now
+        if request.latitude is not None:
+            work_order.clock_out_gps_lat = request.latitude
+        if request.longitude is not None:
+            work_order.clock_out_gps_lon = request.longitude
 
         # Calculate labor minutes
         if work_order.actual_start_time:
-            duration = datetime.utcnow() - work_order.actual_start_time
+            duration = now - work_order.actual_start_time
             work_order.total_labor_minutes = int(duration.total_seconds() / 60)
 
         await db.commit()
 
         return {
             "status": "clocked_out",
+            "clock_out": now.isoformat(),
             "work_order_id": request.work_order_id,
-            "time": datetime.utcnow().isoformat(),
             "labor_minutes": work_order.total_labor_minutes,
         }
 
+    # General clock out
     return {
         "status": "clocked_out",
-        "time": datetime.utcnow().isoformat(),
+        "clock_out": now.isoformat(),
+        "location": {
+            "lat": request.latitude,
+            "lon": request.longitude,
+        } if request.latitude is not None else None,
     }
 
 
