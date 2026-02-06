@@ -329,10 +329,38 @@ def _format_suggestion(s: AISuggestion) -> dict:
 @router.post("/fix-tables")
 async def fix_email_marketing_tables(db: DbSession, current_user: CurrentUser) -> dict:
     """Add missing columns and create missing tables for email marketing."""
+    from app.database import async_session_maker
+
     results = []
 
     migrations = [
-        # MarketingCampaign new columns
+        # Create marketing_campaigns table if missing
+        """CREATE TABLE IF NOT EXISTS marketing_campaigns (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            campaign_type VARCHAR(50) NOT NULL DEFAULT 'manual',
+            template_id UUID,
+            segment VARCHAR(50),
+            target_segment JSONB,
+            estimated_audience INTEGER,
+            start_date TIMESTAMP WITH TIME ZONE,
+            end_date TIMESTAMP WITH TIME ZONE,
+            scheduled_at TIMESTAMP WITH TIME ZONE,
+            sent_at TIMESTAMP WITH TIME ZONE,
+            status VARCHAR(20) DEFAULT 'draft',
+            total_sent INTEGER DEFAULT 0,
+            total_opened INTEGER DEFAULT 0,
+            total_clicked INTEGER DEFAULT 0,
+            total_converted INTEGER DEFAULT 0,
+            total_delivered INTEGER DEFAULT 0,
+            total_bounced INTEGER DEFAULT 0,
+            total_unsubscribed INTEGER DEFAULT 0,
+            created_by VARCHAR(100),
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE
+        )""",
+        # Add columns if table already existed without them
         "ALTER TABLE marketing_campaigns ADD COLUMN IF NOT EXISTS template_id UUID",
         "ALTER TABLE marketing_campaigns ADD COLUMN IF NOT EXISTS segment VARCHAR(50)",
         "ALTER TABLE marketing_campaigns ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMP WITH TIME ZONE",
@@ -343,42 +371,38 @@ async def fix_email_marketing_tables(db: DbSession, current_user: CurrentUser) -
         # Message campaign_id
         "ALTER TABLE messages ADD COLUMN IF NOT EXISTS campaign_id UUID",
         "CREATE INDEX IF NOT EXISTS ix_messages_campaign_id ON messages (campaign_id)",
+        # Create ai_suggestions table
+        """CREATE TABLE IF NOT EXISTS ai_suggestions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            suggestion_type VARCHAR(50) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            target_segment VARCHAR(50),
+            estimated_recipients INTEGER,
+            estimated_revenue FLOAT,
+            priority_score FLOAT,
+            ai_rationale TEXT,
+            suggested_subject VARCHAR(500),
+            suggested_body TEXT,
+            suggested_send_date TIMESTAMP WITH TIME ZONE,
+            status VARCHAR(20) DEFAULT 'pending',
+            campaign_id UUID,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )""",
     ]
 
-    for sql in migrations:
-        try:
-            await db.execute(text(sql))
-            results.append({"sql": sql[:60], "status": "ok"})
-        except Exception as e:
-            results.append({"sql": sql[:60], "status": "error", "error": str(e)})
+    # Execute each migration in its own transaction to avoid cascading failures
+    for sql_stmt in migrations:
+        async with async_session_maker() as session:
+            try:
+                await session.execute(text(sql_stmt))
+                await session.commit()
+                results.append({"sql": sql_stmt[:60], "status": "ok"})
+            except Exception as e:
+                await session.rollback()
+                err = str(e).split("\n")[0][:120]
+                results.append({"sql": sql_stmt[:60], "status": "error", "error": err})
 
-    # Create ai_suggestions table
-    ai_suggestions_sql = """
-    CREATE TABLE IF NOT EXISTS ai_suggestions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        suggestion_type VARCHAR(50) NOT NULL,
-        title VARCHAR(255) NOT NULL,
-        description TEXT,
-        target_segment VARCHAR(50),
-        estimated_recipients INTEGER,
-        estimated_revenue FLOAT,
-        priority_score FLOAT,
-        ai_rationale TEXT,
-        suggested_subject VARCHAR(500),
-        suggested_body TEXT,
-        suggested_send_date TIMESTAMP WITH TIME ZONE,
-        status VARCHAR(20) DEFAULT 'pending',
-        campaign_id UUID,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-    """
-    try:
-        await db.execute(text(ai_suggestions_sql))
-        results.append({"sql": "CREATE TABLE ai_suggestions", "status": "ok"})
-    except Exception as e:
-        results.append({"sql": "CREATE TABLE ai_suggestions", "status": "error", "error": str(e)})
-
-    await db.commit()
     return {"success": True, "migrations": results}
 
 
