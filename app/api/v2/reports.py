@@ -438,12 +438,17 @@ async def get_customer_lifetime_value(
             # Calculate tenure in months
             tenure_months = 12  # Default if no created_at
             if customer.created_at:
-                tenure_days = (datetime.now() - customer.created_at).days
-                tenure_months = max(1, tenure_days // 30)
+                try:
+                    # Handle both timezone-aware and naive datetimes
+                    now = datetime.now(customer.created_at.tzinfo) if customer.created_at.tzinfo else datetime.now()
+                    tenure_days = (now - customer.created_at).days
+                    tenure_months = max(1, tenure_days // 30)
+                except Exception:
+                    tenure_months = 12
 
             customer_ltv.append(
                 {
-                    "customer_id": customer.id,
+                    "customer_id": str(customer.id),
                     "customer_name": customer.name,
                     "lifetime_value": ltv,
                     "total_jobs": wo_count,
