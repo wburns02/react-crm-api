@@ -203,7 +203,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS service_reminders CASCADE")
     op.execute("DROP TABLE IF EXISTS customer_service_schedules CASCADE")
-    op.execute("DROP TABLE IF NOT EXISTS service_intervals CASCADE")
+    op.execute("DROP TABLE IF EXISTS service_intervals CASCADE")
     op.execute("DROP TABLE IF EXISTS inspections CASCADE")
     op.execute("DROP TABLE IF EXISTS certifications CASCADE")
     op.execute("DROP TABLE IF EXISTS licenses CASCADE")
