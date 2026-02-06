@@ -554,17 +554,30 @@ async def delete_work_order(
     current_user: CurrentUser,
 ):
     """Delete a work order."""
-    result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
-    work_order = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+        work_order = result.scalar_one_or_none()
 
-    if not work_order:
+        if not work_order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Work order not found",
+            )
+
+        await db.delete(work_order)
+        await db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        import traceback
+        logging.error(f"Error deleting work order {work_order_id}: {e}")
+        logging.error(traceback.format_exc())
+        await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Work order not found",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete work order: {str(e)}",
         )
-
-    await db.delete(work_order)
-    await db.commit()
 
 
 class WorkOrderCompleteRequest(BaseModel):
