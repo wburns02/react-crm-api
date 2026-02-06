@@ -26,7 +26,7 @@ from sqlalchemy import (
     UniqueConstraint,
     CheckConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, TSVECTOR
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -199,8 +199,8 @@ class SepticPermit(Base):
     embedding_model = Column(String(100), nullable=True)
     embedding_updated_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Full-text search vector (stored as Text for SQLite test compatibility)
-    search_vector = Column(Text, nullable=True)
+    # Full-text search vector (PostgreSQL tsvector, auto-populated by trigger)
+    search_vector = Column(TSVECTOR, nullable=True)
 
     # Combined searchable text for embedding generation
     searchable_text = Column(Text, nullable=True)
