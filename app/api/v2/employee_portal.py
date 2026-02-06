@@ -581,17 +581,18 @@ async def clock_in(
     tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
+    # Auto-create technician profile if missing
     if not technician:
-        # For users without technician profile, return success but no database record
-        return {
-            "status": "clocked_in",
-            "clock_in": now.isoformat(),
-            "location": {
-                "lat": request.latitude,
-                "lon": request.longitude,
-            } if request.latitude is not None else None,
-            "message": "Clock-in recorded (no technician profile)",
-        }
+        logger.info(f"Auto-creating Technician profile for {current_user.email}")
+        technician = Technician(
+            id=uuid_mod.uuid4(),
+            email=current_user.email,
+            name=current_user.email.split("@")[0].replace(".", " ").title(),
+            is_active=True,
+            specializations=["General"],
+        )
+        db.add(technician)
+        await db.flush()  # Get the ID without committing yet
 
     # Check for existing open time entry
     existing_entry_result = await db.execute(
@@ -663,15 +664,16 @@ async def clock_out(
     """Clock out from work (GPS verified)."""
     now = datetime.utcnow()
 
-    # Find technician
+    # Find technician (auto-create if missing for consistency, though shouldn't happen if they clocked in)
     tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
+        # No technician and no active entry - nothing to clock out
         return {
             "status": "clocked_out",
             "clock_out": now.isoformat(),
-            "message": "Clock-out recorded (no technician profile)",
+            "message": "No active clock-in found (no technician profile)",
         }
 
     # Find active time entry
