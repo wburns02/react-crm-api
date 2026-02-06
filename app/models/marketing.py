@@ -1,6 +1,6 @@
 """Marketing automation models."""
 
-from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, JSON, Float
+from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, JSON, Float, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -19,22 +19,31 @@ class MarketingCampaign(Base):
     description = Column(Text, nullable=True)
     campaign_type = Column(String(50), nullable=False)  # nurture, winback, promotion, reminder
 
-    # Targeting
+    # Template & Segment
+    template_id = Column(UUID(as_uuid=True), nullable=True)
+    segment = Column(String(50), nullable=True)  # all, active, inactive, new, service_due, vip
+
+    # Targeting (legacy)
     target_segment = Column(JSON, nullable=True)  # Filter criteria
     estimated_audience = Column(Integer, nullable=True)
 
     # Schedule
     start_date = Column(DateTime(timezone=True), nullable=True)
     end_date = Column(DateTime(timezone=True), nullable=True)
+    scheduled_at = Column(DateTime(timezone=True), nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Status
-    status = Column(String(20), default="draft")  # draft, active, paused, completed
+    # Status: draft, scheduled, sending, sent, canceled
+    status = Column(String(20), default="draft")
 
     # Metrics
     total_sent = Column(Integer, default=0)
     total_opened = Column(Integer, default=0)
     total_clicked = Column(Integer, default=0)
     total_converted = Column(Integer, default=0)
+    total_delivered = Column(Integer, default=0)
+    total_bounced = Column(Integer, default=0)
+    total_unsubscribed = Column(Integer, default=0)
 
     # Timestamps
     created_by = Column(String(100), nullable=True)
@@ -170,4 +179,34 @@ class SMSTemplate(Base):
     category = Column(String(50), nullable=True)
 
     is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AISuggestion(Base):
+    """AI-generated campaign suggestion."""
+
+    __tablename__ = "ai_suggestions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+
+    suggestion_type = Column(String(50), nullable=False)  # campaign, content, timing
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+
+    # Targeting
+    target_segment = Column(String(50), nullable=True)
+    estimated_recipients = Column(Integer, nullable=True)
+    estimated_revenue = Column(Float, nullable=True)
+    priority_score = Column(Float, nullable=True)
+
+    # AI details
+    ai_rationale = Column(Text, nullable=True)
+    suggested_subject = Column(String(500), nullable=True)
+    suggested_body = Column(Text, nullable=True)
+    suggested_send_date = Column(DateTime(timezone=True), nullable=True)
+
+    # Status: pending, approved, rejected, sent
+    status = Column(String(20), default="pending")
+    campaign_id = Column(UUID(as_uuid=True), nullable=True)  # Linked campaign if approved
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())

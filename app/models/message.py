@@ -62,6 +62,9 @@ class Message(Base):
     # Template tracking
     template_id = Column(String(100))
 
+    # Campaign tracking
+    campaign_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+
     # External service ID (Twilio SID, SendGrid ID, etc.)
     external_id = Column(String(100))
     error_message = Column(Text)
