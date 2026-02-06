@@ -154,17 +154,7 @@ def upgrade() -> None:
                 sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
                 sa.Column('updated_at', sa.DateTime(timezone=True), onupdate=sa.func.now()),
             )
-            # Add FK constraints
-            op.create_foreign_key(
-                'customer_service_schedules_customer_id_fkey',
-                'customer_service_schedules', 'customers',
-                ['customer_id'], ['id']
-            )
-            op.create_foreign_key(
-                'customer_service_schedules_service_interval_id_fkey',
-                'customer_service_schedules', 'service_intervals',
-                ['service_interval_id'], ['id']
-            )
+            # Add FK constraints after all tables are created
 
         elif table_name == 'service_reminders':
             op.create_table(
@@ -180,7 +170,31 @@ def upgrade() -> None:
                 sa.Column('sent_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
                 sa.Column('delivered_at', sa.DateTime(timezone=True), nullable=True),
             )
-            # Add FK constraints
+            # FK constraints will be added after all tables exist
+
+
+    # Add FK constraints after all tables are created
+    if conn.execute(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'customer_service_schedules')"
+    )).scalar():
+        try:
+            op.create_foreign_key(
+                'customer_service_schedules_customer_id_fkey',
+                'customer_service_schedules', 'customers',
+                ['customer_id'], ['id']
+            )
+            op.create_foreign_key(
+                'customer_service_schedules_service_interval_id_fkey',
+                'customer_service_schedules', 'service_intervals',
+                ['service_interval_id'], ['id']
+            )
+        except Exception:
+            pass  # FK may already exist
+
+    if conn.execute(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'service_reminders')"
+    )).scalar():
+        try:
             op.create_foreign_key(
                 'service_reminders_schedule_id_fkey',
                 'service_reminders', 'customer_service_schedules',
@@ -191,6 +205,8 @@ def upgrade() -> None:
                 'service_reminders', 'customers',
                 ['customer_id'], ['id']
             )
+        except Exception:
+            pass  # FK may already exist
 
 
 def downgrade() -> None:
