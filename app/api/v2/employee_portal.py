@@ -678,72 +678,79 @@ async def clock_out(
     current_user: CurrentUser,
 ):
     """Clock out from work (GPS verified)."""
-    now = datetime.utcnow()
+    try:
+        now = datetime.utcnow()
 
-    # Find technician (auto-create if missing for consistency, though shouldn't happen if they clocked in)
-    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
-    technician = tech_result.scalar_one_or_none()
+        # Find technician (auto-create if missing for consistency, though shouldn't happen if they clocked in)
+        tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
+        technician = tech_result.scalar_one_or_none()
 
-    if not technician:
-        # No technician and no active entry - nothing to clock out
-        return {
-            "status": "clocked_out",
-            "clock_out": now.isoformat(),
-            "message": "No active clock-in found (no technician profile)",
-        }
+        if not technician:
+            # No technician and no active entry - nothing to clock out
+            logger.warning(f"Clock-out attempted by user without technician profile: {current_user.email}")
+            return {
+                "status": "clocked_out",
+                "clock_out": now.isoformat(),
+                "message": "No active clock-in found (no technician profile)",
+            }
 
-    # Find active time entry
-    time_entry_result = await db.execute(
-        select(TimeEntry)
-        .where(
-            TimeEntry.technician_id == technician.id,
-            TimeEntry.clock_out.is_(None),
+        # Find active time entry
+        time_entry_result = await db.execute(
+            select(TimeEntry)
+            .where(
+                TimeEntry.technician_id == technician.id,
+                TimeEntry.clock_out.is_(None),
+            )
+            .order_by(TimeEntry.clock_in.desc())
+            .limit(1)
         )
-        .order_by(TimeEntry.clock_in.desc())
-        .limit(1)
-    )
-    time_entry = time_entry_result.scalar_one_or_none()
+        time_entry = time_entry_result.scalar_one_or_none()
 
-    if not time_entry:
-        return {
-            "status": "clocked_out",
-            "clock_out": now.isoformat(),
-            "message": "No active clock-in found",
-        }
+        if not time_entry:
+            logger.warning(f"Clock-out attempted but no active time entry for technician: {technician.id}")
+            return {
+                "status": "clocked_out",
+                "clock_out": now.isoformat(),
+                "message": "No active clock-in found",
+            }
 
-    # Update time entry
-    time_entry.clock_out = now
-    time_entry.clock_out_lat = request.latitude
-    time_entry.clock_out_lon = request.longitude
+        # Update time entry
+        time_entry.clock_out = now
+        time_entry.clock_out_lat = request.latitude
+        time_entry.clock_out_lon = request.longitude
 
-    # Calculate hours
-    duration = now - time_entry.clock_in
-    total_hours = duration.total_seconds() / 3600
-    time_entry.regular_hours = min(total_hours, 8.0)
-    time_entry.overtime_hours = max(0, total_hours - 8.0)
+        # Calculate hours
+        duration = now - time_entry.clock_in
+        total_hours = duration.total_seconds() / 3600
+        time_entry.regular_hours = min(total_hours, 8.0)
+        time_entry.overtime_hours = max(0, total_hours - 8.0)
 
-    if request.notes:
-        time_entry.notes = f"{time_entry.notes or ''}\n{request.notes}".strip()
+        if request.notes:
+            time_entry.notes = f"{time_entry.notes or ''}\n{request.notes}".strip()
 
-    # If work order specified, also update work order
-    if request.work_order_id or time_entry.work_order_id:
-        work_order_id = request.work_order_id or time_entry.work_order_id
-        wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
-        work_order = wo_result.scalar_one_or_none()
+        # If work order specified, also update work order
+        if request.work_order_id or time_entry.work_order_id:
+            work_order_id = request.work_order_id or time_entry.work_order_id
+            wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+            work_order = wo_result.scalar_one_or_none()
 
-        if work_order:
-            work_order.is_clocked_in = False
-            work_order.actual_end_time = now
-            if request.latitude is not None:
-                work_order.clock_out_gps_lat = request.latitude
-            if request.longitude is not None:
-                work_order.clock_out_gps_lon = request.longitude
-            if work_order.actual_start_time:
-                duration_minutes = (now - work_order.actual_start_time).total_seconds() / 60
-                work_order.total_labor_minutes = int(duration_minutes)
+            if work_order:
+                work_order.is_clocked_in = False
+                work_order.actual_end_time = now
+                if request.latitude is not None:
+                    work_order.clock_out_gps_lat = request.latitude
+                if request.longitude is not None:
+                    work_order.clock_out_gps_lon = request.longitude
+                if work_order.actual_start_time:
+                    duration_minutes = (now - work_order.actual_start_time).total_seconds() / 60
+                    work_order.total_labor_minutes = int(duration_minutes)
 
-    await db.commit()
-    await db.refresh(time_entry)
+        await db.commit()
+        await db.refresh(time_entry)
+    except Exception as e:
+        logger.error(f"Clock-out error for {current_user.email}: {type(e).__name__}: {str(e)}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Clock-out failed: {str(e)}")
 
     return {
         "status": "clocked_out",
