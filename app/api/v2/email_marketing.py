@@ -246,6 +246,59 @@ async def _get_segment_query(db: AsyncSession, segment_id: str):
              AND wo.status = 'completed') >= 3
         """)
         return [Customer.email.isnot(None), Customer.email != "", sub]
+    elif segment_id == "central_texas":
+        # Customers in Central Texas area
+        tx_cities = [
+            "Bryan", "College Station", "Brenham", "Caldwell", "Hearne",
+            "Navasota", "Madisonville", "Cameron", "Rockdale", "Temple",
+            "Belton", "Killeen", "Waco", "Round Rock", "Georgetown",
+            "Huntsville", "Conroe", "Tomball", "Magnolia", "Montgomery",
+        ]
+        city_conditions = " OR ".join([f"LOWER(customers.city) = '{c.lower()}'" for c in tx_cities])
+        sub = text(f"""
+            (LOWER(customers.state) LIKE '%%tx%%' OR LOWER(customers.state) LIKE '%%texas%%')
+            AND ({city_conditions} OR LOWER(customers.city) LIKE '%%%%')
+        """)
+        # Simpler: just TX state customers
+        return [Customer.email.isnot(None), Customer.email != "",
+                text("(LOWER(customers.state) LIKE '%%tx%%' OR LOWER(customers.state) LIKE '%%texas%%')")]
+    elif segment_id == "nashville":
+        # Greater Nashville, TN area
+        nashville_cities = [
+            "Nashville", "Franklin", "Murfreesboro", "Hendersonville",
+            "Gallatin", "Lebanon", "Mount Juliet", "Smyrna", "Brentwood",
+            "Spring Hill", "Clarksville", "Columbia", "Dickson", "Shelbyville",
+        ]
+        city_conditions = " OR ".join([f"LOWER(customers.city) = '{c.lower()}'" for c in nashville_cities])
+        sub = text(f"""
+            (LOWER(customers.state) LIKE '%%tn%%' OR LOWER(customers.state) LIKE '%%tennessee%%')
+            AND ({city_conditions})
+        """)
+        return [Customer.email.isnot(None), Customer.email != "", sub]
+    elif segment_id == "columbia_sc":
+        # Columbia, South Carolina area
+        sc_cities = [
+            "Columbia", "West Columbia", "Cayce", "Irmo", "Lexington",
+            "Chapin", "Blythewood", "Elgin", "Camden", "Sumter",
+        ]
+        city_conditions = " OR ".join([f"LOWER(customers.city) = '{c.lower()}'" for c in sc_cities])
+        sub = text(f"""
+            (LOWER(customers.state) LIKE '%%sc%%' OR LOWER(customers.state) LIKE '%%south carolina%%')
+            AND ({city_conditions})
+        """)
+        return [Customer.email.isnot(None), Customer.email != "", sub]
+    elif segment_id == "greenville_tn":
+        # Greenville, Tennessee area
+        gtn_cities = [
+            "Greeneville", "Greenville", "Tusculum", "Mosheim",
+            "Bulls Gap", "Morristown", "Johnson City", "Jonesborough",
+        ]
+        city_conditions = " OR ".join([f"LOWER(customers.city) = '{c.lower()}'" for c in gtn_cities])
+        sub = text(f"""
+            (LOWER(customers.state) LIKE '%%tn%%' OR LOWER(customers.state) LIKE '%%tennessee%%')
+            AND ({city_conditions})
+        """)
+        return [Customer.email.isnot(None), Customer.email != "", sub]
     else:
         return [Customer.email.isnot(None), Customer.email != ""]
 
@@ -678,6 +731,10 @@ SEGMENT_DEFINITIONS = [
     {"id": "new", "name": "New Customers", "description": "Created in last 6 months"},
     {"id": "service_due", "name": "Service Due", "description": "Last service 10-14 months ago"},
     {"id": "vip", "name": "VIP Customers", "description": "3+ completed work orders"},
+    {"id": "central_texas", "name": "Central Texas", "description": "Customers in the Central Texas area"},
+    {"id": "nashville", "name": "Greater Nashville", "description": "Customers in the Greater Nashville, TN area"},
+    {"id": "columbia_sc", "name": "Columbia SC", "description": "Customers in the Columbia, SC area"},
+    {"id": "greenville_tn", "name": "Greenville TN", "description": "Customers in the Greenville, TN area"},
 ]
 
 
