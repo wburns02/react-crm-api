@@ -449,7 +449,7 @@ async def get_customer_lifetime_value(
             customer_ltv.append(
                 {
                     "customer_id": str(customer.id),
-                    "customer_name": customer.name,
+                    "customer_name": f"{customer.first_name} {customer.last_name}",
                     "lifetime_value": ltv,
                     "total_jobs": wo_count,
                     "tenure_months": tenure_months,
