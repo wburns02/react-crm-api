@@ -173,7 +173,7 @@ async def get_technician_locations(
         locations.append(
             TechnicianLocation(
                 technician_id=str(tech.id),
-                name=tech.name,
+                name=f"{tech.first_name} {tech.last_name}",
                 status=status,
                 current_latitude=getattr(tech, "current_latitude", None),
                 current_longitude=getattr(tech, "current_longitude", None),
@@ -428,14 +428,23 @@ async def accept_dispatch_suggestion(
 ) -> dict:
     """Accept AI dispatch suggestion and assign technician."""
     # Get the work order
-    result = await db.execute(select(WorkOrder).where(WorkOrder.id == int(work_order_id)))
+    from uuid import UUID as _UUID
+    try:
+        wo_uuid = _UUID(work_order_id)
+        tech_uuid = _UUID(technician_id)
+    except ValueError:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+
+    result = await db.execute(select(WorkOrder).where(WorkOrder.id == wo_uuid))
     work_order = result.scalar_one_or_none()
 
     if not work_order:
-        return {"success": False, "error": "Work order not found"}
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Work order not found")
 
     # Assign technician
-    work_order.technician_id = int(technician_id)
+    work_order.technician_id = tech_uuid
     work_order.status = "scheduled"
 
     await db.commit()
