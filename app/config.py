@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     BREVO_API_KEY: str | None = None
     SENDGRID_API_KEY: str | None = None  # Legacy - use BREVO_API_KEY instead
     EMAIL_FROM_ADDRESS: str = "noreply@macseptic.com"
-    EMAIL_FROM_NAME: str = "Mac Septic Services"
+    EMAIL_FROM_NAME: str = "MAC Septic"
 
     # RingCentral
     RINGCENTRAL_CLIENT_ID: str | None = None
