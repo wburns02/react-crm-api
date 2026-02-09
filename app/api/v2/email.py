@@ -39,7 +39,7 @@ async def list_email_conversations(
 ):
     """List email conversations (messages with type=email)."""
     # Query for email messages
-    query = select(Message).where(Message.type == MessageType.email)
+    query = select(Message).where(Message.message_type == "email")
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
@@ -70,7 +70,7 @@ async def get_email_conversation(
 ):
     """Get a single email conversation/thread."""
     # Get the original message
-    result = await db.execute(select(Message).where(Message.id == conversation_id, Message.type == MessageType.email))
+    result = await db.execute(select(Message).where(Message.id == conversation_id, Message.message_type == "email"))
     message = result.scalar_one_or_none()
 
     if not message:
@@ -84,17 +84,17 @@ async def get_email_conversation(
     return {
         "id": message.id,
         "subject": message.subject or "(No Subject)",
-        "customer_name": message.to_address.split("@")[0] if message.to_address else "Unknown",
-        "customer_email": message.to_address,
+        "customer_name": message.to_email.split("@")[0] if message.to_email else "Unknown",
+        "customer_email": message.to_email,
         "messages": [
             {
                 "id": message.id,
                 "subject": message.subject,
                 "body": message.content,
-                "direction": message.direction.value,
-                "sent_at": message.sent_at.isoformat() if message.sent_at else message.created_at.isoformat(),
-                "from_email": message.from_address or "system@macseptic.com",
-                "to_email": message.to_address,
+                "direction": message.direction if isinstance(message.direction, str) else message.direction.value if message.direction else "outbound",
+                "sent_at": message.sent_at.isoformat() if message.sent_at else (message.created_at.isoformat() if message.created_at else None),
+                "from_email": message.from_email or "system@macseptic.com",
+                "to_email": message.to_email,
             }
         ],
     }
@@ -129,14 +129,13 @@ async def reply_to_email(
     # Create reply message
     reply = Message(
         customer_id=original.customer_id,
-        type=MessageType.email,
-        direction=MessageDirection.outbound,
-        status=MessageStatus.queued,
-        to_address=original.to_address,
-        from_address="support@macseptic.com",
+        message_type="email",
+        direction="outbound",
+        status="queued",
+        to_email=original.to_email,
+        from_email="support@macseptic.com",
         subject=f"Re: {original.subject}" if original.subject else "Re: (No Subject)",
         content=body,
-        source="react",
         sent_at=datetime.utcnow(),
     )
     db.add(reply)

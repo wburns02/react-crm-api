@@ -290,11 +290,11 @@ async def send_email(
         await db.commit()
         await db.refresh(message)
 
-        logger.error("Email send failed", extra={"message_id": message.id, "error_type": type(e).__name__})
+        logger.error("Email send failed", extra={"message_id": message.id, "error_type": type(e).__name__, "error": str(e)})
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to send email. Please try again later.",
+            detail=f"Failed to send email: {type(e).__name__}: {str(e)[:200]}",
         )
 
     return {
