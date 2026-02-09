@@ -123,10 +123,10 @@ class WorkOrderResponse(WorkOrderBase):
 
     # Clock in/out
     is_clocked_in: Optional[bool] = False
-    clock_in_gps_lat: Optional[Decimal] = None
-    clock_in_gps_lon: Optional[Decimal] = None
-    clock_out_gps_lat: Optional[Decimal] = None
-    clock_out_gps_lon: Optional[Decimal] = None
+    clock_in_gps_lat: Optional[float] = None
+    clock_in_gps_lon: Optional[float] = None
+    clock_out_gps_lat: Optional[float] = None
+    clock_out_gps_lon: Optional[float] = None
 
     class Config:
         from_attributes = True
