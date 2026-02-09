@@ -34,11 +34,11 @@ class CacheHeadersMiddleware(BaseHTTPMiddleware):
     ]
 
     # Endpoints with private caching (authenticated, read-only)
+    # NOTE: work-orders removed — HTTP caching causes stale data after
+    # drag-drop optimistic updates (invalidateQueries refetch gets cached response)
     PRIVATE_CACHEABLE: List[Tuple[str, int]] = [
         (r"^/api/v2/dashboard/stats", 60),  # 1 minute
-        (r"^/api/v2/customers$", 30),  # 30 seconds (list)
         (r"^/api/v2/technicians$", 60),  # 1 minute
-        (r"^/api/v2/work-orders$", 30),  # 30 seconds
         (r"^/api/v2/marketing-hub/tasks$", 60),  # 1 minute
     ]
 
