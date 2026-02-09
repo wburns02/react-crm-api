@@ -1,17 +1,21 @@
 """
-Marketing Hub API - Stub endpoints for frontend compatibility.
+Marketing Hub API - Google Ads integration + stub endpoints for other features.
 
-Provides marketing overview, ads, SEO, leads, and reviews endpoints.
+Provides marketing overview, ads performance (real data via Google Ads API),
+SEO, leads, and reviews endpoints.
 """
 
+import logging
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
 
 from app.api.deps import CurrentUser
+from app.config import settings
+from app.services.google_ads_service import get_google_ads_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # Response Models
@@ -48,6 +52,8 @@ class AdsStatus(BaseModel):
     connected: bool = False
     customer_id: Optional[str] = None
     account_name: Optional[str] = None
+    daily_operations: int = 0
+    daily_limit: int = 14000
 
 
 class SEOOverview(BaseModel):
@@ -71,13 +77,7 @@ class PendingReviews(BaseModel):
 
 class IntegrationSettings(BaseModel):
     success: bool = True
-    integrations: dict = {
-        "ga4": {"configured": False},
-        "google_ads": {"configured": False},
-        "anthropic": {"configured": False},
-        "openai": {"configured": False},
-        "search_console": {"configured": False},
-    }
+    integrations: dict = {}
     automation: dict = {
         "ai_advisor_enabled": False,
         "auto_campaigns_enabled": False,
@@ -92,9 +92,39 @@ class IntegrationSettings(BaseModel):
 async def get_overview(
     current_user: CurrentUser,
     days: int = 30,
-) -> MarketingOverview:
-    """Get marketing hub overview."""
-    return MarketingOverview(period_days=days)
+) -> dict:
+    """Get marketing hub overview with real Google Ads data."""
+    ads_service = get_google_ads_service()
+
+    # Fetch real ads data if configured
+    paid_ads = {"spend": 0, "clicks": 0, "conversions": 0, "roas": 0}
+    if ads_service.is_configured():
+        try:
+            metrics = await ads_service.get_performance_metrics(days)
+            if metrics:
+                conversions = metrics.get("conversions", 0)
+                cost = metrics.get("cost", 0)
+                roas = (conversions * 250) / max(1, cost) if cost > 0 else 0
+                paid_ads = {
+                    "spend": cost,
+                    "clicks": metrics.get("clicks", 0),
+                    "conversions": conversions,
+                    "roas": round(roas, 2),
+                }
+        except Exception as e:
+            logger.warning("Failed to fetch Google Ads overview: %s", str(e))
+
+    return {
+        "success": True,
+        "period_days": days,
+        "overview": {
+            "website_traffic": {"sessions": 0, "users": 0, "conversions": 0},
+            "paid_ads": paid_ads,
+            "seo": {"score": 0, "grade": "N/A", "trend": "neutral"},
+            "leads": {"new": 0, "engaged": 0, "converted": 0, "conversion_rate": 0},
+        },
+        "quick_actions": [],
+    }
 
 
 # Ads Endpoints
@@ -104,15 +134,34 @@ async def get_overview(
 async def get_ads_performance(
     current_user: CurrentUser,
     days: int = 30,
-) -> AdsPerformance:
-    """Get Google Ads performance metrics."""
-    return AdsPerformance()
+) -> dict:
+    """Get Google Ads performance metrics - real data from Google Ads API."""
+    ads_service = get_google_ads_service()
+
+    try:
+        result = await ads_service.get_full_performance(days)
+        return {
+            "success": True,
+            "metrics": result["metrics"],
+            "campaigns": result["campaigns"],
+            "recommendations": result["recommendations"],
+        }
+    except Exception as e:
+        logger.error("Google Ads performance fetch failed: %s", str(e))
+        return AdsPerformance().model_dump()
 
 
 @router.get("/ads/status")
-async def get_ads_status(current_user: CurrentUser) -> AdsStatus:
+async def get_ads_status(current_user: CurrentUser) -> dict:
     """Get Google Ads connection status."""
-    return AdsStatus()
+    ads_service = get_google_ads_service()
+
+    try:
+        status = await ads_service.get_connection_status()
+        return {"success": True, **status}
+    except Exception as e:
+        logger.error("Google Ads status check failed: %s", str(e))
+        return AdsStatus().model_dump()
 
 
 # SEO Endpoints
@@ -224,9 +273,29 @@ async def generate_landing_page(
 
 
 @router.get("/settings")
-async def get_settings(current_user: CurrentUser) -> IntegrationSettings:
-    """Get marketing hub settings."""
-    return IntegrationSettings()
+async def get_settings(current_user: CurrentUser) -> dict:
+    """Get marketing hub settings with real integration status."""
+    ads_service = get_google_ads_service()
+    ads_configured = ads_service.is_configured()
+
+    return {
+        "success": True,
+        "integrations": {
+            "ga4": {"configured": False},
+            "google_ads": {
+                "configured": ads_configured,
+                "customer_id": ads_service.customer_id if ads_configured else None,
+            },
+            "anthropic": {"configured": bool(getattr(settings, "ANTHROPIC_API_KEY", None))},
+            "openai": {"configured": bool(getattr(settings, "OPENAI_API_KEY", None))},
+            "search_console": {"configured": False},
+        },
+        "automation": {
+            "ai_advisor_enabled": False,
+            "auto_campaigns_enabled": False,
+            "lead_scoring_enabled": False,
+        },
+    }
 
 
 @router.post("/settings")

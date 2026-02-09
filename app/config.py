@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     CLOVER_API_KEY: str | None = None
     CLOVER_ENVIRONMENT: str = "sandbox"  # "sandbox" or "production"
 
+    # Google Ads API (Basic Access - 15,000 ops/day)
+    GOOGLE_ADS_DEVELOPER_TOKEN: str | None = None
+    GOOGLE_ADS_CLIENT_ID: str | None = None
+    GOOGLE_ADS_CLIENT_SECRET: str | None = None
+    GOOGLE_ADS_REFRESH_TOKEN: str | None = None
+    GOOGLE_ADS_CUSTOMER_ID: str | None = None
+    GOOGLE_ADS_LOGIN_CUSTOMER_ID: str | None = None  # Manager account ID
+
     # AI Services
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
@@ -124,7 +132,7 @@ class Settings(BaseSettings):
 
     # Error Tracking
     SENTRY_DSN: str | None = None
-    VERSION: str = "2.7.3"
+    VERSION: str = "2.8.0"
 
     # Redis Cache (optional)
     REDIS_URL: str | None = None
