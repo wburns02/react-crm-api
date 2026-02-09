@@ -216,7 +216,7 @@ async def start_conversation(
     existing = await db.execute(
         select(AgentConversation).where(
             AgentConversation.agent_id == agent.id,
-            AgentConversation.customer_id == int(request.customer_id),
+            AgentConversation.customer_id == request.customer_id,
             AgentConversation.status == "active",
         )
     )
@@ -229,7 +229,7 @@ async def start_conversation(
     # Create conversation
     conversation = AgentConversation(
         agent_id=agent.id,
-        customer_id=int(request.customer_id),
+        customer_id=request.customer_id,
         channel=request.channel,
         context=request.initial_context,
         goal=request.goal,

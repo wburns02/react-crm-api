@@ -474,7 +474,7 @@ async def calculate_price(
     if request.customer_id:
         # Look up the customer's type, match to a pricing tier
         cust_result = await db.execute(
-            select(Customer.customer_type).where(Customer.id == int(request.customer_id))
+            select(Customer.customer_type).where(Customer.id == request.customer_id)
         )
         cust_type = cust_result.scalar_one_or_none()
         if cust_type:

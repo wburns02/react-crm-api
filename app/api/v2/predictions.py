@@ -483,46 +483,71 @@ async def get_predictions_summary(
     current_user: CurrentUser,
 ):
     """Get summary of all predictions for dashboard."""
-    # Hot leads count
-    hot_leads_result = await db.execute(
-        select(func.count()).select_from(LeadScore).where(LeadScore.score_label == "hot")
-    )
-    hot_leads = hot_leads_result.scalar() or 0
+    try:
+        # Hot leads count
+        hot_leads = 0
+        try:
+            hot_leads_result = await db.execute(
+                select(func.count()).select_from(LeadScore).where(LeadScore.score_label == "hot")
+            )
+            hot_leads = hot_leads_result.scalar() or 0
+        except Exception as e:
+            logger.warning(f"Error querying lead scores: {e}")
 
-    # At-risk customers
-    at_risk_result = await db.execute(
-        select(func.count()).select_from(ChurnPrediction).where(ChurnPrediction.risk_level.in_(["high", "critical"]))
-    )
-    at_risk_customers = at_risk_result.scalar() or 0
+        # At-risk customers
+        at_risk_customers = 0
+        try:
+            at_risk_result = await db.execute(
+                select(func.count()).select_from(ChurnPrediction).where(ChurnPrediction.risk_level.in_(["high", "critical"]))
+            )
+            at_risk_customers = at_risk_result.scalar() or 0
+        except Exception as e:
+            logger.warning(f"Error querying churn predictions: {e}")
 
-    # Rotting deals
-    rotting_result = await db.execute(
-        select(func.count()).select_from(DealHealth).where(DealHealth.health_status.in_(["at_risk", "stale"]))
-    )
-    rotting_deals = rotting_result.scalar() or 0
+        # Rotting deals
+        rotting_deals = 0
+        try:
+            rotting_result = await db.execute(
+                select(func.count()).select_from(DealHealth).where(DealHealth.health_status.in_(["at_risk", "stale"]))
+            )
+            rotting_deals = rotting_result.scalar() or 0
+        except Exception as e:
+            logger.warning(f"Error querying deal health: {e}")
 
-    # Next month forecast
-    next_month = datetime.utcnow().replace(day=1) + timedelta(days=32)
-    next_month = next_month.replace(day=1)
+        # Next month forecast
+        forecast = None
+        try:
+            next_month = datetime.utcnow().replace(day=1) + timedelta(days=32)
+            next_month = next_month.replace(day=1)
 
-    forecast_result = await db.execute(
-        select(RevenueForecast)
-        .where(
-            RevenueForecast.period_type == "monthly",
-            RevenueForecast.period_start >= next_month,
-        )
-        .limit(1)
-    )
-    forecast = forecast_result.scalar_one_or_none()
+            forecast_result = await db.execute(
+                select(RevenueForecast)
+                .where(
+                    RevenueForecast.period_type == "monthly",
+                    RevenueForecast.period_start >= next_month,
+                )
+                .limit(1)
+            )
+            forecast = forecast_result.scalar_one_or_none()
+        except Exception as e:
+            logger.warning(f"Error querying revenue forecast: {e}")
 
-    return {
-        "hot_leads": hot_leads,
-        "at_risk_customers": at_risk_customers,
-        "rotting_deals": rotting_deals,
-        "next_month_forecast": {
-            "revenue": forecast.predicted_revenue if forecast else None,
-            "jobs": forecast.predicted_jobs if forecast else None,
+        return {
+            "hot_leads": hot_leads,
+            "at_risk_customers": at_risk_customers,
+            "rotting_deals": rotting_deals,
+            "next_month_forecast": {
+                "revenue": forecast.predicted_revenue if forecast else None,
+                "jobs": forecast.predicted_jobs if forecast else None,
+            }
+            if forecast
+            else None,
         }
-        if forecast
-        else None,
-    }
+    except Exception as e:
+        logger.warning(f"Error getting predictions summary: {e}")
+        return {
+            "hot_leads": 0,
+            "at_risk_customers": 0,
+            "rotting_deals": 0,
+            "next_month_forecast": None,
+        }

@@ -103,35 +103,52 @@ async def get_integrations_status(
     facebook: FacebookService = Depends(get_facebook_service),
 ) -> dict:
     """Get status of all social integrations."""
+    try:
+        # Get stored integrations
+        result = await db.execute(
+            select(SocialIntegration).where(SocialIntegration.is_active == True)
+        )
+        integrations = result.scalars().all()
 
-    # Get stored integrations
-    result = await db.execute(
-        select(SocialIntegration).where(SocialIntegration.is_active == True)
-    )
-    integrations = result.scalars().all()
+        yelp_integration = next((i for i in integrations if i.platform == "yelp"), None)
+        fb_integration = next((i for i in integrations if i.platform == "facebook"), None)
 
-    yelp_integration = next((i for i in integrations if i.platform == "yelp"), None)
-    fb_integration = next((i for i in integrations if i.platform == "facebook"), None)
+        # Get Yelp status safely
+        yelp_status = {"connected": False, "configured": False, "message": "Yelp not configured"}
+        try:
+            yelp_status = await yelp.get_status()
+        except Exception as e:
+            logger.warning(f"Error getting Yelp status: {e}")
 
-    yelp_status = await yelp.get_status()
-    fb_status = await facebook.get_status(
-        fb_integration.access_token if fb_integration else None
-    )
+        # Get Facebook status safely
+        fb_status = {"connected": False, "configured": False, "message": "Facebook not configured"}
+        try:
+            fb_status = await facebook.get_status(
+                fb_integration.access_token if fb_integration else None
+            )
+        except Exception as e:
+            logger.warning(f"Error getting Facebook status: {e}")
 
-    return {
-        "yelp": {
-            **yelp_status,
-            "business_id": yelp_integration.business_id if yelp_integration else None,
-            "business_name": yelp_integration.business_name if yelp_integration else None,
-            "last_sync": yelp_integration.last_sync_at if yelp_integration else None,
-        },
-        "facebook": {
-            **fb_status,
-            "page_id": fb_integration.business_id if fb_integration else None,
-            "page_name": fb_integration.business_name if fb_integration else None,
-            "last_sync": fb_integration.last_sync_at if fb_integration else None,
-        },
-    }
+        return {
+            "yelp": {
+                **yelp_status,
+                "business_id": yelp_integration.business_id if yelp_integration else None,
+                "business_name": yelp_integration.business_name if yelp_integration else None,
+                "last_sync": yelp_integration.last_sync_at if yelp_integration else None,
+            },
+            "facebook": {
+                **fb_status,
+                "page_id": fb_integration.business_id if fb_integration else None,
+                "page_name": fb_integration.business_name if fb_integration else None,
+                "last_sync": fb_integration.last_sync_at if fb_integration else None,
+            },
+        }
+    except Exception as e:
+        logger.warning(f"Error getting integrations status: {e}")
+        return {
+            "yelp": {"connected": False, "configured": False, "message": "Not configured"},
+            "facebook": {"connected": False, "configured": False, "message": "Not configured"},
+        }
 
 
 # ============================================================================
@@ -723,30 +740,37 @@ async def get_all_reviews(
     facebook: FacebookService = Depends(get_facebook_service),
 ) -> dict:
     """Get reviews from all connected platforms."""
+    try:
+        all_reviews = []
 
-    all_reviews = []
+        # Get Yelp reviews if connected and requested
+        if platform in (None, "yelp"):
+            try:
+                yelp_response = await get_yelp_reviews(current_user, db, yelp)
+                all_reviews.extend(yelp_response.reviews)
+            except (HTTPException, Exception) as e:
+                logger.warning(f"Could not fetch Yelp reviews: {e}")
 
-    # Get Yelp reviews if connected and requested
-    if platform in (None, "yelp"):
-        try:
-            yelp_response = await get_yelp_reviews(current_user, db, yelp)
-            all_reviews.extend(yelp_response.reviews)
-        except HTTPException:
-            pass  # Yelp not connected
+        # Get Facebook reviews if connected and requested
+        if platform in (None, "facebook"):
+            try:
+                fb_response = await get_facebook_reviews(current_user, db, facebook)
+                all_reviews.extend(fb_response.reviews)
+            except (HTTPException, Exception) as e:
+                logger.warning(f"Could not fetch Facebook reviews: {e}")
 
-    # Get Facebook reviews if connected and requested
-    if platform in (None, "facebook"):
-        try:
-            fb_response = await get_facebook_reviews(current_user, db, facebook)
-            all_reviews.extend(fb_response.reviews)
-        except HTTPException:
-            pass  # Facebook not connected
+        # Sort by date descending
+        all_reviews.sort(key=lambda r: r.date, reverse=True)
 
-    # Sort by date descending
-    all_reviews.sort(key=lambda r: r.date, reverse=True)
-
-    return {
-        "success": True,
-        "reviews": [r.model_dump() for r in all_reviews],
-        "total": len(all_reviews),
-    }
+        return {
+            "success": True,
+            "reviews": [r.model_dump() for r in all_reviews],
+            "total": len(all_reviews),
+        }
+    except Exception as e:
+        logger.warning(f"Error getting all reviews: {e}")
+        return {
+            "success": True,
+            "reviews": [],
+            "total": 0,
+        }

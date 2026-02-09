@@ -115,7 +115,7 @@ async def create_signature_request(
     sig_request = SignatureRequest(
         document_type=request.document_type,
         document_id=request.document_id,
-        customer_id=int(request.customer_id),
+        customer_id=request.customer_id,
         signer_name=request.signer_name,
         signer_email=request.signer_email,
         signer_phone=request.signer_phone,

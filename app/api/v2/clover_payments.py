@@ -599,7 +599,7 @@ async def create_refund(
     try:
         # Get payment record
         result = await db.execute(
-            select(Payment).where(Payment.id == int(payment_id))
+            select(Payment).where(Payment.id == payment_id)
         )
         payment = result.scalar_one_or_none()
 

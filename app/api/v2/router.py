@@ -120,6 +120,19 @@ from app.api.v2.customer_success import (
 )
 from app.api.v2.customer_success.escalations_ai import router as escalations_ai_router
 
+# Stub endpoints for missing frontend routes
+from app.api.v2.stubs import (
+    sms_router as sms_stubs_router,
+    templates_router as templates_stubs_router,
+    reminders_router as reminders_stubs_router,
+    billing_router as billing_stubs_router,
+    analytics_stubs_router,
+    tracking_router as tracking_stubs_router,
+    predictions_stubs_router,
+    help_router as help_stubs_router,
+    ai_stubs_router,
+)
+
 api_router = APIRouter()
 
 # Include all v2 routers
@@ -274,6 +287,18 @@ api_router.include_router(availability.router, prefix="/availability", tags=["av
 
 # Public Bookings API (Book & Pay - Supports Test Mode)
 api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"])
+
+# Stub endpoints: empty responses for routes the frontend calls but aren't implemented yet.
+# Each stub returns X-Stub: true header. Replace with real implementations as needed.
+api_router.include_router(sms_stubs_router, prefix="/sms", tags=["stubs"])
+api_router.include_router(templates_stubs_router, prefix="/templates", tags=["stubs"])
+api_router.include_router(reminders_stubs_router, prefix="/reminders", tags=["stubs"])
+api_router.include_router(billing_stubs_router, prefix="/billing", tags=["stubs"])
+api_router.include_router(analytics_stubs_router, prefix="/analytics", tags=["stubs"])
+api_router.include_router(tracking_stubs_router, prefix="/tracking", tags=["stubs"])
+api_router.include_router(predictions_stubs_router, prefix="/predictions", tags=["stubs"])
+api_router.include_router(help_stubs_router, prefix="/help", tags=["stubs"])
+api_router.include_router(ai_stubs_router, prefix="/ai", tags=["stubs"])
 
 # Observability: Prometheus Metrics
 from app.api.v2.endpoints.metrics import router as metrics_router

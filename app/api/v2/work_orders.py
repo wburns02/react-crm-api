@@ -173,7 +173,7 @@ async def list_work_orders(
     db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=500),
+    page_size: int = Query(20, ge=1, le=1000),
     customer_id: Optional[str] = None,
     status_filter: Optional[str] = Query(None, alias="status"),
     job_type: Optional[str] = None,

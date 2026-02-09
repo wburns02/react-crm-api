@@ -541,7 +541,7 @@ async def calculate_labor_cost(
         # Get technician name
         tech_result = await db.execute(select(Technician).where(Technician.id == technician_id))
         technician = tech_result.scalar_one_or_none()
-        tech_name = technician.name if technician else "Unknown"
+        tech_name = f"{technician.first_name} {technician.last_name}" if technician else "Unknown"
 
         if not pay_rate:
             # Return default calculation if no pay rate configured
@@ -672,7 +672,7 @@ async def calculate_commission(
         # Get technician name
         tech_result = await db.execute(select(Technician).where(Technician.id == technician_id))
         technician = tech_result.scalar_one_or_none()
-        tech_name = technician.name if technician else "Unknown"
+        tech_name = f"{technician.first_name} {technician.last_name}" if technician else "Unknown"
 
         # Default commission rate if no pay rate configured
         commission_rate = 0.0

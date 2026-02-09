@@ -113,8 +113,7 @@ async def create_activity(
     try:
         data = activity_data.model_dump()
 
-        # Convert customer_id from string to int
-        data["customer_id"] = int(data["customer_id"])
+        # customer_id is UUID - pass through directly (no int conversion)
 
         # Convert string dates
         if data.get("activity_date"):

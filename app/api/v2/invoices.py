@@ -102,7 +102,7 @@ async def list_invoices(
     db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     status_filter: Optional[str] = Query(None, alias="status"),
     customer_id: Optional[str] = None,
     search: Optional[str] = Query(None, description="Search invoice number, customer name, email, phone, address"),

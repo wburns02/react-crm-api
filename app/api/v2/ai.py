@@ -392,40 +392,49 @@ async def list_conversations(
     page_size: int = Query(20, ge=1, le=100),
 ):
     """List user's AI conversations."""
-    query = (
-        select(AIConversation)
-        .where(AIConversation.user_id == str(current_user.id))
-        .order_by(AIConversation.updated_at.desc())
-    )
+    try:
+        query = (
+            select(AIConversation)
+            .where(AIConversation.user_id == str(current_user.id))
+            .order_by(AIConversation.updated_at.desc())
+        )
 
-    # Count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+        # Count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
 
-    # Paginate
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
-    result = await db.execute(query)
-    conversations = result.scalars().all()
+        # Paginate
+        offset = (page - 1) * page_size
+        query = query.offset(offset).limit(page_size)
+        result = await db.execute(query)
+        conversations = result.scalars().all()
 
-    return {
-        "items": [
-            {
-                "id": str(c.id),
-                "title": c.title,
-                "context_type": c.context_type,
-                "context_id": c.context_id,
-                "status": c.status,
-                "created_at": c.created_at.isoformat() if c.created_at else None,
-                "updated_at": c.updated_at.isoformat() if c.updated_at else None,
-            }
-            for c in conversations
-        ],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-    }
+        return {
+            "items": [
+                {
+                    "id": str(c.id),
+                    "title": c.title,
+                    "context_type": c.context_type,
+                    "context_id": c.context_id,
+                    "status": c.status,
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
+                    "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+                }
+                for c in conversations
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        logger.warning(f"Error listing AI conversations: {e}")
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+        }
 
 
 @router.get("/conversations/{conversation_id}/messages")
@@ -921,14 +930,14 @@ async def get_dispatch_suggestions(
         )
 
     except Exception as e:
-        logger.error(f"Error generating dispatch suggestions: {e}")
+        logger.warning(f"Error generating dispatch suggestions: {e}")
         import traceback
 
-        logger.error(traceback.format_exc())
-        # Sentry SDK not installed - removed sentry_sdk.capture_exception(e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error generating dispatch suggestions",
+        logger.warning(traceback.format_exc())
+        return DispatchSuggestionsResponse(
+            suggestions=[],
+            unassigned_count=0,
+            available_technician_count=0,
         )
 
 

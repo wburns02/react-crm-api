@@ -70,7 +70,7 @@ async def list_equipment(
     db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     customer_id: Optional[str] = None,
     equipment_type: Optional[str] = None,
     condition: Optional[str] = None,

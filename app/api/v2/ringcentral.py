@@ -590,7 +590,7 @@ async def make_call(
             call_date=now.date(),
             call_time=now.time(),
             assigned_to=str(current_user.id),
-            customer_id=int(request.customer_id) if request.customer_id else None,
+            customer_id=request.customer_id if request.customer_id else None,
         )
 
         # Try to find customer if not provided (skip if fails)
@@ -1038,11 +1038,8 @@ async def analyze_single_call_endpoint(
     Returns immediately with queued status. Poll GET /calls/{call_id} to check results.
     """
     try:
-        # Convert call_id to int for database query
-        call_id_int = int(call_id)
-
-        # Get the call
-        result = await db.execute(select(CallLog).where(CallLog.id == call_id_int))
+        # Get the call (call_id is UUID)
+        result = await db.execute(select(CallLog).where(CallLog.id == call_id))
         call = result.scalar_one_or_none()
 
         if not call:
@@ -1063,7 +1060,7 @@ async def analyze_single_call_endpoint(
             }
 
         # Queue for background analysis
-        background_tasks.add_task(analyze_single_call, call_id_int)
+        background_tasks.add_task(analyze_single_call, call.id)
 
         return {
             "status": "queued",
@@ -1118,8 +1115,7 @@ async def update_call(
         )
 
     update_data = request.model_dump(exclude_unset=True)
-    if "customer_id" in update_data and update_data["customer_id"]:
-        update_data["customer_id"] = int(update_data["customer_id"])
+    # customer_id is UUID - no int conversion needed
 
     for field, value in update_data.items():
         setattr(call, field, value)
@@ -1693,8 +1689,8 @@ async def get_agent_performance(
             agent_calls = agent_data["calls"]
 
             # Calculate actual metrics from call records
-            answered = sum(1 for c in agent_calls if getattr(c, 'status', '') != 'missed')
-            durations = [getattr(c, 'duration', 0) or 0 for c in agent_calls]
+            answered = sum(1 for c in agent_calls if getattr(c, 'call_disposition', '') != 'missed')
+            durations = [getattr(c, 'duration_seconds', 0) or 0 for c in agent_calls]
             avg_duration = round(sum(durations) / len(durations)) if durations else 0
             quality_scores = [c.quality_score for c in agent_calls if getattr(c, 'quality_score', None)]
             avg_quality = round(sum(quality_scores) / len(quality_scores)) if quality_scores else 0
