@@ -26,7 +26,7 @@ router = APIRouter()
 class EmailReplyRequest(BaseModel):
     """Request body for replying to an email."""
 
-    conversation_id: int
+    conversation_id: str
     body: str
 
 
@@ -64,7 +64,7 @@ async def list_email_conversations(
 
 @router.get("/conversations/{conversation_id}")
 async def get_email_conversation(
-    conversation_id: int,
+    conversation_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
