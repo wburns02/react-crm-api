@@ -438,7 +438,15 @@ async def create_work_order(
         },
     )
 
-    return work_order
+    # Fetch customer for name population in response
+    customer = None
+    if work_order.customer_id:
+        cust_result = await db.execute(
+            select(Customer).where(Customer.id == work_order.customer_id)
+        )
+        customer = cust_result.scalar_one_or_none()
+
+    return work_order_with_customer_name(work_order, customer)
 
 
 @router.patch("/{work_order_id}", response_model=WorkOrderResponse)
@@ -462,7 +470,14 @@ async def update_work_order(
     update_data = work_order_data.model_dump(exclude_unset=True)
 
     if not update_data:
-        return work_order
+        # Still need customer name for response
+        customer = None
+        if work_order.customer_id:
+            cust_result = await db.execute(
+                select(Customer).where(Customer.id == work_order.customer_id)
+            )
+            customer = cust_result.scalar_one_or_none()
+        return work_order_with_customer_name(work_order, customer)
 
     # Track status change for WebSocket event
     old_status = str(work_order.status) if work_order.status else None
@@ -483,6 +498,14 @@ async def update_work_order(
         logger.error(f"Error updating work order {work_order_id}: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    # Fetch customer for name population in response
+    customer = None
+    if work_order.customer_id:
+        cust_result = await db.execute(
+            select(Customer).where(Customer.id == work_order.customer_id)
+        )
+        customer = cust_result.scalar_one_or_none()
 
     # Determine the type of update for WebSocket event
     new_status = str(work_order.status) if work_order.status else None
@@ -544,7 +567,7 @@ async def update_work_order(
             },
         )
 
-    return work_order
+    return work_order_with_customer_name(work_order, customer)
 
 
 @router.delete("/{work_order_id}", status_code=status.HTTP_204_NO_CONTENT)
