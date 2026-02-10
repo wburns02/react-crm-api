@@ -49,6 +49,8 @@ from app.api.v2 import (
     schedule_map,
     # Phase 9: Employee Portal
     employee_portal,
+    # Phase 28: Technician Dashboard
+    technician_dashboard,
     # Fleet & Integrations
     samsara,
     email_marketing,
@@ -191,6 +193,9 @@ api_router.include_router(schedule_map.router, prefix="/schedule-map", tags=["sc
 
 # Phase 9: Employee Portal
 api_router.include_router(employee_portal.router, prefix="/employee", tags=["employee"])
+
+# Phase 28: Technician Dashboard (aggregated endpoint for field techs)
+api_router.include_router(technician_dashboard.router, prefix="/technician-dashboard", tags=["technician-dashboard"])
 
 # Fleet & Integrations
 api_router.include_router(samsara.router, prefix="/samsara", tags=["samsara"])
