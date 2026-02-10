@@ -14,6 +14,7 @@ from app.api.deps import (
 )
 from app.config import settings
 from app.models.user import User
+from app.models.technician import Technician
 from app.schemas.auth import (
     UserCreate,
     UserResponse,
@@ -130,9 +131,27 @@ async def logout(response: Response):
 
 
 @router.get("/me", response_model=AuthMeResponse)
-async def get_current_user_info(current_user: CurrentUser):
-    """Get current authenticated user information."""
+async def get_current_user_info(current_user: CurrentUser, db: DbSession):
+    """Get current authenticated user information.
+
+    Checks if user has a matching Technician record (by email) to set
+    the role to 'technician' and populate technician_id.
+    """
     user_response = UserResponse.from_db_user(current_user)
+
+    # Check if this user is a technician (email match)
+    if not current_user.is_superuser:
+        try:
+            tech_result = await db.execute(
+                select(Technician).where(Technician.email == current_user.email)
+            )
+            technician = tech_result.scalar_one_or_none()
+            if technician:
+                user_response.role = "technician"
+                user_response.technician_id = str(technician.id)
+        except Exception as e:
+            logger.warning(f"Technician lookup failed for {current_user.email}: {e}")
+
     return AuthMeResponse(user=user_response)
 
 
