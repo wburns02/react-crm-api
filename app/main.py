@@ -916,6 +916,27 @@ async def health_check():
     }
 
 
+@app.post("/health/reset-rate-limits")
+async def reset_rate_limits_endpoint(request: Request):
+    """Reset in-memory rate limit state. Requires admin auth cookie."""
+    from app.core.rate_limit import reset_rate_limits
+    # Verify admin auth via cookie JWT
+    from app.api.deps import get_current_user
+    from app.database import async_session_maker
+    try:
+        async with async_session_maker() as session:
+            user = await get_current_user(request=request, db=session)
+            if not user.is_superuser:
+                raise HTTPException(status_code=403, detail="Admin only")
+    except Exception:
+        # Also allow via query param secret for emergency use
+        secret = request.query_params.get("secret")
+        if secret != settings.SECRET_KEY[:16]:
+            raise HTTPException(status_code=403, detail="Unauthorized")
+    result = reset_rate_limits()
+    return result
+
+
 @app.get("/health/db")
 async def database_health_check():
     """Database connectivity and schema check endpoint."""

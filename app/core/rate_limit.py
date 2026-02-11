@@ -474,6 +474,16 @@ def get_public_api_rate_limiter() -> PublicAPIRateLimiter:
     return _public_api_rate_limiter
 
 
+def reset_rate_limits() -> dict:
+    """Reset all in-memory rate limit state. Used by admin endpoint."""
+    global _public_api_rate_limiter
+    if _public_api_rate_limiter is not None:
+        _public_api_rate_limiter._minute_windows.clear()
+        _public_api_rate_limiter._hour_windows.clear()
+        return {"status": "reset", "message": "All rate limit windows cleared"}
+    return {"status": "no_limiter", "message": "No rate limiter instance to reset"}
+
+
 def rate_limit_by_ip(request: Request, requests_per_minute: int = 60) -> None:
     """
     Rate limit by IP address for unauthenticated endpoints.
