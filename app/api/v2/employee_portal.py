@@ -8,7 +8,7 @@ Features:
 - Offline sync support
 """
 
-from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File, Request
 from sqlalchemy import select, func, and_, or_
 from typing import Optional, List
 from pydantic import BaseModel, Field
@@ -66,6 +66,17 @@ class CustomerSignatureCapture(BaseModel):
     work_order_id: str
     signature_data: str  # Base64 encoded
     signer_name: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class RecordPaymentRequest(BaseModel):
+    """Record how and when payment was collected in the field."""
+    payment_method: str  # cash, check, card, ach, other
+    amount: float
+    payment_date: Optional[str] = None  # ISO datetime, defaults to now
+    check_number: Optional[str] = None
+    notes: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
@@ -895,6 +906,57 @@ async def update_checklist(
     return {"checklist": work_order.checklist}
 
 
+@router.post("/jobs/{work_order_id}/photos/base64")
+async def upload_photo_base64(
+    work_order_id: str,
+    request: Request,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Upload a photo as base64 JSON (used by tech portal camera capture)."""
+    import uuid as uuid_mod
+    from app.models.work_order_photo import WorkOrderPhoto
+
+    body = await request.json()
+    photo_data = body.get("photo_data") or body.get("data")
+    photo_type = body.get("photo_type", "other")
+
+    if not photo_data:
+        raise HTTPException(status_code=400, detail="photo_data is required")
+
+    # Verify work order exists
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+    work_order = wo_result.scalar_one_or_none()
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    # Create photo record
+    photo = WorkOrderPhoto(
+        id=str(uuid_mod.uuid4()),
+        work_order_id=work_order_id,
+        photo_type=photo_type,
+        data=photo_data,  # data:image/jpeg;base64,... or raw base64
+        thumbnail=body.get("thumbnail"),
+        timestamp=datetime.now(timezone.utc),
+        device_info=body.get("device_info"),
+        gps_lat=body.get("gps_lat"),
+        gps_lng=body.get("gps_lng"),
+        gps_accuracy=body.get("gps_accuracy"),
+    )
+    db.add(photo)
+    await db.commit()
+    await db.refresh(photo)
+
+    logger.info(f"Base64 photo uploaded for WO {work_order_id}: type={photo_type}, id={photo.id}")
+
+    return {
+        "status": "uploaded",
+        "photo_id": str(photo.id),
+        "work_order_id": work_order_id,
+        "photo_type": photo_type,
+    }
+
+
 @router.post("/jobs/{work_order_id}/photos")
 async def upload_photo(
     work_order_id: str,
@@ -1003,6 +1065,141 @@ async def capture_customer_signature(
         "signer_name": request.signer_name,
         "timestamp": now.isoformat(),
     }
+
+
+@router.get("/jobs/{work_order_id}/photos")
+async def list_job_photos(
+    work_order_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List all photos for a work order (used by tech portal)."""
+    from app.models.work_order_photo import WorkOrderPhoto
+
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+    work_order = wo_result.scalar_one_or_none()
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    query = (
+        select(WorkOrderPhoto)
+        .where(WorkOrderPhoto.work_order_id == work_order_id)
+        .order_by(WorkOrderPhoto.created_at.desc())
+    )
+    result = await db.execute(query)
+    photos = result.scalars().all()
+
+    return [
+        {
+            "id": str(p.id),
+            "work_order_id": str(p.work_order_id),
+            "photo_type": p.photo_type,
+            "data_url": p.data,
+            "thumbnail_url": p.thumbnail,
+            "timestamp": p.timestamp.isoformat() if p.timestamp else None,
+            "gps_lat": p.gps_lat,
+            "gps_lng": p.gps_lng,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in photos
+    ]
+
+
+@router.post("/jobs/{work_order_id}/payment")
+async def record_job_payment(
+    work_order_id: str,
+    request: RecordPaymentRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Record payment collected in the field by technician."""
+    import uuid as uuid_mod
+    from app.models.payment import Payment
+
+    # Verify work order exists
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+    work_order = wo_result.scalar_one_or_none()
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    now = datetime.now(timezone.utc)
+    payment_date = now
+    if request.payment_date:
+        try:
+            payment_date = datetime.fromisoformat(request.payment_date.replace("Z", "+00:00"))
+        except ValueError:
+            payment_date = now
+
+    # Build description
+    desc_parts = [f"Field payment collected by {current_user.email}"]
+    if request.payment_method == "check" and request.check_number:
+        desc_parts.append(f"Check #{request.check_number}")
+    if request.notes:
+        desc_parts.append(request.notes)
+
+    payment = Payment(
+        id=uuid_mod.uuid4(),
+        customer_id=work_order.customer_id,
+        work_order_id=work_order_id,
+        amount=request.amount,
+        currency="USD",
+        payment_method=request.payment_method,
+        status="completed",
+        description=". ".join(desc_parts),
+        payment_date=payment_date,
+        processed_at=now,
+    )
+    db.add(payment)
+    await db.commit()
+    await db.refresh(payment)
+
+    logger.info(f"Payment recorded for WO {work_order_id}: ${request.amount} via {request.payment_method} by {current_user.email}")
+
+    return {
+        "status": "recorded",
+        "payment_id": str(payment.id),
+        "work_order_id": work_order_id,
+        "amount": float(payment.amount),
+        "payment_method": request.payment_method,
+        "payment_date": payment_date.isoformat(),
+    }
+
+
+@router.get("/jobs/{work_order_id}/payments")
+async def list_job_payments(
+    work_order_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List all payments for a work order."""
+    from app.models.payment import Payment
+
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+    work_order = wo_result.scalar_one_or_none()
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    query = (
+        select(Payment)
+        .where(Payment.work_order_id == work_order_id)
+        .order_by(Payment.created_at.desc())
+    )
+    result = await db.execute(query)
+    payments = result.scalars().all()
+
+    return [
+        {
+            "id": str(p.id),
+            "work_order_id": str(p.work_order_id) if p.work_order_id else None,
+            "amount": float(p.amount) if p.amount else 0,
+            "payment_method": p.payment_method,
+            "status": p.status,
+            "description": p.description,
+            "payment_date": p.payment_date.isoformat() if p.payment_date else None,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in payments
+    ]
 
 
 @router.post("/sync")
