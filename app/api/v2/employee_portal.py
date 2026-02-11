@@ -9,7 +9,7 @@ Features:
 """
 
 from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timedelta, timezone
@@ -17,6 +17,7 @@ import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
+from app.models.customer import Customer
 from app.models.technician import Technician
 from app.models.payroll import TimeEntry
 from app.services.commission_service import auto_create_commission
@@ -196,51 +197,110 @@ async def get_employee_jobs(
     db: DbSession,
     current_user: CurrentUser,
     date_filter: Optional[str] = Query(None, alias="date"),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    search: Optional[str] = Query(None),
+    scheduled_date_from: Optional[str] = Query(None),
+    scheduled_date_to: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
 ):
-    """Get jobs assigned to current technician (frontend-compatible)."""
+    """Get jobs assigned to current technician.
+
+    Matches by BOTH technician_id (UUID FK) AND assigned_technician (name string)
+    since the schedule UI only sets assigned_technician.
+    """
     tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
     technician = tech_result.scalar_one_or_none()
 
     if not technician:
-        return {"jobs": []}
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
 
-    query = select(WorkOrder).where(WorkOrder.technician_id == technician.id)
+    # OR filter: match by UUID FK or name string (same as technician_dashboard)
+    tech_full_name = f"{technician.first_name or ''} {technician.last_name or ''}".strip()
+    tech_conditions = [WorkOrder.technician_id == technician.id]
+    if tech_full_name:
+        tech_conditions.append(WorkOrder.assigned_technician == tech_full_name)
 
+    query = (
+        select(WorkOrder, Customer)
+        .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        .where(or_(*tech_conditions))
+    )
+
+    # Date filtering
     if date_filter:
         query = query.where(WorkOrder.scheduled_date == date.fromisoformat(date_filter))
-    else:
-        query = query.where(WorkOrder.scheduled_date == date.today())
+    elif scheduled_date_from and scheduled_date_to:
+        query = query.where(
+            WorkOrder.scheduled_date >= date.fromisoformat(scheduled_date_from),
+            WorkOrder.scheduled_date <= date.fromisoformat(scheduled_date_to),
+        )
+    # If no date filter, show ALL jobs (not just today) for My Jobs page
 
-    query = query.order_by(WorkOrder.time_window_start)
+    # Status filter
+    if status_filter:
+        query = query.where(WorkOrder.status == status_filter)
+
+    # Search (customer name, address, job type)
+    if search:
+        search_term = f"%{search}%"
+        query = query.where(
+            or_(
+                WorkOrder.assigned_technician.ilike(search_term),
+                WorkOrder.service_address_line1.ilike(search_term),
+                WorkOrder.service_city.ilike(search_term),
+                WorkOrder.job_type.ilike(search_term),
+                Customer.first_name.ilike(search_term),
+                Customer.last_name.ilike(search_term),
+            )
+        )
+
+    # Count total before pagination
+    from sqlalchemy import func as sa_func
+    count_query = select(sa_func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Order and paginate
+    query = query.order_by(WorkOrder.scheduled_date.desc(), WorkOrder.time_window_start)
+    query = query.offset((page - 1) * page_size).limit(page_size)
+
     result = await db.execute(query)
-    work_orders = result.scalars().all()
+    rows = result.all()
 
-    return {
-        "jobs": [
-            {
-                "id": str(wo.id),
-                "customer_id": str(wo.customer_id),
-                "customer_name": wo.customer_name,
-                "job_type": wo.job_type,
-                "status": wo.status,
-                "priority": wo.priority,
-                "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
-                "time_window_start": str(wo.time_window_start) if wo.time_window_start else None,
-                "time_window_end": str(wo.time_window_end) if wo.time_window_end else None,
-                "address": wo.service_address_line1,
-                "city": wo.service_city,
-                "state": wo.service_state,
-                "zip": wo.service_zip,
-                "latitude": wo.service_latitude,
-                "longitude": wo.service_longitude,
-                "notes": wo.notes,
-                "checklist": wo.checklist,
-                "estimated_duration_hours": wo.estimated_duration_hours,
-                "is_clocked_in": wo.is_clocked_in,
-            }
-            for wo in work_orders
-        ]
-    }
+    items = []
+    for row in rows:
+        wo = row[0]  # WorkOrder
+        customer = row[1]  # Customer (may be None)
+        customer_name = ""
+        if customer:
+            customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+        elif wo.assigned_technician:
+            customer_name = wo.customer_name or ""
+
+        items.append({
+            "id": str(wo.id),
+            "customer_id": str(wo.customer_id) if wo.customer_id else None,
+            "customer_name": customer_name,
+            "job_type": wo.job_type,
+            "status": wo.status,
+            "priority": wo.priority,
+            "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
+            "time_window_start": str(wo.time_window_start) if wo.time_window_start else None,
+            "time_window_end": str(wo.time_window_end) if wo.time_window_end else None,
+            "address": wo.service_address_line1,
+            "city": wo.service_city,
+            "state": wo.service_state,
+            "zip": wo.service_zip,
+            "latitude": wo.service_latitude,
+            "longitude": wo.service_longitude,
+            "notes": wo.notes,
+            "checklist": wo.checklist,
+            "estimated_duration_hours": wo.estimated_duration_hours,
+            "is_clocked_in": wo.is_clocked_in,
+        })
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/jobs/{job_id}")
