@@ -1140,6 +1140,10 @@ async def record_job_payment(
     payment_id = uuid_mod.uuid4()
     description = ". ".join(desc_parts)
 
+    # Strip timezone for DB columns that are TIMESTAMP WITHOUT TIME ZONE
+    payment_date_naive = payment_date.replace(tzinfo=None)
+    now_naive = now.replace(tzinfo=None)
+
     # Use raw SQL because Payment model has invoice_id as UUID but DB column is INTEGER
     await db.execute(
         text("""
@@ -1157,8 +1161,8 @@ async def record_job_payment(
             "payment_method": request.payment_method,
             "status": "completed",
             "description": description,
-            "payment_date": payment_date,
-            "processed_at": now,
+            "payment_date": payment_date_naive,
+            "processed_at": now_naive,
         },
     )
     await db.commit()
