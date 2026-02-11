@@ -181,10 +181,8 @@ async def get_employee_profile(
 
     return {
         "id": str(technician.id),
-        "first_name": technician.name.split()[0] if technician.name else "",
-        "last_name": " ".join(technician.name.split()[1:])
-        if technician.name and len(technician.name.split()) > 1
-        else "",
+        "first_name": technician.first_name or "",
+        "last_name": technician.last_name or "",
         "email": technician.email,
         "role": "technician",
         "is_active": technician.is_active,
@@ -209,98 +207,98 @@ async def get_employee_jobs(
     Matches by BOTH technician_id (UUID FK) AND assigned_technician (name string)
     since the schedule UI only sets assigned_technician.
     """
-    tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
-    technician = tech_result.scalar_one_or_none()
+    try:
+        tech_result = await db.execute(select(Technician).where(Technician.email == current_user.email))
+        technician = tech_result.scalar_one_or_none()
 
-    if not technician:
-        return {"items": [], "total": 0, "page": page, "page_size": page_size}
+        if not technician:
+            return {"items": [], "total": 0, "page": page, "page_size": page_size}
 
-    # OR filter: match by UUID FK or name string (same as technician_dashboard)
-    tech_full_name = f"{technician.first_name or ''} {technician.last_name or ''}".strip()
-    tech_conditions = [WorkOrder.technician_id == technician.id]
-    if tech_full_name:
-        tech_conditions.append(WorkOrder.assigned_technician == tech_full_name)
+        # OR filter: match by UUID FK or name string (same as technician_dashboard)
+        tech_full_name = f"{technician.first_name or ''} {technician.last_name or ''}".strip()
+        tech_conditions = [WorkOrder.technician_id == technician.id]
+        if tech_full_name:
+            tech_conditions.append(WorkOrder.assigned_technician == tech_full_name)
 
-    query = (
-        select(WorkOrder, Customer)
-        .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
-        .where(or_(*tech_conditions))
-    )
-
-    # Date filtering
-    if date_filter:
-        query = query.where(WorkOrder.scheduled_date == date.fromisoformat(date_filter))
-    elif scheduled_date_from and scheduled_date_to:
-        query = query.where(
-            WorkOrder.scheduled_date >= date.fromisoformat(scheduled_date_from),
-            WorkOrder.scheduled_date <= date.fromisoformat(scheduled_date_to),
+        query = (
+            select(WorkOrder, Customer)
+            .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+            .where(or_(*tech_conditions))
         )
-    # If no date filter, show ALL jobs (not just today) for My Jobs page
 
-    # Status filter
-    if status_filter:
-        query = query.where(WorkOrder.status == status_filter)
-
-    # Search (customer name, address, job type)
-    if search:
-        search_term = f"%{search}%"
-        query = query.where(
-            or_(
-                WorkOrder.assigned_technician.ilike(search_term),
-                WorkOrder.service_address_line1.ilike(search_term),
-                WorkOrder.service_city.ilike(search_term),
-                WorkOrder.job_type.ilike(search_term),
-                Customer.first_name.ilike(search_term),
-                Customer.last_name.ilike(search_term),
+        # Date filtering
+        if date_filter:
+            query = query.where(WorkOrder.scheduled_date == date.fromisoformat(date_filter))
+        elif scheduled_date_from and scheduled_date_to:
+            query = query.where(
+                WorkOrder.scheduled_date >= date.fromisoformat(scheduled_date_from),
+                WorkOrder.scheduled_date <= date.fromisoformat(scheduled_date_to),
             )
-        )
 
-    # Count total before pagination
-    from sqlalchemy import func as sa_func
-    count_query = select(sa_func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
+        # Status filter
+        if status_filter:
+            query = query.where(WorkOrder.status == status_filter)
 
-    # Order and paginate
-    query = query.order_by(WorkOrder.scheduled_date.desc(), WorkOrder.time_window_start)
-    query = query.offset((page - 1) * page_size).limit(page_size)
+        # Search (customer name, address, job type)
+        if search:
+            search_term = f"%{search}%"
+            query = query.where(
+                or_(
+                    WorkOrder.assigned_technician.ilike(search_term),
+                    WorkOrder.service_address_line1.ilike(search_term),
+                    WorkOrder.service_city.ilike(search_term),
+                    WorkOrder.job_type.ilike(search_term),
+                    Customer.first_name.ilike(search_term),
+                    Customer.last_name.ilike(search_term),
+                )
+            )
 
-    result = await db.execute(query)
-    rows = result.all()
+        # Count total before pagination
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
 
-    items = []
-    for row in rows:
-        wo = row[0]  # WorkOrder
-        customer = row[1]  # Customer (may be None)
-        customer_name = ""
-        if customer:
-            customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
-        elif wo.assigned_technician:
-            customer_name = wo.customer_name or ""
+        # Order and paginate
+        query = query.order_by(WorkOrder.scheduled_date.desc().nullslast(), WorkOrder.time_window_start)
+        query = query.offset((page - 1) * page_size).limit(page_size)
 
-        items.append({
-            "id": str(wo.id),
-            "customer_id": str(wo.customer_id) if wo.customer_id else None,
-            "customer_name": customer_name,
-            "job_type": wo.job_type,
-            "status": wo.status,
-            "priority": wo.priority,
-            "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
-            "time_window_start": str(wo.time_window_start) if wo.time_window_start else None,
-            "time_window_end": str(wo.time_window_end) if wo.time_window_end else None,
-            "address": wo.service_address_line1,
-            "city": wo.service_city,
-            "state": wo.service_state,
-            "zip": wo.service_zip,
-            "latitude": wo.service_latitude,
-            "longitude": wo.service_longitude,
-            "notes": wo.notes,
-            "checklist": wo.checklist,
-            "estimated_duration_hours": wo.estimated_duration_hours,
-            "is_clocked_in": wo.is_clocked_in,
-        })
+        result = await db.execute(query)
+        rows = result.all()
 
-    return {"items": items, "total": total, "page": page, "page_size": page_size}
+        items = []
+        for row in rows:
+            wo = row[0]  # WorkOrder
+            customer = row[1]  # Customer (may be None)
+            customer_name = ""
+            if customer:
+                customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+
+            items.append({
+                "id": str(wo.id),
+                "customer_id": str(wo.customer_id) if wo.customer_id else None,
+                "customer_name": customer_name,
+                "job_type": wo.job_type,
+                "status": wo.status,
+                "priority": wo.priority,
+                "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
+                "time_window_start": str(wo.time_window_start) if wo.time_window_start else None,
+                "time_window_end": str(wo.time_window_end) if wo.time_window_end else None,
+                "address": wo.service_address_line1,
+                "city": wo.service_city,
+                "state": wo.service_state,
+                "zip": wo.service_postal_code,
+                "latitude": wo.service_latitude,
+                "longitude": wo.service_longitude,
+                "notes": wo.notes,
+                "checklist": wo.checklist,
+                "estimated_duration_hours": wo.estimated_duration_hours,
+                "is_clocked_in": wo.is_clocked_in,
+            })
+
+        return {"items": items, "total": total, "page": page, "page_size": page_size}
+    except Exception as e:
+        logger.error(f"Employee jobs error for {current_user.email}: {type(e).__name__}: {e}")
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
 
 
 @router.get("/jobs/{job_id}")
@@ -310,16 +308,26 @@ async def get_employee_job(
     current_user: CurrentUser,
 ):
     """Get a single job."""
-    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == job_id))
-    work_order = wo_result.scalar_one_or_none()
+    wo_result = await db.execute(
+        select(WorkOrder, Customer)
+        .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        .where(WorkOrder.id == job_id)
+    )
+    row = wo_result.one_or_none()
 
-    if not work_order:
+    if not row:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    work_order = row[0]
+    customer = row[1]
+    customer_name = ""
+    if customer:
+        customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
 
     return {
         "id": str(work_order.id),
-        "customer_id": str(work_order.customer_id),
-        "customer_name": work_order.customer_name,
+        "customer_id": str(work_order.customer_id) if work_order.customer_id else None,
+        "customer_name": customer_name,
         "job_type": work_order.job_type,
         "status": work_order.status,
         "priority": work_order.priority,
@@ -329,7 +337,7 @@ async def get_employee_job(
         "address": work_order.service_address_line1,
         "city": work_order.service_city,
         "state": work_order.service_state,
-        "zip": work_order.service_zip,
+        "zip": work_order.service_postal_code,
         "latitude": work_order.service_latitude,
         "longitude": work_order.service_longitude,
         "notes": work_order.notes,
