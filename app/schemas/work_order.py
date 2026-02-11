@@ -109,6 +109,7 @@ class WorkOrderResponse(WorkOrderBase):
     id: UUIDStr  # Flask uses VARCHAR(36) UUID
     work_order_number: Optional[str] = None  # Human-readable WO-NNNNNN format
     customer_name: Optional[str] = None  # Populated from Customer JOIN
+    customer_phone: Optional[str] = None  # Populated from Customer JOIN
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
