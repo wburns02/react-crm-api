@@ -117,16 +117,19 @@ async def fix_work_orders_table(db: DbSession, current_user: CurrentUser):
 def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -> dict:
     """Convert WorkOrder to dict with customer_name populated from Customer JOIN."""
     customer_name = None
+    customer_phone = None
     if customer:
         first = customer.first_name or ""
         last = customer.last_name or ""
         customer_name = f"{first} {last}".strip() or None
+        customer_phone = customer.phone or None
 
     return {
         "id": wo.id,
         "work_order_number": wo.work_order_number,
         "customer_id": wo.customer_id,
         "customer_name": customer_name,
+        "customer_phone": customer_phone,
         "technician_id": wo.technician_id,
         "job_type": str(wo.job_type) if wo.job_type else None,
         "status": str(wo.status) if wo.status else "draft",
