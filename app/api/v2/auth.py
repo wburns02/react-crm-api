@@ -44,8 +44,8 @@ async def login(
     db: DbSession,
 ):
     """Authenticate user and return JWT token (or MFA challenge if enabled)."""
-    # Rate limit: 5 requests/minute per IP to prevent brute force attacks
-    rate_limit_by_ip(request, requests_per_minute=5)
+    # Rate limit: 30 requests/minute per IP (300/hr) to prevent brute force
+    rate_limit_by_ip(request, requests_per_minute=30)
 
     try:
         # Find user (without MFA eager loading to avoid errors if MFA tables don't exist)
@@ -162,8 +162,8 @@ async def register(
     db: DbSession,
 ):
     """Register a new user."""
-    # Rate limit: 3 requests/minute per IP to prevent account enumeration
-    rate_limit_by_ip(request, requests_per_minute=3)
+    # Rate limit: 10 requests/minute per IP to prevent account enumeration
+    rate_limit_by_ip(request, requests_per_minute=10)
 
     # Check if user exists
     result = await db.execute(select(User).where(User.email == user_data.email))
@@ -202,8 +202,8 @@ async def login_mfa(
     db: DbSession,
 ):
     """Complete login with MFA verification."""
-    # Rate limit: 5 requests/minute per IP
-    rate_limit_by_ip(request, requests_per_minute=5)
+    # Rate limit: 20 requests/minute per IP
+    rate_limit_by_ip(request, requests_per_minute=20)
 
     mfa_manager = MFAManager(db)
     success, user_id, error_message = await mfa_manager.verify_mfa_session(
