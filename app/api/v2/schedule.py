@@ -79,14 +79,14 @@ async def get_schedule_stats(
     week_start = today - timedelta(days=today.weekday())
     week_end = week_start + timedelta(days=6)
 
-    today_result = await db.execute(select(func.count()).where(func.date(WorkOrder.scheduled_date) == today))
+    today_result = await db.execute(select(func.count()).where(WorkOrder.scheduled_date == today))
     today_jobs = today_result.scalar() or 0
 
     week_result = await db.execute(
         select(func.count()).where(
             and_(
-                func.date(WorkOrder.scheduled_date) >= week_start,
-                func.date(WorkOrder.scheduled_date) <= week_end,
+                WorkOrder.scheduled_date >= week_start,
+                WorkOrder.scheduled_date <= week_end,
             )
         )
     )
@@ -156,11 +156,14 @@ async def get_schedule_by_date(
     date: str = Query(..., description="Date in YYYY-MM-DD format"),
 ):
     """Get all work orders scheduled for a specific date with customer names."""
+    # Parse string to date object — asyncpg requires proper types, not raw strings
+    parsed_date = datetime.strptime(date, "%Y-%m-%d").date()
+
     # LEFT JOIN with Customer table to get real customer names
     query = (
         select(WorkOrder, Customer)
         .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
-        .where(func.date(WorkOrder.scheduled_date) == date)
+        .where(WorkOrder.scheduled_date == parsed_date)
         .order_by(WorkOrder.time_window_start)
     )
 
@@ -190,9 +193,11 @@ async def get_schedule_by_technician(
     )
 
     if date_from:
-        query = query.where(func.date(WorkOrder.scheduled_date) >= date_from)
+        parsed_from = datetime.strptime(date_from, "%Y-%m-%d").date()
+        query = query.where(WorkOrder.scheduled_date >= parsed_from)
     if date_to:
-        query = query.where(func.date(WorkOrder.scheduled_date) <= date_to)
+        parsed_to = datetime.strptime(date_to, "%Y-%m-%d").date()
+        query = query.where(WorkOrder.scheduled_date <= parsed_to)
 
     query = query.order_by(WorkOrder.scheduled_date, WorkOrder.time_window_start)
 
@@ -222,8 +227,8 @@ async def get_week_view(
         .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
         .where(
             and_(
-                func.date(WorkOrder.scheduled_date) >= start,
-                func.date(WorkOrder.scheduled_date) <= end,
+                WorkOrder.scheduled_date >= start,
+                WorkOrder.scheduled_date <= end,
             )
         )
         .order_by(WorkOrder.scheduled_date, WorkOrder.time_window_start)

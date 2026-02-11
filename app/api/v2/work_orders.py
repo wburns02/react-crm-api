@@ -10,6 +10,7 @@ import traceback
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
 from app.models.customer import Customer
+from app.models.technician import Technician
 from app.services.commission_service import auto_create_commission
 from app.schemas.work_order import (
     WorkOrderCreate,
@@ -419,6 +420,31 @@ async def create_work_order(
     data = work_order_data.model_dump()
     data["id"] = str(uuid.uuid4())
     data["work_order_number"] = await generate_work_order_number(db)
+
+    # Auto-resolve assigned_technician → technician_id if not already set
+    if data.get("assigned_technician") and not data.get("technician_id"):
+        tech_name = data["assigned_technician"].strip()
+        name_parts = tech_name.split(None, 1)
+        if len(name_parts) >= 2:
+            tech_result = await db.execute(
+                select(Technician).where(
+                    Technician.first_name == name_parts[0],
+                    Technician.last_name == name_parts[1],
+                    Technician.is_active == True,
+                ).limit(1)
+            )
+        else:
+            tech_result = await db.execute(
+                select(Technician).where(
+                    Technician.first_name == tech_name,
+                    Technician.is_active == True,
+                ).limit(1)
+            )
+        matched_tech = tech_result.scalar_one_or_none()
+        if matched_tech:
+            data["technician_id"] = str(matched_tech.id)
+            logger.info(f"Auto-resolved technician '{tech_name}' → {matched_tech.id}")
+
     work_order = WorkOrder(**data)
     db.add(work_order)
     await db.commit()
@@ -487,6 +513,32 @@ async def update_work_order(
         # Use SQLAlchemy ORM update - handles ENUM types correctly
         for field, value in update_data.items():
             setattr(work_order, field, value)
+
+        # Auto-resolve assigned_technician (name string) → technician_id (UUID FK)
+        # The schedule UI only sets assigned_technician, but the technician dashboard
+        # needs technician_id to find jobs. Bridge the gap automatically.
+        if "assigned_technician" in update_data and update_data["assigned_technician"]:
+            tech_name = update_data["assigned_technician"]
+            name_parts = tech_name.strip().split(None, 1)
+            if len(name_parts) >= 2:
+                tech_result = await db.execute(
+                    select(Technician).where(
+                        Technician.first_name == name_parts[0],
+                        Technician.last_name == name_parts[1],
+                        Technician.is_active == True,
+                    ).limit(1)
+                )
+            else:
+                tech_result = await db.execute(
+                    select(Technician).where(
+                        Technician.first_name == tech_name,
+                        Technician.is_active == True,
+                    ).limit(1)
+                )
+            matched_tech = tech_result.scalar_one_or_none()
+            if matched_tech:
+                work_order.technician_id = matched_tech.id
+                logger.info(f"Auto-resolved technician '{tech_name}' → {matched_tech.id}")
 
         # Update timestamp
         work_order.updated_at = datetime.utcnow()

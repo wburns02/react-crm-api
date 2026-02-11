@@ -12,10 +12,11 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter
-from sqlalchemy import select, func, and_, cast, String
+from sqlalchemy import select, func, and_, or_, cast, String
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
+from app.models.customer import Customer
 from app.models.technician import Technician
 from app.models.payroll import TimeEntry, Commission, PayrollPeriod
 
@@ -127,8 +128,19 @@ async def get_my_summary(
 
         tech_id = technician.id
         tech_id_str = str(tech_id)
+        tech_full_name = f"{technician.first_name or ''} {technician.last_name or ''}".strip()
         today = date.today()
         now = datetime.now(timezone.utc)
+
+        # Match work orders by EITHER technician_id (UUID FK) OR assigned_technician (name string).
+        # The schedule UI only sets assigned_technician (string), not technician_id (UUID FK),
+        # so we must check both to find all jobs assigned to this technician.
+        def _tech_filter():
+            """OR filter: matches by UUID FK or by name string."""
+            conditions = [WorkOrder.technician_id == tech_id]
+            if tech_full_name:
+                conditions.append(WorkOrder.assigned_technician == tech_full_name)
+            return or_(*conditions)
 
         # Update response with technician info
         response = dict(empty_response)
@@ -156,16 +168,25 @@ async def get_my_summary(
             "active_entry_id": str(active_entry.id) if active_entry else None,
         }
 
-        # 3. Today's jobs
+        # 3. Today's jobs — join with Customer table for real customer names
         jobs_result = await db.execute(
-            select(WorkOrder)
+            select(WorkOrder, Customer)
+            .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
             .where(
-                WorkOrder.technician_id == tech_id_str,
+                _tech_filter(),
                 WorkOrder.scheduled_date == today,
             )
             .order_by(WorkOrder.time_window_start)
         )
-        work_orders = jobs_result.scalars().all()
+        job_rows = jobs_result.all()
+        work_orders = [row[0] for row in job_rows]
+        # Build customer name lookup from joined data
+        customer_names = {}
+        for wo, cust in job_rows:
+            if cust:
+                customer_names[wo.id] = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Customer"
+            else:
+                customer_names[wo.id] = "Customer"
 
         # Sort: in_progress first, then en_route, then scheduled, then completed
         status_priority = {"in_progress": 0, "en_route": 1, "scheduled": 2, "draft": 3, "completed": 4, "cancelled": 5}
@@ -199,7 +220,7 @@ async def get_my_summary(
 
             todays_jobs.append({
                 "id": str(wo.id),
-                "customer_name": wo.customer_name or "Customer",
+                "customer_name": customer_names.get(wo.id, "Customer"),
                 "job_type": job_type_raw,
                 "job_type_label": job_type_label,
                 "status": status_raw,
@@ -221,7 +242,7 @@ async def get_my_summary(
         total_jobs = len(work_orders)
         hours_result = await db.execute(
             select(func.sum(WorkOrder.total_labor_minutes)).where(
-                WorkOrder.technician_id == tech_id_str,
+                _tech_filter(),
                 WorkOrder.scheduled_date == today,
             )
         )
@@ -264,7 +285,7 @@ async def get_my_summary(
                 select(func.count())
                 .select_from(WorkOrder)
                 .where(
-                    WorkOrder.technician_id == tech_id_str,
+                    _tech_filter(),
                     WorkOrder.scheduled_date >= current_period.start_date,
                     WorkOrder.scheduled_date <= current_period.end_date,
                     cast(WorkOrder.status, String) == "completed",
@@ -297,7 +318,7 @@ async def get_my_summary(
             select(func.count())
             .select_from(WorkOrder)
             .where(
-                WorkOrder.technician_id == tech_id_str,
+                _tech_filter(),
                 WorkOrder.scheduled_date >= week_start,
                 WorkOrder.scheduled_date <= today,
                 cast(WorkOrder.status, String) == "completed",
@@ -309,7 +330,7 @@ async def get_my_summary(
             select(func.count())
             .select_from(WorkOrder)
             .where(
-                WorkOrder.technician_id == tech_id_str,
+                _tech_filter(),
                 WorkOrder.scheduled_date >= last_week_start,
                 WorkOrder.scheduled_date <= last_week_end,
                 cast(WorkOrder.status, String) == "completed",
@@ -321,7 +342,7 @@ async def get_my_summary(
         avg_result = await db.execute(
             select(func.avg(WorkOrder.total_labor_minutes))
             .where(
-                WorkOrder.technician_id == tech_id_str,
+                _tech_filter(),
                 WorkOrder.scheduled_date >= today.replace(day=1),
                 WorkOrder.total_labor_minutes.isnot(None),
                 WorkOrder.total_labor_minutes > 0,
