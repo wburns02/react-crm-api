@@ -930,10 +930,11 @@ async def upload_photo_base64(
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
 
-    # Create photo record
+    # Create photo record (use UUID objects for UUID columns)
+    photo_id = uuid_mod.uuid4()
     photo = WorkOrderPhoto(
-        id=str(uuid_mod.uuid4()),
-        work_order_id=work_order_id,
+        id=photo_id,
+        work_order_id=uuid_mod.UUID(work_order_id),
         photo_type=photo_type,
         data=photo_data,  # data:image/jpeg;base64,... or raw base64
         thumbnail=body.get("thumbnail"),
@@ -1113,8 +1114,7 @@ async def record_job_payment(
     current_user: CurrentUser,
 ):
     """Record payment collected in the field by technician."""
-    import uuid as uuid_mod
-    from app.models.payment import Payment
+    from sqlalchemy import text
 
     # Verify work order exists
     wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
@@ -1137,29 +1137,39 @@ async def record_job_payment(
     if request.notes:
         desc_parts.append(request.notes)
 
-    payment = Payment(
-        id=uuid_mod.uuid4(),
-        customer_id=work_order.customer_id,
-        work_order_id=work_order_id,
-        amount=request.amount,
-        currency="USD",
-        payment_method=request.payment_method,
-        status="completed",
-        description=". ".join(desc_parts),
-        payment_date=payment_date,
-        processed_at=now,
+    payment_id = uuid_mod.uuid4()
+    description = ". ".join(desc_parts)
+
+    # Use raw SQL because Payment model has invoice_id as UUID but DB column is INTEGER
+    await db.execute(
+        text("""
+            INSERT INTO payments (id, customer_id, work_order_id, amount, currency,
+                payment_method, status, description, payment_date, processed_at)
+            VALUES (:id, :customer_id, :work_order_id, :amount, :currency,
+                :payment_method, :status, :description, :payment_date, :processed_at)
+        """),
+        {
+            "id": str(payment_id),
+            "customer_id": str(work_order.customer_id) if work_order.customer_id else None,
+            "work_order_id": str(work_order_id),
+            "amount": request.amount,
+            "currency": "USD",
+            "payment_method": request.payment_method,
+            "status": "completed",
+            "description": description,
+            "payment_date": payment_date,
+            "processed_at": now,
+        },
     )
-    db.add(payment)
     await db.commit()
-    await db.refresh(payment)
 
     logger.info(f"Payment recorded for WO {work_order_id}: ${request.amount} via {request.payment_method} by {current_user.email}")
 
     return {
         "status": "recorded",
-        "payment_id": str(payment.id),
+        "payment_id": str(payment_id),
         "work_order_id": work_order_id,
-        "amount": float(payment.amount),
+        "amount": request.amount,
         "payment_method": request.payment_method,
         "payment_date": payment_date.isoformat(),
     }
