@@ -321,6 +321,9 @@ async def _process_feed_update(changed_data: list):
 
     async with _vehicle_store_lock:
         for v in changed_data:
+            # Samsara feed may return nested lists — skip non-dict items
+            if not isinstance(v, dict):
+                continue
             vehicle_id = v.get("id", "")
             gps_data = v.get("gps", {})
 
