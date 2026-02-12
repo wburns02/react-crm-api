@@ -29,6 +29,20 @@ from app.services.clover_service import get_clover_service
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_payment_method(tender_label: str) -> str:
+    """Normalize Clover tender labels to standard payment method values."""
+    lower = tender_label.lower().strip()
+    if any(k in lower for k in ("visa", "master", "amex", "discover", "credit", "debit")):
+        return "card"
+    if lower in ("cash", "com.clover.tender.cash"):
+        return "cash"
+    if lower in ("check", "com.clover.tender.check"):
+        return "check"
+    if lower in ("card", "com.clover.tender.credit_card"):
+        return "card"
+    return "card"  # Default Clover POS payments to card
+
 router = APIRouter()
 
 
@@ -362,7 +376,7 @@ async def clover_webhook(
                     {
                         "amount": round(amount_cents / 100, 2),
                         "currency": "USD",
-                        "method": (tender.get("label") or "card").lower()[:50],
+                        "method": _normalize_payment_method(tender.get("label") or "card"),
                         "status": "completed" if data.get("result") == "SUCCESS" else "pending",
                         "charge_id": clover_payment_id,
                         "description": "Clover payment (webhook)",
@@ -579,7 +593,7 @@ async def sync_clover_payments(
                 created_dt = datetime.utcfromtimestamp(created_ms / 1000) if created_ms else datetime.utcnow()
 
                 amount_val = round(amount_cents / 100, 2)
-                method_label = (tender.get("label") or "card").lower()[:50]
+                method_label = _normalize_payment_method(tender.get("label") or "card")
 
                 # Use raw SQL to avoid ORM type mismatch (model has invoice_id as UUID
                 # but actual DB column is integer)
