@@ -891,16 +891,39 @@ async def ping():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint with DB latency measurement."""
+    import time as _time
     warnings = []
     if not settings.RATE_LIMIT_REDIS_ENABLED:
         warnings.append("rate_limiting_not_distributed")
 
+    # Measure DB latency
+    db_status = "healthy"
+    db_latency_ms = None
+    try:
+        from app.database import async_session_maker
+        from sqlalchemy import text
+        start = _time.monotonic()
+        async with async_session_maker() as session:
+            await session.execute(text("SELECT 1"))
+        db_latency_ms = round((_time.monotonic() - start) * 1000, 1)
+        if db_latency_ms > 5000:
+            warnings.append("db_latency_high")
+    except Exception as e:
+        db_status = "unhealthy"
+        warnings.append(f"db_error: {str(e)[:100]}")
+
+    overall_status = "healthy" if db_status == "healthy" else "degraded"
+
     return {
-        "status": "healthy",
+        "status": overall_status,
         "version": "2.9.4",  # Added date filter to commissions + social integrations
         "environment": settings.ENVIRONMENT,
         "rate_limiting": "redis" if settings.RATE_LIMIT_REDIS_ENABLED else "memory",
+        "database": {
+            "status": db_status,
+            "latency_ms": db_latency_ms,
+        },
         "features": [
             "public_api",
             "oauth2",
