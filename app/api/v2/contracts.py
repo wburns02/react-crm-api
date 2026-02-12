@@ -21,6 +21,7 @@ from app.api.deps import DbSession, CurrentUser
 from app.models.contract import Contract
 from app.models.contract_template import ContractTemplate
 from app.models.customer import Customer
+from app.schemas.types import UUIDStr
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -71,11 +72,11 @@ class ContractUpdate(BaseModel):
 
 
 class ContractResponse(BaseModel):
-    id: str
+    id: UUIDStr
     contract_number: str
     name: str
     contract_type: str
-    customer_id: str
+    customer_id: UUIDStr
     customer_name: Optional[str] = None
     start_date: date
     end_date: date
@@ -124,7 +125,7 @@ class TemplateUpdate(BaseModel):
 
 
 class TemplateResponse(BaseModel):
-    id: str
+    id: UUIDStr
     name: str
     code: str
     description: Optional[str] = None
@@ -221,7 +222,7 @@ async def list_contracts(
                     "contract_number": c.contract_number,
                     "name": c.name,
                     "contract_type": c.contract_type,
-                    "customer_id": c.customer_id,
+                    "customer_id": str(c.customer_id) if c.customer_id else None,
                     "customer_name": c.customer_name,
                     "start_date": c.start_date,
                     "end_date": c.end_date,
@@ -262,7 +263,7 @@ async def create_contract(
             "contract_number": contract.contract_number,
             "name": contract.name,
             "contract_type": contract.contract_type,
-            "customer_id": contract.customer_id,
+            "customer_id": str(contract.customer_id) if contract.customer_id else None,
             "customer_name": contract.customer_name,
             "start_date": contract.start_date,
             "end_date": contract.end_date,
@@ -301,7 +302,7 @@ async def get_contract(
             "contract_number": contract.contract_number,
             "name": contract.name,
             "contract_type": contract.contract_type,
-            "customer_id": contract.customer_id,
+            "customer_id": str(contract.customer_id) if contract.customer_id else None,
             "customer_name": contract.customer_name,
             "start_date": contract.start_date,
             "end_date": contract.end_date,
@@ -350,7 +351,7 @@ async def update_contract(
             "contract_number": contract.contract_number,
             "name": contract.name,
             "contract_type": contract.contract_type,
-            "customer_id": contract.customer_id,
+            "customer_id": str(contract.customer_id) if contract.customer_id else None,
             "customer_name": contract.customer_name,
             "start_date": contract.start_date,
             "end_date": contract.end_date,
@@ -663,7 +664,7 @@ async def generate_contract_from_template(
             "contract_number": contract.contract_number,
             "name": contract.name,
             "contract_type": contract.contract_type,
-            "customer_id": contract.customer_id,
+            "customer_id": str(contract.customer_id) if contract.customer_id else None,
             "customer_name": contract.customer_name,
             "start_date": contract.start_date,
             "end_date": contract.end_date,
@@ -960,7 +961,7 @@ async def renew_contract(
             "contract_number": new_contract.contract_number,
             "name": new_contract.name,
             "contract_type": new_contract.contract_type,
-            "customer_id": new_contract.customer_id,
+            "customer_id": str(new_contract.customer_id) if new_contract.customer_id else None,
             "customer_name": new_contract.customer_name,
             "start_date": new_contract.start_date,
             "end_date": new_contract.end_date,
