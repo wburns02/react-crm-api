@@ -54,6 +54,20 @@ class CreatePaymentRequest(BaseModel):
     customer_email: Optional[str] = None
 
 
+class CollectPaymentRequest(BaseModel):
+    """Request to collect a payment (admin or tech, any method)."""
+
+    work_order_id: Optional[str] = None
+    invoice_id: Optional[str] = None
+    customer_id: Optional[str] = None
+    amount: float  # in dollars
+    payment_method: str = "cash"  # cash, check, card, ach, other
+    check_number: Optional[str] = None
+    reference_number: Optional[str] = None
+    notes: Optional[str] = None
+    auto_create_invoice: bool = True
+
+
 class PaymentResultSchema(BaseModel):
     """Payment result."""
 
@@ -432,7 +446,193 @@ async def get_reconciliation(
 
 
 # =============================================================================
-# Payment Endpoints
+# Payment Collection Endpoint (admin/tech — any method)
+# =============================================================================
+
+
+@router.post("/collect")
+async def collect_payment(
+    request: CollectPaymentRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Collect a payment (any method) and auto-create invoice if needed.
+
+    Works for both admin and technician roles. Records the payment,
+    optionally auto-creates an invoice, and updates related records.
+    """
+    from app.models.customer import Customer
+    from app.models.work_order import WorkOrder
+    from app.services.websocket_manager import manager
+
+    now = datetime.now(timezone.utc)
+    now_naive = now.replace(tzinfo=None)
+    payment_id = uuid.uuid4()
+
+    # Resolve work order if provided
+    work_order = None
+    customer_id = request.customer_id
+    if request.work_order_id:
+        wo_result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == request.work_order_id)
+        )
+        work_order = wo_result.scalar_one_or_none()
+        if not work_order:
+            raise HTTPException(status_code=404, detail="Work order not found")
+        if not customer_id:
+            customer_id = str(work_order.customer_id) if work_order.customer_id else None
+
+    # Resolve invoice
+    invoice = None
+    invoice_id_str = None
+    if request.invoice_id:
+        inv_result = await db.execute(
+            select(Invoice).where(Invoice.id == uuid.UUID(request.invoice_id))
+        )
+        invoice = inv_result.scalar_one_or_none()
+        if invoice:
+            invoice_id_str = str(invoice.id)
+    elif request.auto_create_invoice and work_order:
+        # Check for existing invoice on this WO
+        inv_result = await db.execute(
+            select(Invoice).where(Invoice.work_order_id == request.work_order_id).limit(1)
+        )
+        invoice = inv_result.scalar_one_or_none()
+
+        if not invoice:
+            # Auto-create invoice
+            invoice_id_val = uuid.uuid4()
+            invoice_number = f"INV-{now.strftime('%Y%m%d')}-{str(invoice_id_val)[:8].upper()}"
+
+            job_type_label = (work_order.job_type or "service").replace("_", " ").title()
+            line_items = [{
+                "description": f"{job_type_label} - WO #{work_order.work_order_number or str(work_order.id)[:8]}",
+                "quantity": 1,
+                "unit_price": request.amount,
+                "total": request.amount,
+            }]
+
+            invoice = Invoice(
+                id=invoice_id_val,
+                customer_id=uuid.UUID(customer_id) if customer_id else None,
+                work_order_id=uuid.UUID(request.work_order_id),
+                invoice_number=invoice_number,
+                status="paid",
+                amount=request.amount,
+                paid_amount=request.amount,
+                issue_date=now.date(),
+                due_date=now.date(),
+                paid_date=now.date(),
+                line_items=line_items,
+                notes=f"Auto-generated from payment collection.",
+            )
+            db.add(invoice)
+            await db.flush()
+            invoice_id_str = str(invoice_id_val)
+            logger.info(f"Auto-created invoice {invoice_number} for WO {request.work_order_id}")
+        else:
+            invoice_id_str = str(invoice.id)
+
+    # Update existing invoice if we have one
+    if invoice and not request.auto_create_invoice:
+        pass  # Don't auto-update if not creating
+    elif invoice and invoice_id_str:
+        current_paid = float(invoice.paid_amount or 0)
+        new_paid = current_paid + request.amount
+        if invoice.status != "paid":
+            invoice.paid_amount = new_paid
+            if invoice.amount and new_paid >= float(invoice.amount):
+                invoice.status = "paid"
+                invoice.paid_date = now.date()
+            else:
+                invoice.status = "partial"
+
+    # Build description
+    desc_parts = [f"Payment collected by {current_user.email}"]
+    if request.payment_method == "check" and request.check_number:
+        desc_parts.append(f"Check #{request.check_number}")
+    if request.reference_number:
+        desc_parts.append(f"Ref: {request.reference_number}")
+    if request.notes:
+        desc_parts.append(request.notes)
+    description = ". ".join(desc_parts)
+
+    # Insert payment via raw SQL (invoice_id type mismatch workaround)
+    await db.execute(
+        text("""
+            INSERT INTO payments (id, customer_id, work_order_id, amount, currency,
+                payment_method, status, description, payment_date, processed_at)
+            VALUES (:id, :customer_id, :work_order_id, :amount, :currency,
+                :payment_method, :status, :description, :payment_date, :processed_at)
+        """),
+        {
+            "id": str(payment_id),
+            "customer_id": customer_id,
+            "work_order_id": request.work_order_id,
+            "amount": request.amount,
+            "currency": "USD",
+            "payment_method": request.payment_method,
+            "status": "completed",
+            "description": description,
+            "payment_date": now_naive,
+            "processed_at": now_naive,
+        },
+    )
+
+    # Add payment note to work order
+    if work_order:
+        timestamp_str = now.strftime("%Y-%m-%d %H:%M")
+        existing_notes = work_order.notes or ""
+        method_label = request.payment_method.replace("_", " ").title()
+        work_order.notes = f"{existing_notes}\n[{timestamp_str}] Payment: ${request.amount:.2f} via {method_label}".strip()
+
+    await db.commit()
+
+    # Broadcast payment event
+    try:
+        await manager.broadcast_event(
+            event_type="payment.received",
+            data={
+                "payment_id": str(payment_id),
+                "work_order_id": request.work_order_id,
+                "customer_id": customer_id,
+                "amount": request.amount,
+                "payment_method": request.payment_method,
+                "invoice_id": invoice_id_str,
+            },
+        )
+    except Exception:
+        pass
+
+    # Fetch customer name for receipt
+    customer_name = "Customer"
+    if customer_id:
+        from app.models.customer import Customer
+        cust_result = await db.execute(
+            select(Customer).where(Customer.id == customer_id)
+        )
+        cust = cust_result.scalar_one_or_none()
+        if cust:
+            customer_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Customer"
+
+    logger.info(f"Payment collected: ${request.amount} via {request.payment_method} by {current_user.email}")
+
+    return {
+        "status": "recorded",
+        "payment_id": str(payment_id),
+        "work_order_id": request.work_order_id,
+        "invoice_id": invoice_id_str,
+        "customer_id": customer_id,
+        "customer_name": customer_name,
+        "amount": request.amount,
+        "payment_method": request.payment_method,
+        "description": description,
+        "payment_date": now.isoformat(),
+    }
+
+
+# =============================================================================
+# Card Payment Endpoints (Clover ecommerce)
 # =============================================================================
 
 

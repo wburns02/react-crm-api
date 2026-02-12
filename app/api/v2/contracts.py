@@ -20,6 +20,7 @@ import uuid
 from app.api.deps import DbSession, CurrentUser
 from app.models.contract import Contract
 from app.models.contract_template import ContractTemplate
+from app.models.neighborhood_bundle import NeighborhoodBundle
 from app.models.customer import Customer
 from app.schemas.types import UUIDStr
 
@@ -52,6 +53,20 @@ class ContractCreate(BaseModel):
     terms_and_conditions: Optional[str] = None
     special_terms: Optional[str] = None
     notes: Optional[str] = None
+    # Commercial & Tier fields
+    tier: Optional[str] = None
+    system_size: Optional[str] = None
+    daily_flow_gallons: Optional[int] = None
+    # Neighborhood bundle
+    bundle_id: Optional[str] = None
+    neighborhood_group_name: Optional[str] = None
+    discount_percent: Optional[float] = None
+    # Add-ons & Upsells
+    add_ons: Optional[list] = None
+    referral_code: Optional[str] = None
+    referral_credit: Optional[float] = None
+    annual_increase_percent: Optional[float] = 5.0
+    upsell_from_id: Optional[str] = None
 
 
 class ContractUpdate(BaseModel):
@@ -69,6 +84,14 @@ class ContractUpdate(BaseModel):
     status: Optional[str] = None
     notes: Optional[str] = None
     internal_notes: Optional[str] = None
+    # Commercial & Tier fields
+    tier: Optional[str] = None
+    system_size: Optional[str] = None
+    daily_flow_gallons: Optional[int] = None
+    add_ons: Optional[list] = None
+    discount_percent: Optional[float] = None
+    referral_code: Optional[str] = None
+    referral_credit: Optional[float] = None
 
 
 class ContractResponse(BaseModel):
@@ -90,6 +113,19 @@ class ContractResponse(BaseModel):
     company_signed: bool
     document_url: Optional[str] = None
     created_at: Optional[datetime] = None
+    # Commercial & Tier fields
+    tier: Optional[str] = None
+    system_size: Optional[str] = None
+    daily_flow_gallons: Optional[int] = None
+    # Neighborhood bundle
+    bundle_id: Optional[str] = None
+    neighborhood_group_name: Optional[str] = None
+    discount_percent: Optional[float] = None
+    # Add-ons & Upsells
+    add_ons: Optional[list] = None
+    referral_code: Optional[str] = None
+    referral_credit: Optional[float] = None
+    annual_increase_percent: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -165,6 +201,16 @@ class GenerateContractRequest(BaseModel):
     services_included: Optional[list] = None
     covered_properties: Optional[list] = None
     special_terms: Optional[str] = None
+    # Commercial & extras
+    tier: Optional[str] = None
+    system_size: Optional[str] = None
+    daily_flow_gallons: Optional[int] = None
+    add_ons: Optional[list] = None
+    bundle_id: Optional[str] = None
+    neighborhood_group_name: Optional[str] = None
+    discount_percent: Optional[float] = None
+    referral_code: Optional[str] = None
+    referral_credit: Optional[float] = None
 
 
 # ========================
@@ -177,6 +223,43 @@ def generate_contract_number():
     from datetime import datetime
 
     return f"CTR-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+
+
+def contract_to_response(c: Contract) -> dict:
+    """Convert Contract model to response dict with all fields."""
+    return {
+        "id": str(c.id),
+        "contract_number": c.contract_number,
+        "name": c.name,
+        "contract_type": c.contract_type,
+        "customer_id": str(c.customer_id) if c.customer_id else None,
+        "customer_name": c.customer_name,
+        "start_date": c.start_date,
+        "end_date": c.end_date,
+        "auto_renew": c.auto_renew,
+        "total_value": c.total_value,
+        "billing_frequency": c.billing_frequency,
+        "status": c.status,
+        "is_active": c.is_active,
+        "days_until_expiry": c.days_until_expiry,
+        "customer_signed": c.customer_signed,
+        "company_signed": c.company_signed,
+        "document_url": c.document_url,
+        "created_at": c.created_at,
+        # Commercial & Tier
+        "tier": c.tier,
+        "system_size": c.system_size,
+        "daily_flow_gallons": c.daily_flow_gallons,
+        # Neighborhood bundle
+        "bundle_id": str(c.bundle_id) if c.bundle_id else None,
+        "neighborhood_group_name": c.neighborhood_group_name,
+        "discount_percent": c.discount_percent,
+        # Add-ons & Upsells
+        "add_ons": c.add_ons,
+        "referral_code": c.referral_code,
+        "referral_credit": c.referral_credit,
+        "annual_increase_percent": c.annual_increase_percent,
+    }
 
 
 # ========================
@@ -193,6 +276,8 @@ async def list_contracts(
     customer_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     contract_type: Optional[str] = Query(None),
+    tier: Optional[str] = Query(None),
+    bundle_id: Optional[str] = Query(None),
     expiring_within_days: Optional[int] = Query(None),
 ):
     """List contracts with filtering."""
@@ -205,6 +290,10 @@ async def list_contracts(
             query = query.where(Contract.status == status)
         if contract_type:
             query = query.where(Contract.contract_type == contract_type)
+        if tier:
+            query = query.where(Contract.tier == tier)
+        if bundle_id:
+            query = query.where(Contract.bundle_id == uuid.UUID(bundle_id))
         if expiring_within_days:
             expiry_threshold = date.today() + timedelta(days=expiring_within_days)
             query = query.where(Contract.end_date <= expiry_threshold, Contract.status == "active")
@@ -235,6 +324,13 @@ async def list_contracts(
                     "status": c.status,
                     "total_value": c.total_value,
                     "days_until_expiry": c.days_until_expiry,
+                    "auto_renew": c.auto_renew,
+                    "tier": c.tier,
+                    "bundle_id": str(c.bundle_id) if c.bundle_id else None,
+                    "neighborhood_group_name": c.neighborhood_group_name,
+                    "discount_percent": c.discount_percent,
+                    "add_ons": c.add_ons,
+                    "referral_code": c.referral_code,
                 }
                 for c in contracts
             ],
@@ -259,31 +355,18 @@ async def create_contract(
         if data.get("template_id"):
             data["template_id"] = uuid.UUID(data["template_id"])
 
+        # Convert UUID string fields
+        if data.get("bundle_id"):
+            data["bundle_id"] = uuid.UUID(data["bundle_id"])
+        if data.get("upsell_from_id"):
+            data["upsell_from_id"] = uuid.UUID(data["upsell_from_id"])
+
         contract = Contract(contract_number=generate_contract_number(), created_by=current_user.email, **data)
         db.add(contract)
         await db.commit()
         await db.refresh(contract)
 
-        return {
-            "id": str(contract.id),
-            "contract_number": contract.contract_number,
-            "name": contract.name,
-            "contract_type": contract.contract_type,
-            "customer_id": str(contract.customer_id) if contract.customer_id else None,
-            "customer_name": contract.customer_name,
-            "start_date": contract.start_date,
-            "end_date": contract.end_date,
-            "auto_renew": contract.auto_renew,
-            "total_value": contract.total_value,
-            "billing_frequency": contract.billing_frequency,
-            "status": contract.status,
-            "is_active": contract.is_active,
-            "days_until_expiry": contract.days_until_expiry,
-            "customer_signed": contract.customer_signed,
-            "company_signed": contract.company_signed,
-            "document_url": contract.document_url,
-            "created_at": contract.created_at,
-        }
+        return contract_to_response(contract)
     except Exception as e:
         logger.error(f"Error creating contract: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -303,26 +386,7 @@ async def get_contract(
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
 
-        return {
-            "id": str(contract.id),
-            "contract_number": contract.contract_number,
-            "name": contract.name,
-            "contract_type": contract.contract_type,
-            "customer_id": str(contract.customer_id) if contract.customer_id else None,
-            "customer_name": contract.customer_name,
-            "start_date": contract.start_date,
-            "end_date": contract.end_date,
-            "auto_renew": contract.auto_renew,
-            "total_value": contract.total_value,
-            "billing_frequency": contract.billing_frequency,
-            "status": contract.status,
-            "is_active": contract.is_active,
-            "days_until_expiry": contract.days_until_expiry,
-            "customer_signed": contract.customer_signed,
-            "company_signed": contract.company_signed,
-            "document_url": contract.document_url,
-            "created_at": contract.created_at,
-        }
+        return contract_to_response(contract)
     except HTTPException:
         raise
     except Exception as e:
@@ -352,26 +416,7 @@ async def update_contract(
         await db.commit()
         await db.refresh(contract)
 
-        return {
-            "id": str(contract.id),
-            "contract_number": contract.contract_number,
-            "name": contract.name,
-            "contract_type": contract.contract_type,
-            "customer_id": str(contract.customer_id) if contract.customer_id else None,
-            "customer_name": contract.customer_name,
-            "start_date": contract.start_date,
-            "end_date": contract.end_date,
-            "auto_renew": contract.auto_renew,
-            "total_value": contract.total_value,
-            "billing_frequency": contract.billing_frequency,
-            "status": contract.status,
-            "is_active": contract.is_active,
-            "days_until_expiry": contract.days_until_expiry,
-            "customer_signed": contract.customer_signed,
-            "company_signed": contract.company_signed,
-            "document_url": contract.document_url,
-            "created_at": contract.created_at,
-        }
+        return contract_to_response(contract)
     except HTTPException:
         raise
     except Exception as e:
@@ -667,6 +712,13 @@ async def generate_contract_from_template(
         # Calculate end date
         end_date = request.start_date + timedelta(days=template.default_duration_months * 30)
 
+        # Calculate final value with discount
+        base_value = request.total_value or template.base_price
+        add_on_total = sum(a.get("price", 0) for a in (request.add_ons or []))
+        subtotal = (base_value or 0) + add_on_total
+        if request.discount_percent and request.discount_percent > 0:
+            subtotal = round(subtotal * (1 - request.discount_percent / 100), 2)
+
         # Create contract from template
         contract = Contract(
             contract_number=generate_contract_number(),
@@ -678,7 +730,7 @@ async def generate_contract_from_template(
             start_date=request.start_date,
             end_date=end_date,
             auto_renew=template.default_auto_renew,
-            total_value=request.total_value or template.base_price,
+            total_value=subtotal if subtotal else base_value,
             billing_frequency=template.default_billing_frequency,
             payment_terms=template.default_payment_terms,
             services_included=request.services_included or template.default_services,
@@ -686,32 +738,24 @@ async def generate_contract_from_template(
             terms_and_conditions=template.terms_and_conditions,
             special_terms=request.special_terms,
             created_by=current_user.email,
+            # New fields
+            tier=request.tier,
+            system_size=request.system_size,
+            daily_flow_gallons=request.daily_flow_gallons,
+            add_ons=request.add_ons,
+            bundle_id=uuid.UUID(request.bundle_id) if request.bundle_id else None,
+            neighborhood_group_name=request.neighborhood_group_name,
+            discount_percent=request.discount_percent,
+            referral_code=request.referral_code,
+            referral_credit=request.referral_credit,
+            annual_increase_percent=5.0,
         )
 
         db.add(contract)
         await db.commit()
         await db.refresh(contract)
 
-        return {
-            "id": str(contract.id),
-            "contract_number": contract.contract_number,
-            "name": contract.name,
-            "contract_type": contract.contract_type,
-            "customer_id": str(contract.customer_id) if contract.customer_id else None,
-            "customer_name": contract.customer_name,
-            "start_date": contract.start_date,
-            "end_date": contract.end_date,
-            "auto_renew": contract.auto_renew,
-            "total_value": contract.total_value,
-            "billing_frequency": contract.billing_frequency,
-            "status": contract.status,
-            "is_active": contract.is_active,
-            "days_until_expiry": contract.days_until_expiry,
-            "customer_signed": contract.customer_signed,
-            "company_signed": contract.company_signed,
-            "document_url": contract.document_url,
-            "created_at": contract.created_at,
-        }
+        return contract_to_response(contract)
     except HTTPException:
         raise
     except Exception as e:
@@ -906,6 +950,81 @@ async def get_contract_reports(
             )
         )).scalar() or 0
 
+        # Revenue by tier (commercial vs residential vs neighborhood)
+        tier_result = await db.execute(
+            select(
+                func.coalesce(Contract.tier, "residential").label("tier"),
+                func.count(Contract.id),
+                func.coalesce(func.sum(Contract.total_value), 0),
+                func.avg(Contract.total_value),
+            ).where(Contract.status == "active").group_by(func.coalesce(Contract.tier, "residential"))
+        )
+        revenue_by_tier = [
+            {
+                "tier": row[0],
+                "count": row[1],
+                "total_value": round(float(row[2] or 0), 2),
+                "avg_value": round(float(row[3] or 0), 2),
+            }
+            for row in tier_result.all()
+        ]
+
+        # Churn by tier
+        churn_by_tier_result = await db.execute(
+            select(
+                func.coalesce(Contract.tier, "residential").label("tier"),
+                func.count(Contract.id),
+            ).where(
+                Contract.status == "cancelled",
+                Contract.updated_at >= one_year_ago,
+            ).group_by(func.coalesce(Contract.tier, "residential"))
+        )
+        churn_by_tier = {row[0]: row[1] for row in churn_by_tier_result.all()}
+
+        # Upsell conversion
+        upsell_count = (await db.execute(
+            select(func.count(Contract.id)).where(
+                Contract.upsell_from_id.isnot(None),
+                Contract.created_at >= one_year_ago,
+            )
+        )).scalar() or 0
+
+        # Referral stats
+        referral_count = (await db.execute(
+            select(func.count(Contract.id)).where(
+                Contract.referral_code.isnot(None),
+                Contract.referral_code != "",
+            )
+        )).scalar() or 0
+
+        referral_revenue = (await db.execute(
+            select(func.sum(Contract.total_value)).where(
+                Contract.referral_code.isnot(None),
+                Contract.referral_code != "",
+                Contract.status == "active",
+            )
+        )).scalar() or 0
+
+        # Neighborhood bundle stats
+        bundle_count = (await db.execute(
+            select(func.count(Contract.id)).where(Contract.bundle_id.isnot(None))
+        )).scalar() or 0
+
+        bundle_revenue = (await db.execute(
+            select(func.sum(Contract.total_value)).where(
+                Contract.bundle_id.isnot(None),
+                Contract.status == "active",
+            )
+        )).scalar() or 0
+
+        # Add-on revenue
+        add_on_contracts = (await db.execute(
+            select(func.count(Contract.id)).where(
+                Contract.add_ons.isnot(None),
+                Contract.status == "active",
+            )
+        )).scalar() or 0
+
         return {
             "total_recurring_revenue": total_recurring_revenue,
             "churn_rate": churn_rate,
@@ -917,6 +1036,21 @@ async def get_contract_reports(
             "expiring_60": expiring_60,
             "expiring_90": expiring_90,
             "overdue_count": overdue_count,
+            # Enhanced analytics
+            "revenue_by_tier": revenue_by_tier,
+            "churn_by_tier": churn_by_tier,
+            "upsell_conversions": upsell_count,
+            "referral_stats": {
+                "total_referrals": referral_count,
+                "referral_revenue": float(referral_revenue),
+            },
+            "neighborhood_stats": {
+                "total_bundle_contracts": bundle_count,
+                "bundle_revenue": float(bundle_revenue),
+            },
+            "add_on_stats": {
+                "contracts_with_add_ons": add_on_contracts,
+            },
         }
     except Exception as e:
         logger.error(f"Error getting contract reports: {e}")
@@ -985,30 +1119,22 @@ async def renew_contract(
         old_contract.status = "renewed"
         old_contract.internal_notes = (old_contract.internal_notes or "") + f"\nRenewed on {date.today()} by {current_user.email}"
 
+        # Copy new fields to renewed contract
+        new_contract.tier = old_contract.tier
+        new_contract.system_size = old_contract.system_size
+        new_contract.daily_flow_gallons = old_contract.daily_flow_gallons
+        new_contract.add_ons = old_contract.add_ons
+        new_contract.bundle_id = old_contract.bundle_id
+        new_contract.neighborhood_group_name = old_contract.neighborhood_group_name
+        new_contract.discount_percent = old_contract.discount_percent
+        new_contract.referral_code = old_contract.referral_code
+        new_contract.annual_increase_percent = old_contract.annual_increase_percent
+
         db.add(new_contract)
         await db.commit()
         await db.refresh(new_contract)
 
-        return {
-            "id": str(new_contract.id),
-            "contract_number": new_contract.contract_number,
-            "name": new_contract.name,
-            "contract_type": new_contract.contract_type,
-            "customer_id": str(new_contract.customer_id) if new_contract.customer_id else None,
-            "customer_name": new_contract.customer_name,
-            "start_date": new_contract.start_date,
-            "end_date": new_contract.end_date,
-            "auto_renew": new_contract.auto_renew,
-            "total_value": new_contract.total_value,
-            "billing_frequency": new_contract.billing_frequency,
-            "status": new_contract.status,
-            "is_active": new_contract.is_active,
-            "days_until_expiry": new_contract.days_until_expiry,
-            "customer_signed": new_contract.customer_signed,
-            "company_signed": new_contract.company_signed,
-            "document_url": new_contract.document_url,
-            "created_at": new_contract.created_at,
-        }
+        return contract_to_response(new_contract)
     except HTTPException:
         raise
     except Exception as e:
@@ -1111,6 +1237,142 @@ async def bulk_contract_action(
         raise
     except Exception as e:
         logger.error(f"Error performing bulk action: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========================
+# Neighborhood Bundle Endpoints
+# ========================
+
+
+class BundleCreate(BaseModel):
+    name: str
+    discount_percent: float = 10.0
+    min_contracts: int = 5
+    notes: Optional[str] = None
+
+
+class BundleResponse(BaseModel):
+    id: UUIDStr
+    name: str
+    discount_percent: float
+    min_contracts: int
+    status: str
+    notes: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+    contract_count: int = 0
+    total_value: float = 0
+
+
+@router.get("/neighborhood-bundles/list")
+async def list_neighborhood_bundles(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List all neighborhood bundles with contract counts."""
+    try:
+        result = await db.execute(select(NeighborhoodBundle).order_by(NeighborhoodBundle.name))
+        bundles = result.scalars().all()
+
+        items = []
+        for b in bundles:
+            # Count contracts in this bundle
+            count_result = await db.execute(
+                select(func.count(Contract.id), func.coalesce(func.sum(Contract.total_value), 0))
+                .where(Contract.bundle_id == b.id)
+            )
+            row = count_result.one()
+            items.append({
+                "id": str(b.id),
+                "name": b.name,
+                "discount_percent": b.discount_percent,
+                "min_contracts": b.min_contracts,
+                "status": b.status,
+                "notes": b.notes,
+                "created_by": b.created_by,
+                "created_at": b.created_at,
+                "contract_count": row[0],
+                "total_value": float(row[1]),
+            })
+
+        return {"items": items, "total": len(items)}
+    except Exception as e:
+        logger.error(f"Error listing bundles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/neighborhood-bundles", status_code=status.HTTP_201_CREATED)
+async def create_neighborhood_bundle(
+    bundle_data: BundleCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Create a new neighborhood discount bundle."""
+    try:
+        bundle = NeighborhoodBundle(
+            id=uuid.uuid4(),
+            created_by=current_user.email,
+            **bundle_data.model_dump(),
+        )
+        db.add(bundle)
+        await db.commit()
+        await db.refresh(bundle)
+
+        return {
+            "id": str(bundle.id),
+            "name": bundle.name,
+            "discount_percent": bundle.discount_percent,
+            "min_contracts": bundle.min_contracts,
+            "status": bundle.status,
+            "notes": bundle.notes,
+            "created_by": bundle.created_by,
+            "created_at": bundle.created_at,
+            "contract_count": 0,
+            "total_value": 0,
+        }
+    except Exception as e:
+        logger.error(f"Error creating bundle: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/neighborhood-bundles/{bundle_id}")
+async def get_neighborhood_bundle(
+    bundle_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a neighborhood bundle with its contracts."""
+    try:
+        result = await db.execute(select(NeighborhoodBundle).where(NeighborhoodBundle.id == uuid.UUID(bundle_id)))
+        bundle = result.scalar_one_or_none()
+
+        if not bundle:
+            raise HTTPException(status_code=404, detail="Bundle not found")
+
+        # Get contracts in this bundle
+        contracts_result = await db.execute(
+            select(Contract).where(Contract.bundle_id == bundle.id).order_by(Contract.customer_name)
+        )
+        contracts = contracts_result.scalars().all()
+
+        return {
+            "id": str(bundle.id),
+            "name": bundle.name,
+            "discount_percent": bundle.discount_percent,
+            "min_contracts": bundle.min_contracts,
+            "status": bundle.status,
+            "notes": bundle.notes,
+            "created_by": bundle.created_by,
+            "created_at": bundle.created_at,
+            "contract_count": len(contracts),
+            "total_value": sum(c.total_value or 0 for c in contracts),
+            "contracts": [contract_to_response(c) for c in contracts],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting bundle: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

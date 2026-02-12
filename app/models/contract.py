@@ -68,6 +68,23 @@ class Contract(Base):
     terms_and_conditions = Column(Text, nullable=True)
     special_terms = Column(Text, nullable=True)
 
+    # Commercial & Tier
+    tier = Column(String(30), nullable=True, index=True)  # residential, commercial_small, commercial_medium, commercial_large, neighborhood
+    system_size = Column(String(50), nullable=True)  # e.g., "1,500 gal"
+    daily_flow_gallons = Column(Integer, nullable=True)  # flow rate for commercial
+
+    # Neighborhood Bundle
+    bundle_id = Column(UUID(as_uuid=True), ForeignKey("neighborhood_bundles.id"), nullable=True, index=True)
+    neighborhood_group_name = Column(String(255), nullable=True)
+    discount_percent = Column(Float, nullable=True)  # e.g., 10.0 for 10%
+
+    # Add-Ons & Upsells
+    add_ons = Column(JSON, nullable=True)  # [{"name": "telemetry", "price": 150}, ...]
+    referral_code = Column(String(50), nullable=True)
+    referral_credit = Column(Float, nullable=True)  # e.g., 50.0
+    annual_increase_percent = Column(Float, nullable=True, default=5.0)
+    upsell_from_id = Column(UUID(as_uuid=True), nullable=True)  # contract this was upgraded from
+
     # Notes
     notes = Column(Text, nullable=True)
     internal_notes = Column(Text, nullable=True)

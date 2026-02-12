@@ -304,6 +304,7 @@ async def get_employee_jobs(
                 "checklist": wo.checklist,
                 "estimated_duration_hours": wo.estimated_duration_hours,
                 "is_clocked_in": wo.is_clocked_in,
+                "total_amount": float(wo.total_amount) if wo.total_amount else None,
             })
 
         return {"items": items, "total": total, "page": page, "page_size": page_size}
@@ -358,6 +359,7 @@ async def get_employee_job(
         "actual_start_time": work_order.actual_start_time.isoformat() if work_order.actual_start_time else None,
         "actual_end_time": work_order.actual_end_time.isoformat() if work_order.actual_end_time else None,
         "total_labor_minutes": work_order.total_labor_minutes,
+        "total_amount": float(work_order.total_amount) if work_order.total_amount else None,
     }
 
 
@@ -1113,8 +1115,14 @@ async def record_job_payment(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Record payment collected in the field by technician."""
+    """Record payment collected in the field by technician.
+
+    Auto-creates invoice if none exists, updates work order payment status,
+    and broadcasts a WebSocket event for real-time dashboard updates.
+    """
     from sqlalchemy import text
+    from app.models.invoice import Invoice
+    from app.services.websocket_manager import manager
 
     # Verify work order exists
     wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
@@ -1144,6 +1152,64 @@ async def record_job_payment(
     payment_date_naive = payment_date.replace(tzinfo=None)
     now_naive = now.replace(tzinfo=None)
 
+    # Auto-create invoice if none exists for this work order
+    invoice_id = None
+    inv_result = await db.execute(
+        select(Invoice).where(Invoice.work_order_id == work_order_id).limit(1)
+    )
+    invoice = inv_result.scalar_one_or_none()
+
+    if not invoice:
+        # Auto-generate invoice
+        invoice_id_val = uuid_mod.uuid4()
+        invoice_number = f"INV-{now.strftime('%Y%m%d')}-{str(invoice_id_val)[:8].upper()}"
+        customer_name = "Customer"
+        if work_order.customer_id:
+            cust_result = await db.execute(
+                select(Customer).where(Customer.id == work_order.customer_id)
+            )
+            cust = cust_result.scalar_one_or_none()
+            if cust:
+                customer_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Customer"
+
+        job_type_label = (work_order.job_type or "service").replace("_", " ").title()
+        line_items = [{
+            "description": f"{job_type_label} - WO #{work_order.work_order_number or str(work_order_id)[:8]}",
+            "quantity": 1,
+            "unit_price": float(request.amount),
+            "total": float(request.amount),
+        }]
+
+        invoice = Invoice(
+            id=invoice_id_val,
+            customer_id=work_order.customer_id,
+            work_order_id=uuid_mod.UUID(work_order_id) if isinstance(work_order_id, str) else work_order_id,
+            invoice_number=invoice_number,
+            status="paid",
+            amount=request.amount,
+            paid_amount=request.amount,
+            issue_date=now.date(),
+            due_date=now.date(),
+            paid_date=now.date(),
+            line_items=line_items,
+            notes=f"Auto-generated from field payment. {description}",
+        )
+        db.add(invoice)
+        await db.flush()
+        invoice_id = str(invoice_id_val)
+        logger.info(f"Auto-created invoice {invoice_number} for WO {work_order_id}")
+    else:
+        invoice_id = str(invoice.id)
+        # Update existing invoice paid_amount
+        current_paid = float(invoice.paid_amount or 0)
+        new_paid = current_paid + request.amount
+        invoice.paid_amount = new_paid
+        if invoice.amount and new_paid >= float(invoice.amount):
+            invoice.status = "paid"
+            invoice.paid_date = now.date()
+        else:
+            invoice.status = "partial"
+
     # Use raw SQL because Payment model has invoice_id as UUID but DB column is INTEGER
     await db.execute(
         text("""
@@ -1165,17 +1231,53 @@ async def record_job_payment(
             "processed_at": now_naive,
         },
     )
+
+    # Add payment note to work order
+    timestamp_str = now.strftime("%Y-%m-%d %H:%M")
+    existing_notes = work_order.notes or ""
+    method_label = request.payment_method.replace("_", " ").title()
+    work_order.notes = f"{existing_notes}\n[{timestamp_str}] Payment: ${request.amount:.2f} via {method_label}".strip()
+
     await db.commit()
 
+    # Broadcast payment received event
+    try:
+        await manager.broadcast_event(
+            event_type="payment.received",
+            data={
+                "payment_id": str(payment_id),
+                "work_order_id": work_order_id,
+                "customer_id": str(work_order.customer_id) if work_order.customer_id else None,
+                "amount": request.amount,
+                "payment_method": request.payment_method,
+                "invoice_id": invoice_id,
+            },
+        )
+    except Exception:
+        pass  # WebSocket broadcast is best-effort
+
     logger.info(f"Payment recorded for WO {work_order_id}: ${request.amount} via {request.payment_method} by {current_user.email}")
+
+    # Get customer name for receipt
+    customer_name = "Customer"
+    if work_order.customer_id:
+        cust_result = await db.execute(
+            select(Customer).where(Customer.id == work_order.customer_id)
+        )
+        cust = cust_result.scalar_one_or_none()
+        if cust:
+            customer_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Customer"
 
     return {
         "status": "recorded",
         "payment_id": str(payment_id),
         "work_order_id": work_order_id,
+        "invoice_id": invoice_id,
         "amount": request.amount,
         "payment_method": request.payment_method,
         "payment_date": payment_date.isoformat(),
+        "customer_name": customer_name,
+        "description": description,
     }
 
 

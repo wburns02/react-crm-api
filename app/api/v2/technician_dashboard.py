@@ -220,6 +220,7 @@ async def get_my_summary(
 
             todays_jobs.append({
                 "id": str(wo.id),
+                "customer_id": str(wo.customer_id) if wo.customer_id else None,
                 "customer_name": customer_names.get(wo.id, "Customer"),
                 "job_type": job_type_raw,
                 "job_type_label": job_type_label,
@@ -234,6 +235,7 @@ async def get_my_summary(
                 "longitude": wo.service_longitude,
                 "notes": wo.notes,
                 "estimated_duration_hours": wo.estimated_duration_hours,
+                "total_amount": float(wo.total_amount) if wo.total_amount else None,
             })
 
         response["todays_jobs"] = todays_jobs
