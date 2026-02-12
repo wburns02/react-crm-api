@@ -951,13 +951,14 @@ async def get_contract_reports(
         )).scalar() or 0
 
         # Revenue by tier (commercial vs residential vs neighborhood)
+        tier_label = func.coalesce(Contract.tier, "residential").label("tier")
         tier_result = await db.execute(
             select(
-                func.coalesce(Contract.tier, "residential").label("tier"),
+                tier_label,
                 func.count(Contract.id),
                 func.coalesce(func.sum(Contract.total_value), 0),
                 func.avg(Contract.total_value),
-            ).where(Contract.status == "active").group_by(func.coalesce(Contract.tier, "residential"))
+            ).where(Contract.status == "active").group_by(tier_label)
         )
         revenue_by_tier = [
             {
@@ -970,14 +971,15 @@ async def get_contract_reports(
         ]
 
         # Churn by tier
+        churn_tier_label = func.coalesce(Contract.tier, "residential").label("tier")
         churn_by_tier_result = await db.execute(
             select(
-                func.coalesce(Contract.tier, "residential").label("tier"),
+                churn_tier_label,
                 func.count(Contract.id),
             ).where(
                 Contract.status == "cancelled",
                 Contract.updated_at >= one_year_ago,
-            ).group_by(func.coalesce(Contract.tier, "residential"))
+            ).group_by(churn_tier_label)
         )
         churn_by_tier = {row[0]: row[1] for row in churn_by_tier_result.all()}
 
