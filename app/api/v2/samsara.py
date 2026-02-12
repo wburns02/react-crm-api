@@ -155,8 +155,18 @@ async def fetch_vehicles_from_samsara() -> list[Vehicle]:
         now = datetime.now(timezone.utc)
 
         for v in stats_data.get("data", []):
+            if not isinstance(v, dict):
+                continue
             vehicle_id = v.get("id", "")
-            gps_data = v.get("gps", {})
+            raw_gps = v.get("gps", {})
+
+            # Samsara may return gps as a list of points or a single dict
+            if isinstance(raw_gps, list):
+                gps_data = raw_gps[-1] if raw_gps else {}
+            elif isinstance(raw_gps, dict):
+                gps_data = raw_gps
+            else:
+                gps_data = {}
 
             # Get additional vehicle info
             info = vehicle_info.get(vehicle_id, {})
@@ -284,7 +294,7 @@ async def _poll_samsara_feed():
         except Exception as e:
             logger.error(f"Unexpected error in feed poller: {e}")
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(30)
 
 
 async def _do_full_fetch():
@@ -325,7 +335,16 @@ async def _process_feed_update(changed_data: list):
             if not isinstance(v, dict):
                 continue
             vehicle_id = v.get("id", "")
-            gps_data = v.get("gps", {})
+            raw_gps = v.get("gps", {})
+
+            # Samsara feed may return gps as a list of points or a single dict
+            if isinstance(raw_gps, list):
+                # Take the most recent GPS point (last in the list)
+                gps_data = raw_gps[-1] if raw_gps else {}
+            elif isinstance(raw_gps, dict):
+                gps_data = raw_gps
+            else:
+                gps_data = {}
 
             if not gps_data:
                 continue

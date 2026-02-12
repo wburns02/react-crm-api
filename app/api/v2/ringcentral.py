@@ -86,6 +86,7 @@ async def _perform_sync(hours_back: int = 2) -> dict:
                     start_dt = datetime.fromisoformat(record["startTime"].replace("Z", "+00:00"))
 
                 call_log = CallLog(
+                    rc_account_id=record.get("accountId", "auto-sync"),
                     ringcentral_call_id=rc_call_id,
                     ringcentral_session_id=record.get("sessionId"),
                     caller_number=from_info.get("phoneNumber", ""),

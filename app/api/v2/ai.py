@@ -688,7 +688,14 @@ class OptimizeRouteResponse(BaseModel):
 class DispatchStatsResponse(BaseModel):
     """Comprehensive dispatch statistics."""
 
-    # Suggestion stats
+    # Frontend-expected fields (AIDispatchStats widget)
+    suggestions_today: int = 0
+    suggestions_accepted: int = 0
+    auto_executions: int = 0
+    time_saved_minutes: int = 0
+    acceptance_rate: float = 0.0  # 0-1
+
+    # Detailed suggestion stats
     suggestions_accepted_today: int = 0
     suggestions_accepted_week: int = 0
     suggestions_accepted_month: int = 0
@@ -1345,7 +1352,37 @@ async def get_dispatch_stats(
         )
         jobs_week = week_jobs_result.scalar() or 0
 
+        # Compute frontend widget fields
+        # Total jobs today = scheduled + completed + in-progress
+        total_today_result = await db.execute(
+            select(func.count()).where(WorkOrder.scheduled_date == today)
+        )
+        total_today = total_today_result.scalar() or 0
+
+        # Completed today (proxy for accepted suggestions)
+        completed_today_result = await db.execute(
+            select(func.count()).where(
+                and_(
+                    WorkOrder.scheduled_date == today,
+                    cast(WorkOrder.status, String).in_(["completed", "in_progress"]),
+                )
+            )
+        )
+        completed_today = completed_today_result.scalar() or 0
+
+        # Acceptance rate: completed or in-progress / total scheduled
+        acceptance = (completed_today / total_today) if total_today > 0 else 0.0
+        # Time saved: ~15 min per scheduled job (manual scheduling estimate)
+        time_saved = suggestions_today * 15
+
         return DispatchStatsResponse(
+            # Frontend widget fields
+            suggestions_today=jobs_today,
+            suggestions_accepted=completed_today,
+            auto_executions=suggestions_today,
+            time_saved_minutes=time_saved,
+            acceptance_rate=round(min(acceptance, 1.0), 2),
+            # Detailed stats
             suggestions_accepted_today=suggestions_today,
             suggestions_accepted_week=suggestions_week,
             suggestions_accepted_month=suggestions_month,
