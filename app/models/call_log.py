@@ -23,7 +23,7 @@ class CallLog(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
     # RingCentral identifiers (match actual DB columns)
-    rc_account_id = Column(String(100), nullable=True)  # RingCentral account ID — DB has NOT NULL but we default
+    rc_account_id = Column(UUID(as_uuid=True), nullable=True)  # RingCentral account ID — DB column is UUID type
     ringcentral_call_id = Column(String(100), nullable=True, index=True)
     ringcentral_session_id = Column(String(100), nullable=True)
 
