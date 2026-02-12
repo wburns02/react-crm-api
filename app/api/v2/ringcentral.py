@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 import logging
 import asyncio
+import uuid as _uuid
 
 from app.api.deps import DbSession, CurrentUser
 from app.services.ringcentral_service import ringcentral_service
@@ -27,6 +28,12 @@ from app.database import async_session_maker
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _rc_account_uuid(account_id: str) -> _uuid.UUID:
+    """Generate a deterministic UUID from a RingCentral account ID string."""
+    return _uuid.uuid5(_uuid.NAMESPACE_URL, f"ringcentral:{account_id}")
+
 
 # Global state for auto-sync
 _auto_sync_task: Optional[asyncio.Task] = None
@@ -86,7 +93,7 @@ async def _perform_sync(hours_back: int = 2) -> dict:
                     start_dt = datetime.fromisoformat(record["startTime"].replace("Z", "+00:00"))
 
                 call_log = CallLog(
-                    rc_account_id=None,  # DB column is UUID type; RC accountId is numeric string
+                    rc_account_id=_rc_account_uuid(record.get("accountId", "unknown")),
                     ringcentral_call_id=rc_call_id,
                     ringcentral_session_id=record.get("sessionId"),
                     caller_number=from_info.get("phoneNumber", ""),
