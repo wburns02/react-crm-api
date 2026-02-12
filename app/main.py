@@ -541,6 +541,17 @@ async def ensure_commissions_columns():
 
     async with async_session_maker() as session:
         try:
+            # Check if commissions table exists first
+            table_check = await session.execute(
+                text("""SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_name = 'commissions'
+                )""")
+            )
+            if not table_check.scalar():
+                logger.info("Commissions table does not exist, skipping column ensures")
+                return
+
             # Check which columns exist
             result = await session.execute(
                 text(

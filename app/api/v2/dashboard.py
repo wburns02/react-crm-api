@@ -224,6 +224,23 @@ async def get_dashboard_stats(
     except Exception:
         logger.warning("Dashboard query failed", exc_info=True)
 
+    # Pipeline value: sum estimated_value for active prospects, fall back to count * $500
+    pipeline_value = 0.0
+    try:
+        pv_result = await db.execute(
+            select(func.sum(Customer.estimated_value)).where(
+                Customer.prospect_stage.in_(prospect_stages),
+            )
+        )
+        pv_sum = pv_result.scalar()
+        if pv_sum and float(pv_sum) > 0:
+            pipeline_value = float(pv_sum)
+        else:
+            # Fallback: $500 average job value * number of active prospects
+            pipeline_value = float(total_prospects) * 500.0
+    except Exception:
+        logger.warning("Pipeline value query failed", exc_info=True)
+
     # Recent prospects - order by id if created_at is unreliable
     try:
         recent_prospects_result = await db.execute(
@@ -296,7 +313,7 @@ async def get_dashboard_stats(
         scheduled_work_orders=scheduled_work_orders,
         in_progress_work_orders=in_progress_work_orders,
         today_jobs=today_jobs_count,
-        pipeline_value=0.0,
+        pipeline_value=pipeline_value,
         revenue_mtd=float(revenue_mtd),
         invoices_pending=invoices_pending,
         invoices_overdue=invoices_overdue,
