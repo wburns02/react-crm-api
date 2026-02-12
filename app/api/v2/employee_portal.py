@@ -1306,3 +1306,118 @@ async def get_my_stats(
         "total_labor_hours": round(total_labor_minutes / 60, 1),
         "avg_job_duration_minutes": round(total_labor_minutes / completed_jobs, 0) if completed_jobs > 0 else 0,
     }
+
+
+# ── Customer Service History ─────────────────────────────────────────────
+
+
+@router.get("/customers/{customer_id}/service-history")
+async def get_customer_service_history(
+    customer_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    """Get work order history for a customer (for technician context)."""
+    from app.models.work_order_photo import WorkOrderPhoto
+
+    try:
+        # Get all work orders for this customer, newest first
+        result = await db.execute(
+            select(WorkOrder)
+            .where(WorkOrder.customer_id == customer_id)
+            .order_by(WorkOrder.scheduled_date.desc().nullslast(), WorkOrder.created_at.desc())
+            .limit(limit)
+        )
+        work_orders = result.scalars().all()
+
+        # Get photo counts per work order
+        wo_ids = [wo.id for wo in work_orders]
+        photo_counts = {}
+        if wo_ids:
+            photo_result = await db.execute(
+                select(
+                    WorkOrderPhoto.work_order_id,
+                    func.count(WorkOrderPhoto.id).label("count")
+                )
+                .where(WorkOrderPhoto.work_order_id.in_(wo_ids))
+                .group_by(WorkOrderPhoto.work_order_id)
+            )
+            for row in photo_result:
+                photo_counts[str(row.work_order_id)] = row.count
+
+        # Calculate summary stats
+        total_jobs = len(work_orders)
+        completed_jobs = sum(1 for wo in work_orders if wo.status == "completed")
+        last_service = None
+        for wo in work_orders:
+            if wo.status == "completed" and wo.scheduled_date:
+                last_service = wo.scheduled_date.isoformat() if hasattr(wo.scheduled_date, 'isoformat') else str(wo.scheduled_date)
+                break
+
+        history = []
+        for wo in work_orders:
+            history.append({
+                "id": str(wo.id),
+                "work_order_number": wo.work_order_number,
+                "job_type": wo.job_type,
+                "status": wo.status,
+                "priority": wo.priority,
+                "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date and hasattr(wo.scheduled_date, 'isoformat') else str(wo.scheduled_date) if wo.scheduled_date else None,
+                "notes": wo.notes,
+                "total_amount": float(wo.total_amount) if wo.total_amount else None,
+                "assigned_technician": wo.assigned_technician,
+                "photo_count": photo_counts.get(str(wo.id), 0),
+                "service_address_line1": wo.service_address_line1,
+                "actual_start_time": wo.actual_start_time.isoformat() if wo.actual_start_time else None,
+                "actual_end_time": wo.actual_end_time.isoformat() if wo.actual_end_time else None,
+                "total_labor_minutes": wo.total_labor_minutes,
+                "created_at": wo.created_at.isoformat() if wo.created_at else None,
+            })
+
+        return {
+            "customer_id": customer_id,
+            "total_jobs": total_jobs,
+            "completed_jobs": completed_jobs,
+            "last_service_date": last_service,
+            "work_orders": history,
+        }
+    except Exception as e:
+        logger.warning(f"Error fetching customer service history: {e}")
+        raise HTTPException(status_code=500, detail="Could not load service history")
+
+
+@router.get("/jobs/{work_order_id}/photos/gallery")
+async def get_job_photos_gallery(
+    work_order_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get all photos for a job with full data for gallery display."""
+    from app.models.work_order_photo import WorkOrderPhoto
+
+    try:
+        result = await db.execute(
+            select(WorkOrderPhoto)
+            .where(WorkOrderPhoto.work_order_id == work_order_id)
+            .order_by(WorkOrderPhoto.created_at.asc())
+        )
+        photos = result.scalars().all()
+
+        return [
+            {
+                "id": str(p.id),
+                "work_order_id": str(p.work_order_id),
+                "photo_type": p.photo_type,
+                "data_url": p.data,
+                "thumbnail_url": p.thumbnail or p.data,
+                "timestamp": p.timestamp.isoformat() if p.timestamp else None,
+                "gps_lat": p.gps_lat,
+                "gps_lng": p.gps_lng,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in photos
+        ]
+    except Exception as e:
+        logger.warning(f"Error fetching job photos gallery: {e}")
+        raise HTTPException(status_code=500, detail="Could not load photos")
