@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     CLOVER_MERCHANT_ID: str | None = None
     CLOVER_API_KEY: str | None = None
     CLOVER_ENVIRONMENT: str = "sandbox"  # "sandbox" or "production"
+    CLOVER_CLIENT_ID: str | None = None  # OAuth 2.0 App ID
+    CLOVER_CLIENT_SECRET: str | None = None  # OAuth 2.0 App Secret
+    CLOVER_REDIRECT_URI: str | None = None  # OAuth callback URL
 
     # Google Ads API (Basic Access - 15,000 ops/day)
     GOOGLE_ADS_DEVELOPER_TOKEN: str | None = None

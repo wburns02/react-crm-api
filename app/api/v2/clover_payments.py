@@ -2,14 +2,16 @@
 Clover Payment Processing API Endpoints
 
 Handles:
+- OAuth 2.0 authorization code grant flow
 - REST API data access (merchant, payments, orders, items)
 - Payment sync from Clover to CRM
 - Payment reconciliation
-- Payment creation for invoices (ecommerce - future)
+- Card payment processing via Ecommerce API
 - Payment history
+- Webhook handling for real-time payment updates
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import select, text
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -22,6 +24,7 @@ from app.api.deps import DbSession, CurrentUser
 from app.config import settings
 from app.models.invoice import Invoice
 from app.models.payment import Payment
+from app.models.clover_oauth import CloverOAuthToken
 from app.services.clover_service import get_clover_service
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,8 @@ class CloverConfig(BaseModel):
     is_configured: bool
     rest_api_available: bool = False
     ecommerce_available: bool = False
+    oauth_configured: bool = False
+    oauth_connected: bool = False
 
 
 class CreatePaymentRequest(BaseModel):
@@ -94,6 +99,21 @@ class PaymentHistoryItem(BaseModel):
 # =============================================================================
 
 
+async def _load_oauth_token(db, clover) -> bool:
+    """Load active OAuth token from DB into service. Returns True if token loaded."""
+    try:
+        result = await db.execute(
+            select(CloverOAuthToken).where(CloverOAuthToken.is_active == True).limit(1)
+        )
+        token_record = result.scalar_one_or_none()
+        if token_record:
+            clover.set_oauth_token(token_record.access_token, token_record.merchant_id)
+            return True
+    except Exception as e:
+        logger.warning(f"Failed to load OAuth token from DB: {e}")
+    return False
+
+
 @router.get("/config")
 async def get_clover_config(
     db: DbSession,
@@ -102,11 +122,21 @@ async def get_clover_config(
     """Get Clover configuration for frontend with capability detection."""
     clover = get_clover_service()
 
+    # Try loading OAuth token from DB
+    has_oauth = await _load_oauth_token(db, clover)
+
     if not clover.is_configured():
-        raise HTTPException(
-            status_code=503,
-            detail="Clover is not configured. Please set CLOVER_MERCHANT_ID and CLOVER_API_KEY.",
-        )
+        # Still return useful info even if not configured
+        return {
+            "merchant_id": settings.CLOVER_MERCHANT_ID or "",
+            "merchant_name": None,
+            "environment": settings.CLOVER_ENVIRONMENT,
+            "is_configured": False,
+            "rest_api_available": False,
+            "ecommerce_available": False,
+            "oauth_configured": clover.is_oauth_configured(),
+            "oauth_connected": has_oauth,
+        }
 
     # Check REST API access by fetching merchant info
     merchant = await clover.get_merchant()
@@ -117,13 +147,218 @@ async def get_clover_config(
     ecomm_available = await clover.check_ecommerce_access()
 
     return {
-        "merchant_id": settings.CLOVER_MERCHANT_ID or "",
+        "merchant_id": clover._get_active_merchant_id() or settings.CLOVER_MERCHANT_ID or "",
         "merchant_name": merchant_name,
         "environment": settings.CLOVER_ENVIRONMENT,
         "is_configured": True,
         "rest_api_available": rest_available,
         "ecommerce_available": ecomm_available,
+        "oauth_configured": clover.is_oauth_configured(),
+        "oauth_connected": has_oauth,
     }
+
+
+# =============================================================================
+# OAuth 2.0 Endpoints
+# =============================================================================
+
+
+@router.get("/oauth/authorize")
+async def oauth_authorize(
+    current_user: CurrentUser,
+) -> dict:
+    """Get Clover OAuth2 authorization URL for merchant connection."""
+    clover = get_clover_service()
+
+    if not clover.is_oauth_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="OAuth not configured. Set CLOVER_CLIENT_ID and CLOVER_CLIENT_SECRET.",
+        )
+
+    # Generate state token for CSRF protection
+    state = uuid.uuid4().hex
+    auth_url = clover.get_authorization_url(state=state)
+
+    if not auth_url:
+        raise HTTPException(status_code=500, detail="Failed to generate authorization URL")
+
+    return {
+        "authorization_url": auth_url,
+        "state": state,
+    }
+
+
+@router.post("/oauth/callback")
+async def oauth_callback(
+    code: str = Query(..., description="Authorization code from Clover"),
+    merchant_id: Optional[str] = Query(None, description="Merchant ID from Clover redirect"),
+    state: Optional[str] = Query(None, description="CSRF state token"),
+    db: DbSession = None,
+    current_user: CurrentUser = None,
+) -> dict:
+    """Exchange authorization code for access token and store it."""
+    clover = get_clover_service()
+
+    if not clover.is_oauth_configured():
+        raise HTTPException(status_code=400, detail="OAuth not configured")
+
+    # Exchange code for token
+    result = await clover.exchange_code_for_token(code)
+
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    access_token = result.get("access_token")
+    oauth_merchant_id = result.get("merchant_id") or merchant_id
+
+    if not access_token:
+        raise HTTPException(status_code=400, detail="No access token received")
+
+    # Set token in service to verify it works
+    clover.set_oauth_token(access_token, oauth_merchant_id)
+    merchant_info = await clover.get_merchant()
+    merchant_name = merchant_info.get("name") if merchant_info else None
+
+    # Deactivate any existing tokens
+    await db.execute(
+        text("UPDATE clover_oauth_tokens SET is_active = false WHERE is_active = true")
+    )
+
+    # Store new token
+    token_record = CloverOAuthToken(
+        id=uuid.uuid4(),
+        merchant_id=oauth_merchant_id or settings.CLOVER_MERCHANT_ID or "unknown",
+        access_token=access_token,
+        merchant_name=merchant_name,
+        is_active=True,
+        connected_by=current_user.email,
+    )
+    db.add(token_record)
+    await db.commit()
+
+    logger.info(f"Clover OAuth connected by {current_user.email} for merchant {oauth_merchant_id}")
+
+    return {
+        "success": True,
+        "merchant_id": oauth_merchant_id,
+        "merchant_name": merchant_name,
+        "connected_by": current_user.email,
+    }
+
+
+@router.post("/oauth/disconnect")
+async def oauth_disconnect(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Disconnect Clover OAuth (deactivate stored tokens)."""
+    result = await db.execute(
+        text("UPDATE clover_oauth_tokens SET is_active = false WHERE is_active = true")
+    )
+    await db.commit()
+
+    clover = get_clover_service()
+    clover.clear_oauth_token()
+
+    logger.info(f"Clover OAuth disconnected by {current_user.email}")
+    return {"success": True, "message": "Clover disconnected"}
+
+
+@router.get("/oauth/status")
+async def oauth_status(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Check Clover OAuth connection status."""
+    clover = get_clover_service()
+
+    # Check for active token in DB
+    result = await db.execute(
+        select(CloverOAuthToken).where(CloverOAuthToken.is_active == True).limit(1)
+    )
+    token_record = result.scalar_one_or_none()
+
+    return {
+        "oauth_configured": clover.is_oauth_configured(),
+        "oauth_connected": token_record is not None,
+        "merchant_id": token_record.merchant_id if token_record else None,
+        "merchant_name": token_record.merchant_name if token_record else None,
+        "connected_by": token_record.connected_by if token_record else None,
+        "connected_at": token_record.created_at.isoformat() if token_record and token_record.created_at else None,
+        "env_configured": bool(settings.CLOVER_MERCHANT_ID and settings.CLOVER_API_KEY),
+    }
+
+
+# =============================================================================
+# Webhook Endpoint (unauthenticated — Clover sends webhooks here)
+# =============================================================================
+
+
+@router.post("/webhook")
+async def clover_webhook(
+    request: Request,
+    db: DbSession,
+) -> dict:
+    """Handle Clover webhook notifications for payment events."""
+    body = await request.body()
+    signature = request.headers.get("X-Clover-Signature", "")
+
+    clover = get_clover_service()
+
+    # Verify signature if client_secret is configured
+    if clover.client_secret and signature:
+        if not clover.verify_webhook_signature(body, signature):
+            logger.warning("Invalid Clover webhook signature")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+
+    try:
+        import json
+        payload = json.loads(body)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    event_type = payload.get("type", "")
+    data = payload.get("data", {})
+
+    logger.info(f"Clover webhook received: {event_type}")
+
+    if event_type in ("payment.created", "payment.updated"):
+        # Auto-sync this payment to CRM
+        clover_payment_id = data.get("id")
+        if clover_payment_id:
+            # Check if already exists
+            existing = await db.execute(
+                select(Payment).where(Payment.stripe_payment_intent_id == clover_payment_id)
+            )
+            if not existing.scalar_one_or_none():
+                amount_cents = data.get("amount", 0) or 0
+                tender = data.get("tender") or {}
+                created_ms = data.get("createdTime") or 0
+                created_dt = datetime.utcfromtimestamp(created_ms / 1000) if created_ms else datetime.utcnow()
+
+                await db.execute(
+                    text("""
+                        INSERT INTO payments (amount, currency, payment_method, status,
+                            stripe_payment_intent_id, description, payment_date, processed_at)
+                        VALUES (:amount, :currency, :method, :status,
+                            :charge_id, :description, :payment_date, :processed_at)
+                    """),
+                    {
+                        "amount": round(amount_cents / 100, 2),
+                        "currency": "USD",
+                        "method": (tender.get("label") or "card").lower()[:50],
+                        "status": "completed" if data.get("result") == "SUCCESS" else "pending",
+                        "charge_id": clover_payment_id,
+                        "description": "Clover payment (webhook)",
+                        "payment_date": created_dt,
+                        "processed_at": created_dt,
+                    },
+                )
+                await db.commit()
+                logger.info(f"Auto-synced Clover payment {clover_payment_id} via webhook")
+
+    return {"received": True, "type": event_type}
 
 
 # =============================================================================
@@ -133,10 +368,12 @@ async def get_clover_config(
 
 @router.get("/merchant")
 async def get_merchant_info(
+    db: DbSession,
     current_user: CurrentUser,
 ) -> dict:
     """Get merchant profile from Clover."""
     clover = get_clover_service()
+    await _load_oauth_token(db, clover)
     if not clover.is_configured():
         raise HTTPException(status_code=503, detail="Clover is not configured")
 
@@ -156,6 +393,7 @@ async def get_merchant_info(
 
 @router.get("/payments")
 async def list_clover_payments(
+    db: DbSession,
     current_user: CurrentUser,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -163,6 +401,7 @@ async def list_clover_payments(
     """List payments from Clover POS device."""
     try:
         clover = get_clover_service()
+        await _load_oauth_token(db, clover)
         if not clover.is_configured():
             # Return empty list instead of 503 - not configured is not an error
             return {"payments": [], "total": 0, "error": "Clover not configured"}
@@ -201,12 +440,14 @@ async def list_clover_payments(
 
 @router.get("/orders")
 async def list_clover_orders(
+    db: DbSession,
     current_user: CurrentUser,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> dict:
     """List orders from Clover with line items."""
     clover = get_clover_service()
+    await _load_oauth_token(db, clover)
     if not clover.is_configured():
         raise HTTPException(status_code=503, detail="Clover is not configured")
 
@@ -244,10 +485,12 @@ async def list_clover_orders(
 
 @router.get("/items")
 async def list_clover_items(
+    db: DbSession,
     current_user: CurrentUser,
 ) -> dict:
     """List service catalog items from Clover inventory."""
     clover = get_clover_service()
+    await _load_oauth_token(db, clover)
     if not clover.is_configured():
         raise HTTPException(status_code=503, detail="Clover is not configured")
 
@@ -281,6 +524,7 @@ async def sync_clover_payments(
 ) -> dict:
     """Sync Clover payments to CRM Payment records."""
     clover = get_clover_service()
+    await _load_oauth_token(db, clover)
     if not clover.is_configured():
         raise HTTPException(status_code=503, detail="Clover is not configured")
 
@@ -380,6 +624,7 @@ async def get_reconciliation(
 ) -> dict:
     """Compare CRM payments vs Clover payments for reconciliation."""
     clover = get_clover_service()
+    await _load_oauth_token(db, clover)
     if not clover.is_configured():
         raise HTTPException(status_code=503, detail="Clover is not configured")
 
@@ -644,6 +889,7 @@ async def charge_invoice(
 ) -> PaymentResultSchema:
     """Charge a payment for an invoice using Clover."""
     clover = get_clover_service()
+    await _load_oauth_token(db, clover)
 
     if not clover.is_configured():
         raise HTTPException(status_code=503, detail="Clover is not configured")
