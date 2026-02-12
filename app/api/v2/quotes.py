@@ -150,7 +150,7 @@ async def list_quotes(
 
 @router.get("/{quote_id}", response_model=QuoteResponse)
 async def get_quote(
-    quote_id: int,
+    quote_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -191,7 +191,7 @@ async def create_quote(
 
 @router.patch("/{quote_id}", response_model=QuoteResponse)
 async def update_quote(
-    quote_id: int,
+    quote_id: str,
     quote_data: QuoteUpdate,
     db: DbSession,
     current_user: CurrentUser,
@@ -222,7 +222,7 @@ async def update_quote(
 
 @router.post("/{quote_id}/send", response_model=QuoteResponse)
 async def send_quote(
-    quote_id: int,
+    quote_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -246,7 +246,7 @@ async def send_quote(
 
 @router.post("/{quote_id}/accept", response_model=QuoteResponse)
 async def accept_quote(
-    quote_id: int,
+    quote_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -275,7 +275,7 @@ async def accept_quote(
 
 @router.post("/{quote_id}/decline", response_model=QuoteResponse)
 async def decline_quote(
-    quote_id: int,
+    quote_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -304,7 +304,7 @@ async def decline_quote(
 
 @router.post("/{quote_id}/convert", response_model=QuoteConvertResponse)
 async def convert_quote_to_work_order(
-    quote_id: int,
+    quote_id: str,
     convert_data: QuoteConvertRequest,
     db: DbSession,
     current_user: CurrentUser,
@@ -418,7 +418,7 @@ async def convert_quote_to_work_order(
 
 @router.delete("/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_quote(
-    quote_id: int,
+    quote_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -707,7 +707,7 @@ def generate_quote_pdf_html(quote_data: dict) -> str:
 
 @router.get("/{quote_id}/pdf")
 async def generate_quote_pdf(
-    quote_id: int,
+    quote_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
