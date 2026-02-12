@@ -30,7 +30,8 @@ async def list_customers(
     search: Optional[str] = None,
     customer_type: Optional[str] = None,
     prospect_stage: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    is_active: Optional[bool] = True,
+    include_all: Optional[bool] = None,
 ):
     """List customers with pagination and filtering."""
     # Base query
@@ -52,7 +53,8 @@ async def list_customers(
     if prospect_stage:
         query = query.where(Customer.prospect_stage == prospect_stage)
 
-    if is_active is not None:
+    # Default to active-only; pass include_all=true to see everything
+    if not include_all and is_active is not None:
         query = query.where(Customer.is_active == is_active)
 
     # Get total count

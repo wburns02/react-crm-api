@@ -198,7 +198,7 @@ async def list_technicians(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
-    active_only: Optional[bool] = None,
+    active_only: Optional[bool] = True,
 ):
     """List technicians with pagination and filtering."""
     try:
