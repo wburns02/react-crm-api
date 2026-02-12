@@ -44,8 +44,8 @@ async def login(
     db: DbSession,
 ):
     """Authenticate user and return JWT token (or MFA challenge if enabled)."""
-    # Rate limit: 30 requests/minute per IP (300/hr) to prevent brute force
-    rate_limit_by_ip(request, requests_per_minute=30)
+    # Rate limit: 60 requests/minute per IP to prevent brute force
+    rate_limit_by_ip(request, requests_per_minute=60)
 
     try:
         # Find user (without MFA eager loading to avoid errors if MFA tables don't exist)

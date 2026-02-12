@@ -136,7 +136,8 @@ class Settings(BaseSettings):
 
     # Redis Cache (optional)
     REDIS_URL: str | None = None
-    RATE_LIMIT_REDIS_ENABLED: bool = False  # Use Redis for distributed rate limiting
+    RATE_LIMIT_REDIS_ENABLED: bool = True  # Use Redis when REDIS_URL is set
+    RATE_LIMIT_BYPASS_IPS: str = ""  # Comma-separated IPs to bypass rate limiting (e.g., test runners)
 
     # OpenTelemetry (optional)
     OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None

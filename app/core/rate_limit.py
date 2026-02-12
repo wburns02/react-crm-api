@@ -489,6 +489,7 @@ def rate_limit_by_ip(request: Request, requests_per_minute: int = 60) -> None:
     Rate limit by IP address for unauthenticated endpoints.
 
     Used for OAuth token endpoint to prevent brute force attacks.
+    Supports bypass for whitelisted IPs (e.g., E2E test runners).
     """
     # Get client IP (handle proxy headers)
     forwarded_for = request.headers.get("x-forwarded-for")
@@ -496,6 +497,13 @@ def rate_limit_by_ip(request: Request, requests_per_minute: int = 60) -> None:
         client_ip = forwarded_for.split(",")[0].strip()
     else:
         client_ip = request.client.host if request.client else "unknown"
+
+    # Check bypass list (for E2E test runners, internal services)
+    from app.config import settings
+    if settings.RATE_LIMIT_BYPASS_IPS:
+        bypass_ips = {ip.strip() for ip in settings.RATE_LIMIT_BYPASS_IPS.split(",") if ip.strip()}
+        if client_ip in bypass_ips or client_ip in ("127.0.0.1", "::1") and "127.0.0.1" in bypass_ips:
+            return
 
     # Hash IP for privacy
     ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:16]
