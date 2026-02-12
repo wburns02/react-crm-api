@@ -151,6 +151,7 @@ async def get_dashboard_stats(
     revenue_mtd = 0.0
     invoices_pending = 0
     invoices_overdue = 0
+    upcoming_followups = 0
     recent_prospects_models = []
     recent_customers_models = []
     today_jobs_models = []
@@ -223,6 +224,21 @@ async def get_dashboard_stats(
         invoices_overdue = overdue_result.scalar() or 0
     except Exception:
         logger.warning("Dashboard query failed", exc_info=True)
+
+    # Upcoming follow-ups: work orders scheduled in the next 7 days (excluding today)
+    try:
+        next_week = today + timedelta(days=7)
+        followups_result = await db.execute(
+            select(func.count()).where(
+                and_(
+                    WorkOrder.scheduled_date > today,
+                    WorkOrder.scheduled_date <= next_week,
+                )
+            )
+        )
+        upcoming_followups = followups_result.scalar() or 0
+    except Exception:
+        logger.warning("Dashboard followups query failed", exc_info=True)
 
     # Pipeline value: sum estimated_value for active prospects, fall back to count * $500
     pipeline_value = 0.0
@@ -317,7 +333,7 @@ async def get_dashboard_stats(
         revenue_mtd=float(revenue_mtd),
         invoices_pending=invoices_pending,
         invoices_overdue=invoices_overdue,
-        upcoming_followups=0,
+        upcoming_followups=upcoming_followups,
         recent_prospect_ids=[str(p.id) for p in recent_prospects_models],
         recent_customer_ids=[str(c.id) for c in recent_customers_models],
     )
