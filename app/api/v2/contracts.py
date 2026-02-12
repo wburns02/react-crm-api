@@ -132,9 +132,15 @@ class TemplateResponse(BaseModel):
     contract_type: str
     default_duration_months: int
     default_billing_frequency: str
+    default_auto_renew: bool = False
+    default_payment_terms: Optional[str] = None
+    default_services: Optional[list] = None
+    variables: Optional[list] = None
     base_price: Optional[float] = None
     is_active: bool
     version: int
+    has_content: bool = False
+    terms_and_conditions: Optional[str] = None
     created_at: Optional[datetime] = None
 
     class Config:
@@ -468,8 +474,17 @@ async def list_templates(
                     "contract_type": t.contract_type,
                     "description": t.description,
                     "default_duration_months": t.default_duration_months,
+                    "default_billing_frequency": t.default_billing_frequency,
+                    "default_auto_renew": t.default_auto_renew,
+                    "default_payment_terms": t.default_payment_terms,
+                    "default_services": t.default_services,
+                    "variables": t.variables,
                     "base_price": t.base_price,
                     "is_active": t.is_active,
+                    "version": t.version,
+                    "has_content": bool(t.content),
+                    "terms_and_conditions": t.terms_and_conditions,
+                    "created_at": t.created_at,
                 }
                 for t in templates
             ],
@@ -503,9 +518,15 @@ async def create_template(
             "contract_type": template.contract_type,
             "default_duration_months": template.default_duration_months,
             "default_billing_frequency": template.default_billing_frequency,
+            "default_auto_renew": template.default_auto_renew,
+            "default_payment_terms": template.default_payment_terms,
+            "default_services": template.default_services,
+            "variables": template.variables,
             "base_price": template.base_price,
             "is_active": template.is_active,
             "version": template.version,
+            "has_content": bool(template.content),
+            "terms_and_conditions": template.terms_and_conditions,
             "created_at": template.created_at,
         }
     except Exception as e:
@@ -535,9 +556,15 @@ async def get_template(
             "contract_type": template.contract_type,
             "default_duration_months": template.default_duration_months,
             "default_billing_frequency": template.default_billing_frequency,
+            "default_auto_renew": template.default_auto_renew,
+            "default_payment_terms": template.default_payment_terms,
+            "default_services": template.default_services,
+            "variables": template.variables,
             "base_price": template.base_price,
             "is_active": template.is_active,
             "version": template.version,
+            "has_content": bool(template.content),
+            "terms_and_conditions": template.terms_and_conditions,
             "created_at": template.created_at,
         }
     except HTTPException:
@@ -581,9 +608,15 @@ async def update_template(
             "contract_type": template.contract_type,
             "default_duration_months": template.default_duration_months,
             "default_billing_frequency": template.default_billing_frequency,
+            "default_auto_renew": template.default_auto_renew,
+            "default_payment_terms": template.default_payment_terms,
+            "default_services": template.default_services,
+            "variables": template.variables,
             "base_price": template.base_price,
             "is_active": template.is_active,
             "version": template.version,
+            "has_content": bool(template.content),
+            "terms_and_conditions": template.terms_and_conditions,
             "created_at": template.created_at,
         }
     except HTTPException:
@@ -1085,134 +1118,37 @@ async def bulk_contract_action(
 # Seed MAC Septic Templates
 # ========================
 
-
-MAC_SEPTIC_TEMPLATES = [
-    {
-        "name": "Initial 2-Year Evergreen",
-        "code": "INIT_2YR_EVERGREEN",
-        "description": "Initial 2-year evergreen maintenance contract for new customers. Includes comprehensive septic system inspection, pumping, and preventive maintenance.",
-        "contract_type": "multi-year",
-        "content": "Initial 2-Year Evergreen Maintenance Agreement between MAC Septic Services and the Customer.",
-        "terms_and_conditions": "This agreement automatically renews for successive 1-year periods unless cancelled with 30 days written notice.",
-        "default_duration_months": 24,
-        "default_billing_frequency": "annual",
-        "default_payment_terms": "due-on-receipt",
-        "default_auto_renew": True,
-        "default_services": [
-            {"service_code": "PUMP", "description": "Septic Tank Pumping", "frequency": "annual", "quantity": 1},
-            {"service_code": "INSPECT", "description": "Full System Inspection", "frequency": "annual", "quantity": 1},
-            {"service_code": "MAINT", "description": "Preventive Maintenance", "frequency": "annual", "quantity": 1},
-        ],
-        "base_price": 575.00,
-        "variables": ["customer_name", "service_address", "tank_size", "system_type"],
-    },
-    {
-        "name": "Typical Yearly Maintenance",
-        "code": "YEARLY_MAINT",
-        "description": "Standard annual maintenance contract. One service visit per year including pumping and inspection.",
-        "contract_type": "annual",
-        "content": "Annual Maintenance Agreement between MAC Septic Services and the Customer.",
-        "terms_and_conditions": "This agreement covers one calendar year and must be manually renewed.",
-        "default_duration_months": 12,
-        "default_billing_frequency": "annual",
-        "default_payment_terms": "due-on-receipt",
-        "default_auto_renew": False,
-        "default_services": [
-            {"service_code": "PUMP", "description": "Septic Tank Pumping", "frequency": "annual", "quantity": 1},
-            {"service_code": "INSPECT", "description": "System Inspection", "frequency": "annual", "quantity": 1},
-        ],
-        "base_price": 350.00,
-        "variables": ["customer_name", "service_address", "tank_size"],
-    },
-    {
-        "name": "Evergreen Maintenance",
-        "code": "EVERGREEN_MAINT",
-        "description": "Evergreen maintenance contract with automatic renewal. Budget-friendly option for ongoing system care.",
-        "contract_type": "maintenance",
-        "content": "Evergreen Maintenance Agreement between MAC Septic Services and the Customer.",
-        "terms_and_conditions": "This agreement automatically renews annually unless cancelled with 30 days written notice.",
-        "default_duration_months": 12,
-        "default_billing_frequency": "annual",
-        "default_payment_terms": "due-on-receipt",
-        "default_auto_renew": True,
-        "default_services": [
-            {"service_code": "MAINT", "description": "Preventive Maintenance Visit", "frequency": "annual", "quantity": 1},
-            {"service_code": "INSPECT", "description": "Basic Inspection", "frequency": "annual", "quantity": 1},
-        ],
-        "base_price": 300.00,
-        "variables": ["customer_name", "service_address"],
-    },
-    {
-        "name": "Evergreen Service - 1 Visit",
-        "code": "EVERGREEN_SVC_1",
-        "description": "Evergreen service contract with 1 annual visit. Ideal for low-usage residential systems.",
-        "contract_type": "service",
-        "content": "Evergreen Service Visit Agreement (1 Visit/Year) between MAC Septic Services and the Customer.",
-        "terms_and_conditions": "Includes 1 scheduled service visit per year. Auto-renews annually.",
-        "default_duration_months": 12,
-        "default_billing_frequency": "annual",
-        "default_payment_terms": "due-on-receipt",
-        "default_auto_renew": True,
-        "default_services": [
-            {"service_code": "SVC_VISIT", "description": "Scheduled Service Visit", "frequency": "annual", "quantity": 1},
-        ],
-        "base_price": 175.00,
-        "variables": ["customer_name", "service_address"],
-    },
-    {
-        "name": "Evergreen Service - 2 Visits",
-        "code": "EVERGREEN_SVC_2",
-        "description": "Evergreen service contract with 2 annual visits. Recommended for standard residential systems.",
-        "contract_type": "service",
-        "content": "Evergreen Service Visit Agreement (2 Visits/Year) between MAC Septic Services and the Customer.",
-        "terms_and_conditions": "Includes 2 scheduled service visits per year. Auto-renews annually.",
-        "default_duration_months": 12,
-        "default_billing_frequency": "annual",
-        "default_payment_terms": "due-on-receipt",
-        "default_auto_renew": True,
-        "default_services": [
-            {"service_code": "SVC_VISIT", "description": "Scheduled Service Visit", "frequency": "semi-annual", "quantity": 2},
-        ],
-        "base_price": 295.00,
-        "variables": ["customer_name", "service_address"],
-    },
-    {
-        "name": "Evergreen Service - 3 Visits",
-        "code": "EVERGREEN_SVC_3",
-        "description": "Evergreen service contract with 3 annual visits. Best for commercial or high-usage systems.",
-        "contract_type": "service",
-        "content": "Evergreen Service Visit Agreement (3 Visits/Year) between MAC Septic Services and the Customer.",
-        "terms_and_conditions": "Includes 3 scheduled service visits per year. Auto-renews annually.",
-        "default_duration_months": 12,
-        "default_billing_frequency": "annual",
-        "default_payment_terms": "due-on-receipt",
-        "default_auto_renew": True,
-        "default_services": [
-            {"service_code": "SVC_VISIT", "description": "Scheduled Service Visit", "frequency": "quarterly", "quantity": 3},
-        ],
-        "base_price": 325.00,
-        "variables": ["customer_name", "service_address"],
-    },
-]
+from app.data.contract_templates import MAC_SEPTIC_CONTRACT_TEMPLATES
 
 
 @router.post("/seed-templates")
 async def seed_mac_septic_templates(
     db: DbSession,
     current_user: CurrentUser,
+    force_update: bool = Query(False, description="Update existing templates with new content"),
 ):
-    """Seed MAC Septic contract templates. Skips templates that already exist by code."""
+    """Seed MAC Septic contract templates. Skips templates that already exist by code unless force_update=true."""
     try:
         created = []
         skipped = []
+        updated = []
 
-        for tmpl_data in MAC_SEPTIC_TEMPLATES:
+        for tmpl_data in MAC_SEPTIC_CONTRACT_TEMPLATES:
             # Check if template already exists
-            existing = await db.execute(
+            existing_result = await db.execute(
                 select(ContractTemplate).where(ContractTemplate.code == tmpl_data["code"])
             )
-            if existing.scalar_one_or_none():
-                skipped.append(tmpl_data["code"])
+            existing = existing_result.scalar_one_or_none()
+
+            if existing:
+                if force_update:
+                    # Update existing template with new content
+                    for key, value in tmpl_data.items():
+                        setattr(existing, key, value)
+                    existing.version += 1
+                    updated.append(tmpl_data["code"])
+                else:
+                    skipped.append(tmpl_data["code"])
                 continue
 
             template = ContractTemplate(
@@ -1225,12 +1161,144 @@ async def seed_mac_septic_templates(
         await db.commit()
         return {
             "created": created,
+            "updated": updated,
             "skipped": skipped,
             "total_created": len(created),
+            "total_updated": len(updated),
             "total_skipped": len(skipped),
         }
     except Exception as e:
         logger.error(f"Error seeding templates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========================
+# Template Document Preview
+# ========================
+
+
+@router.get("/templates/{template_id}/document")
+async def get_template_document(
+    template_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+    # Optional variable substitution
+    customer_name: Optional[str] = Query(None),
+    service_address: Optional[str] = Query(None),
+    system_type: Optional[str] = Query(None),
+    contract_number: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+):
+    """Get the full contract document content for a template, with optional variable substitution."""
+    try:
+        result = await db.execute(select(ContractTemplate).where(ContractTemplate.id == uuid.UUID(template_id)))
+        template = result.scalar_one_or_none()
+
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        if not template.content:
+            raise HTTPException(status_code=404, detail="Template has no document content")
+
+        document = template.content
+
+        # Substitute any provided variables
+        substitutions = {
+            "customer_name": customer_name or "___________________________",
+            "service_address": service_address or "___________________________",
+            "system_type": system_type or "___________________________",
+            "contract_number": contract_number or generate_contract_number(),
+            "start_date": start_date or date.today().isoformat(),
+            "contact_person": "___________________________",
+            "system_capacity": "___________________________",
+            "plan_tier": "___________________________",
+            "commercial_tier": "___________________________",
+        }
+
+        for key, value in substitutions.items():
+            document = document.replace(f"{{{{{key}}}}}", value)
+
+        return {
+            "template_id": str(template.id),
+            "template_name": template.name,
+            "template_code": template.code,
+            "document": document,
+            "terms_and_conditions": template.terms_and_conditions,
+            "variables": template.variables,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting template document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{contract_id}/document")
+async def get_contract_document(
+    contract_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get the generated contract document with customer-specific variables substituted."""
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        contract = result.scalar_one_or_none()
+
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+        # Get the template to access the full document content
+        if not contract.template_id:
+            return {
+                "contract_id": str(contract.id),
+                "contract_number": contract.contract_number,
+                "document": None,
+                "terms_and_conditions": contract.terms_and_conditions,
+                "message": "This contract was not generated from a template",
+            }
+
+        template_result = await db.execute(
+            select(ContractTemplate).where(ContractTemplate.id == contract.template_id)
+        )
+        template = template_result.scalar_one_or_none()
+
+        if not template or not template.content:
+            return {
+                "contract_id": str(contract.id),
+                "contract_number": contract.contract_number,
+                "document": None,
+                "terms_and_conditions": contract.terms_and_conditions,
+                "message": "Template document content not available",
+            }
+
+        # Substitute variables with actual contract data
+        document = template.content
+        substitutions = {
+            "contract_number": contract.contract_number,
+            "start_date": contract.start_date.isoformat() if contract.start_date else "",
+            "customer_name": contract.customer_name or "",
+            "service_address": ", ".join(contract.covered_properties) if contract.covered_properties else "",
+            "system_type": contract.coverage_details or "",
+            "contact_person": "",
+            "system_capacity": "",
+            "plan_tier": "",
+            "commercial_tier": "",
+        }
+
+        for key, value in substitutions.items():
+            document = document.replace(f"{{{{{key}}}}}", value)
+
+        return {
+            "contract_id": str(contract.id),
+            "contract_number": contract.contract_number,
+            "customer_name": contract.customer_name,
+            "document": document,
+            "terms_and_conditions": contract.terms_and_conditions or template.terms_and_conditions,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting contract document: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
