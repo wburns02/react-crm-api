@@ -142,8 +142,8 @@ class CloverService:
         if state:
             params["state"] = state
 
-        query = "&".join(f"{k}={v}" for k, v in params.items())
-        return f"{self.auth_url}?{query}"
+        from urllib.parse import urlencode
+        return f"{self.auth_url}?{urlencode(params)}"
 
     async def exchange_code_for_token(self, code: str) -> dict:
         """Exchange authorization code for access token.
