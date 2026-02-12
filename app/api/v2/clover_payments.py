@@ -300,10 +300,31 @@ async def clover_webhook(
     request: Request,
     db: DbSession,
 ) -> dict:
-    """Handle Clover webhook notifications for payment events."""
+    """Handle Clover webhook notifications for payment events and verification."""
     body = await request.body()
-    signature = request.headers.get("X-Clover-Signature", "")
+    body_text = body.decode("utf-8", errors="replace").strip()
 
+    # Handle Clover webhook verification challenge
+    # Clover sends the verification code as plain text or JSON with "verificationCode"
+    if not body_text.startswith("{"):
+        # Plain text verification code
+        logger.info(f"Clover webhook verification code received: {body_text}")
+        return {"received": True, "verification_code": body_text}
+
+    import json
+    try:
+        payload = json.loads(body)
+    except Exception:
+        logger.info(f"Clover webhook non-JSON body: {body_text[:200]}")
+        return {"received": True, "raw": body_text[:200]}
+
+    # Check for verification code in JSON format
+    if "verificationCode" in payload:
+        code = payload["verificationCode"]
+        logger.info(f"Clover webhook verification code received: {code}")
+        return {"received": True, "verification_code": code}
+
+    signature = request.headers.get("X-Clover-Signature", "")
     clover = get_clover_service()
 
     # Verify signature if client_secret is configured
@@ -311,12 +332,6 @@ async def clover_webhook(
         if not clover.verify_webhook_signature(body, signature):
             logger.warning("Invalid Clover webhook signature")
             raise HTTPException(status_code=401, detail="Invalid signature")
-
-    try:
-        import json
-        payload = json.loads(body)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     event_type = payload.get("type", "")
     data = payload.get("data", {})
