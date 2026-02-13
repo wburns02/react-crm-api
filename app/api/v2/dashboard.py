@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select, func, and_, text
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -9,6 +10,7 @@ from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
 from app.models.work_order import WorkOrder
 from app.models.invoice import Invoice
+from app.services.cache_service import get_cache_service, TTL
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +140,13 @@ async def get_dashboard_stats(
     current_user: CurrentUser,
 ):
     """Get aggregated dashboard statistics."""
+    # Check cache first (dashboard is expensive - 10+ queries)
+    cache = get_cache_service()
+    cache_key = "dashboard:stats"
+    cached = await cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     now = datetime.now()
     today = now.date()
 
@@ -338,9 +347,11 @@ async def get_dashboard_stats(
         recent_customer_ids=[str(c.id) for c in recent_customers_models],
     )
 
-    return DashboardFullStats(
+    response = DashboardFullStats(
         stats=stats,
         recent_prospects=recent_prospects,
         recent_customers=recent_customers,
         today_jobs=today_jobs_list,
     )
+    await cache.set(cache_key, jsonable_encoder(response), ttl=TTL.MEDIUM)
+    return response

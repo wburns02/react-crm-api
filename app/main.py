@@ -879,7 +879,7 @@ async def root():
     """Root endpoint - API info."""
     response = {
         "name": "React CRM API",
-        "version": "2.1.0",
+        "version": settings.VERSION,
         "health": "/health",
         "api_v2": "/api/v2",
         "public_api": "/api/public/v1",
@@ -928,7 +928,7 @@ async def health_check():
 
     return {
         "status": overall_status,
-        "version": "2.9.4",  # Added date filter to commissions + social integrations
+        "version": settings.VERSION,
         "environment": settings.ENVIRONMENT,
         "rate_limiting": "redis" if settings.RATE_LIMIT_REDIS_ENABLED else "memory",
         "database": {

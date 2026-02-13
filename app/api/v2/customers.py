@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Query
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select, func, or_
 from typing import Optional
 
@@ -11,6 +12,7 @@ from app.schemas.customer import (
     CustomerListResponse,
 )
 from app.schemas.errors import LIST_ERROR_RESPONSES, CRUD_ERROR_RESPONSES
+from app.services.cache_service import get_cache_service, TTL
 
 router = APIRouter()
 
@@ -34,6 +36,13 @@ async def list_customers(
     include_all: Optional[bool] = None,
 ):
     """List customers with pagination and filtering."""
+    # Check cache first
+    cache = get_cache_service()
+    cache_key = f"customers:list:{page}:{page_size}:{search}:{customer_type}:{prospect_stage}:{is_active}:{include_all}"
+    cached = await cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     # Base query
     query = select(Customer)
 
@@ -70,12 +79,14 @@ async def list_customers(
     result = await db.execute(query)
     customers = result.scalars().all()
 
-    return CustomerListResponse(
+    response = CustomerListResponse(
         items=customers,
         total=total,
         page=page,
         page_size=page_size,
     )
+    await cache.set(cache_key, jsonable_encoder(response), ttl=TTL.SHORT)
+    return response
 
 
 @router.get(
@@ -114,6 +125,8 @@ async def create_customer(
     db.add(customer)
     await db.commit()
     await db.refresh(customer)
+    await get_cache_service().delete_pattern("customers:*")
+    await get_cache_service().delete_pattern("dashboard:*")
 
     # Try to set the customer_uuid for invoice FK optimization
     # This may fail if migration 040 hasn't run yet, which is OK
@@ -152,6 +165,8 @@ async def update_customer(
 
     await db.commit()
     await db.refresh(customer)
+    await get_cache_service().delete_pattern("customers:*")
+    await get_cache_service().delete_pattern("dashboard:*")
     return customer
 
 
@@ -179,3 +194,5 @@ async def delete_customer(
     # This preserves data integrity and historical records
     customer.is_active = False
     await db.commit()
+    await get_cache_service().delete_pattern("customers:*")
+    await get_cache_service().delete_pattern("dashboard:*")

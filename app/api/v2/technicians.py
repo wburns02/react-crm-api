@@ -14,6 +14,7 @@ from app.schemas.technician import (
     TechnicianJobDetail,
     TechnicianJobsResponse,
 )
+from app.services.cache_service import get_cache_service, TTL
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -201,6 +202,13 @@ async def list_technicians(
     active_only: Optional[bool] = True,
 ):
     """List technicians with pagination and filtering."""
+    # Check cache first
+    cache = get_cache_service()
+    cache_key = f"technicians:list:{page}:{page_size}:{search}:{active_only}"
+    cached = await cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         from sqlalchemy import text as sql_text
 
@@ -308,12 +316,14 @@ async def list_technicians(
                 }
             )
 
-        return {
+        result = {
             "items": items,
             "total": total,
             "page": page,
             "page_size": page_size,
         }
+        await cache.set(cache_key, result, ttl=TTL.LONG)
+        return result
     except Exception as e:
         import traceback
 
@@ -586,6 +596,8 @@ async def create_technician(
         db.add(technician)
         await db.commit()
         await db.refresh(technician)
+        await get_cache_service().delete_pattern("technicians:*")
+        await get_cache_service().delete_pattern("dashboard:*")
         return technician_to_response(technician)
     except Exception as e:
         logger.error(f"Error creating technician: {type(e).__name__}: {e}")
@@ -620,6 +632,8 @@ async def update_technician(
 
         await db.commit()
         await db.refresh(technician)
+        await get_cache_service().delete_pattern("technicians:*")
+        await get_cache_service().delete_pattern("dashboard:*")
         return technician_to_response(technician)
     except HTTPException:
         raise
@@ -651,6 +665,8 @@ async def delete_technician(
         # Soft delete - set is_active to False
         technician.is_active = False
         await db.commit()
+        await get_cache_service().delete_pattern("technicians:*")
+        await get_cache_service().delete_pattern("dashboard:*")
     except HTTPException:
         raise
     except Exception as e:
