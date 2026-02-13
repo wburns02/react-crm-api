@@ -3,10 +3,13 @@ Prospects API - Customers in prospect stages (not yet won).
 Prospects are customers with prospect_stage != 'won'.
 """
 
+import logging
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, update
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
@@ -192,3 +195,21 @@ async def delete_prospect(
     # work_orders, invoices, messages, equipment, etc.
     prospect.is_active = False
     await db.commit()
+
+
+@router.post("/backfill-stages")
+async def backfill_prospect_stages(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Backfill NULL prospect_stage to 'new_lead' for existing prospects."""
+    # Only admins should run this
+    result = await db.execute(
+        update(Customer)
+        .where(Customer.prospect_stage.is_(None))
+        .values(prospect_stage="new_lead")
+    )
+    count = result.rowcount
+    await db.commit()
+    logger.info(f"Backfilled {count} prospects with 'new_lead' stage")
+    return {"backfilled": count, "stage": "new_lead"}

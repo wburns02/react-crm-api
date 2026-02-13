@@ -31,9 +31,9 @@ class Customer(Base):
     is_active = Column(Boolean, default=True)
 
     # Lead/Sales tracking (stored as varchar in Flask DB)
-    lead_source = Column(String(50))
+    lead_source = Column(String(50), default="unknown")
     lead_notes = Column(Text)
-    prospect_stage = Column(String(50))
+    prospect_stage = Column(String(50), default="new_lead")
     assigned_sales_rep = Column(String(100))
     estimated_value = Column(Float)
     customer_type = Column(String(50))
