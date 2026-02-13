@@ -18,6 +18,7 @@ import uuid
 from app.api.deps import DbSession, CurrentUser
 from app.models.job_cost import JobCost
 from app.models.work_order import WorkOrder
+from app.models.customer import Customer
 from app.models.payroll import TechnicianPayRate, Commission
 from app.models.dump_site import DumpSite
 from app.models.technician import Technician
@@ -781,14 +782,20 @@ async def list_recent_work_orders(
 ):
     """List recent work orders for job costing selection."""
     try:
-        result = await db.execute(select(WorkOrder).order_by(WorkOrder.created_at.desc()).limit(limit))
-        work_orders = result.scalars().all()
+        result = await db.execute(
+            select(WorkOrder, Customer.first_name, Customer.last_name)
+            .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+            .order_by(WorkOrder.created_at.desc())
+            .limit(limit)
+        )
+        rows = result.all()
 
         return {
             "work_orders": [
                 {
                     "id": wo.id,
                     "customer_id": wo.customer_id,
+                    "customer_name": f"{first_name} {last_name}".strip() if first_name else None,
                     "job_type": getattr(wo, "job_type", None),
                     "status": getattr(wo, "status", None),
                     "total_amount": float(wo.total_amount) if hasattr(wo, "total_amount") and wo.total_amount else 0,
@@ -798,9 +805,9 @@ async def list_recent_work_orders(
                     "technician_id": getattr(wo, "technician_id", None),
                     "created_at": wo.created_at.isoformat() if wo.created_at else None,
                 }
-                for wo in work_orders
+                for wo, first_name, last_name in rows
             ],
-            "total": len(work_orders),
+            "total": len(rows),
         }
 
     except Exception as e:
