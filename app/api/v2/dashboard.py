@@ -310,18 +310,32 @@ async def get_dashboard_stats(
         for c in recent_customers_models
     ]
 
-    # Today's jobs
+    # Today's jobs with customer names
     try:
         today_jobs_query = await db.execute(select(WorkOrder).where(WorkOrder.scheduled_date == today).limit(10))
         today_jobs_models = today_jobs_query.scalars().all()
     except Exception:
         logger.warning("Dashboard query failed", exc_info=True)
 
+    # Batch-fetch customer names for today's jobs
+    customer_name_map = {}
+    if today_jobs_models:
+        try:
+            cust_ids = list({j.customer_id for j in today_jobs_models if j.customer_id})
+            if cust_ids:
+                cust_result = await db.execute(
+                    select(Customer.id, Customer.first_name, Customer.last_name).where(Customer.id.in_(cust_ids))
+                )
+                for row in cust_result.fetchall():
+                    customer_name_map[str(row[0])] = f"{row[1] or ''} {row[2] or ''}".strip()
+        except Exception:
+            logger.warning("Dashboard customer name lookup failed", exc_info=True)
+
     today_jobs_list = [
         TodayJob(
             id=str(j.id),
             customer_id=str(j.customer_id),
-            customer_name=None,
+            customer_name=customer_name_map.get(str(j.customer_id)),
             job_type=j.job_type or "pumping",
             status=j.status or "draft",
             time_window_start=str(j.time_window_start) if j.time_window_start else None,
