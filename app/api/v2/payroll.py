@@ -340,9 +340,9 @@ async def calculate_payroll(
     ANNUAL_GUARANTEE = 60000.0
     BIWEEKLY_BACKBOARD = round(ANNUAL_GUARANTEE / 26, 2)
 
-    # Get all technician IDs from both entries and commissions
-    technician_ids = set(e.technician_id for e in entries)
-    technician_ids.update(c.technician_id for c in commissions)
+    # Get all technician IDs from both entries and commissions (skip None)
+    technician_ids = set(e.technician_id for e in entries if e.technician_id)
+    technician_ids.update(c.technician_id for c in commissions if c.technician_id)
 
     total_gross = 0.0
     total_backboard = 0.0
@@ -1053,15 +1053,15 @@ async def get_period_summary(
         if not period:
             raise HTTPException(status_code=404, detail="Payroll period not found")
 
-        # 2. Get all technicians (for names)
+        # 2. Get all technicians (for names) - key by string ID for consistent lookups
         tech_result = await db.execute(select(Technician))
-        technicians = {t.id: t for t in tech_result.scalars().all()}
+        technicians = {str(t.id): t for t in tech_result.scalars().all()}
 
         # 3. Get active pay rates
         rates_result = await db.execute(
             select(TechnicianPayRate).where(TechnicianPayRate.is_active == True)
         )
-        pay_rates = {r.technician_id: r for r in rates_result.scalars().all()}
+        pay_rates = {str(r.technician_id): r for r in rates_result.scalars().all()}
 
         # 4. Get time entries by DATE RANGE (not just period_id link)
         # This ensures entries show up even if not explicitly linked to period
@@ -1101,7 +1101,7 @@ async def get_period_summary(
             .where(WorkOrder.scheduled_date <= period.end_date)
             .group_by(WorkOrder.technician_id)
         )
-        jobs_by_tech = dict(jobs_result.all())
+        jobs_by_tech = {str(k): v for k, v in jobs_result.all()}
 
         # 7. Build summaries by technician
         by_technician = {}
@@ -1110,12 +1110,15 @@ async def get_period_summary(
         ANNUAL_GUARANTEE = 60000.0
         BIWEEKLY_BACKBOARD = round(ANNUAL_GUARANTEE / 26, 2)  # $2,307.69
 
-        def get_or_create_tech(tech_id: str):
-            if tech_id not in by_technician:
-                tech = technicians.get(tech_id)
-                tech_name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{tech_id[:8]}"
-                by_technician[tech_id] = {
-                    "technician_id": tech_id,
+        def get_or_create_tech(tech_id):
+            if tech_id is None:
+                tech_id = "unknown"
+            tech_id_str = str(tech_id)
+            if tech_id_str not in by_technician:
+                tech = technicians.get(tech_id_str)
+                tech_name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{tech_id_str[:8]}"
+                by_technician[tech_id_str] = {
+                    "technician_id": tech_id_str,
                     "technician_name": tech_name,
                     "regular_hours": 0.0,
                     "overtime_hours": 0.0,
@@ -1131,7 +1134,7 @@ async def get_period_summary(
                     "net_pay": 0.0,
                     "jobs_completed": 0,
                 }
-            return by_technician[tech_id]
+            return by_technician[tech_id_str]
 
         # Add time entry hours
         for entry in entries:
@@ -1145,15 +1148,15 @@ async def get_period_summary(
             summary["total_commissions"] += comm.commission_amount or 0
 
         # Add jobs completed from work orders
-        for tech_id, job_count in jobs_by_tech.items():
-            summary = get_or_create_tech(tech_id)
+        for tech_id_str, job_count in jobs_by_tech.items():
+            summary = get_or_create_tech(tech_id_str)
             summary["jobs_completed"] = job_count
 
         # 8. Calculate pay: 100% commission with backboard guarantee
         # If commissions >= threshold: pay = commissions (no backboard)
         # If commissions < threshold: pay = backboard amount (no commission)
-        for tech_id, summary in by_technician.items():
-            pay_rate = pay_rates.get(tech_id)
+        for tech_id_str, summary in by_technician.items():
+            pay_rate = pay_rates.get(tech_id_str)
             commission_total = summary["total_commissions"]
 
             # Use custom guarantee from pay rate salary_amount, or default $60K
