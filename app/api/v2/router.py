@@ -102,6 +102,8 @@ from app.api.v2 import (
     email_templates,
     # Social Integrations (Yelp, Facebook)
     social_integrations,
+    # Phase 29: Smart Dispatch
+    dispatch,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -286,6 +288,9 @@ api_router.include_router(email_templates.router, prefix="/email-templates", tag
 
 # Social Integrations (Yelp, Facebook)
 api_router.include_router(social_integrations.router, prefix="/integrations/social", tags=["social-integrations"])
+
+# Phase 29: Smart Dispatch
+api_router.include_router(dispatch.router, prefix="/dispatch", tags=["dispatch"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
