@@ -780,8 +780,12 @@ async def lifespan(app: FastAPI):
     try:
         from app.services.cache_service import cache_service
 
-        await cache_service.get("warmup:ping")
-        logger.info("Redis connection warmed successfully")
+        await cache_service.set("warmup:ping", "ok", ttl=60)
+        result = await cache_service.get("warmup:ping")
+        if result == "ok":
+            logger.info("Redis connection warmed successfully (set+get verified)")
+        else:
+            logger.info("Redis connection warmed (set succeeded, get returned %s)", result)
     except Exception as e:
         logger.debug(f"Redis warmup skipped: {e}")
 

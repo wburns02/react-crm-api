@@ -163,9 +163,10 @@ class CacheService:
 
         try:
             value = await client.get(key)
+            # A successful Redis operation (hit or miss) resets the circuit breaker
+            self._record_success()
             if value is not None:
                 self._hits += 1
-                self._record_success()
                 try:
                     return json.loads(value)
                 except json.JSONDecodeError:
@@ -258,9 +259,8 @@ class CacheService:
             keys = await client.keys(pattern)
             if keys:
                 await client.delete(*keys)
-                self._record_success()
-                return len(keys)
-            return 0
+            self._record_success()
+            return len(keys) if keys else 0
         except Exception as e:
             logger.debug(f"Cache delete_pattern error for {pattern}: {e}")
             self._record_failure()
