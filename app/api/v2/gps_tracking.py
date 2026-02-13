@@ -3,10 +3,13 @@ GPS Tracking API Endpoints
 Real-time location tracking, ETA, geofencing, and customer tracking links
 """
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.api.deps import get_current_user
@@ -433,6 +436,80 @@ async def list_geofences(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/geofences/events", response_model=List[GeofenceEventResponse])
+async def get_geofence_events(
+    technician_id: Optional[str] = Query(None, description="Filter by technician UUID"),
+    geofence_id: Optional[str] = Query(None, description="Filter by geofence UUID"),
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    limit: int = Query(100, le=1000),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Get geofence events log."""
+    from app.models.gps_tracking import GeofenceEvent, Geofence
+    from app.models.technician import Technician
+    from sqlalchemy import select
+
+    try:
+        query = select(GeofenceEvent)
+
+        if technician_id:
+            query = query.where(GeofenceEvent.technician_id == technician_id)
+        if geofence_id:
+            query = query.where(GeofenceEvent.geofence_id == geofence_id)
+        if start_date:
+            start = datetime.strptime(start_date, "%Y-%m-%d")
+            query = query.where(GeofenceEvent.occurred_at >= start)
+        if end_date:
+            end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+            query = query.where(GeofenceEvent.occurred_at < end)
+
+        query = query.order_by(GeofenceEvent.occurred_at.desc()).limit(limit)
+        result = await db.execute(query)
+        events = result.scalars().all()
+
+        # Batch load geofences and technicians to avoid N+1 queries
+        gf_ids = {e.geofence_id for e in events if e.geofence_id}
+        tech_ids = {e.technician_id for e in events if e.technician_id}
+
+        geofences_map = {}
+        if gf_ids:
+            gf_result = await db.execute(select(Geofence).where(Geofence.id.in_(gf_ids)))
+            geofences_map = {g.id: g for g in gf_result.scalars().all()}
+
+        technicians_map = {}
+        if tech_ids:
+            tech_result = await db.execute(select(Technician).where(Technician.id.in_(tech_ids)))
+            technicians_map = {t.id: t for t in tech_result.scalars().all()}
+
+        results = []
+        for event in events:
+            gf = geofences_map.get(event.geofence_id)
+            tech = technicians_map.get(event.technician_id)
+
+            results.append(
+                GeofenceEventResponse(
+                    id=event.id,
+                    geofence_id=event.geofence_id,
+                    geofence_name=gf.name if gf else "Unknown",
+                    technician_id=event.technician_id,
+                    technician_name=f"{tech.first_name} {tech.last_name}" if tech else "Unknown",
+                    event_type=event.event_type,
+                    latitude=event.latitude,
+                    longitude=event.longitude,
+                    action_triggered=event.action_triggered.value if event.action_triggered else None,
+                    action_result=event.action_result,
+                    occurred_at=event.occurred_at,
+                )
+            )
+
+        return results
+    except Exception as e:
+        logger.warning(f"Error fetching geofence events: {e}")
+        return []
+
+
 @router.get("/geofences/{geofence_id}", response_model=GeofenceResponse)
 async def get_geofence(
     geofence_id: int = Path(..., description="Geofence ID"),
@@ -516,77 +593,6 @@ async def delete_geofence(
         raise HTTPException(status_code=404, detail="Geofence not found")
 
     return {"success": True, "message": "Geofence deleted"}
-
-
-@router.get("/geofences/events", response_model=List[GeofenceEventResponse])
-async def get_geofence_events(
-    technician_id: Optional[int] = Query(None, description="Filter by technician"),
-    geofence_id: Optional[int] = Query(None, description="Filter by geofence"),
-    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    limit: int = Query(100, le=1000),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Get geofence events log."""
-    from app.models.gps_tracking import GeofenceEvent, Geofence
-    from app.models.technician import Technician
-    from sqlalchemy import and_
-
-    query = db.query(GeofenceEvent)
-
-    if technician_id:
-        query = query.filter(GeofenceEvent.technician_id == technician_id)
-    if geofence_id:
-        query = query.filter(GeofenceEvent.geofence_id == geofence_id)
-    if start_date:
-        start = datetime.strptime(start_date, "%Y-%m-%d")
-        query = query.filter(GeofenceEvent.occurred_at >= start)
-    if end_date:
-        end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
-        query = query.filter(GeofenceEvent.occurred_at < end)
-
-    events = query.order_by(GeofenceEvent.occurred_at.desc()).limit(limit).all()
-
-    # Batch load geofences and technicians to avoid N+1 queries
-    geofence_ids = {e.geofence_id for e in events if e.geofence_id}
-    technician_ids = {e.technician_id for e in events if e.technician_id}
-
-    # Single query for all geofences
-    geofences_map = {}
-    if geofence_ids:
-        geofences = db.query(Geofence).filter(Geofence.id.in_(geofence_ids)).all()
-        geofences_map = {g.id: g for g in geofences}
-
-    # Single query for all technicians
-    technicians_map = {}
-    if technician_ids:
-        technicians = db.query(Technician).filter(Technician.id.in_(technician_ids)).all()
-        technicians_map = {t.id: t for t in technicians}
-
-    # Build results using maps (3 queries total instead of 2N+1)
-    results = []
-    for event in events:
-        geofence = geofences_map.get(event.geofence_id)
-        tech = technicians_map.get(event.technician_id)
-
-        results.append(
-            GeofenceEventResponse(
-                id=event.id,
-                geofence_id=event.geofence_id,
-                geofence_name=geofence.name if geofence else "Unknown",
-                technician_id=event.technician_id,
-                technician_name=f"{tech.first_name} {tech.last_name}" if tech else "Unknown",
-                event_type=event.event_type,
-                latitude=event.latitude,
-                longitude=event.longitude,
-                action_triggered=event.action_triggered.value if event.action_triggered else None,
-                action_result=event.action_result,
-                occurred_at=event.occurred_at,
-            )
-        )
-
-    return results
 
 
 # ==================== Dispatch Map ====================
