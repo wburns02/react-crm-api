@@ -109,7 +109,7 @@ async def _get_tech_stats(db: DbSession, tech_id: str, tech_name: str):
                 WorkOrder.technician_id == tech_id,
                 WorkOrder.assigned_technician == tech_name,
             ),
-            WorkOrder.scheduled_date >= str(thirty_days_ago),
+            WorkOrder.scheduled_date >= thirty_days_ago,
         )
     )
     result = await db.execute(recent_q)
@@ -125,8 +125,8 @@ async def _get_tech_stats(db: DbSession, tech_id: str, tech_name: str):
                 WorkOrder.technician_id == tech_id,
                 WorkOrder.assigned_technician == tech_name,
             ),
-            WorkOrder.scheduled_date >= str(sixty_days_ago),
-            WorkOrder.scheduled_date < str(thirty_days_ago),
+            WorkOrder.scheduled_date >= sixty_days_ago,
+            WorkOrder.scheduled_date < thirty_days_ago,
         )
     )
     prev_result = await db.execute(prev_q)
