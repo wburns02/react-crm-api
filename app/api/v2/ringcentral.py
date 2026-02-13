@@ -93,6 +93,7 @@ async def _perform_sync(hours_back: int = 2) -> dict:
                     start_dt = datetime.fromisoformat(record["startTime"].replace("Z", "+00:00"))
 
                 call_log = CallLog(
+                    user_id="1",  # System admin for auto-sync
                     rc_account_id=_rc_account_uuid(record.get("accountId", "unknown")),
                     ringcentral_call_id=rc_call_id,
                     ringcentral_session_id=record.get("sessionId"),
@@ -1244,6 +1245,7 @@ async def sync_call_logs(
             start_dt = datetime.fromisoformat(record["startTime"].replace("Z", "+00:00"))
 
         call_log = CallLog(
+            user_id=str(current_user.id),  # Logged-in user for manual sync
             ringcentral_call_id=rc_call_id,
             ringcentral_session_id=record.get("sessionId"),
             caller_number=from_info.get("phoneNumber", ""),

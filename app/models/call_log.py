@@ -31,6 +31,9 @@ class CallLog(Base):
     caller_number = Column(String(50), nullable=True, index=True)
     called_number = Column(String(50), nullable=True, index=True)
 
+    # User who owns/created this record (NOT NULL in production DB)
+    user_id = Column(String(36), nullable=False, default="1")
+
     # CRM entity linking
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True, index=True)
     answered_by = Column(String(255), nullable=True)
