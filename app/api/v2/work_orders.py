@@ -597,6 +597,45 @@ async def update_work_order(
         "updated_fields": list(update_data.keys()),
     }
 
+    # Auto-generate invoice when status changes to "completed" via PATCH
+    if old_status != new_status and new_status == "completed":
+        try:
+            from app.models.invoice import Invoice
+            from datetime import timedelta as td
+
+            existing_inv = await db.execute(
+                select(Invoice).where(Invoice.work_order_id == work_order_id)
+            )
+            if not existing_inv.scalar_one_or_none():
+                wo_amount = float(work_order.total_amount) if work_order.total_amount else 0.0
+                if wo_amount > 0 and work_order.customer_id:
+                    job_labels = {
+                        "pumping": "Septic Tank Pumping", "inspection": "Septic System Inspection",
+                        "repair": "Septic System Repair", "installation": "Septic System Installation",
+                        "emergency": "Emergency Service Call", "maintenance": "Septic Maintenance",
+                        "grease_trap": "Grease Trap Service", "camera_inspection": "Camera Inspection",
+                    }
+                    job_label = job_labels.get(str(work_order.job_type) if work_order.job_type else "pumping", "Septic Service")
+                    addr_parts = [work_order.service_address_line1, work_order.service_city, work_order.service_state]
+                    addr = ", ".join(p for p in addr_parts if p)
+                    desc = job_label + (f" at {addr}" if addr else "")
+                    tax_rate, tax = 8.25, round(wo_amount * 0.0825, 2)
+                    total = round(wo_amount + tax, 2)
+                    inv = Invoice(
+                        id=uuid.uuid4(), customer_id=work_order.customer_id, work_order_id=work_order.id,
+                        invoice_number=f"INV-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}",
+                        issue_date=datetime.now().date(), due_date=datetime.now().date() + td(days=30),
+                        amount=total, paid_amount=0, status="draft",
+                        line_items=[{"description": desc, "quantity": 1, "unit_price": wo_amount, "amount": wo_amount}],
+                        notes=f"Auto-generated from {work_order.work_order_number or 'work order'} completion",
+                    )
+                    db.add(inv)
+                    await db.commit()
+                    logger.info(f"Auto-generated invoice {inv.invoice_number} for WO {work_order_id} (via PATCH)")
+        except Exception as e:
+            await db.rollback()
+            logger.warning(f"Auto-invoice generation failed for WO {work_order_id}: {e}")
+
     # Status change event
     if old_status != new_status:
         await manager.broadcast_event(
@@ -765,6 +804,67 @@ async def complete_work_order(
             logger.error(f"Failed to create commission: {e}")
             commission = None  # Still return success for work order completion
 
+    # Auto-generate invoice (non-blocking, won't fail WO completion)
+    invoice_info = None
+    try:
+        from app.models.invoice import Invoice
+        from datetime import timedelta as td
+
+        # Check if invoice already exists for this WO
+        existing_inv = await db.execute(
+            select(Invoice).where(Invoice.work_order_id == work_order_id)
+        )
+        if not existing_inv.scalar_one_or_none():
+            wo_amount = float(work_order.total_amount) if work_order.total_amount else 0.0
+            if wo_amount > 0 and work_order.customer_id:
+                job_labels = {
+                    "pumping": "Septic Tank Pumping",
+                    "inspection": "Septic System Inspection",
+                    "repair": "Septic System Repair",
+                    "installation": "Septic System Installation",
+                    "emergency": "Emergency Service Call",
+                    "maintenance": "Septic Maintenance",
+                    "grease_trap": "Grease Trap Service",
+                    "camera_inspection": "Camera Inspection",
+                }
+                job_label = job_labels.get(
+                    str(work_order.job_type) if work_order.job_type else "pumping",
+                    "Septic Service",
+                )
+                addr_parts = [work_order.service_address_line1, work_order.service_city, work_order.service_state]
+                addr = ", ".join(p for p in addr_parts if p)
+                desc = job_label
+                if addr:
+                    desc += f" at {addr}"
+
+                tax_rate = 8.25
+                tax = round(wo_amount * tax_rate / 100, 2)
+                total = round(wo_amount + tax, 2)
+                date_part = datetime.now().strftime("%Y%m%d")
+                random_part = uuid.uuid4().hex[:4].upper()
+
+                invoice = Invoice(
+                    id=uuid.uuid4(),
+                    customer_id=work_order.customer_id,
+                    work_order_id=work_order.id,
+                    invoice_number=f"INV-{date_part}-{random_part}",
+                    issue_date=datetime.now().date(),
+                    due_date=datetime.now().date() + td(days=30),
+                    amount=total,
+                    paid_amount=0,
+                    status="draft",
+                    line_items=[{"description": desc, "quantity": 1, "unit_price": wo_amount, "amount": wo_amount}],
+                    notes=f"Auto-generated from {work_order.work_order_number or 'work order'} completion",
+                )
+                db.add(invoice)
+                await db.commit()
+                await db.refresh(invoice)
+                invoice_info = {"id": str(invoice.id), "invoice_number": invoice.invoice_number, "total": total}
+                logger.info(f"Auto-generated invoice {invoice.invoice_number} for WO {work_order_id}")
+    except Exception as e:
+        await db.rollback()
+        logger.warning(f"Auto-invoice generation failed for WO {work_order_id}: {e}")
+
     # Store values before any potential errors
     wo_id = work_order.id
     wo_number = work_order.work_order_number
@@ -818,6 +918,7 @@ async def complete_work_order(
         }
         if commission
         else None,
+        "invoice": invoice_info,
     }
 
 
