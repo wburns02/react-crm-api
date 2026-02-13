@@ -637,7 +637,7 @@ async def list_time_entries(
             {
                 "id": str(e.id),
                 "technician_id": e.technician_id,
-                "technician_name": technicians.get(e.technician_id, "Unknown Technician"),
+                "technician_name": technicians.get(str(e.technician_id), "Unknown Technician"),
                 "date": e.entry_date.isoformat(),
                 "entry_date": e.entry_date.isoformat(),
                 "clock_in": e.clock_in.isoformat() if e.clock_in else None,
@@ -1432,7 +1432,7 @@ async def get_work_orders_for_commission(
                     "total_amount": float(wo.total_amount) if wo.total_amount else 0,
                     "estimated_gallons": wo.estimated_gallons,
                     "technician_id": wo.technician_id,
-                    "technician_name": technicians.get(wo.technician_id, None),
+                    "technician_name": technicians.get(str(wo.technician_id), None) if wo.technician_id else None,
                     "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
                     "service_address": f"{wo.service_address_line1 or ''}, {wo.service_city or ''}, {wo.service_state or ''}".strip(
                         ", "
@@ -1888,7 +1888,7 @@ async def list_pay_rates(
             {
                 "id": str(r.id),
                 "technician_id": r.technician_id,
-                "technician_name": technicians.get(r.technician_id, "Unknown Technician"),
+                "technician_name": technicians.get(str(r.technician_id), "Unknown Technician"),
                 "pay_type": r.pay_type or "hourly",
                 "hourly_rate": r.hourly_rate,
                 "overtime_rate": (r.hourly_rate or 0) * (r.overtime_multiplier or 1.5),
@@ -2577,7 +2577,7 @@ async def get_commission_leaderboard(
         # Build leaderboard entries
         entries = []
         for tech_id, data in by_tech.items():
-            tech = technicians.get(tech_id)
+            tech = technicians.get(str(tech_id))
             avg_rate = sum(data["rates"]) / len(data["rates"]) if data["rates"] else 0
             avg_commission = data["total_earned"] / data["jobs_completed"] if data["jobs_completed"] > 0 else 0
 
@@ -2787,7 +2787,7 @@ async def export_commissions(
             writer.writerow(
                 [
                     c.earned_date.isoformat(),
-                    technicians.get(c.technician_id, c.technician_id),
+                    technicians.get(str(c.technician_id), str(c.technician_id) if c.technician_id else ""),
                     c.work_order_id or "",
                     c.commission_type or "job_completion",
                     f"${c.base_amount:.2f}" if c.base_amount else "",
