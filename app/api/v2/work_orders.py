@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, status, Query
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select, func, cast, String, text, and_, or_
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date as date_type
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uuid
 import logging
 import traceback
@@ -380,6 +380,170 @@ async def list_work_orders_cursor(
         logger.error(f"Error in list_work_orders_cursor: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+# ============================================
+# Bulk Operations
+# ============================================
+
+VALID_STATUSES = {"draft", "scheduled", "confirmed", "enroute", "on_site", "in_progress", "completed", "canceled", "requires_followup"}
+MAX_BULK_SIZE = 200
+
+
+class BulkStatusRequest(BaseModel):
+    """Bulk update status for multiple work orders."""
+    ids: List[str] = Field(..., max_length=MAX_BULK_SIZE)
+    status: str
+
+
+class BulkAssignRequest(BaseModel):
+    """Bulk assign technician to multiple work orders."""
+    ids: List[str] = Field(..., max_length=MAX_BULK_SIZE)
+    assigned_technician: Optional[str] = None
+    technician_id: Optional[str] = None
+
+
+class BulkDeleteRequest(BaseModel):
+    """Bulk delete multiple work orders."""
+    ids: List[str] = Field(..., max_length=MAX_BULK_SIZE)
+
+
+class BulkResult(BaseModel):
+    """Result of a bulk operation."""
+    success_count: int
+    failed_count: int
+    errors: List[dict] = []
+
+
+@router.patch("/bulk/status")
+async def bulk_update_status(
+    request: BulkStatusRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> BulkResult:
+    """Bulk update work order status. Max 200 at a time."""
+    if request.status not in VALID_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {request.status}")
+
+    success = 0
+    errors = []
+
+    for wo_id in request.ids:
+        try:
+            result = await db.execute(select(WorkOrder).where(WorkOrder.id == wo_id))
+            wo = result.scalar_one_or_none()
+            if not wo:
+                errors.append({"id": wo_id, "error": "Not found"})
+                continue
+            wo.status = request.status
+            wo.updated_at = datetime.utcnow()
+            success += 1
+        except Exception as e:
+            errors.append({"id": wo_id, "error": str(e)})
+
+    await db.commit()
+
+    # Invalidate cache
+    cache = get_cache_service()
+    await cache.delete_pattern("work-orders:*")
+
+    # Broadcast WebSocket event
+    await manager.broadcast({
+        "type": "workorder:bulk_updated",
+        "data": {"count": success, "status": request.status},
+    })
+
+    return BulkResult(success_count=success, failed_count=len(errors), errors=errors)
+
+
+@router.patch("/bulk/assign")
+async def bulk_assign_technician(
+    request: BulkAssignRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> BulkResult:
+    """Bulk assign a technician to multiple work orders. Max 200."""
+    # Resolve technician_id from name if not provided
+    tech_id = None
+    if request.technician_id:
+        tech_id = request.technician_id
+    elif request.assigned_technician:
+        parts = request.assigned_technician.strip().split()
+        if len(parts) >= 2:
+            tech_result = await db.execute(
+                select(Technician).where(
+                    func.lower(Technician.first_name) == parts[0].lower(),
+                    func.lower(Technician.last_name) == parts[-1].lower(),
+                )
+            )
+            tech = tech_result.scalar_one_or_none()
+            if tech:
+                tech_id = str(tech.id)
+
+    success = 0
+    errors = []
+
+    for wo_id in request.ids:
+        try:
+            result = await db.execute(select(WorkOrder).where(WorkOrder.id == wo_id))
+            wo = result.scalar_one_or_none()
+            if not wo:
+                errors.append({"id": wo_id, "error": "Not found"})
+                continue
+            wo.assigned_technician = request.assigned_technician
+            if tech_id:
+                wo.technician_id = tech_id
+            wo.updated_at = datetime.utcnow()
+            success += 1
+        except Exception as e:
+            errors.append({"id": wo_id, "error": str(e)})
+
+    await db.commit()
+
+    cache = get_cache_service()
+    await cache.delete_pattern("work-orders:*")
+
+    await manager.broadcast({
+        "type": "workorder:bulk_assigned",
+        "data": {"count": success, "technician": request.assigned_technician},
+    })
+
+    return BulkResult(success_count=success, failed_count=len(errors), errors=errors)
+
+
+@router.delete("/bulk")
+async def bulk_delete_work_orders(
+    request: BulkDeleteRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> BulkResult:
+    """Bulk delete work orders. Max 200."""
+    success = 0
+    errors = []
+
+    for wo_id in request.ids:
+        try:
+            result = await db.execute(select(WorkOrder).where(WorkOrder.id == wo_id))
+            wo = result.scalar_one_or_none()
+            if not wo:
+                errors.append({"id": wo_id, "error": "Not found"})
+                continue
+            await db.delete(wo)
+            success += 1
+        except Exception as e:
+            errors.append({"id": wo_id, "error": str(e)})
+
+    await db.commit()
+
+    cache = get_cache_service()
+    await cache.delete_pattern("work-orders:*")
+
+    return BulkResult(success_count=success, failed_count=len(errors), errors=errors)
+
+
+# ============================================
+# Single Work Order Operations
+# ============================================
 
 
 @router.get("/{work_order_id}", response_model=WorkOrderResponse)
