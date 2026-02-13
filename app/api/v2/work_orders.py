@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Query
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select, func, cast, String, text, and_, or_
 from typing import Optional
 from datetime import datetime, date as date_type
@@ -12,6 +13,7 @@ from app.models.work_order import WorkOrder
 from app.models.customer import Customer
 from app.models.technician import Technician
 from app.services.commission_service import auto_create_commission
+from app.services.cache_service import get_cache_service, TTL
 from app.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
@@ -189,6 +191,13 @@ async def list_work_orders(
     scheduled_date_to: Optional[datetime] = None,
 ):
     """List work orders with pagination, filtering, and real customer names."""
+    # Check cache first
+    cache = get_cache_service()
+    cache_key = f"workorders:list:{page}:{page_size}:{customer_id}:{status_filter}:{job_type}:{priority}:{assigned_technician}:{technician_id}:{scheduled_date}:{scheduled_date_from}:{scheduled_date_to}"
+    cached = await cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         # Base query with LEFT JOIN to Customer for real customer names
         query = select(WorkOrder, Customer).outerjoin(Customer, WorkOrder.customer_id == Customer.id)
@@ -258,12 +267,14 @@ async def list_work_orders(
         # Convert to dicts with customer_name populated
         items = [work_order_with_customer_name(wo, customer) for wo, customer in rows]
 
-        return WorkOrderListResponse(
+        response = WorkOrderListResponse(
             items=items,
             total=total,
             page=page,
             page_size=page_size,
         )
+        await cache.set(cache_key, jsonable_encoder(response), ttl=TTL.SHORT)
+        return response
     except Exception as e:
         logger.error(f"Error in list_work_orders: {e}")
         logger.error(traceback.format_exc())
@@ -467,6 +478,10 @@ async def create_work_order(
         },
     )
 
+    # Invalidate work order and dashboard caches
+    await get_cache_service().delete_pattern("workorders:*")
+    await get_cache_service().delete_pattern("dashboard:*")
+
     # Fetch customer for name population in response
     customer = None
     if work_order.customer_id:
@@ -553,6 +568,10 @@ async def update_work_order(
         logger.error(f"Error updating work order {work_order_id}: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    # Invalidate caches
+    await get_cache_service().delete_pattern("workorders:*")
+    await get_cache_service().delete_pattern("dashboard:*")
 
     # Fetch customer for name population in response
     customer = None
@@ -644,6 +663,8 @@ async def delete_work_order(
 
         await db.delete(work_order)
         await db.commit()
+        await get_cache_service().delete_pattern("workorders:*")
+        await get_cache_service().delete_pattern("dashboard:*")
     except HTTPException:
         raise
     except Exception as e:

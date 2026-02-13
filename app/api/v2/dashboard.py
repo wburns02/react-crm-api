@@ -355,3 +355,12 @@ async def get_dashboard_stats(
     )
     await cache.set(cache_key, jsonable_encoder(response), ttl=TTL.MEDIUM)
     return response
+
+
+@router.get("/cache-stats")
+async def get_cache_stats(
+    current_user: CurrentUser,
+):
+    """Get Redis cache hit/miss statistics."""
+    cache = get_cache_service()
+    return cache.get_stats()
