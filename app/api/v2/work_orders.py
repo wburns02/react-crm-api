@@ -819,3 +819,146 @@ async def complete_work_order(
         if commission
         else None,
     }
+
+
+# =====================================================
+# Invoice Generation from Work Order
+# =====================================================
+
+
+@router.post("/{work_order_id}/generate-invoice")
+async def generate_invoice_from_work_order(
+    work_order_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Auto-generate an invoice from a completed work order.
+
+    Creates an invoice with line items derived from the work order's
+    job type, total_amount, and service details. Sets net-30 payment terms.
+    """
+    from app.models.invoice import Invoice
+    from datetime import timedelta
+
+    # Fetch work order with customer
+    result = await db.execute(
+        select(WorkOrder, Customer)
+        .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        .where(WorkOrder.id == work_order_id)
+    )
+    row = result.first()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Work order not found",
+        )
+
+    work_order, customer = row
+
+    # Check if invoice already exists for this work order
+    existing = await db.execute(
+        select(Invoice).where(Invoice.work_order_id == work_order_id)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An invoice already exists for this work order",
+        )
+
+    # Build line items from work order data
+    job_type_labels = {
+        "pumping": "Septic Tank Pumping",
+        "inspection": "Septic System Inspection",
+        "repair": "Septic System Repair",
+        "installation": "Septic System Installation",
+        "emergency": "Emergency Service Call",
+        "maintenance": "Septic Maintenance",
+        "grease_trap": "Grease Trap Service",
+        "camera_inspection": "Camera Inspection",
+    }
+
+    job_label = job_type_labels.get(
+        str(work_order.job_type) if work_order.job_type else "pumping",
+        "Septic Service",
+    )
+    amount = float(work_order.total_amount) if work_order.total_amount else 0.0
+
+    # Build description from service address
+    address_parts = [
+        work_order.service_address_line1,
+        work_order.service_city,
+        work_order.service_state,
+    ]
+    address = ", ".join(p for p in address_parts if p)
+    description = f"{job_label}"
+    if address:
+        description += f" at {address}"
+    if work_order.scheduled_date:
+        description += f" on {work_order.scheduled_date}"
+    if work_order.estimated_gallons:
+        description += f" ({work_order.estimated_gallons} gallons)"
+
+    line_items = [
+        {
+            "description": description,
+            "quantity": 1,
+            "unit_price": amount,
+            "amount": amount,
+        }
+    ]
+
+    # Calculate tax (8.25% default)
+    tax_rate = 8.25
+    subtotal = amount
+    tax = round(subtotal * tax_rate / 100, 2)
+    total = round(subtotal + tax, 2)
+
+    # Generate invoice number
+    date_part = datetime.now().strftime("%Y%m%d")
+    random_part = uuid.uuid4().hex[:4].upper()
+    invoice_number = f"INV-{date_part}-{random_part}"
+
+    # Create invoice
+    today = datetime.now().date()
+    invoice = Invoice(
+        id=uuid.uuid4(),
+        customer_id=work_order.customer_id,
+        work_order_id=work_order.id,
+        invoice_number=invoice_number,
+        issue_date=today,
+        due_date=today + timedelta(days=30),
+        amount=total,
+        paid_amount=0,
+        status="draft",
+        line_items=line_items,
+        notes=f"Generated from {work_order.work_order_number or 'work order'}",
+    )
+
+    db.add(invoice)
+    await db.commit()
+    await db.refresh(invoice)
+
+    # Invalidate caches
+    await get_cache_service().delete_pattern("dashboard:*")
+
+    customer_name = None
+    if customer:
+        customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+
+    return {
+        "id": str(invoice.id),
+        "invoice_number": invoice.invoice_number,
+        "customer_id": str(invoice.customer_id),
+        "customer_name": customer_name,
+        "work_order_id": str(invoice.work_order_id),
+        "work_order_number": work_order.work_order_number,
+        "issue_date": invoice.issue_date.isoformat(),
+        "due_date": invoice.due_date.isoformat(),
+        "subtotal": subtotal,
+        "tax_rate": tax_rate,
+        "tax": tax,
+        "total": total,
+        "status": invoice.status,
+        "line_items": line_items,
+    }
