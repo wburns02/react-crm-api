@@ -5,7 +5,7 @@ Payments API - Track invoice and customer payments.
 from fastapi import APIRouter, HTTPException, status as http_status, Query
 from sqlalchemy import select, func
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 import logging
 
 from app.api.deps import DbSession, CurrentUser
@@ -32,7 +32,11 @@ async def list_payments(
     customer_id: Optional[str] = None,
     work_order_id: Optional[str] = None,  # Flask uses work_order_id not invoice_id
     payment_status: Optional[str] = None,
+    status: Optional[str] = Query(None, description="Alias for payment_status"),
     payment_method: Optional[str] = None,
+    date_from: Optional[date] = Query(None, description="Filter payments on or after this date"),
+    date_to: Optional[date] = Query(None, description="Filter payments on or before this date"),
+    search: Optional[str] = Query(None, description="Search customer name"),
 ):
     """List payments with pagination and filtering."""
     try:
@@ -46,11 +50,27 @@ async def list_payments(
         if work_order_id:
             query = query.where(Payment.work_order_id == work_order_id)
 
-        if payment_status:
-            query = query.where(Payment.status == payment_status)
+        # Support both 'status' and 'payment_status' param names
+        effective_status = payment_status or status
+        if effective_status:
+            query = query.where(Payment.status == effective_status)
 
         if payment_method:
             query = query.where(Payment.payment_method == payment_method)
+
+        # Date range filtering
+        if date_from:
+            query = query.where(Payment.payment_date >= date_from)
+        if date_to:
+            query = query.where(Payment.payment_date <= date_to)
+
+        # Text search by customer name
+        if search and search.strip():
+            search_term = f"%{search.strip()}%"
+            matching_ids = select(Customer.id).where(
+                func.concat(Customer.first_name, " ", Customer.last_name).ilike(search_term)
+            )
+            query = query.where(Payment.customer_id.in_(matching_ids))
 
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
