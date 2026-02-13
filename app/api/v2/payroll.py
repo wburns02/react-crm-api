@@ -341,8 +341,17 @@ async def calculate_payroll(
     BIWEEKLY_BACKBOARD = round(ANNUAL_GUARANTEE / 26, 2)
 
     # Get all technician IDs from both entries and commissions (skip None)
-    technician_ids = set(e.technician_id for e in entries if e.technician_id)
-    technician_ids.update(c.technician_id for c in commissions if c.technician_id)
+    raw_tech_ids = set(e.technician_id for e in entries if e.technician_id)
+    raw_tech_ids.update(c.technician_id for c in commissions if c.technician_id)
+
+    # Filter to only active technicians
+    if raw_tech_ids:
+        active_result = await db.execute(
+            select(Technician.id).where(Technician.id.in_(raw_tech_ids), Technician.is_active == True)
+        )
+        technician_ids = set(active_result.scalars().all())
+    else:
+        technician_ids = set()
 
     total_gross = 0.0
     total_backboard = 0.0
@@ -916,6 +925,9 @@ async def create_payroll_period(
     if request.end_date <= request.start_date:
         raise HTTPException(status_code=400, detail="End date must be after start date")
 
+    if request.end_date > date.today():
+        raise HTTPException(status_code=400, detail="Cannot create payroll period with future end date")
+
     try:
         # Check for overlapping periods
         overlap_result = await db.execute(
@@ -1053,8 +1065,8 @@ async def get_period_summary(
         if not period:
             raise HTTPException(status_code=404, detail="Payroll period not found")
 
-        # 2. Get all technicians (for names) - key by string ID for consistent lookups
-        tech_result = await db.execute(select(Technician))
+        # 2. Get active technicians (for names) - key by string ID for consistent lookups
+        tech_result = await db.execute(select(Technician).where(Technician.is_active == True))
         technicians = {str(t.id): t for t in tech_result.scalars().all()}
 
         # 3. Get active pay rates
@@ -2153,8 +2165,8 @@ async def get_payroll_summary_overview(
         )
         commissions = comm_result.scalars().all()
 
-        # Get technician names
-        tech_result = await db.execute(select(Technician))
+        # Get active technician names only
+        tech_result = await db.execute(select(Technician).where(Technician.is_active == True))
         technicians = {t.id: t for t in tech_result.scalars().all()}
 
         # Aggregate by technician
