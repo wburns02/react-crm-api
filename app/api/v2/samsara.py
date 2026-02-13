@@ -294,7 +294,7 @@ async def _poll_samsara_feed():
         except Exception as e:
             logger.error(f"Unexpected error in feed poller: {e}")
 
-        await asyncio.sleep(30)
+        await asyncio.sleep(10)
 
 
 async def _do_full_fetch():
