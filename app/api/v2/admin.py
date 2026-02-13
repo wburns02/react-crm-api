@@ -1784,3 +1784,84 @@ async def fix_pay_rate_schema(
         await db.rollback()
         logger.error(f"Error fixing pay rate schema: {e}")
         raise HTTPException(status_code=500, detail=f"Error: {type(e).__name__}: {str(e)}")
+
+
+@router.post("/data/normalize-names")
+async def normalize_names(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Normalize name casing and phone formatting across all records.
+
+    Title-cases first_name, last_name, city. Formats US phone numbers as (XXX) XXX-XXXX.
+    """
+    import re
+    from sqlalchemy import text
+
+    require_admin(current_user)
+
+    results = {"customers_updated": 0, "work_orders_updated": 0, "technicians_updated": 0}
+
+    try:
+        # Normalize customer names/cities
+        cust_result = await db.execute(text("SELECT id, first_name, last_name, city, phone FROM customers"))
+        customers = cust_result.fetchall()
+        for c in customers:
+            updates = {}
+            if c[1] and c[1] != c[1].strip().title():
+                updates["first_name"] = c[1].strip().title()
+            if c[2] and c[2] != c[2].strip().title():
+                updates["last_name"] = c[2].strip().title()
+            if c[3] and c[3] != c[3].strip().title():
+                updates["city"] = c[3].strip().title()
+            if c[4]:
+                digits = re.sub(r"\\D", "", c[4])
+                if len(digits) == 11 and digits[0] == "1":
+                    digits = digits[1:]
+                if len(digits) == 10:
+                    formatted = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+                    if formatted != c[4]:
+                        updates["phone"] = formatted
+            if updates:
+                set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+                updates["cid"] = str(c[0])
+                await db.execute(text(f"UPDATE customers SET {set_clause} WHERE id = :cid"), updates)
+                results["customers_updated"] += 1
+
+        # Normalize work order assigned_technician and service_city
+        wo_result = await db.execute(text("SELECT id, assigned_technician, service_city FROM work_orders"))
+        work_orders = wo_result.fetchall()
+        for wo in work_orders:
+            updates = {}
+            if wo[1] and wo[1] != wo[1].strip().title():
+                updates["assigned_technician"] = wo[1].strip().title()
+            if wo[2] and wo[2] != wo[2].strip().title():
+                updates["service_city"] = wo[2].strip().title()
+            if updates:
+                set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+                updates["wid"] = str(wo[0])
+                await db.execute(text(f"UPDATE work_orders SET {set_clause} WHERE id = :wid"), updates)
+                results["work_orders_updated"] += 1
+
+        # Normalize technician names
+        tech_result = await db.execute(text("SELECT id, first_name, last_name FROM technicians"))
+        techs = tech_result.fetchall()
+        for t in techs:
+            updates = {}
+            if t[1] and t[1] != t[1].strip().title():
+                updates["first_name"] = t[1].strip().title()
+            if t[2] and t[2] != t[2].strip().title():
+                updates["last_name"] = t[2].strip().title()
+            if updates:
+                set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+                updates["tid"] = str(t[0])
+                await db.execute(text(f"UPDATE technicians SET {set_clause} WHERE id = :tid"), updates)
+                results["technicians_updated"] += 1
+
+        await db.commit()
+        return {"success": True, "results": results}
+
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error normalizing data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {type(e).__name__}: {str(e)}")

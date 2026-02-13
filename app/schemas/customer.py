@@ -1,9 +1,20 @@
-from pydantic import BaseModel, EmailStr, Field
+import re
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime, date
 from typing import Optional
 from decimal import Decimal
 
 from app.schemas.types import UUIDStr
+
+
+def _normalize_phone(phone: str) -> str:
+    """Normalize phone number to (XXX) XXX-XXXX format for US numbers."""
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) == 11 and digits[0] == "1":
+        digits = digits[1:]
+    if len(digits) == 10:
+        return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+    return phone  # Return as-is if not a standard US number
 
 
 class CustomerBase(BaseModel):
@@ -65,6 +76,27 @@ class CustomerBase(BaseModel):
 
     # Follow-up
     next_follow_up_date: Optional[date] = None
+
+    @field_validator("first_name", "last_name", mode="before")
+    @classmethod
+    def title_case_names(cls, v: Optional[str]) -> Optional[str]:
+        if v and isinstance(v, str):
+            return v.strip().title()
+        return v
+
+    @field_validator("city", mode="before")
+    @classmethod
+    def title_case_city(cls, v: Optional[str]) -> Optional[str]:
+        if v and isinstance(v, str):
+            return v.strip().title()
+        return v
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone_number(cls, v: Optional[str]) -> Optional[str]:
+        if v and isinstance(v, str):
+            return _normalize_phone(v.strip())
+        return v
 
 
 class CustomerCreate(CustomerBase):

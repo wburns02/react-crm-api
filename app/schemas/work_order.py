@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, date, time
 from typing import Optional, Any
 from decimal import Decimal
@@ -49,6 +49,20 @@ class WorkOrderBase(BaseModel):
 
     # Financial
     total_amount: Optional[Decimal] = None
+
+    @field_validator("assigned_technician", mode="before")
+    @classmethod
+    def title_case_technician(cls, v: Optional[str]) -> Optional[str]:
+        if v and isinstance(v, str):
+            return v.strip().title()
+        return v
+
+    @field_validator("service_city", mode="before")
+    @classmethod
+    def title_case_city(cls, v: Optional[str]) -> Optional[str]:
+        if v and isinstance(v, str):
+            return v.strip().title()
+        return v
 
 
 class WorkOrderCreate(WorkOrderBase):
