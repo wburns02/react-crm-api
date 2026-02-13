@@ -1112,11 +1112,12 @@ async def get_period_summary(
 
         def get_or_create_tech(tech_id):
             if tech_id is None:
-                tech_id = "unknown"
-            tech_id_str = str(tech_id)
+                tech_id_str = "unassigned"
+            else:
+                tech_id_str = str(tech_id)
             if tech_id_str not in by_technician:
                 tech = technicians.get(tech_id_str)
-                tech_name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{tech_id_str[:8]}"
+                tech_name = f"{tech.first_name} {tech.last_name}" if tech else ("Unassigned" if tech_id_str == "unassigned" else f"Tech #{tech_id_str[:8]}")
                 by_technician[tech_id_str] = {
                     "technician_id": tech_id_str,
                     "technician_name": tech_name,
