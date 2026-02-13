@@ -11,7 +11,7 @@ from typing import Optional
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from app.config import settings
 from app.models.qbo_oauth import QBOOAuthToken
 
 logger = logging.getLogger(__name__)
