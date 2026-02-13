@@ -81,6 +81,23 @@ async def list_prospects(
     )
 
 
+@router.post("/backfill-stages")
+async def backfill_prospect_stages(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Backfill NULL prospect_stage to 'new_lead' for existing prospects."""
+    result = await db.execute(
+        update(Customer)
+        .where(Customer.prospect_stage.is_(None))
+        .values(prospect_stage="new_lead")
+    )
+    count = result.rowcount
+    await db.commit()
+    logger.info(f"Backfilled {count} prospects with 'new_lead' stage")
+    return {"backfilled": count, "stage": "new_lead"}
+
+
 @router.get("/{prospect_id}", response_model=CustomerResponse)
 async def get_prospect(
     prospect_id: UUID,
@@ -197,19 +214,3 @@ async def delete_prospect(
     await db.commit()
 
 
-@router.post("/backfill-stages")
-async def backfill_prospect_stages(
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Backfill NULL prospect_stage to 'new_lead' for existing prospects."""
-    # Only admins should run this
-    result = await db.execute(
-        update(Customer)
-        .where(Customer.prospect_stage.is_(None))
-        .values(prospect_stage="new_lead")
-    )
-    count = result.rowcount
-    await db.commit()
-    logger.info(f"Backfilled {count} prospects with 'new_lead' stage")
-    return {"backfilled": count, "stage": "new_lead"}
