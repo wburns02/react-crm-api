@@ -1117,7 +1117,7 @@ async def get_period_summary(
                 tech_id_str = str(tech_id)
             if tech_id_str not in by_technician:
                 tech = technicians.get(tech_id_str)
-                tech_name = f"{tech.first_name} {tech.last_name}" if tech else ("Unassigned" if tech_id_str == "unassigned" else f"Tech #{tech_id_str[:8]}")
+                tech_name = f"{tech.first_name} {tech.last_name}" if tech else "Unassigned"
                 by_technician[tech_id_str] = {
                     "technician_id": tech_id_str,
                     "technician_name": tech_name,
@@ -2162,7 +2162,7 @@ async def get_payroll_summary_overview(
         for entry in entries:
             if entry.technician_id not in by_tech:
                 tech = technicians.get(entry.technician_id)
-                name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{entry.technician_id[:8]}"
+                name = f"{tech.first_name} {tech.last_name}" if tech else "Unassigned"
                 by_tech[entry.technician_id] = {
                     "technician_id": entry.technician_id,
                     "technician_name": name,
@@ -2178,7 +2178,7 @@ async def get_payroll_summary_overview(
         for comm in commissions:
             if comm.technician_id not in by_tech:
                 tech = technicians.get(comm.technician_id)
-                name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{comm.technician_id[:8]}"
+                name = f"{tech.first_name} {tech.last_name}" if tech else "Unassigned"
                 by_tech[comm.technician_id] = {
                     "technician_id": comm.technician_id,
                     "technician_name": name,
@@ -2588,7 +2588,7 @@ async def get_commission_leaderboard(
             entries.append(
                 {
                     "technician_id": tech_id,
-                    "technician_name": f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{tech_id}",
+                    "technician_name": f"{tech.first_name} {tech.last_name}" if tech else "Unassigned",
                     "total_earned": round(data["total_earned"], 2),
                     "jobs_completed": data["jobs_completed"],
                     "average_commission": round(avg_commission, 2),
@@ -2673,7 +2673,7 @@ async def get_commission_insights(
             top_tech = max(by_tech.items(), key=lambda x: x[1])
             tech_result = await db.execute(select(Technician).where(Technician.id == top_tech[0]))
             tech = tech_result.scalar_one_or_none()
-            tech_name = f"{tech.first_name} {tech.last_name}" if tech else f"Tech #{top_tech[0]}"
+            tech_name = f"{tech.first_name} {tech.last_name}" if tech else "Unassigned"
 
             insights.append(
                 {
