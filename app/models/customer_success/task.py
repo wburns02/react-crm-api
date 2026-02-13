@@ -5,6 +5,7 @@ Manages CS tasks generated from playbooks, journeys, or manually created.
 """
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, Date, ForeignKey, Enum as SQLEnum, JSON
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -24,7 +25,7 @@ class CSTask(Base):
     __tablename__ = "cs_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
 
     # Task origin
     playbook_execution_id = Column(Integer, ForeignKey("cs_playbook_executions.id"), index=True)

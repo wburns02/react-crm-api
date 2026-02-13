@@ -6,6 +6,7 @@ for predictive churn analysis and proactive engagement.
 """
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -26,7 +27,7 @@ class HealthScore(Base):
     __tablename__ = "cs_health_scores"
 
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
 
     # Overall score (0-100)
     overall_score = Column(Integer, nullable=False, default=50)
@@ -93,7 +94,7 @@ class HealthScoreEvent(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     health_score_id = Column(Integer, ForeignKey("cs_health_scores.id"), nullable=False, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
 
     # Score change
     previous_score = Column(Integer)

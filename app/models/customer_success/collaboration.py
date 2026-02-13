@@ -8,6 +8,7 @@ Enables internal collaboration for Customer Success teams:
 """
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -146,7 +147,7 @@ class CSTeamNote(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Optional customer association
-    customer_id = Column(Integer, ForeignKey("customers.id"), index=True)
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id"), index=True)
 
     title = Column(String(300), nullable=False)
     content = Column(Text, nullable=False)
@@ -225,7 +226,7 @@ class CSActivity(Base):
     user_id = Column(Integer, ForeignKey("api_users.id"), nullable=False)
 
     # Optional customer association
-    customer_id = Column(Integer, ForeignKey("customers.id"))
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id"))
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

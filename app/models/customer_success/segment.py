@@ -24,6 +24,7 @@ from sqlalchemy import (
     Index,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -243,7 +244,7 @@ class SegmentMembership(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     segment_id = Column(Integer, ForeignKey("cs_segments.id", ondelete="CASCADE"), nullable=False, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Current status
     is_active = Column(Boolean, default=True, index=True)
@@ -383,7 +384,7 @@ class CustomerSegment(Base):
     __tablename__ = "cs_customer_segments"
 
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
     segment_id = Column(Integer, ForeignKey("cs_segments.id"), nullable=False, index=True)
 
     # Membership status

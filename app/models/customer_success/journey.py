@@ -6,6 +6,7 @@ branching logic, and human touchpoints.
 """
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -214,7 +215,7 @@ class JourneyEnrollment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     journey_id = Column(Integer, ForeignKey("cs_journeys.id"), nullable=False, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
 
     # Current status
     status = Column(

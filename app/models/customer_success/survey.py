@@ -10,6 +10,7 @@ Enables NPS, CSAT, CES and custom surveys with:
 """
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -150,7 +151,7 @@ class SurveyResponse(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     survey_id = Column(Integer, ForeignKey("cs_surveys.id"), nullable=False, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
 
     # Overall survey metrics for this response
     overall_score = Column(Float)  # Calculated score (NPS score, CSAT rating, etc.)
@@ -306,7 +307,7 @@ class SurveyAction(Base):
     survey_id = Column(Integer, ForeignKey("cs_surveys.id"), nullable=False, index=True)
     response_id = Column(Integer, ForeignKey("cs_survey_responses.id"), nullable=True, index=True)
     analysis_id = Column(Integer, ForeignKey("cs_survey_analyses.id"), nullable=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
 
     # Action details
     action_type = Column(

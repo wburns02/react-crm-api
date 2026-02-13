@@ -8,6 +8,7 @@ Enables intelligent send time optimization for campaigns:
 """
 
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, JSON
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -24,7 +25,7 @@ class CustomerSendTimeProfile(Base):
     __tablename__ = "cs_customer_send_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, unique=True, index=True)
+    customer_id = Column(PG_UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, unique=True, index=True)
 
     # Optimal windows (stored as hour of day, 0-23)
     best_hour_email = Column(Integer)  # Best hour for email engagement
