@@ -54,8 +54,9 @@ async def websocket_endpoint(
         - schedule.updated
         - payment.received
     """
-    # Authenticate the connection
-    user = await get_current_user_ws(token)
+    # Authenticate the connection — try query param token, fall back to session cookie
+    session_cookie = websocket.cookies.get("session")
+    user = await get_current_user_ws(token, session_cookie)
 
     if not user:
         logger.warning("WebSocket connection rejected: invalid token")

@@ -138,12 +138,13 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_active_user)]
 
 
-async def get_current_user_ws(token: str | None) -> User | None:
+async def get_current_user_ws(token: str | None, session_cookie: str | None = None) -> User | None:
     """
-    Authenticate WebSocket connections using JWT token from query parameter.
+    Authenticate WebSocket connections using JWT token or session cookie.
 
-    Unlike HTTP endpoints, WebSocket connections cannot use headers for auth,
-    so the token is passed as a query parameter.
+    Tries query parameter token first, then falls back to session cookie.
+    This handles the case where the localStorage JWT has expired but the
+    session cookie is still valid.
 
     SECURITY:
     - Token is validated the same way as Bearer tokens
@@ -152,16 +153,19 @@ async def get_current_user_ws(token: str | None) -> User | None:
 
     Args:
         token: JWT access token from WebSocket query parameter
+        session_cookie: Session cookie value (fallback auth)
 
     Returns:
         User object if authenticated, None otherwise
     """
-    if not token:
-        logger.warning("WebSocket auth failed: no token provided")
+    # Try token first, then fall back to session cookie
+    auth_token = token or session_cookie
+    if not auth_token:
+        logger.warning("WebSocket auth failed: no token or session cookie provided")
         return None
 
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(auth_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         sub = payload.get("sub")
         if sub is None:
             logger.warning("WebSocket auth failed: no sub claim in token")

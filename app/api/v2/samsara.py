@@ -503,7 +503,7 @@ async def stream_vehicles(
     Streams vehicle location updates as they arrive from the Samsara feed poller.
     Sends heartbeat every 15 seconds to keep connection alive.
     """
-    # EventSource can't set headers, so accept token from query param or header
+    # EventSource can't set headers, so accept token from query param, header, or session cookie
     jwt_token = None
     auth_header = request.headers.get("authorization", "")
     if auth_header.startswith("Bearer "):
@@ -511,10 +511,11 @@ async def stream_vehicles(
     elif token:
         jwt_token = token
 
-    if not jwt_token:
+    session_cookie = request.cookies.get("session")
+    if not jwt_token and not session_cookie:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    user = await get_current_user_ws(jwt_token)
+    user = await get_current_user_ws(jwt_token, session_cookie)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid token")
     queue: asyncio.Queue = asyncio.Queue(maxsize=50)
