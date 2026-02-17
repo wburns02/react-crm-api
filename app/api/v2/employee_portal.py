@@ -305,6 +305,7 @@ async def get_employee_jobs(
                 "estimated_duration_hours": wo.estimated_duration_hours,
                 "is_clocked_in": wo.is_clocked_in,
                 "total_amount": float(wo.total_amount) if wo.total_amount else None,
+                "system_type": wo.system_type or "conventional",
             })
 
         return {"items": items, "total": total, "page": page, "page_size": page_size}
@@ -360,6 +361,10 @@ async def get_employee_job(
         "actual_end_time": work_order.actual_end_time.isoformat() if work_order.actual_end_time else None,
         "total_labor_minutes": work_order.total_labor_minutes,
         "total_amount": float(work_order.total_amount) if work_order.total_amount else None,
+        "system_type": work_order.system_type or "conventional",
+        "internal_notes": work_order.internal_notes,
+        "assigned_technician": work_order.assigned_technician,
+        "estimated_gallons": work_order.estimated_gallons,
     }
 
 

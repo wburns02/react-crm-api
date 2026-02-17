@@ -47,6 +47,9 @@ class WorkOrderBase(BaseModel):
     assigned_vehicle: Optional[str] = None
     assigned_technician: Optional[str] = None
 
+    # Septic system type
+    system_type: Optional[str] = "conventional"
+
     # Financial
     total_amount: Optional[Decimal] = None
 
@@ -105,6 +108,8 @@ class WorkOrderUpdate(BaseModel):
 
     assigned_vehicle: Optional[str] = None
     assigned_technician: Optional[str] = None
+
+    system_type: Optional[str] = None
 
     total_amount: Optional[Decimal] = None
 

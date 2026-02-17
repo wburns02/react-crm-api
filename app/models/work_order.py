@@ -68,6 +68,9 @@ class WorkOrder(Base):
     priority = Column(String(50))
     status = Column(String(50))
 
+    # Septic system type (conventional or aerobic) — determines required photos
+    system_type = Column(String(50), nullable=True, default="conventional")
+
     # Scheduling
     scheduled_date = Column(Date)
     time_window_start = Column(Time)
