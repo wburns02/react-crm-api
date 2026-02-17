@@ -15,6 +15,13 @@ depends_on = None
 
 
 def upgrade():
+    # Skip if table was already created manually
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'qbo_oauth_tokens')"
+    ))
+    if result.scalar():
+        return
     op.create_table(
         "qbo_oauth_tokens",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
