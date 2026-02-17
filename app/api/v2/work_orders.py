@@ -156,6 +156,7 @@ def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -
         "checklist": wo.checklist,
         "assigned_vehicle": wo.assigned_vehicle,
         "assigned_technician": wo.assigned_technician,
+        "system_type": wo.system_type or "conventional",
         "total_amount": wo.total_amount,
         "created_at": wo.created_at,
         "updated_at": wo.updated_at,
