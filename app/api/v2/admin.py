@@ -16,6 +16,7 @@ import logging
 
 from app.api.deps import CurrentUser, DbSession, get_password_hash
 from app.models.user import User
+from app.models.technician import Technician
 from app.models.system_settings import SystemSettingStore
 from app.security.rbac import require_admin, require_superuser
 from app.models.customer import Customer
@@ -90,7 +91,23 @@ async def list_users(
     """List all users. Requires admin access."""
     result = await db.execute(select(User).order_by(User.created_at.desc()))
     users = result.scalars().all()
-    return {"users": [user_to_response(u) for u in users]}
+
+    # Batch-resolve technician roles via email match
+    non_admin_emails = [u.email for u in users if not u.is_superuser]
+    tech_emails: set[str] = set()
+    if non_admin_emails:
+        tech_result = await db.execute(
+            select(Technician.email).where(Technician.email.in_(non_admin_emails))
+        )
+        tech_emails = {row[0] for row in tech_result.all() if row[0]}
+
+    def resolve_user(u: User) -> dict:
+        resp = user_to_response(u)
+        if not u.is_superuser and u.email in tech_emails:
+            resp["role"] = "technician"
+        return resp
+
+    return {"users": [resolve_user(u) for u in users]}
 
 
 @router.post("/users")
@@ -121,6 +138,24 @@ async def create_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    # Auto-create Technician record when role is "technician"
+    # This is required for /auth/me to resolve the technician role via email match
+    if request.role == "technician":
+        import uuid
+        existing_tech = await db.execute(
+            select(Technician).where(Technician.email == request.email)
+        )
+        if not existing_tech.scalar_one_or_none():
+            technician = Technician(
+                id=uuid.uuid4(),
+                first_name=request.first_name,
+                last_name=request.last_name,
+                email=request.email,
+                is_active=True,
+            )
+            db.add(technician)
+            await db.commit()
 
     return {"user": user_to_response(user)}
 
@@ -159,6 +194,23 @@ async def update_user(
 
     await db.commit()
     await db.refresh(user)
+
+    # Auto-create Technician record when role changed to "technician"
+    if request.role == "technician":
+        import uuid
+        existing_tech = await db.execute(
+            select(Technician).where(Technician.email == user.email)
+        )
+        if not existing_tech.scalar_one_or_none():
+            technician = Technician(
+                id=uuid.uuid4(),
+                first_name=user.first_name,
+                last_name=user.last_name,
+                email=user.email,
+                is_active=True,
+            )
+            db.add(technician)
+            await db.commit()
 
     return {"user": user_to_response(user)}
 
