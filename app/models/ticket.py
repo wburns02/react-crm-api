@@ -1,6 +1,6 @@
-"""Ticket model for support/service ticket tracking."""
+"""Ticket model for internal project/feature ticket tracking."""
 
-from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Integer
+from sqlalchemy import Column, String, DateTime, Text, Float, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -9,25 +9,36 @@ from app.database import Base
 
 
 class Ticket(Base):
-    """Ticket model for customer support/service requests."""
+    """Ticket model for internal project management and feature tracking."""
 
     __tablename__ = "tickets"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
+
+    # Optional link to customer/work order
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True, index=True)
     work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True, index=True)
 
     # Ticket details
-    subject = Column(String(255), nullable=False)
+    title = Column(String(255), nullable=True)  # Frontend uses title
+    subject = Column(String(255), nullable=True)  # Legacy field
     description = Column(Text, nullable=False)
-    category = Column(String(50), nullable=True)  # complaint, request, inquiry, feedback
+    type = Column(String(50), nullable=True)  # bug, feature, support, task
+    category = Column(String(50), nullable=True)  # Legacy: complaint, request, inquiry, feedback
 
     # Status tracking
-    status = Column(String(30), default="open", index=True)  # open, in_progress, pending, resolved, closed
-    priority = Column(String(20), default="normal")  # low, normal, high, urgent
+    status = Column(String(30), default="open", index=True)
+    priority = Column(String(20), default="medium")
+
+    # RICE scoring
+    reach = Column(Float, nullable=True)
+    impact = Column(Float, nullable=True)
+    confidence = Column(Float, nullable=True)
+    effort = Column(Float, nullable=True)
+    rice_score = Column(Float, nullable=True)
 
     # Assignment
-    assigned_to = Column(String(100), nullable=True)  # User email or name
+    assigned_to = Column(String(100), nullable=True)
 
     # Resolution
     resolution = Column(Text, nullable=True)
@@ -39,4 +50,5 @@ class Ticket(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     def __repr__(self):
-        return f"<Ticket {self.id} - {self.subject[:30]}>"
+        display = self.title or self.subject or "Untitled"
+        return f"<Ticket {self.id} - {display[:30]}>"

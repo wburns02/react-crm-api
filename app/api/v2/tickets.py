@@ -1,7 +1,7 @@
-"""Tickets API - Support/service ticket management."""
+"""Tickets API - Internal project/feature ticket management with RICE scoring."""
 
 from fastapi import APIRouter, HTTPException, status, Query
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func, or_
 from typing import Optional
 from datetime import datetime
 import uuid
@@ -20,19 +20,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def calculate_rice_score(reach: float, impact: float, confidence: float, effort: float) -> float:
+    """Calculate RICE score: (Reach * Impact * Confidence%) / Effort."""
+    if not effort or effort == 0:
+        return 0.0
+    return (reach * impact * (confidence / 100.0)) / effort
+
+
 def ticket_to_response(ticket: Ticket) -> dict:
     """Convert Ticket model to response dict."""
+    # Use title, falling back to subject for legacy data
+    title = ticket.title or ticket.subject or "Untitled"
     return {
         "id": str(ticket.id),
-        "customer_id": str(ticket.customer_id),
-        "work_order_id": ticket.work_order_id,
-        "subject": ticket.subject,
+        "title": title,
         "description": ticket.description,
-        "category": ticket.category,
+        "type": ticket.type or ticket.category,
         "status": ticket.status,
         "priority": ticket.priority,
+        "rice_score": ticket.rice_score,
+        "reach": ticket.reach,
+        "impact": ticket.impact,
+        "confidence": ticket.confidence,
+        "effort": ticket.effort,
         "assigned_to": ticket.assigned_to,
-        "resolution": ticket.resolution,
         "resolved_at": ticket.resolved_at.isoformat() if ticket.resolved_at else None,
         "created_by": ticket.created_by,
         "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
@@ -46,20 +57,29 @@ async def list_tickets(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    customer_id: Optional[str] = None,
+    search: Optional[str] = None,
+    type: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
     assigned_to: Optional[str] = None,
-    category: Optional[str] = None,
 ):
     """List tickets with pagination and filtering."""
     try:
-        # Base query
         query = select(Ticket)
 
-        # Apply filters
-        if customer_id:
-            query = query.where(Ticket.customer_id == customer_id)
+        # Search in title, subject, description
+        if search:
+            search_term = f"%{search}%"
+            query = query.where(
+                or_(
+                    Ticket.title.ilike(search_term),
+                    Ticket.subject.ilike(search_term),
+                    Ticket.description.ilike(search_term),
+                )
+            )
+
+        if type:
+            query = query.where(or_(Ticket.type == type, Ticket.category == type))
 
         if status:
             query = query.where(Ticket.status == status)
@@ -70,9 +90,6 @@ async def list_tickets(
         if assigned_to:
             query = query.where(Ticket.assigned_to == assigned_to)
 
-        if category:
-            query = query.where(Ticket.category == category)
-
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await db.execute(count_query)
@@ -82,7 +99,6 @@ async def list_tickets(
         offset = (page - 1) * page_size
         query = query.offset(offset).limit(page_size).order_by(Ticket.created_at.desc())
 
-        # Execute query
         result = await db.execute(query)
         tickets = result.scalars().all()
 
@@ -94,9 +110,8 @@ async def list_tickets(
         }
     except Exception as e:
         import traceback
-
         logger.error(f"Error in list_tickets: {traceback.format_exc()}")
-        return {"items": [], "total": 0, "page": page, "page_size": page_size, "error": str(e)}
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
 
 
 @router.get("/{ticket_id}", response_model=TicketResponse)
@@ -125,12 +140,21 @@ async def create_ticket(
     current_user: CurrentUser,
 ):
     """Create a new ticket."""
-    data = ticket_data.model_dump()
+    data = ticket_data.model_dump(exclude_none=True)
 
-    # customer_id is UUID - pass through directly (no int conversion)
+    # Calculate RICE score if all components provided
+    reach = data.get("reach")
+    impact = data.get("impact")
+    confidence = data.get("confidence")
+    effort = data.get("effort")
+    if reach is not None and impact is not None and confidence is not None and effort is not None:
+        data["rice_score"] = calculate_rice_score(reach, impact, confidence, effort)
 
     # Set created_by to current user
     data["created_by"] = current_user.email
+
+    # Also set legacy subject field for backwards compatibility
+    data["subject"] = data.get("title", "")
 
     ticket = Ticket(**data)
     db.add(ticket)
@@ -156,12 +180,23 @@ async def update_ticket(
             detail="Ticket not found",
         )
 
-    # Update only provided fields
     update_data = ticket_data.model_dump(exclude_unset=True)
 
     # If status changed to resolved, set resolved_at
     if update_data.get("status") == "resolved" and ticket.status != "resolved":
         update_data["resolved_at"] = datetime.utcnow()
+
+    # Recalculate RICE score if any component changed
+    reach = update_data.get("reach", ticket.reach)
+    impact = update_data.get("impact", ticket.impact)
+    confidence = update_data.get("confidence", ticket.confidence)
+    effort = update_data.get("effort", ticket.effort)
+    if reach is not None and impact is not None and confidence is not None and effort is not None:
+        update_data["rice_score"] = calculate_rice_score(reach, impact, confidence, effort)
+
+    # Keep subject in sync with title
+    if "title" in update_data:
+        update_data["subject"] = update_data["title"]
 
     for field, value in update_data.items():
         setattr(ticket, field, value)
