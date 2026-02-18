@@ -101,6 +101,22 @@ class Settings(BaseSettings):
     GOOGLE_ADS_CUSTOMER_ID: str | None = None
     GOOGLE_ADS_LOGIN_CUSTOMER_ID: str | None = None  # Manager account ID
 
+    # Google Analytics 4
+    GA4_PROPERTY_ID: str | None = None
+    GA4_CREDENTIALS_JSON: str | None = None  # Service account JSON (base64 or path)
+
+    # Google Search Console
+    GOOGLE_SEARCH_CONSOLE_SITE_URL: str | None = None
+    GOOGLE_SEARCH_CONSOLE_CREDENTIALS_JSON: str | None = None
+
+    # Google Business Profile
+    GOOGLE_BUSINESS_PROFILE_ACCOUNT_ID: str | None = None
+    GOOGLE_BUSINESS_PROFILE_LOCATION_ID: str | None = None
+
+    # Google Calendar
+    GOOGLE_CALENDAR_ID: str | None = None
+    GOOGLE_CALENDAR_CREDENTIALS_JSON: str | None = None
+
     # AI Services
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None

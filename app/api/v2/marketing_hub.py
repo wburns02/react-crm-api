@@ -1242,17 +1242,36 @@ async def get_settings(current_user: CurrentUser) -> dict:
     ads_service = get_google_ads_service()
     ads_configured = ads_service.is_configured()
 
+    ga4_configured = bool(getattr(settings, "GA4_PROPERTY_ID", None))
+    search_console_configured = bool(getattr(settings, "GOOGLE_SEARCH_CONSOLE_SITE_URL", None))
+    gbp_configured = bool(getattr(settings, "GOOGLE_BUSINESS_PROFILE_ACCOUNT_ID", None))
+    gcal_configured = bool(getattr(settings, "GOOGLE_CALENDAR_ID", None))
+
     return {
         "success": True,
         "integrations": {
-            "ga4": {"configured": False},
+            "ga4": {
+                "configured": ga4_configured,
+                "property_id": getattr(settings, "GA4_PROPERTY_ID", None) if ga4_configured else None,
+            },
             "google_ads": {
                 "configured": ads_configured,
                 "customer_id": ads_service.customer_id if ads_configured else None,
             },
+            "search_console": {
+                "configured": search_console_configured,
+                "site_url": getattr(settings, "GOOGLE_SEARCH_CONSOLE_SITE_URL", None) if search_console_configured else None,
+            },
+            "google_business_profile": {
+                "configured": gbp_configured,
+                "account_id": getattr(settings, "GOOGLE_BUSINESS_PROFILE_ACCOUNT_ID", None) if gbp_configured else None,
+            },
+            "google_calendar": {
+                "configured": gcal_configured,
+                "calendar_id": getattr(settings, "GOOGLE_CALENDAR_ID", None) if gcal_configured else None,
+            },
             "anthropic": {"configured": bool(getattr(settings, "ANTHROPIC_API_KEY", None))},
             "openai": {"configured": bool(getattr(settings, "OPENAI_API_KEY", None))},
-            "search_console": {"configured": False},
         },
         "automation": {
             "ai_advisor_enabled": bool(getattr(settings, "ANTHROPIC_API_KEY", None) or getattr(settings, "OPENAI_API_KEY", None)),
