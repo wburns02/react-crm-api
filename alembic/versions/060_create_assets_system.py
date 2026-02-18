@@ -16,6 +16,16 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Check if tables already exist (auto-created by SQLAlchemy model import)
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    existing_tables = inspector.get_table_names()
+
+    if "assets" in existing_tables:
+        # Tables already exist via auto-creation, skip
+        return
+
     # ---- assets table ----
     op.create_table(
         "assets",
