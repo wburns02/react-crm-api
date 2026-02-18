@@ -1528,3 +1528,355 @@ async def get_job_photos_gallery(
     except Exception as e:
         logger.warning(f"Error fetching job photos gallery: {e}")
         raise HTTPException(status_code=500, detail="Could not load photos")
+
+
+# ── Inspection Checklist (Aerobic Systems) ───────────────────────────────
+
+
+class InspectionStepUpdate(BaseModel):
+    status: Optional[str] = None  # pending, in_progress, completed, skipped
+    notes: Optional[str] = None
+    voice_notes: Optional[str] = None
+    findings: Optional[str] = None  # ok, needs_attention, critical
+    finding_details: Optional[str] = None
+    photos: Optional[List[str]] = None
+
+
+class InspectionStartRequest(BaseModel):
+    equipment_items: Optional[dict] = None  # {"sludge_judge": true, ...}
+
+
+class InspectionCompleteRequest(BaseModel):
+    tech_notes: Optional[str] = None
+
+
+class ArrivalNotifyRequest(BaseModel):
+    customer_phone: Optional[str] = None
+    custom_message: Optional[str] = None
+
+
+@router.get("/jobs/{job_id}/inspection")
+async def get_inspection_state(
+    job_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get the inspection checklist state for a work order."""
+    try:
+        result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection", None)
+        return {"success": True, "inspection": inspection}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error getting inspection state: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/inspection/start")
+async def start_inspection(
+    job_id: str,
+    body: InspectionStartRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Initialize the inspection checklist for a work order."""
+    try:
+        result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        now = datetime.now(timezone.utc).isoformat()
+        checklist = wo.checklist or {}
+
+        inspection = {
+            "started_at": now,
+            "completed_at": None,
+            "equipment_verified": bool(body.equipment_items),
+            "equipment_items": body.equipment_items or {},
+            "homeowner_notified_at": None,
+            "current_step": 1,
+            "steps": {},
+            "summary": None,
+            "voice_guidance_enabled": False,
+        }
+        checklist["inspection"] = inspection
+        wo.checklist = checklist
+        # Force SQLAlchemy to detect JSON change
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(wo, "checklist")
+        await db.commit()
+
+        return {"success": True, "inspection": inspection}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error starting inspection: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/jobs/{job_id}/inspection/step/{step_number}")
+async def update_inspection_step(
+    job_id: str,
+    step_number: int,
+    body: InspectionStepUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update a single inspection step."""
+    try:
+        result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection")
+        if not inspection:
+            raise HTTPException(status_code=400, detail="Inspection not started")
+
+        steps = inspection.get("steps", {})
+        step_key = str(step_number)
+        existing = steps.get(step_key, {
+            "status": "pending",
+            "completed_at": None,
+            "notes": "",
+            "voice_notes": "",
+            "findings": "ok",
+            "finding_details": "",
+            "photos": [],
+        })
+
+        # Merge updates
+        if body.status is not None:
+            existing["status"] = body.status
+            if body.status == "completed":
+                existing["completed_at"] = datetime.now(timezone.utc).isoformat()
+        if body.notes is not None:
+            existing["notes"] = body.notes
+        if body.voice_notes is not None:
+            existing["voice_notes"] = body.voice_notes
+        if body.findings is not None:
+            existing["findings"] = body.findings
+        if body.finding_details is not None:
+            existing["finding_details"] = body.finding_details
+        if body.photos is not None:
+            existing["photos"] = body.photos
+
+        steps[step_key] = existing
+        inspection["steps"] = steps
+        inspection["current_step"] = step_number
+        checklist["inspection"] = inspection
+        wo.checklist = checklist
+
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(wo, "checklist")
+        await db.commit()
+
+        return {"success": True, "step": existing}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error updating inspection step: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/inspection/save")
+async def save_inspection_state(
+    job_id: str,
+    request: Request,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Bulk save the entire inspection state (for offline sync)."""
+    try:
+        body = await request.json()
+        result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        checklist = wo.checklist or {}
+        checklist["inspection"] = body.get("inspection", {})
+        wo.checklist = checklist
+
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(wo, "checklist")
+        await db.commit()
+
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error saving inspection: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/inspection/complete")
+async def complete_inspection(
+    job_id: str,
+    body: InspectionCompleteRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Mark inspection as complete and generate summary."""
+    try:
+        result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection")
+        if not inspection:
+            raise HTTPException(status_code=400, detail="Inspection not started")
+
+        now = datetime.now(timezone.utc).isoformat()
+        steps = inspection.get("steps", {})
+
+        # Compute summary
+        total_steps = len(steps)
+        critical_count = sum(1 for s in steps.values() if s.get("findings") == "critical")
+        attention_count = sum(1 for s in steps.values() if s.get("findings") == "needs_attention")
+
+        if critical_count > 0:
+            overall = "critical"
+        elif attention_count >= 3:
+            overall = "poor"
+        elif attention_count >= 1:
+            overall = "fair"
+        else:
+            overall = "good"
+
+        recommendations = []
+        upsell = []
+        for step_num, step_data in steps.items():
+            findings = step_data.get("findings", "ok")
+            details = step_data.get("finding_details", "")
+            if findings == "critical":
+                recommendations.append(f"URGENT (Step {step_num}): {details or 'Critical issue — schedule repair immediately.'}")
+            elif findings == "needs_attention":
+                recommendations.append(f"Step {step_num}: {details or 'Needs maintenance attention.'}")
+
+        upsell.append("Schedule regular pumping based on sludge level observed.")
+        upsell.append("Consider a maintenance plan for quarterly inspections.")
+        if attention_count > 0 or critical_count > 0:
+            upsell.append("Repair service recommended for issues found during inspection.")
+
+        summary = {
+            "generated_at": now,
+            "overall_condition": overall,
+            "total_steps": total_steps,
+            "total_issues": critical_count + attention_count,
+            "critical_issues": critical_count,
+            "recommendations": recommendations,
+            "upsell_opportunities": upsell,
+            "next_service_date": None,
+            "tech_notes": body.tech_notes or "",
+        }
+
+        inspection["completed_at"] = now
+        inspection["summary"] = summary
+        checklist["inspection"] = inspection
+        wo.checklist = checklist
+
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(wo, "checklist")
+        await db.commit()
+
+        return {"success": True, "summary": summary}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error completing inspection: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/inspection/notify-arrival")
+async def notify_arrival(
+    job_id: str,
+    body: ArrivalNotifyRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Send arrival SMS notification to homeowner."""
+    try:
+        result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        # Get customer phone
+        phone = body.customer_phone
+        if not phone and wo.customer_id:
+            cust_result = await db.execute(
+                select(Customer).where(Customer.id == wo.customer_id)
+            )
+            cust = cust_result.scalars().first()
+            if cust:
+                phone = cust.phone
+
+        if not phone:
+            return {"success": False, "error": "No phone number available"}
+
+        message = body.custom_message or (
+            f"Hi! This is MAC Septic. Your technician has arrived for "
+            f"your scheduled septic inspection. We'll knock when we're "
+            f"ready to discuss findings. Thank you!"
+        )
+
+        # Try Twilio if available
+        sent = False
+        try:
+            from app.services.twilio_service import TwilioService
+            sms_service = TwilioService()
+            result = sms_service.send_sms(to=phone, body=message)
+            sent = bool(result)
+        except Exception as sms_err:
+            logger.warning(f"Twilio SMS failed: {sms_err}")
+
+        # Update inspection state
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection", {})
+        inspection["homeowner_notified_at"] = datetime.now(timezone.utc).isoformat()
+        checklist["inspection"] = inspection
+        wo.checklist = checklist
+
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(wo, "checklist")
+        await db.commit()
+
+        return {
+            "success": True,
+            "sms_sent": sent,
+            "phone": phone,
+            "notified_at": inspection["homeowner_notified_at"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error sending arrival notification: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
