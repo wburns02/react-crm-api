@@ -429,15 +429,23 @@ class AIGateway:
             }
 
         try:
-            # Build Anthropic request format
-            payload = {
+            # Build Anthropic request format — strip system role from messages
+            # (Ollama fallback chain may prepend {"role": "system"} to messages,
+            # but Anthropic requires system as a top-level parameter, not in messages)
+            filtered_messages = [m for m in messages if m.get("role") != "system"]
+            extracted_system = next(
+                (m["content"] for m in messages if m.get("role") == "system"), None
+            )
+            effective_system = system_prompt or extracted_system
+
+            payload: dict = {
                 "model": "claude-3-5-sonnet-20241022",
                 "max_tokens": max_tokens,
-                "messages": messages,
+                "messages": filtered_messages,
             }
 
-            if system_prompt:
-                payload["system"] = system_prompt
+            if effective_system:
+                payload["system"] = effective_system
 
             async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(
