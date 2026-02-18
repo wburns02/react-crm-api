@@ -1735,6 +1735,10 @@ async def save_inspection_state(
         inspection_data = body.get("inspection")
         if inspection_data:
             checklist = wo.checklist or {}
+            # Preserve persisted AI analysis if frontend didn't include it
+            existing_inspection = checklist.get("inspection", {})
+            if "ai_analysis" not in inspection_data and "ai_analysis" in existing_inspection:
+                inspection_data["ai_analysis"] = existing_inspection["ai_analysis"]
             checklist["inspection"] = inspection_data
             wo.checklist = checklist
             from sqlalchemy.orm.attributes import flag_modified
