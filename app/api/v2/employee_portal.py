@@ -2263,10 +2263,11 @@ Provide your analysis as JSON."""
 
         # Persist AI analysis to checklist so it survives page refresh
         try:
+            from sqlalchemy.orm.attributes import flag_modified as fm
             inspection["ai_analysis"] = parsed
             checklist["inspection"] = inspection
             wo.checklist = checklist
-            flag_modified(wo, "checklist")
+            fm(wo, "checklist")
             await db.commit()
         except Exception as persist_err:
             logger.warning(f"Failed to persist AI analysis: {persist_err}")
