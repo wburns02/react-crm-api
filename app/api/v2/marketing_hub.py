@@ -27,6 +27,7 @@ from app.models.work_order import WorkOrder
 from app.models.marketing import MarketingCampaign, AISuggestion
 from app.models.social_integrations import SocialReview, SocialIntegration
 from app.services.google_ads_service import get_google_ads_service
+from app.services.ga4_service import get_ga4_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -111,7 +112,31 @@ async def get_overview(
     completed_jobs = row[0] if row else 0
     total_revenue = float(row[1]) if row else 0
 
-    # 4. SEO estimate from real data
+    # 4. GA4 real traffic data (or estimate fallback)
+    ga4_service = get_ga4_service()
+    website_traffic = {
+        "sessions": completed_jobs * 12,
+        "users": completed_jobs * 8,
+        "conversions": completed_jobs,
+        "source": "estimate",
+    }
+    if ga4_service.is_configured():
+        try:
+            traffic = await ga4_service.get_traffic_summary(days)
+            totals = traffic.get("totals", {})
+            website_traffic = {
+                "sessions": totals.get("sessions", 0),
+                "users": totals.get("users", 0),
+                "pageviews": totals.get("pageviews", 0),
+                "new_users": totals.get("new_users", 0),
+                "bounce_rate": totals.get("bounce_rate", 0),
+                "avg_session_duration": totals.get("avg_session_duration", 0),
+                "conversions": completed_jobs,
+                "source": "ga4",
+            }
+        except Exception as e:
+            logger.warning("Failed to fetch GA4 traffic for overview: %s", str(e))
+
     seo_data = {
         "score": 78,  # Updated by PageSpeed API when called
         "grade": "B+",
@@ -122,11 +147,7 @@ async def get_overview(
         "success": True,
         "period_days": days,
         "overview": {
-            "website_traffic": {
-                "sessions": completed_jobs * 12,  # Estimate: 12 visits per conversion
-                "users": completed_jobs * 8,
-                "conversions": completed_jobs,
-            },
+            "website_traffic": website_traffic,
             "paid_ads": paid_ads,
             "seo": seo_data,
             "leads": leads_data,
@@ -1242,7 +1263,8 @@ async def get_settings(current_user: CurrentUser) -> dict:
     ads_service = get_google_ads_service()
     ads_configured = ads_service.is_configured()
 
-    ga4_configured = bool(getattr(settings, "GA4_PROPERTY_ID", None))
+    ga4_service = get_ga4_service()
+    ga4_configured = ga4_service.is_configured()
     search_console_configured = bool(getattr(settings, "GOOGLE_SEARCH_CONSOLE_SITE_URL", None))
     gbp_configured = bool(getattr(settings, "GOOGLE_BUSINESS_PROFILE_ACCOUNT_ID", None))
     gcal_configured = bool(getattr(settings, "GOOGLE_CALENDAR_ID", None))
@@ -1288,3 +1310,135 @@ async def save_settings(
 ) -> dict:
     """Save marketing hub settings."""
     return {"success": True, "message": "Settings saved"}
+
+
+# ────────────────────────────────────────────
+# GA4 Analytics Endpoints (Real Data)
+# ────────────────────────────────────────────
+
+@router.get("/ga4/status")
+async def ga4_status(current_user: CurrentUser) -> dict:
+    """Check GA4 integration status."""
+    ga4 = get_ga4_service()
+    return {
+        "success": True,
+        "configured": ga4.is_configured(),
+        "property_id": ga4.property_id if ga4.is_configured() else None,
+    }
+
+
+@router.get("/ga4/traffic")
+async def ga4_traffic(
+    current_user: CurrentUser,
+    days: int = 7,
+) -> dict:
+    """Get GA4 traffic summary with daily breakdown."""
+    ga4 = get_ga4_service()
+    if not ga4.is_configured():
+        return {"success": False, "error": "GA4 not configured", "data": None}
+    try:
+        data = await ga4.get_traffic_summary(days)
+        return {"success": True, "data": data}
+    except Exception as e:
+        logger.error("GA4 traffic endpoint failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": None}
+
+
+@router.get("/ga4/sources")
+async def ga4_sources(
+    current_user: CurrentUser,
+    days: int = 7,
+) -> dict:
+    """Get GA4 traffic by source/channel."""
+    ga4 = get_ga4_service()
+    if not ga4.is_configured():
+        return {"success": False, "error": "GA4 not configured", "data": None}
+    try:
+        data = await ga4.get_traffic_sources(days)
+        return {"success": True, "data": data}
+    except Exception as e:
+        logger.error("GA4 sources endpoint failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": None}
+
+
+@router.get("/ga4/pages")
+async def ga4_pages(
+    current_user: CurrentUser,
+    days: int = 7,
+    limit: int = 20,
+) -> dict:
+    """Get GA4 top pages by pageviews."""
+    ga4 = get_ga4_service()
+    if not ga4.is_configured():
+        return {"success": False, "error": "GA4 not configured", "data": None}
+    try:
+        data = await ga4.get_top_pages(days, limit)
+        return {"success": True, "data": data}
+    except Exception as e:
+        logger.error("GA4 pages endpoint failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": None}
+
+
+@router.get("/ga4/devices")
+async def ga4_devices(
+    current_user: CurrentUser,
+    days: int = 7,
+) -> dict:
+    """Get GA4 traffic by device type."""
+    ga4 = get_ga4_service()
+    if not ga4.is_configured():
+        return {"success": False, "error": "GA4 not configured", "data": None}
+    try:
+        data = await ga4.get_device_breakdown(days)
+        return {"success": True, "data": data}
+    except Exception as e:
+        logger.error("GA4 devices endpoint failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": None}
+
+
+@router.get("/ga4/geo")
+async def ga4_geo(
+    current_user: CurrentUser,
+    days: int = 7,
+) -> dict:
+    """Get GA4 traffic by geographic location."""
+    ga4 = get_ga4_service()
+    if not ga4.is_configured():
+        return {"success": False, "error": "GA4 not configured", "data": None}
+    try:
+        data = await ga4.get_geo_breakdown(days)
+        return {"success": True, "data": data}
+    except Exception as e:
+        logger.error("GA4 geo endpoint failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": None}
+
+
+@router.get("/ga4/realtime")
+async def ga4_realtime(current_user: CurrentUser) -> dict:
+    """Get GA4 real-time active users."""
+    ga4 = get_ga4_service()
+    if not ga4.is_configured():
+        return {"success": False, "error": "GA4 not configured", "data": None}
+    try:
+        data = await ga4.get_realtime()
+        return {"success": True, "data": data}
+    except Exception as e:
+        logger.error("GA4 realtime endpoint failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": None}
+
+
+@router.get("/ga4/comparison")
+async def ga4_comparison(
+    current_user: CurrentUser,
+    days: int = 7,
+) -> dict:
+    """Get GA4 this period vs previous period comparison."""
+    ga4 = get_ga4_service()
+    if not ga4.is_configured():
+        return {"success": False, "error": "GA4 not configured", "data": None}
+    try:
+        data = await ga4.get_comparison(days)
+        return {"success": True, "data": data}
+    except Exception as e:
+        logger.error("GA4 comparison endpoint failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": None}

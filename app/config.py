@@ -104,6 +104,9 @@ class Settings(BaseSettings):
     # Google Analytics 4
     GA4_PROPERTY_ID: str | None = None
     GA4_CREDENTIALS_JSON: str | None = None  # Service account JSON (base64 or path)
+    GA4_OAUTH_CLIENT_ID: str | None = None
+    GA4_OAUTH_CLIENT_SECRET: str | None = None
+    GA4_OAUTH_REFRESH_TOKEN: str | None = None
 
     # Google Search Console
     GOOGLE_SEARCH_CONSOLE_SITE_URL: str | None = None
