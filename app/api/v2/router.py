@@ -107,6 +107,8 @@ from app.api.v2 import (
     dispatch,
     # Phase 30: Company Assets Management
     assets,
+    # Phase 31: AI Provider Configuration
+    ai_providers,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -298,6 +300,9 @@ api_router.include_router(dispatch.router, prefix="/dispatch", tags=["dispatch"]
 
 # Phase 30: Company Assets Management
 api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
+
+# Phase 31: AI Provider Configuration (Anthropic Claude, etc.)
+api_router.include_router(ai_providers.router, prefix="/ai-providers", tags=["ai-providers"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])

@@ -14,11 +14,13 @@ Falls back to OpenAI/Anthropic when local AI is unreachable.
 
 import httpx
 import logging
+import time as _time
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 import json
 import traceback
 import os
+import uuid
 
 from app.config import settings
 
@@ -116,7 +118,183 @@ class AIGateway:
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
-    async def chat_completion(
+    # --- Provider routing for configurable AI providers ---
+
+    _provider_cache: Dict[str, Any] = {}
+    _provider_cache_time: float = 0
+    _CACHE_TTL: float = 300.0  # 5 minutes
+
+    async def _get_provider_config(self) -> Optional[Any]:
+        """Get cached provider config from DB. Returns AIProviderConfig or None."""
+        now = _time.time()
+        if now - self._provider_cache_time < self._CACHE_TTL and "config" in self._provider_cache:
+            return self._provider_cache.get("config")
+
+        try:
+            from app.database import async_session_maker
+            from app.models.ai_provider_config import AIProviderConfig
+            from sqlalchemy import select
+
+            async with async_session_maker() as db:
+                result = await db.execute(
+                    select(AIProviderConfig).where(
+                        AIProviderConfig.provider == "anthropic",
+                        AIProviderConfig.is_active == True,
+                        AIProviderConfig.is_primary == True,
+                    )
+                )
+                config = result.scalar_one_or_none()
+                self._provider_cache["config"] = config
+                self._provider_cache_time = now
+                return config
+        except Exception as e:
+            logger.debug(f"Provider config lookup failed: {e}")
+            return None
+
+    def invalidate_provider_cache(self):
+        """Clear the provider config cache (call after connect/disconnect)."""
+        self._provider_cache.clear()
+        self._provider_cache_time = 0
+
+    async def _should_use_claude(self, feature: str = "chat") -> bool:
+        """Check if Claude should be used for a given feature."""
+        config = await self._get_provider_config()
+        if not config or not config.api_key_encrypted:
+            return False
+        features = config.feature_config or {}
+        return features.get(feature, False)
+
+    async def _claude_primary(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        system_prompt: Optional[str] = None,
+        feature: str = "chat",
+    ) -> Dict[str, Any]:
+        """Route request through Claude as primary provider."""
+        from app.services.encryption import decrypt_value
+
+        config = await self._get_provider_config()
+        if not config or not config.api_key_encrypted:
+            logger.warning("Claude primary called but no config, falling back to Ollama")
+            return await self._ollama_chat(messages, max_tokens, temperature, system_prompt)
+
+        api_key = decrypt_value(config.api_key_encrypted)
+        if not api_key:
+            # Try env var fallback
+            api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
+        if not api_key:
+            logger.warning("Claude API key decrypt failed, falling back to Ollama")
+            return await self._ollama_chat(messages, max_tokens, temperature, system_prompt)
+
+        model = (config.model_config_data or {}).get("default_model", "claude-sonnet-4-6")
+
+        payload = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": messages,
+        }
+        if system_prompt:
+            payload["system"] = system_prompt
+
+        start = _time.time()
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                content = ""
+                if "content" in data and len(data["content"]) > 0:
+                    content = data["content"][0].get("text", "")
+
+                usage = data.get("usage", {})
+                duration_ms = int((_time.time() - start) * 1000)
+
+                logger.info(f"Claude primary response: model={model}, tokens={usage}, {duration_ms}ms")
+
+                # Log usage asynchronously
+                await self._log_usage("anthropic", model, feature, usage, duration_ms)
+
+                # Update last_used_at
+                try:
+                    from app.database import async_session_maker
+                    from app.models.ai_provider_config import AIProviderConfig
+                    from sqlalchemy import select
+                    from datetime import datetime, timezone
+
+                    async with async_session_maker() as db:
+                        result = await db.execute(
+                            select(AIProviderConfig).where(AIProviderConfig.provider == "anthropic")
+                        )
+                        cfg = result.scalar_one_or_none()
+                        if cfg:
+                            cfg.last_used_at = datetime.now(timezone.utc)
+                            await db.commit()
+                except Exception:
+                    pass  # Non-critical
+
+                return {
+                    "content": content,
+                    "usage": usage,
+                    "model": model,
+                }
+        except Exception as e:
+            duration_ms = int((_time.time() - start) * 1000)
+            logger.warning(f"Claude primary failed ({e}), falling back to Ollama")
+            await self._log_usage("anthropic", model, feature, {}, duration_ms, success=False, error=str(e))
+            return await self._ollama_chat(messages, max_tokens, temperature, system_prompt)
+
+    async def _log_usage(
+        self,
+        provider: str,
+        model: str,
+        feature: str,
+        usage: dict,
+        duration_ms: int,
+        success: bool = True,
+        error: Optional[str] = None,
+    ):
+        """Log AI usage to database. Fire-and-forget."""
+        try:
+            from app.database import async_session_maker
+            from app.models.ai_provider_config import AIUsageLog
+
+            prompt_tokens = usage.get("input_tokens", usage.get("prompt_tokens", 0))
+            completion_tokens = usage.get("output_tokens", usage.get("completion_tokens", 0))
+            total = prompt_tokens + completion_tokens
+
+            # Sonnet: $3/MTok input, $15/MTok output
+            cost_cents = int((prompt_tokens * 0.3 + completion_tokens * 1.5) / 100)
+
+            async with async_session_maker() as db:
+                log = AIUsageLog(
+                    provider=provider,
+                    model=model,
+                    feature=feature,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=total,
+                    cost_cents=cost_cents,
+                    request_duration_ms=duration_ms,
+                    success=success,
+                    error_message=error,
+                )
+                db.add(log)
+                await db.commit()
+        except Exception as e:
+            logger.debug(f"Failed to log AI usage: {e}")
+
+    async def _ollama_chat(
         self,
         messages: List[Dict[str, str]],
         max_tokens: int = 1024,
@@ -124,51 +302,22 @@ class AIGateway:
         system_prompt: Optional[str] = None,
         use_heavy_model: bool = False,
     ) -> Dict[str, Any]:
-        """Generate chat completion using local LLM.
-
-        Args:
-            messages: List of {role, content} messages
-            max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature (0-1)
-            system_prompt: Optional system prompt to prepend
-            use_heavy_model: Use the larger 70B model for complex analysis
-
-        Returns:
-            Dict with 'content' key containing generated text
-        """
+        """Original Ollama chat logic (extracted for fallback)."""
         try:
             client = await self.get_client()
-
-            # Prepend system prompt if provided
             if system_prompt:
                 messages = [{"role": "system", "content": system_prompt}] + messages
-
-            # Select model based on task complexity
             model = self.config.heavy_model if use_heavy_model else self.config.default_model
             logger.info(f"Attempting chat with model={model}, base_url={self.config.base_url}")
-
-            payload = {
-                "model": model,  # Ollama model name
-                "messages": messages,
-                "stream": False,
-            }
-
-            # Try OpenAI-compatible endpoint first
+            payload = {"model": model, "messages": messages, "stream": False}
             try:
                 response = await client.post("/v1/chat/completions", json=payload)
                 response.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                logger.warning(f"OpenAI-compat endpoint failed ({e}), trying native Ollama API...")
-                # Fall back to native Ollama /api/chat endpoint
+            except httpx.HTTPStatusError:
                 response = await client.post("/api/chat", json=payload)
                 response.raise_for_status()
-
             data = response.json()
-            logger.info(f"LLM response keys: {data.keys()}")
-
-            # Handle different response formats
             if "choices" in data and len(data["choices"]) > 0:
-                # OpenAI-compatible format
                 choice = data["choices"][0]
                 if "message" in choice:
                     content = choice["message"].get("content", "")
@@ -177,29 +326,41 @@ class AIGateway:
                 else:
                     content = str(choice)
             elif "message" in data:
-                # Native Ollama format: {"message": {"role": "assistant", "content": "..."}}
                 content = data["message"].get("content", "")
             elif "response" in data:
                 content = data["response"]
             elif "content" in data:
                 content = data["content"]
             else:
-                logger.warning(f"Unexpected LLM response format: {data}")
                 content = str(data)
-
-            return {
-                "content": content,
-                "usage": data.get("usage", {}),
-                "model": data.get("model", self.config.default_model),
-            }
+            return {"content": content, "usage": data.get("usage", {}), "model": data.get("model", self.config.default_model)}
         except (httpx.ConnectError, httpx.HTTPStatusError) as conn_err:
             logger.warning(f"Local AI unavailable ({conn_err}), trying OpenAI fallback...")
             return await self._openai_fallback(messages, max_tokens, temperature, system_prompt)
         except Exception as e:
-            logger.error(f"Chat completion error: {e}")
-            logger.error(traceback.format_exc())
-            # Try fallback on any error
+            logger.error(f"Ollama chat error: {e}")
             return await self._openai_fallback(messages, max_tokens, temperature, system_prompt)
+
+    async def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        system_prompt: Optional[str] = None,
+        use_heavy_model: bool = False,
+        feature: str = "chat",
+    ) -> Dict[str, Any]:
+        """Generate chat completion using configured AI provider.
+
+        Routes through Claude when configured as primary for this feature,
+        otherwise falls back to local Ollama -> OpenAI -> Anthropic fallback chain.
+        """
+        # Check if Claude is configured as primary for this feature
+        if not use_heavy_model and await self._should_use_claude(feature):
+            return await self._claude_primary(messages, max_tokens, temperature, system_prompt, feature)
+
+        # Default: Ollama with OpenAI/Anthropic fallback chain
+        return await self._ollama_chat(messages, max_tokens, temperature, system_prompt, use_heavy_model)
 
     async def _openai_fallback(
         self,
@@ -465,8 +626,9 @@ class AIGateway:
 
         result = await self.chat_completion(
             messages=[{"role": "user", "content": f"{prompt}\n\n{text}"}],
-            max_tokens=max_length * 2,  # Rough estimate
-            temperature=0.3,  # Lower temp for summarization
+            max_tokens=max_length * 2,
+            temperature=0.3,
+            feature="summarization",
         )
 
         return {
@@ -496,6 +658,7 @@ Text: {text}""",
             ],
             max_tokens=100,
             temperature=0.1,
+            feature="sentiment",
         )
 
         try:
@@ -577,8 +740,9 @@ Scoring guidelines:
         result = await self.chat_completion(
             messages=[{"role": "user", "content": analysis_prompt}],
             max_tokens=500,
-            temperature=0.2,  # Low temp for consistent analysis
-            use_heavy_model=True,  # Use 70B model for complex analysis
+            temperature=0.2,
+            use_heavy_model=True,
+            feature="call_analysis",
         )
 
         try:
