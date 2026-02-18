@@ -371,7 +371,6 @@ class AIGateway:
     ) -> Dict[str, Any]:
         """Fallback to OpenAI when local AI is unavailable."""
         openai_key = getattr(settings, "OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
-        logger.info(f"OpenAI fallback: key={'set' if openai_key else 'MISSING'}, settings_has={hasattr(settings, 'OPENAI_API_KEY')}, env={bool(os.getenv('OPENAI_API_KEY'))}")
 
         if not openai_key:
             # Try Anthropic as second fallback
@@ -421,7 +420,6 @@ class AIGateway:
     ) -> Dict[str, Any]:
         """Fallback to Anthropic Claude when OpenAI is unavailable."""
         anthropic_key = getattr(settings, "ANTHROPIC_API_KEY", None) or os.getenv("ANTHROPIC_API_KEY")
-        logger.info(f"Anthropic fallback: key={'set' if anthropic_key else 'MISSING'}, settings_has={hasattr(settings, 'ANTHROPIC_API_KEY')}, env={bool(os.getenv('ANTHROPIC_API_KEY'))}")
 
         if not anthropic_key:
             logger.error("No Anthropic API key configured for fallback")
