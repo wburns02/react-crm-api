@@ -1678,7 +1678,11 @@ async def update_inspection_step(
 
         steps[step_key] = existing
         inspection["steps"] = steps
-        inspection["current_step"] = step_number
+        # Advance current_step when completing a step
+        if body.status == "completed":
+            inspection["current_step"] = step_number + 1
+        else:
+            inspection["current_step"] = step_number
         checklist["inspection"] = inspection
         wo.checklist = checklist
 
