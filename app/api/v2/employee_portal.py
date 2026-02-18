@@ -1954,11 +1954,17 @@ async def complete_inspection(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class CreateEstimateRequest(BaseModel):
+    include_pumping: Optional[bool] = None  # None = auto from recommend_pumping flag
+    pumping_rate: Optional[float] = None    # Override default $295
+
+
 @router.post("/jobs/{job_id}/inspection/create-estimate")
 async def create_estimate_from_inspection(
     job_id: str,
     db: DbSession,
     current_user: CurrentUser,
+    body: CreateEstimateRequest = CreateEstimateRequest(),
 ):
     """Create a formal Quote/Estimate from inspection findings."""
     import uuid as uuid_mod
@@ -1985,6 +1991,7 @@ async def create_estimate_from_inspection(
         # Parts catalog keyed by step number (mirrors frontend inspectionSteps.ts)
         STEP_PARTS = {
             7: [
+                {"service": "Replacement lid", "part": "LID-24-GRN", "rate": 125},
                 {"service": "Replacement lid screws", "part": "LID-SCR-SS", "rate": 8},
                 {"service": "Riser extension", "part": "RSR-24-GRN", "rate": 65},
             ],
@@ -2040,6 +2047,19 @@ async def create_estimate_from_inspection(
                 "quantity": 1,
                 "rate": float(labor_cost),
                 "amount": float(labor_cost),
+            })
+
+        # Add pumping if recommended (and not explicitly excluded)
+        recommend_pumping = inspection.get("recommend_pumping", False)
+        include_pumping = body.include_pumping if body.include_pumping is not None else recommend_pumping
+        if include_pumping:
+            pumping_rate = body.pumping_rate or 295.0
+            line_items.append({
+                "service": "Septic Tank Pumping",
+                "description": "Standard residential pump out (up to 1000 gal)",
+                "quantity": 1,
+                "rate": float(pumping_rate),
+                "amount": float(pumping_rate),
             })
 
         if not line_items:
@@ -2166,16 +2186,23 @@ async def inspection_ai_analysis(
         critical_issues = summary.get("critical_issues", 0)
 
         system_prompt = """You are a septic system expert and customer communication specialist for MAC Septic Services in Central Texas.
-You help field technicians communicate findings to homeowners clearly and professionally.
+You help field technicians create professional, clear inspection reports for homeowners.
 Respond ONLY with valid JSON (no markdown, no code blocks). Use this exact structure:
 {
   "overall_assessment": "2-3 sentence plain English summary of system health",
   "priority_repairs": [
     {"issue": "what's wrong", "why_it_matters": "consequence if not fixed", "urgency": "Fix today|Schedule this week|Schedule this month"}
   ],
-  "homeowner_script": "Exactly what to say to the customer, conversational tone, no jargon",
+  "homeowner_script": "Exactly what to say to the customer — conversational tone, no jargon, reference them by name",
   "maintenance_recommendation": "Next pumping, inspection frequency, preventive tips",
-  "cost_notes": "If estimate is high, suggest phasing. If low, note good value."
+  "cost_notes": "If estimate is high, suggest phasing. If low, note good value.",
+  "what_to_expect": "2-3 sentences about what the homeowner should expect from their system over the next 6-12 months based on current condition",
+  "maintenance_schedule": [
+    {"timeframe": "e.g. Every 3 months", "task": "what needs to happen", "why": "brief reason"}
+  ],
+  "seasonal_tips": [
+    {"season": "Spring|Summer|Fall|Winter", "tip": "specific maintenance advice for Central Texas climate"}
+  ]
 }"""
 
         user_message = f"""Analyze this septic inspection for {cust_name}:
@@ -2197,7 +2224,7 @@ Provide your analysis as JSON."""
         ai = AIGateway()
         ai_result = await ai.chat_completion(
             messages=[{"role": "user", "content": user_message}],
-            max_tokens=1500,
+            max_tokens=2000,
             temperature=0.3,
             system_prompt=system_prompt,
             feature="inspection_analysis",
@@ -2228,6 +2255,19 @@ Provide your analysis as JSON."""
             }
 
         parsed["model_used"] = model_used
+        parsed["generated_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Persist AI analysis to checklist so it survives page refresh
+        try:
+            inspection["ai_analysis"] = parsed
+            checklist["inspection"] = inspection
+            wo.checklist = checklist
+            flag_modified(wo, "checklist")
+            await db.commit()
+        except Exception as persist_err:
+            logger.warning(f"Failed to persist AI analysis: {persist_err}")
+            await db.rollback()
+
         return parsed
 
     except HTTPException:
