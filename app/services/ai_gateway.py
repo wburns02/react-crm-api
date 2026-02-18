@@ -439,7 +439,7 @@ class AIGateway:
             effective_system = system_prompt or extracted_system
 
             payload: dict = {
-                "model": "claude-3-5-sonnet-20241022",
+                "model": "claude-sonnet-4-6",
                 "max_tokens": max_tokens,
                 "messages": filtered_messages,
             }
@@ -470,7 +470,7 @@ class AIGateway:
                 return {
                     "content": content,
                     "usage": data.get("usage", {}),
-                    "model": "claude-3.5-sonnet (fallback)",
+                    "model": "claude-sonnet-4-6 (fallback)",
                 }
         except Exception as e:
             logger.error(f"Anthropic fallback error: {e}")
