@@ -1769,9 +1769,82 @@ async def save_inspection_state(
                 except Exception as sms_err:
                     logger.warning(f"Failed to send report via SMS: {sms_err}")
             elif method == "email" and to:
-                # Email with PDF attachment — log for now, full email in future
-                logger.info(f"Report email requested to {to} for job {job_id}")
-                report_sent = True  # Mark as sent (email service integration TBD)
+                try:
+                    from app.services.email_service import EmailService
+                    email_svc = EmailService()
+                    if not email_svc.is_configured:
+                        logger.warning("Brevo email service not configured")
+                    else:
+                        insp = (wo.checklist or {}).get("inspection", {})
+                        summary = insp.get("summary", {})
+                        condition = summary.get("overall_condition", "N/A")
+                        issues = summary.get("total_issues", 0)
+                        recs = summary.get("recommendations", [])
+
+                        # Get customer name
+                        cust_name = "Valued Customer"
+                        if wo.customer_id:
+                            cust_result = await db.execute(
+                                select(Customer).where(Customer.id == wo.customer_id)
+                            )
+                            cust = cust_result.scalars().first()
+                            if cust:
+                                cust_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Valued Customer"
+
+                        # Build HTML email
+                        condition_color = "#22c55e" if condition == "good" else "#f59e0b" if condition == "fair" else "#ef4444"
+                        condition_label = "Good" if condition == "good" else "Needs Attention" if condition == "fair" else "Needs Repair"
+
+                        recs_html = ""
+                        if recs:
+                            recs_items = "".join(f"<li style='margin-bottom:4px'>{r}</li>" for r in recs)
+                            recs_html = f"<h3 style='margin-top:16px'>Recommendations:</h3><ul>{recs_items}</ul>"
+
+                        html_body = f"""
+                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+                          <div style="background:#1e40af;color:white;padding:20px;text-align:center">
+                            <h1 style="margin:0;font-size:20px">MAC Septic Services</h1>
+                            <p style="margin:4px 0 0;font-size:14px">Septic System Inspection Report</p>
+                          </div>
+                          <div style="padding:20px">
+                            <p>Hi {cust_name},</p>
+                            <p>Thank you for choosing MAC Septic. Here are the results of your septic system inspection:</p>
+                            <div style="background:{condition_color};color:white;padding:16px;border-radius:8px;text-align:center;margin:16px 0">
+                              <strong style="font-size:18px">Overall Condition: {condition_label}</strong>
+                              <br><span style="font-size:14px">{issues} item(s) noted</span>
+                            </div>
+                            {recs_html}
+                            <p style="margin-top:20px;color:#666;font-size:13px">
+                              A detailed PDF report is attached. If you have questions, call us at (512) 555-0100.
+                            </p>
+                            <p>Thank you,<br><strong>MAC Septic Services</strong></p>
+                          </div>
+                        </div>
+                        """
+
+                        plain_text = (
+                            f"MAC Septic Inspection Report\n\n"
+                            f"Hi {cust_name},\n\n"
+                            f"Overall Condition: {condition_label}\n"
+                            f"Issues noted: {issues}\n\n"
+                        )
+                        if recs:
+                            plain_text += "Recommendations:\n"
+                            for r in recs:
+                                plain_text += f"- {r}\n"
+                        plain_text += "\nThank you for choosing MAC Septic!"
+
+                        result = await email_svc.send_email(
+                            to=to,
+                            subject=f"Your Septic Inspection Report — {condition_label}",
+                            body=plain_text,
+                            html_body=html_body,
+                        )
+                        report_sent = result.get("success", False)
+                        if not report_sent:
+                            logger.warning(f"Brevo email failed: {result.get('error')}")
+                except Exception as email_err:
+                    logger.warning(f"Failed to send report via email: {email_err}")
 
         return {"success": True, "report_sent": report_sent}
     except HTTPException:
@@ -1874,6 +1947,154 @@ async def complete_inspection(
         raise
     except Exception as e:
         logger.warning(f"Error completing inspection: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/inspection/create-estimate")
+async def create_estimate_from_inspection(
+    job_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Create a formal Quote/Estimate from inspection findings."""
+    import uuid as uuid_mod
+    from app.models.quote import Quote
+    from app.models.customer import Customer
+
+    try:
+        result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection")
+        if not inspection:
+            raise HTTPException(status_code=400, detail="Inspection not started")
+
+        steps = inspection.get("steps", {})
+        if not steps:
+            raise HTTPException(status_code=400, detail="No inspection steps recorded")
+
+        # Parts catalog keyed by step number (mirrors frontend inspectionSteps.ts)
+        STEP_PARTS = {
+            7: [
+                {"service": "Replacement lid screws", "part": "LID-SCR-SS", "rate": 8},
+                {"service": "Riser extension", "part": "RSR-24-GRN", "rate": 65},
+            ],
+            8: [
+                {"service": "Replacement float switch", "part": "FLT-UNI-120", "rate": 45},
+                {"service": "Float switch wire nuts", "part": "WN-14-WP", "rate": 5},
+            ],
+            9: [
+                {"service": "Replacement alarm light bulb", "part": "ALM-BULB-12V", "rate": 12},
+                {"service": "Wire nuts (waterproof)", "part": "WN-14-WP", "rate": 5},
+            ],
+            11: [
+                {"service": "Alarm light bulb", "part": "ALM-BULB-12V", "rate": 12},
+                {"service": "Buzzer unit", "part": "BZR-12V-WP", "rate": 25},
+            ],
+            12: [
+                {"service": "Silicon sealant", "part": "SIL-CLR-10OZ", "rate": 8},
+                {"service": "Wire nuts (waterproof)", "part": "WN-14-WP", "rate": 5},
+                {"service": "Conduit sealant", "part": "CND-SEAL-GRY", "rate": 12},
+            ],
+            14: [
+                {"service": "Drip filter", "part": "DRP-FLT-STD", "rate": 18},
+                {"service": "Check valve", "part": "CHK-VLV-1IN", "rate": 22},
+                {"service": "Spray head (replacement)", "part": "SPR-HD-360", "rate": 15},
+            ],
+        }
+
+        line_items = []
+        issue_step_count = 0
+
+        for step_num_str, step_data in steps.items():
+            findings = step_data.get("findings", "ok")
+            if findings == "ok":
+                continue
+            issue_step_count += 1
+            step_num = int(step_num_str)
+            parts = STEP_PARTS.get(step_num, [])
+            for part in parts:
+                line_items.append({
+                    "service": part["service"],
+                    "description": f"Part #{part['part']} — Step {step_num}",
+                    "quantity": 1,
+                    "rate": float(part["rate"]),
+                    "amount": float(part["rate"]),
+                })
+
+        # Add labor
+        if issue_step_count > 0:
+            labor_cost = issue_step_count * 75
+            line_items.append({
+                "service": "Labor (estimated)",
+                "description": f"Repair labor for {issue_step_count} issue(s) found",
+                "quantity": 1,
+                "rate": float(labor_cost),
+                "amount": float(labor_cost),
+            })
+
+        if not line_items:
+            raise HTTPException(
+                status_code=400,
+                detail="No issues found in inspection — no estimate needed",
+            )
+
+        subtotal = sum(item["amount"] for item in line_items)
+        tax_rate = 8.25
+        tax = round(subtotal * tax_rate / 100, 2)
+        total = round(subtotal + tax, 2)
+
+        # Generate quote number
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+        unique_id = str(uuid_mod.uuid4())[:8].upper()
+        quote_number = f"Q-{timestamp}-{unique_id}"
+
+        valid_until = datetime.now(timezone.utc) + timedelta(days=30)
+
+        # Get customer name for notes
+        customer_name = ""
+        if wo.customer_id:
+            cust_result = await db.execute(
+                select(Customer).where(Customer.id == wo.customer_id)
+            )
+            customer = cust_result.scalars().first()
+            if customer:
+                customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+
+        quote = Quote(
+            id=uuid_mod.uuid4(),
+            quote_number=quote_number,
+            customer_id=wo.customer_id,
+            title="Inspection Repair Estimate",
+            description=f"Based on inspection of {customer_name}'s septic system on {datetime.now(timezone.utc).strftime('%B %d, %Y')}",
+            line_items=line_items,
+            subtotal=subtotal,
+            tax_rate=tax_rate,
+            tax=tax,
+            total=total,
+            status="draft",
+            valid_until=valid_until,
+            notes="; ".join(inspection.get("summary", {}).get("recommendations", [])) or None,
+        )
+        db.add(quote)
+        await db.commit()
+        await db.refresh(quote)
+
+        return {
+            "quote_id": str(quote.id),
+            "quote_number": quote.quote_number,
+            "total": float(quote.total),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error creating estimate from inspection: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 

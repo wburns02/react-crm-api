@@ -204,12 +204,13 @@ class TwilioService:
             raise Exception("Twilio client not configured")
 
         try:
+            to_formatted = self._format_phone(to)
             message = self.client.messages.create(
-                to=to,
+                to=to_formatted,
                 from_=self.phone_number,
                 body=body,
             )
-            logger.info(f"SMS sent: {message.sid} to {to}")
+            logger.info(f"SMS sent: {message.sid} to {to_formatted}")
             return message
         except TwilioRestException as e:
             logger.error(f"Twilio error: {e.msg}")

@@ -8,6 +8,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime
+from pydantic import BaseModel
 import uuid
 
 from app.api.deps import DbSession, CurrentUser
@@ -244,13 +245,19 @@ async def send_quote(
     return quote
 
 
+class QuoteAcceptRequest(BaseModel):
+    signature_data: Optional[str] = None
+    signed_by: Optional[str] = None
+
+
 @router.post("/{quote_id}/accept", response_model=QuoteResponse)
 async def accept_quote(
     quote_id: str,
     db: DbSession,
     current_user: CurrentUser,
+    body: Optional[QuoteAcceptRequest] = None,
 ):
-    """Mark a quote as accepted by customer."""
+    """Mark a quote as accepted by customer, optionally with signature."""
     result = await db.execute(select(Quote).where(Quote.id == quote_id))
     quote = result.scalar_one_or_none()
 
@@ -267,6 +274,14 @@ async def accept_quote(
         )
 
     quote.status = "accepted"
+
+    if body:
+        if body.signature_data:
+            quote.signature_data = body.signature_data
+        if body.signed_by:
+            quote.signed_by = body.signed_by
+        quote.signed_at = datetime.utcnow()
+        quote.approval_status = "approved"
 
     await db.commit()
     await db.refresh(quote)
