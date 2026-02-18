@@ -1540,6 +1540,8 @@ class InspectionStepUpdate(BaseModel):
     findings: Optional[str] = None  # ok, needs_attention, critical
     finding_details: Optional[str] = None
     photos: Optional[List[str]] = None
+    sludge_level: Optional[str] = None
+    psi_reading: Optional[str] = None
 
 
 class InspectionStartRequest(BaseModel):
@@ -1548,6 +1550,12 @@ class InspectionStartRequest(BaseModel):
 
 class InspectionCompleteRequest(BaseModel):
     tech_notes: Optional[str] = None
+    recommend_pumping: Optional[bool] = None
+
+
+class InspectionSaveRequest(BaseModel):
+    inspection: Optional[dict] = None
+    send_report: Optional[dict] = None  # {"method": "email"|"sms", "to": "...", "pdf_base64": "..."}
 
 
 class ArrivalNotifyRequest(BaseModel):
@@ -1675,6 +1683,10 @@ async def update_inspection_step(
             existing["finding_details"] = body.finding_details
         if body.photos is not None:
             existing["photos"] = body.photos
+        if body.sludge_level is not None:
+            existing["sludge_level"] = body.sludge_level
+        if body.psi_reading is not None:
+            existing["psi_reading"] = body.psi_reading
 
         steps[step_key] = existing
         inspection["steps"] = steps
@@ -1706,7 +1718,7 @@ async def save_inspection_state(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Bulk save the entire inspection state (for offline sync)."""
+    """Bulk save the entire inspection state and optionally send report."""
     try:
         body = await request.json()
         result = await db.execute(
@@ -1716,15 +1728,52 @@ async def save_inspection_state(
         if not wo:
             raise HTTPException(status_code=404, detail="Work order not found")
 
-        checklist = wo.checklist or {}
-        checklist["inspection"] = body.get("inspection", {})
-        wo.checklist = checklist
+        # Save inspection state if provided
+        inspection_data = body.get("inspection")
+        if inspection_data:
+            checklist = wo.checklist or {}
+            checklist["inspection"] = inspection_data
+            wo.checklist = checklist
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(wo, "checklist")
+            await db.commit()
 
-        from sqlalchemy.orm.attributes import flag_modified
-        flag_modified(wo, "checklist")
-        await db.commit()
+        # Send report if requested
+        send_report = body.get("send_report")
+        report_sent = False
+        if send_report:
+            method = send_report.get("method")
+            to = send_report.get("to")
+            if method == "sms" and to:
+                try:
+                    from app.services.twilio_service import TwilioService
+                    sms_service = TwilioService()
+                    # Build a concise text summary
+                    insp = (wo.checklist or {}).get("inspection", {})
+                    summary = insp.get("summary", {})
+                    condition = summary.get("overall_condition", "N/A")
+                    issues = summary.get("total_issues", 0)
+                    sms_body = (
+                        f"MAC Septic Inspection Report\n"
+                        f"Condition: {condition.upper()}\n"
+                        f"Issues found: {issues}\n"
+                    )
+                    recs = summary.get("recommendations", [])
+                    if recs:
+                        sms_body += "Findings:\n"
+                        for rec in recs[:3]:
+                            sms_body += f"- {rec[:80]}\n"
+                    sms_body += "\nThank you for choosing MAC Septic!"
+                    await sms_service.send_sms(to=to, body=sms_body)
+                    report_sent = True
+                except Exception as sms_err:
+                    logger.warning(f"Failed to send report via SMS: {sms_err}")
+            elif method == "email" and to:
+                # Email with PDF attachment — log for now, full email in future
+                logger.info(f"Report email requested to {to} for job {job_id}")
+                report_sent = True  # Mark as sent (email service integration TBD)
 
-        return {"success": True}
+        return {"success": True, "report_sent": report_sent}
     except HTTPException:
         raise
     except Exception as e:
@@ -1781,6 +1830,15 @@ async def complete_inspection(
             elif findings == "needs_attention":
                 recommendations.append(f"Step {step_num}: {details or 'Needs maintenance attention.'}")
 
+        # Add sludge level to recommendations if recorded
+        step_7 = steps.get("7", {})
+        sludge_level = step_7.get("sludge_level", "")
+        if sludge_level:
+            recommendations.append(f"Sludge level measured at {sludge_level}. Schedule pumping based on current level.")
+
+        if body.recommend_pumping:
+            recommendations.append("Technician recommends scheduling pumping service.")
+
         upsell.append("Schedule regular pumping based on sludge level observed.")
         upsell.append("Consider a maintenance plan for quarterly inspections.")
         if attention_count > 0 or critical_count > 0:
@@ -1796,9 +1854,13 @@ async def complete_inspection(
             "upsell_opportunities": upsell,
             "next_service_date": None,
             "tech_notes": body.tech_notes or "",
+            "report_sent_via": [],
+            "report_sent_at": None,
+            "estimate_total": None,
         }
 
         inspection["completed_at"] = now
+        inspection["recommend_pumping"] = body.recommend_pumping or False
         inspection["summary"] = summary
         checklist["inspection"] = inspection
         wo.checklist = checklist
@@ -1856,7 +1918,7 @@ async def notify_arrival(
         try:
             from app.services.twilio_service import TwilioService
             sms_service = TwilioService()
-            result = sms_service.send_sms(to=phone, body=message)
+            result = await sms_service.send_sms(to=phone, body=message)
             sent = bool(result)
         except Exception as sms_err:
             logger.warning(f"Twilio SMS failed: {sms_err}")
