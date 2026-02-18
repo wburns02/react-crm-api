@@ -1542,6 +1542,7 @@ class InspectionStepUpdate(BaseModel):
     photos: Optional[List[str]] = None
     sludge_level: Optional[str] = None
     psi_reading: Optional[str] = None
+    selected_parts: Optional[List[str]] = None
 
 
 class InspectionStartRequest(BaseModel):
@@ -1687,6 +1688,8 @@ async def update_inspection_step(
             existing["sludge_level"] = body.sludge_level
         if body.psi_reading is not None:
             existing["psi_reading"] = body.psi_reading
+        if body.selected_parts is not None:
+            existing["selected_parts"] = body.selected_parts
 
         steps[step_key] = existing
         inspection["steps"] = steps
@@ -2096,6 +2099,141 @@ async def create_estimate_from_inspection(
     except Exception as e:
         logger.warning(f"Error creating estimate from inspection: {e}")
         await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/inspection/ai-analysis")
+async def inspection_ai_analysis(
+    job_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Use Claude Sonnet AI to analyze inspection findings and generate insights."""
+    try:
+        result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection")
+        if not inspection:
+            raise HTTPException(status_code=400, detail="No inspection data")
+
+        summary = inspection.get("summary", {})
+        steps = inspection.get("steps", {})
+
+        # Get customer name
+        cust_name = "the homeowner"
+        if wo.customer_id:
+            cust_result = await db.execute(
+                select(Customer).where(Customer.id == wo.customer_id)
+            )
+            cust = cust_result.scalars().first()
+            if cust:
+                cust_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "the homeowner"
+
+        # Build inspection context for AI
+        step_details = []
+        for step_num in sorted(steps.keys(), key=lambda x: int(x)):
+            s = steps[step_num]
+            finding = s.get("findings", "ok")
+            if finding == "ok":
+                step_details.append(f"Step {step_num}: OK")
+            else:
+                details = s.get("finding_details", "")
+                notes = s.get("notes", "")
+                sludge = s.get("sludge_level", "")
+                psi = s.get("psi_reading", "")
+                parts = s.get("selected_parts", [])
+                line = f"Step {step_num}: {finding.upper()}"
+                if details:
+                    line += f" — {details}"
+                if notes:
+                    line += f" (Notes: {notes})"
+                if sludge:
+                    line += f" [Sludge: {sludge}]"
+                if psi:
+                    line += f" [PSI: {psi}]"
+                if parts:
+                    line += f" [Parts needed: {', '.join(parts)}]"
+                step_details.append(line)
+
+        overall = summary.get("overall_condition", "unknown")
+        total_issues = summary.get("total_issues", 0)
+        critical_issues = summary.get("critical_issues", 0)
+
+        system_prompt = """You are a septic system expert and customer communication specialist for MAC Septic Services in Central Texas.
+You help field technicians communicate findings to homeowners clearly and professionally.
+Respond ONLY with valid JSON (no markdown, no code blocks). Use this exact structure:
+{
+  "overall_assessment": "2-3 sentence plain English summary of system health",
+  "priority_repairs": [
+    {"issue": "what's wrong", "why_it_matters": "consequence if not fixed", "urgency": "Fix today|Schedule this week|Schedule this month"}
+  ],
+  "homeowner_script": "Exactly what to say to the customer, conversational tone, no jargon",
+  "maintenance_recommendation": "Next pumping, inspection frequency, preventive tips",
+  "cost_notes": "If estimate is high, suggest phasing. If low, note good value."
+}"""
+
+        user_message = f"""Analyze this septic inspection for {cust_name}:
+
+Overall condition: {overall}
+Issues: {total_issues} total ({critical_issues} critical)
+Recommend pumping: {inspection.get('recommend_pumping', False)}
+
+Step-by-step findings:
+{chr(10).join(step_details)}
+
+Recommendations from tech:
+{chr(10).join(summary.get('recommendations', []))}
+
+Provide your analysis as JSON."""
+
+        # Use AI Gateway
+        from app.services.ai_gateway import AIGateway
+        ai = AIGateway()
+        ai_result = await ai.chat(
+            messages=[{"role": "user", "content": user_message}],
+            max_tokens=1500,
+            temperature=0.3,
+            system_prompt=system_prompt,
+            feature="inspection_analysis",
+        )
+
+        content = ai_result.get("content", "")
+        model_used = ai_result.get("model", "AI")
+
+        # Parse the JSON response
+        import json as json_mod
+        try:
+            # Strip any markdown code block markers
+            cleaned = content.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[-1]
+            if cleaned.endswith("```"):
+                cleaned = cleaned.rsplit("```", 1)[0]
+            cleaned = cleaned.strip()
+            parsed = json_mod.loads(cleaned)
+        except json_mod.JSONDecodeError:
+            # If AI didn't return valid JSON, return raw text
+            parsed = {
+                "overall_assessment": content[:500],
+                "priority_repairs": [],
+                "homeowner_script": "Please review the inspection findings with the customer.",
+                "maintenance_recommendation": "Schedule regular maintenance based on findings.",
+                "cost_notes": "",
+            }
+
+        parsed["model_used"] = model_used
+        return parsed
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"AI inspection analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
