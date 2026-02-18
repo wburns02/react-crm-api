@@ -105,6 +105,8 @@ from app.api.v2 import (
     social_integrations,
     # Phase 29: Smart Dispatch
     dispatch,
+    # Phase 30: Company Assets Management
+    assets,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -293,6 +295,9 @@ api_router.include_router(social_integrations.router, prefix="/integrations/soci
 
 # Phase 29: Smart Dispatch
 api_router.include_router(dispatch.router, prefix="/dispatch", tags=["dispatch"])
+
+# Phase 30: Company Assets Management
+api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])

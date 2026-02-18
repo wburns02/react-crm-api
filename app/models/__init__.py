@@ -98,6 +98,9 @@ from app.models.service_interval import ServiceInterval, CustomerServiceSchedule
 # Notifications
 from app.models.notification import Notification
 
+# Company Assets Management
+from app.models.asset import Asset, AssetMaintenanceLog, AssetAssignment
+
 # MFA (Multi-Factor Authentication)
 from app.models.mfa import UserMFASettings, UserBackupCode, MFASession
 
@@ -203,6 +206,10 @@ __all__ = [
     "ServiceReminder",
     # Notifications
     "Notification",
+    # Company Assets Management
+    "Asset",
+    "AssetMaintenanceLog",
+    "AssetAssignment",
     # MFA (Multi-Factor Authentication)
     "UserMFASettings",
     "UserBackupCode",
