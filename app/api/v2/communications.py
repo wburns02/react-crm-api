@@ -8,13 +8,14 @@ SECURITY:
 """
 
 from fastapi import APIRouter, HTTPException, status, Query, Depends
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from typing import Optional
 from datetime import datetime
 import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.message import Message, MessageType, MessageDirection, MessageStatus
+from app.models.customer import Customer
 from app.schemas.message import (
     SendSMSRequest,
     SendEmailRequest,
@@ -361,30 +362,61 @@ async def get_communication_activity(
     db: DbSession,
     current_user: CurrentUser,
     limit: int = Query(10, ge=1, le=50),
+    channel: Optional[str] = Query(None, description="Filter by channel: sms, email, call"),
+    search: Optional[str] = Query(None, description="Search in content or customer name"),
 ):
-    """Get recent communication activity."""
+    """Get recent communication activity with customer names."""
     try:
-        query = select(Message).order_by(Message.created_at.desc()).limit(limit)
+        query = (
+            select(Message, Customer.first_name, Customer.last_name)
+            .outerjoin(Customer, Message.customer_id == Customer.id)
+            .order_by(Message.created_at.desc())
+        )
+
+        if channel:
+            query = query.where(Message.message_type == channel)
+
+        if search:
+            search_term = f"%{search}%"
+            query = query.where(
+                or_(
+                    Message.content.ilike(search_term),
+                    Message.subject.ilike(search_term),
+                    (Customer.first_name + " " + Customer.last_name).ilike(search_term),
+                    Message.to_number.ilike(search_term),
+                    Message.to_email.ilike(search_term),
+                )
+            )
+
+        query = query.limit(limit)
         result = await db.execute(query)
-        messages = result.scalars().all()
+        rows = result.all()
+
+        items = []
+        for row in rows:
+            m = row[0]  # Message object
+            first = row[1] or ""
+            last = row[2] or ""
+            customer_name = f"{first} {last}".strip() if (first or last) else None
+
+            items.append({
+                "id": str(m.id),
+                "type": m.message_type,
+                "direction": m.direction,
+                "status": m.status,
+                "to_address": m.to_number or m.to_email,
+                "from_address": m.from_number or m.from_email,
+                "subject": m.subject,
+                "content": m.content[:200] if m.content else None,
+                "customer_id": str(m.customer_id) if m.customer_id else None,
+                "customer_name": customer_name or m.to_number or m.to_email or "Unknown",
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+                "sent_at": m.sent_at.isoformat() if m.sent_at else None,
+            })
 
         return {
-            "items": [
-                {
-                    "id": m.id,
-                    "type": m.message_type,
-                    "direction": m.direction,
-                    "status": m.status,
-                    "to_address": m.to_number or m.to_email,
-                    "from_address": m.from_number or m.from_email,
-                    "subject": m.subject,
-                    "content": m.content[:100] if m.content else None,
-                    "customer_id": m.customer_id,
-                    "created_at": m.created_at.isoformat() if m.created_at else None,
-                }
-                for m in messages
-            ],
-            "total": len(messages),
+            "items": items,
+            "total": len(items),
         }
     except Exception as e:
         logger.error(f"Activity query failed: {e}")
