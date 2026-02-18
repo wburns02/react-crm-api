@@ -10,8 +10,8 @@ Create Date: 2026-02-18
 from alembic import op
 import sqlalchemy as sa
 
-revision = "061_update_tickets_for_rice_scoring"
-down_revision = "060_create_assets_system"
+revision = "061"
+down_revision = "060"
 branch_labels = None
 depends_on = None
 
