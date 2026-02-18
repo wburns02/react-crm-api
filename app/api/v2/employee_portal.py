@@ -2195,7 +2195,7 @@ Provide your analysis as JSON."""
         # Use AI Gateway
         from app.services.ai_gateway import AIGateway
         ai = AIGateway()
-        ai_result = await ai.chat(
+        ai_result = await ai.chat_completion(
             messages=[{"role": "user", "content": user_message}],
             max_tokens=1500,
             temperature=0.3,
