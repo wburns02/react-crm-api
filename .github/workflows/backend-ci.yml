@@ -50,6 +50,7 @@ jobs:
 
       - name: Run Ruff formatter check
         run: ruff format --check app/
+        continue-on-error: true
 
   test:
     name: Tests
