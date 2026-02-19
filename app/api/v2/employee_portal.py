@@ -1960,7 +1960,7 @@ async def complete_inspection(
 
 class CreateEstimateRequest(BaseModel):
     include_pumping: Optional[bool] = None  # None = auto from recommend_pumping flag
-    pumping_rate: Optional[float] = None    # Override default $295
+    pumping_rate: Optional[float] = None    # Override default $595
 
 
 @router.post("/jobs/{job_id}/inspection/create-estimate")
@@ -2057,10 +2057,10 @@ async def create_estimate_from_inspection(
         recommend_pumping = inspection.get("recommend_pumping", False)
         include_pumping = body.include_pumping if body.include_pumping is not None else recommend_pumping
         if include_pumping:
-            pumping_rate = body.pumping_rate or 295.0
+            pumping_rate = body.pumping_rate or 595.0
             line_items.append({
                 "service": "Septic Tank Pumping",
-                "description": "Standard residential pump out (up to 1000 gal)",
+                "description": "Standard residential pump out (up to 2,000 gal)",
                 "quantity": 1,
                 "rate": float(pumping_rate),
                 "amount": float(pumping_rate),
@@ -2110,6 +2110,9 @@ async def create_estimate_from_inspection(
             notes="; ".join(inspection.get("summary", {}).get("recommendations", [])) or None,
         )
         db.add(quote)
+
+        # Update the work order total_amount so it flows into the Payment tab
+        wo.total_amount = total
         await db.commit()
         await db.refresh(quote)
 
