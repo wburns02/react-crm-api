@@ -193,7 +193,7 @@ class TestWorkOrderSchemas:
             "priority": "normal",
         }
         schema = WorkOrderCreate(**data)
-        assert schema.customer_id == 1
+        assert schema.customer_id == "1"  # UUIDStr coerces to string
         assert schema.job_type == "pumping"
         assert schema.status == "draft"
         assert schema.priority == "normal"

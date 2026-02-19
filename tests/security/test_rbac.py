@@ -73,9 +73,8 @@ class TestGetUserRole:
 
     def test_regular_user_role(self):
         """Test regular user is recognized."""
-        user = MagicMock()
+        user = MagicMock(spec=["is_superuser", "id", "email"])
         user.is_superuser = False
-        del user.is_admin
         assert get_user_role(user) == Role.USER
 
     def test_user_without_admin_flag(self):
@@ -123,21 +122,23 @@ class TestHasPermission:
 class TestRequirePermission:
     """Test require_permission dependency."""
 
-    def test_permission_granted(self):
+    @pytest.mark.asyncio
+    async def test_permission_granted(self):
         """Test no exception when permission is granted."""
         user = MagicMock()
         user.is_superuser = True
         checker = require_permission(Permission.ADMIN_PANEL)
-        checker(user)
+        await checker(user)
 
-    def test_permission_denied(self):
+    @pytest.mark.asyncio
+    async def test_permission_denied(self):
         """Test exception when permission is denied."""
         user = MagicMock(spec=["is_superuser", "id"])
         user.is_superuser = False
         user.id = 1
         checker = require_permission(Permission.ADMIN_PANEL)
         with pytest.raises(HTTPException) as exc:
-            checker(user)
+            await checker(user)
         assert exc.value.status_code == 403
         assert "Permission denied" in exc.value.detail
 
@@ -145,26 +146,30 @@ class TestRequirePermission:
 class TestRequireAdmin:
     """Test require_admin dependency."""
 
-    def test_admin_allowed(self):
+    @pytest.mark.asyncio
+    async def test_admin_allowed(self):
         """Test admin is allowed."""
         user = MagicMock()
         user.is_superuser = False
         user.is_admin = True
-        require_admin(user)
+        await require_admin(user)
 
-    def test_superuser_allowed(self):
+    @pytest.mark.asyncio
+    async def test_superuser_allowed(self):
         """Test superuser is allowed."""
         user = MagicMock()
         user.is_superuser = True
-        require_admin(user)
+        await require_admin(user)
 
-    def test_regular_user_denied(self):
+    @pytest.mark.asyncio
+    async def test_regular_user_denied(self):
         """Test regular user is denied."""
-        user = MagicMock(spec=["is_superuser", "id"])
+        user = MagicMock(spec=["is_superuser", "is_admin", "id"])
         user.is_superuser = False
+        user.is_admin = False
         user.id = 1
         with pytest.raises(HTTPException) as exc:
-            require_admin(user)
+            await require_admin(user)
         assert exc.value.status_code == 403
         assert "Admin access required" in exc.value.detail
 
@@ -172,19 +177,21 @@ class TestRequireAdmin:
 class TestRequireSuperuser:
     """Test require_superuser dependency."""
 
-    def test_superuser_allowed(self):
+    @pytest.mark.asyncio
+    async def test_superuser_allowed(self):
         """Test superuser is allowed."""
         user = MagicMock()
         user.is_superuser = True
-        require_superuser(user)
+        await require_superuser(user)
 
-    def test_admin_denied(self):
+    @pytest.mark.asyncio
+    async def test_admin_denied(self):
         """Test admin is denied."""
         user = MagicMock()
         user.is_superuser = False
         user.id = 1
         with pytest.raises(HTTPException) as exc:
-            require_superuser(user)
+            await require_superuser(user)
         assert exc.value.status_code == 403
         assert "Superuser access required" in exc.value.detail
 
@@ -192,24 +199,27 @@ class TestRequireSuperuser:
 class TestRBACChecker:
     """Test RBACChecker class."""
 
-    def test_role_check_passes(self):
+    @pytest.mark.asyncio
+    async def test_role_check_passes(self):
         """Test role check passes for sufficient role."""
         user = MagicMock()
         user.is_superuser = True
         checker = RBACChecker(required_role=Role.ADMIN)
-        checker(user)
+        await checker(user)
 
-    def test_role_check_fails(self):
+    @pytest.mark.asyncio
+    async def test_role_check_fails(self):
         """Test role check fails for insufficient role."""
         user = MagicMock(spec=["is_superuser", "id"])
         user.is_superuser = False
         checker = RBACChecker(required_role=Role.ADMIN)
         with pytest.raises(HTTPException) as exc:
-            checker(user)
+            await checker(user)
         assert exc.value.status_code == 403
         assert "role" in exc.value.detail.lower()
 
-    def test_permission_and_logic(self):
+    @pytest.mark.asyncio
+    async def test_permission_and_logic(self):
         """Test AND logic for multiple permissions (all required)."""
         user = MagicMock(spec=["is_superuser", "id"])
         user.is_superuser = False
@@ -218,11 +228,12 @@ class TestRBACChecker:
             any_permission=False
         )
         with pytest.raises(HTTPException) as exc:
-            checker(user)
+            await checker(user)
         assert exc.value.status_code == 403
         assert "Missing permissions" in exc.value.detail
 
-    def test_permission_or_logic_passes(self):
+    @pytest.mark.asyncio
+    async def test_permission_or_logic_passes(self):
         """Test OR logic for multiple permissions (any one is sufficient)."""
         user = MagicMock(spec=["is_superuser", "id"])
         user.is_superuser = False
@@ -230,9 +241,10 @@ class TestRBACChecker:
             required_permissions=[Permission.SEND_SMS, Permission.ADMIN_PANEL],
             any_permission=True
         )
-        checker(user)
+        await checker(user)
 
-    def test_permission_or_logic_fails(self):
+    @pytest.mark.asyncio
+    async def test_permission_or_logic_fails(self):
         """Test OR logic fails when user has none of the permissions."""
         user = MagicMock(spec=["is_superuser", "id"])
         user.is_superuser = False
@@ -241,13 +253,14 @@ class TestRBACChecker:
             any_permission=True
         )
         with pytest.raises(HTTPException) as exc:
-            checker(user)
+            await checker(user)
         assert exc.value.status_code == 403
         assert "Insufficient permissions" in exc.value.detail
 
-    def test_no_requirements(self):
+    @pytest.mark.asyncio
+    async def test_no_requirements(self):
         """Test checker with no requirements passes."""
         user = MagicMock(spec=["is_superuser", "id"])
         user.is_superuser = False
         checker = RBACChecker()
-        checker(user)
+        await checker(user)

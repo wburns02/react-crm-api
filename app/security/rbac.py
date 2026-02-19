@@ -75,7 +75,7 @@ def get_user_role(user: "User") -> Role:
     if user.is_superuser:
         return Role.SUPERUSER
     # Check for admin flag - column added in migration 043
-    if user.is_admin:
+    if getattr(user, "is_admin", False):
         return Role.ADMIN
     return Role.USER
 

@@ -37,7 +37,8 @@ class EmailService:
             return raw_key
         # Try base64 decode (MCP-wrapped keys are base64 JSON)
         try:
-            import base64, json
+            import base64
+            import json
             decoded = base64.b64decode(raw_key + "==").decode()
             data = json.loads(decoded)
             if isinstance(data, dict) and "api_key" in data:

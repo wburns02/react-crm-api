@@ -108,7 +108,7 @@ async def init_notifications_table(current_user: CurrentUser, db: DbSession):
     except Exception as e:
         try:
             await db.rollback()
-        except:
+        except Exception:
             pass
         return {"error": str(e), "type": type(e).__name__, "created": False}
 
