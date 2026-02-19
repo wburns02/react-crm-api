@@ -77,6 +77,7 @@ class EmailService:
         body: str,
         html_body: Optional[str] = None,
         reply_to: Optional[str] = None,
+        attachments: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         Send an email via Brevo API.
@@ -87,6 +88,7 @@ class EmailService:
             body: Plain text body
             html_body: Optional HTML body (if not provided, plain text wrapped in basic HTML)
             reply_to: Optional reply-to address
+            attachments: Optional list of dicts with 'content' (base64) and 'name' (filename)
 
         Returns:
             Dict with status_code, message_id, and success status
@@ -122,6 +124,10 @@ class EmailService:
         # Add reply-to if provided
         if reply_to:
             payload["replyTo"] = {"email": reply_to}
+
+        # Add attachments (Brevo format: [{content: base64, name: filename}])
+        if attachments:
+            payload["attachment"] = attachments
 
         headers = {
             "accept": "application/json",

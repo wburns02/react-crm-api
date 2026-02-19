@@ -1798,33 +1798,52 @@ async def save_inspection_state(
                             if cust:
                                 cust_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Valued Customer"
 
-                        # Build HTML email
+                        # Build HTML email — premium branded design
                         condition_color = "#22c55e" if condition == "good" else "#f59e0b" if condition == "fair" else "#ef4444"
                         condition_label = "Good" if condition == "good" else "Needs Attention" if condition == "fair" else "Needs Repair"
 
                         recs_html = ""
                         if recs:
-                            recs_items = "".join(f"<li style='margin-bottom:4px'>{r}</li>" for r in recs)
-                            recs_html = f"<h3 style='margin-top:16px'>Recommendations:</h3><ul>{recs_items}</ul>"
+                            recs_items = "".join(f"<li style='margin-bottom:8px;color:#374151'>{r}</li>" for r in recs)
+                            recs_html = f"""
+                            <div style="margin-top:20px">
+                              <h3 style="margin:0 0 12px;font-size:16px;color:#1e3a5f">Key Findings:</h3>
+                              <ul style="margin:0;padding-left:20px">{recs_items}</ul>
+                            </div>"""
+
+                        # AI analysis snippet if available
+                        ai_analysis = insp.get("ai_analysis", {})
+                        ai_section = ""
+                        if ai_analysis and ai_analysis.get("overall_assessment"):
+                            assessment = ai_analysis["overall_assessment"][:300]
+                            if len(ai_analysis["overall_assessment"]) > 300:
+                                assessment += "..."
+                            ai_section = f"""
+                            <div style="margin-top:20px;padding:16px;background:#f0f4ff;border-left:4px solid #2563eb;border-radius:0 8px 8px 0">
+                              <h3 style="margin:0 0 8px;font-size:14px;color:#1e3a5f">Expert Analysis</h3>
+                              <p style="margin:0;font-size:14px;color:#374151;line-height:1.5">{assessment}</p>
+                            </div>"""
 
                         html_body = f"""
-                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-                          <div style="background:#1e40af;color:white;padding:20px;text-align:center">
-                            <h1 style="margin:0;font-size:20px">MAC Septic Services</h1>
-                            <p style="margin:4px 0 0;font-size:14px">Septic System Inspection Report</p>
+                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+                          <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);color:white;padding:28px;text-align:center">
+                            <h1 style="margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px">MAC SEPTIC SERVICES</h1>
+                            <p style="margin:6px 0 0;font-size:14px;color:#93c5fd">Septic System Inspection Report</p>
                           </div>
-                          <div style="padding:20px">
-                            <p>Hi {cust_name},</p>
-                            <p>Thank you for choosing MAC Septic. Here are the results of your septic system inspection:</p>
-                            <div style="background:{condition_color};color:white;padding:16px;border-radius:8px;text-align:center;margin:16px 0">
-                              <strong style="font-size:18px">Overall Condition: {condition_label}</strong>
-                              <br><span style="font-size:14px">{issues} item(s) noted</span>
+                          <div style="padding:24px">
+                            <p style="font-size:16px;color:#1f2937">Hi {cust_name},</p>
+                            <p style="font-size:14px;color:#4b5563;line-height:1.6">Thank you for choosing MAC Septic Services. Below is a summary of your recent septic system inspection. A complete PDF report with photos is attached.</p>
+                            <div style="background:{condition_color};color:white;padding:20px;border-radius:10px;text-align:center;margin:20px 0">
+                              <strong style="font-size:20px">Overall Condition: {condition_label}</strong>
+                              <br><span style="font-size:14px;opacity:0.9">{issues} item(s) noted during inspection</span>
                             </div>
                             {recs_html}
-                            <p style="margin-top:20px;color:#666;font-size:13px">
-                              A detailed PDF report is attached. If you have questions, call us at (512) 555-0100.
-                            </p>
-                            <p>Thank you,<br><strong>MAC Septic Services</strong></p>
+                            {ai_section}
+                            <div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:8px;text-align:center">
+                              <p style="margin:0 0 4px;font-size:13px;color:#6b7280">Questions about your report?</p>
+                              <p style="margin:0;font-size:16px;font-weight:600;color:#1e3a5f">(512) 392-1232 &nbsp;|&nbsp; macseptic.com</p>
+                            </div>
+                            <p style="margin-top:20px;font-size:14px;color:#4b5563">Thank you,<br><strong>MAC Septic Services</strong><br><span style="font-size:12px;color:#9ca3af">San Marcos, TX</span></p>
                           </div>
                         </div>
                         """
@@ -1836,16 +1855,31 @@ async def save_inspection_state(
                             f"Issues noted: {issues}\n\n"
                         )
                         if recs:
-                            plain_text += "Recommendations:\n"
+                            plain_text += "Key Findings:\n"
                             for r in recs:
                                 plain_text += f"- {r}\n"
-                        plain_text += "\nThank you for choosing MAC Septic!"
+                        plain_text += "\nA complete PDF report with photos is attached."
+                        plain_text += "\n\nQuestions? Call us at (512) 392-1232"
+                        plain_text += "\nThank you for choosing MAC Septic Services!"
+
+                        # Attach PDF if provided
+                        attachments = None
+                        pdf_base64 = send_report.get("pdf_base64") or send_report.get("pdfBase64")
+                        if pdf_base64:
+                            # Strip data URL prefix if present
+                            if "," in pdf_base64:
+                                pdf_base64 = pdf_base64.split(",", 1)[1]
+                            attachments = [{
+                                "content": pdf_base64,
+                                "name": f"MAC-Septic-Inspection-{str(wo.id)[:8]}.pdf",
+                            }]
 
                         result = await email_svc.send_email(
                             to=to,
                             subject=f"Your Septic Inspection Report — {condition_label}",
                             body=plain_text,
                             html_body=html_body,
+                            attachments=attachments,
                         )
                         report_sent = result.get("success", False)
                         if not report_sent:
