@@ -11,14 +11,21 @@ INVOICE_STATUSES = Literal["draft", "sent", "paid", "overdue", "void"]
 
 
 class LineItem(BaseModel):
-    """Schema for invoice line item."""
+    """Schema for invoice line item.
+
+    Flexible schema: supports both the standard format (service/rate/amount)
+    and the inspection-generated format (description/unit_price/total).
+    """
 
     id: Optional[str] = None
-    service: str = Field(..., min_length=1)
+    service: Optional[str] = None
     description: Optional[str] = None
-    quantity: float = Field(..., ge=0)
-    rate: float = Field(..., ge=0)
-    amount: float = Field(..., ge=0)
+    quantity: Optional[float] = 1
+    rate: Optional[float] = None
+    amount: Optional[float] = None
+    # Alternate field names from inspection-generated invoices
+    unit_price: Optional[float] = None
+    total: Optional[float] = None
 
 
 class CustomerSummary(BaseModel):

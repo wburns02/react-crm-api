@@ -36,13 +36,30 @@ def invoice_to_response(invoice: Invoice, customer: Optional[Customer] = None) -
         invoice: The Invoice model instance
         customer: Optional Customer model instance for enrichment
     """
-    line_items = invoice.line_items or []
+    raw_line_items = invoice.line_items or []
+
+    # Normalize line items to consistent format
+    line_items = []
+    for item in raw_line_items:
+        if isinstance(item, dict):
+            # Normalize alternate field names
+            normalized = {
+                "id": item.get("id"),
+                "service": item.get("service") or item.get("description") or "Service",
+                "description": item.get("description") or item.get("service") or "",
+                "quantity": float(item.get("quantity", 1) or 1),
+                "rate": float(item.get("rate") or item.get("unit_price") or 0),
+                "amount": float(item.get("amount") or item.get("total") or 0),
+            }
+            # If amount is 0 but we have rate and quantity, calculate it
+            if normalized["amount"] == 0 and normalized["rate"] > 0:
+                normalized["amount"] = normalized["rate"] * normalized["quantity"]
+            line_items.append(normalized)
 
     # Calculate subtotal from line items
     subtotal = 0.0
     for item in line_items:
-        if isinstance(item, dict):
-            subtotal += float(item.get("amount", 0) or 0)
+        subtotal += float(item.get("amount", 0) or 0)
 
     # Total from amount field, or calculated subtotal
     total = float(invoice.amount) if invoice.amount else subtotal
