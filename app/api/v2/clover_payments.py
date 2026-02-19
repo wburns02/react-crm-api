@@ -20,7 +20,7 @@ from typing import Optional
 import uuid
 import logging
 
-from app.api.deps import DbSession, CurrentUser
+from app.api.deps import DbSession, CurrentUser, EntityCtx
 from app.config import settings
 from app.models.invoice import Invoice
 from app.models.payment import Payment
@@ -113,12 +113,13 @@ class PaymentHistoryItem(BaseModel):
 # =============================================================================
 
 
-async def _load_oauth_token(db, clover) -> bool:
-    """Load active OAuth token from DB into service. Returns True if token loaded."""
+async def _load_oauth_token(db, clover, entity_id=None) -> bool:
+    """Load active OAuth token from DB into service. Optionally scoped by entity_id."""
     try:
-        result = await db.execute(
-            select(CloverOAuthToken).where(CloverOAuthToken.is_active == True).limit(1)
-        )
+        query = select(CloverOAuthToken).where(CloverOAuthToken.is_active == True)
+        if entity_id:
+            query = query.where(CloverOAuthToken.entity_id == entity_id)
+        result = await db.execute(query.limit(1))
         token_record = result.scalar_one_or_none()
         if token_record:
             clover.set_oauth_token(token_record.access_token, token_record.merchant_id)
@@ -132,12 +133,13 @@ async def _load_oauth_token(db, clover) -> bool:
 async def get_clover_config(
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx,
 ) -> dict:
     """Get Clover configuration for frontend with capability detection."""
     clover = get_clover_service()
 
-    # Try loading OAuth token from DB
-    has_oauth = await _load_oauth_token(db, clover)
+    # Try loading OAuth token from DB (scoped by entity)
+    has_oauth = await _load_oauth_token(db, clover, entity_id=entity.id if entity else None)
 
     if not clover.is_configured():
         # Still return useful info even if not configured
@@ -210,6 +212,7 @@ async def oauth_callback(
     state: Optional[str] = Query(None, description="CSRF state token"),
     db: DbSession = None,
     current_user: CurrentUser = None,
+    entity: EntityCtx = None,
 ) -> dict:
     """Exchange authorization code for access token and store it."""
     clover = get_clover_service()
@@ -234,10 +237,16 @@ async def oauth_callback(
     merchant_info = await clover.get_merchant()
     merchant_name = merchant_info.get("name") if merchant_info else None
 
-    # Deactivate any existing tokens
-    await db.execute(
-        text("UPDATE clover_oauth_tokens SET is_active = false WHERE is_active = true")
-    )
+    # Deactivate any existing tokens for this entity
+    if entity:
+        await db.execute(
+            text("UPDATE clover_oauth_tokens SET is_active = false WHERE is_active = true AND entity_id = :eid"),
+            {"eid": str(entity.id)},
+        )
+    else:
+        await db.execute(
+            text("UPDATE clover_oauth_tokens SET is_active = false WHERE is_active = true AND entity_id IS NULL")
+        )
 
     # Store new token
     token_record = CloverOAuthToken(
@@ -247,6 +256,7 @@ async def oauth_callback(
         merchant_name=merchant_name,
         is_active=True,
         connected_by=current_user.email,
+        entity_id=entity.id if entity else None,
     )
     db.add(token_record)
     await db.commit()
@@ -265,11 +275,18 @@ async def oauth_callback(
 async def oauth_disconnect(
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx = None,
 ) -> dict:
-    """Disconnect Clover OAuth (deactivate stored tokens)."""
-    result = await db.execute(
-        text("UPDATE clover_oauth_tokens SET is_active = false WHERE is_active = true")
-    )
+    """Disconnect Clover OAuth (deactivate stored tokens for current entity)."""
+    if entity:
+        await db.execute(
+            text("UPDATE clover_oauth_tokens SET is_active = false WHERE is_active = true AND entity_id = :eid"),
+            {"eid": str(entity.id)},
+        )
+    else:
+        await db.execute(
+            text("UPDATE clover_oauth_tokens SET is_active = false WHERE is_active = true AND entity_id IS NULL")
+        )
     await db.commit()
 
     clover = get_clover_service()
@@ -283,14 +300,16 @@ async def oauth_disconnect(
 async def oauth_status(
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx = None,
 ) -> dict:
-    """Check Clover OAuth connection status."""
+    """Check Clover OAuth connection status for current entity."""
     clover = get_clover_service()
 
-    # Check for active token in DB
-    result = await db.execute(
-        select(CloverOAuthToken).where(CloverOAuthToken.is_active == True).limit(1)
-    )
+    # Check for active token in DB scoped by entity
+    query = select(CloverOAuthToken).where(CloverOAuthToken.is_active == True)
+    if entity:
+        query = query.where(CloverOAuthToken.entity_id == entity.id)
+    result = await db.execute(query.limit(1))
     token_record = result.scalar_one_or_none()
 
     return {
@@ -729,6 +748,7 @@ async def collect_payment(
     request: CollectPaymentRequest,
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx = None,
 ) -> dict:
     """Collect a payment (any method) and auto-create invoice if needed.
 
@@ -835,9 +855,9 @@ async def collect_payment(
     await db.execute(
         text("""
             INSERT INTO payments (id, customer_id, work_order_id, amount, currency,
-                payment_method, status, description, payment_date, processed_at)
+                payment_method, status, description, payment_date, processed_at, entity_id)
             VALUES (:id, :customer_id, :work_order_id, :amount, :currency,
-                :payment_method, :status, :description, :payment_date, :processed_at)
+                :payment_method, :status, :description, :payment_date, :processed_at, :entity_id)
         """),
         {
             "id": str(payment_id),
@@ -850,6 +870,7 @@ async def collect_payment(
             "description": description,
             "payment_date": now_naive,
             "processed_at": now_naive,
+            "entity_id": str(entity.id) if entity else None,
         },
     )
 
@@ -915,10 +936,11 @@ async def charge_invoice(
     request: CreatePaymentRequest,
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx = None,
 ) -> PaymentResultSchema:
     """Charge a payment for an invoice using Clover."""
     clover = get_clover_service()
-    await _load_oauth_token(db, clover)
+    await _load_oauth_token(db, clover, entity_id=entity.id if entity else None)
 
     if not clover.is_configured():
         raise HTTPException(status_code=503, detail="Clover is not configured")

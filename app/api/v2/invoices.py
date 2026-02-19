@@ -5,7 +5,7 @@ from datetime import datetime, date
 import uuid
 import logging
 
-from app.api.deps import DbSession, CurrentUser
+from app.api.deps import DbSession, CurrentUser, EntityCtx
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.customer import Customer
 from app.schemas.invoice import (
@@ -19,11 +19,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def generate_invoice_number() -> str:
-    """Generate a unique invoice number."""
+def generate_invoice_number(prefix: str = "INV") -> str:
+    """Generate a unique invoice number with optional entity prefix."""
     date_part = datetime.now().strftime("%Y%m%d")
     random_part = uuid.uuid4().hex[:4].upper()
-    return f"INV-{date_part}-{random_part}"
+    return f"{prefix}-{date_part}-{random_part}"
 
 
 def invoice_to_response(invoice: Invoice, customer: Optional[Customer] = None) -> dict:
@@ -118,6 +118,7 @@ def invoice_to_response(invoice: Invoice, customer: Optional[Customer] = None) -
 async def list_invoices(
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=1000),
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -177,6 +178,13 @@ async def list_invoices(
                 query = query.where(Invoice.due_date <= to_date)
             except ValueError:
                 pass  # Invalid date format, skip filter
+
+        # Multi-entity filtering
+        if entity:
+            if entity.is_default:
+                query = query.where(or_(Invoice.entity_id == entity.id, Invoice.entity_id == None))
+            else:
+                query = query.where(Invoice.entity_id == entity.id)
 
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
@@ -261,6 +269,7 @@ async def create_invoice(
     invoice_data: InvoiceCreate,
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx,
 ):
     """Create a new invoice."""
     try:
@@ -281,9 +290,14 @@ async def create_invoice(
         # Remove None values to let DB use defaults
         data = {k: v for k, v in data.items() if v is not None}
 
-        # Generate invoice number if not provided
+        # Generate invoice number if not provided (uses entity prefix)
         if not data.get("invoice_number"):
-            data["invoice_number"] = generate_invoice_number()
+            prefix = (entity.invoice_prefix if entity and entity.invoice_prefix else "INV")
+            data["invoice_number"] = generate_invoice_number(prefix)
+
+        # Set entity_id from context
+        if entity:
+            data["entity_id"] = entity.id
 
         # Set issue date if not provided
         if not data.get("issue_date"):

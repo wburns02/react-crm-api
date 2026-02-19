@@ -72,6 +72,9 @@ class Invoice(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # Multi-entity (LLC) support
+    entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)
+
     # Relationships
     customer = relationship("Customer", backref="invoices")
 

@@ -8,7 +8,7 @@ import uuid
 import logging
 import traceback
 
-from app.api.deps import DbSession, CurrentUser
+from app.api.deps import DbSession, CurrentUser, EntityCtx
 from app.models.work_order import WorkOrder
 from app.models.customer import Customer
 from app.models.technician import Technician
@@ -182,6 +182,7 @@ def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -
 async def list_work_orders(
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=1000),
     customer_id: Optional[str] = None,
@@ -232,6 +233,13 @@ async def list_work_orders(
         if scheduled_date_to:
             query = query.where(WorkOrder.scheduled_date <= scheduled_date_to)
 
+        # Multi-entity filtering
+        if entity:
+            if entity.is_default:
+                query = query.where(or_(WorkOrder.entity_id == entity.id, WorkOrder.entity_id == None))
+            else:
+                query = query.where(WorkOrder.entity_id == entity.id)
+
         # Get total count - simple count with same filters
         count_query = select(func.count()).select_from(WorkOrder)
         if customer_id:
@@ -256,6 +264,11 @@ async def list_work_orders(
             count_query = count_query.where(WorkOrder.scheduled_date >= scheduled_date_from)
         if scheduled_date_to:
             count_query = count_query.where(WorkOrder.scheduled_date <= scheduled_date_to)
+        if entity:
+            if entity.is_default:
+                count_query = count_query.where(or_(WorkOrder.entity_id == entity.id, WorkOrder.entity_id == None))
+            else:
+                count_query = count_query.where(WorkOrder.entity_id == entity.id)
 
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
@@ -597,10 +610,13 @@ async def create_work_order(
     work_order_data: WorkOrderCreate,
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx,
 ):
     """Create a new work order."""
     data = work_order_data.model_dump()
     data["id"] = str(uuid.uuid4())
+    if entity:
+        data["entity_id"] = str(entity.id)
     data["work_order_number"] = await generate_work_order_number(db)
 
     # Set default estimated_duration_hours based on job type if not provided

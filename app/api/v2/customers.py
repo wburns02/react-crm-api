@@ -3,7 +3,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select, func, or_
 from typing import Optional
 
-from app.api.deps import DbSession, CurrentUser
+from app.api.deps import DbSession, CurrentUser, EntityCtx
 from app.models.customer import Customer
 from app.schemas.customer import (
     CustomerCreate,
@@ -27,6 +27,7 @@ router = APIRouter()
 async def list_customers(
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
     search: Optional[str] = None,
@@ -69,6 +70,13 @@ async def list_customers(
     # Default to active-only; pass include_all=true to see everything
     if not include_all and is_active is not None:
         query = query.where(Customer.is_active == is_active)
+
+    # Multi-entity filtering: NULL entity_id = default entity
+    if entity:
+        if entity.is_default:
+            query = query.where(or_(Customer.entity_id == entity.id, Customer.entity_id == None))
+        else:
+            query = query.where(Customer.entity_id == entity.id)
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
@@ -123,9 +131,12 @@ async def create_customer(
     customer_data: CustomerCreate,
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx,
 ):
     """Create a new customer."""
     customer = Customer(**customer_data.model_dump())
+    if entity:
+        customer.entity_id = entity.id
     db.add(customer)
     await db.commit()
     await db.refresh(customer)

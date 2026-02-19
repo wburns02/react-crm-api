@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -77,6 +77,9 @@ class Customer(Base):
 
     # Follow-up
     next_follow_up_date = Column(Date)
+
+    # Multi-entity (LLC) support
+    entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)
 
     # Relationships
     work_orders = relationship("WorkOrder", back_populates="customer")

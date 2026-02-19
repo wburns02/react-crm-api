@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -67,6 +67,9 @@ class Technician(Base):
     # Timestamps
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
+
+    # Multi-entity (LLC) support
+    entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)
 
     def __repr__(self):
         return f"<Technician {self.first_name} {self.last_name}>"

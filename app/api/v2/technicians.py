@@ -3,7 +3,7 @@ from sqlalchemy import select, func, or_, text as sql_text
 from typing import Optional, Literal
 import logging
 
-from app.api.deps import DbSession, CurrentUser
+from app.api.deps import DbSession, CurrentUser, EntityCtx
 from app.models.technician import Technician
 from app.schemas.technician import (
     TechnicianCreate,
@@ -196,6 +196,7 @@ def technician_to_response(tech: Technician) -> dict:
 async def list_technicians(
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
@@ -224,6 +225,14 @@ async def list_technicians(
                 "(first_name ILIKE :search OR last_name ILIKE :search OR email ILIKE :search OR employee_id ILIKE :search)"
             )
             params["search"] = f"%{search}%"
+
+        # Multi-entity filtering
+        if entity:
+            if entity.is_default:
+                where_clauses.append("(entity_id = :entity_id OR entity_id IS NULL)")
+            else:
+                where_clauses.append("entity_id = :entity_id")
+            params["entity_id"] = str(entity.id)
 
         where_sql = ""
         if where_clauses:
@@ -573,6 +582,7 @@ async def create_technician(
     technician_data: TechnicianCreate,
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx,
 ):
     """Create a new technician."""
     import uuid
@@ -592,6 +602,8 @@ async def create_technician(
         if tech_data.get("vehicle_capacity_gallons") is not None:
             tech_data["vehicle_capacity_gallons"] = int(tech_data["vehicle_capacity_gallons"])
 
+        if entity:
+            tech_data["entity_id"] = entity.id
         technician = Technician(**tech_data)
         db.add(technician)
         await db.commit()

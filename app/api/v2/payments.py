@@ -3,12 +3,12 @@ Payments API - Track invoice and customer payments.
 """
 
 from fastapi import APIRouter, HTTPException, status as http_status, Query
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from typing import Optional
 from datetime import datetime, date
 import logging
 
-from app.api.deps import DbSession, CurrentUser
+from app.api.deps import DbSession, CurrentUser, EntityCtx
 from app.models.payment import Payment
 from app.models.customer import Customer
 from app.schemas.payment import (
@@ -27,6 +27,7 @@ router = APIRouter()
 async def list_payments(
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
     customer_id: Optional[str] = None,
@@ -71,6 +72,13 @@ async def list_payments(
                 func.concat(Customer.first_name, " ", Customer.last_name).ilike(search_term)
             )
             query = query.where(Payment.customer_id.in_(matching_ids))
+
+        # Multi-entity filtering
+        if entity:
+            if entity.is_default:
+                query = query.where(or_(Payment.entity_id == entity.id, Payment.entity_id == None))
+            else:
+                query = query.where(Payment.entity_id == entity.id)
 
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())

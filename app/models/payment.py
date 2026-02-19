@@ -47,6 +47,9 @@ class Payment(Base):
     processed_at = Column(DateTime)
     payment_date = Column(DateTime)  # When payment was completed
 
+    # Multi-entity (LLC) support
+    entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)
+
     # Note: Relationship to Customer commented out to avoid import/backref issues
     # customer = relationship("Customer", backref="payments")
 

@@ -29,23 +29,23 @@ class QBOService:
     def __init__(self):
         self._client = httpx.AsyncClient(timeout=30.0)
 
-    async def _get_token(self, db: AsyncSession) -> Optional[QBOOAuthToken]:
-        """Get active QBO OAuth token from DB."""
+    async def _get_token(self, db: AsyncSession, entity_id=None) -> Optional[QBOOAuthToken]:
+        """Get active QBO OAuth token from DB, optionally scoped by entity_id."""
         try:
+            query = select(QBOOAuthToken).where(QBOOAuthToken.is_active == True)
+            if entity_id:
+                query = query.where(QBOOAuthToken.entity_id == entity_id)
             result = await db.execute(
-                select(QBOOAuthToken)
-                .where(QBOOAuthToken.is_active == True)
-                .order_by(QBOOAuthToken.created_at.desc())
-                .limit(1)
+                query.order_by(QBOOAuthToken.created_at.desc()).limit(1)
             )
             return result.scalar_one_or_none()
         except Exception:
             logger.debug("QBO token table may not exist yet", exc_info=True)
             return None
 
-    async def _get_access_token(self, db: AsyncSession) -> tuple[Optional[str], Optional[str]]:
+    async def _get_access_token(self, db: AsyncSession, entity_id=None) -> tuple[Optional[str], Optional[str]]:
         """Get access token and realm_id. Refreshes if expired."""
-        token = await self._get_token(db)
+        token = await self._get_token(db, entity_id=entity_id)
         if token:
             # Check if token needs refresh (expires within 5 min)
             if token.expires_at and token.expires_at < datetime.utcnow() + timedelta(minutes=5):
@@ -147,7 +147,7 @@ class QBOService:
         return f"{QBO_AUTH_URL}?{query}"
 
     async def exchange_code(
-        self, db: AsyncSession, code: str, redirect_uri: str, connected_by: str = ""
+        self, db: AsyncSession, code: str, redirect_uri: str, connected_by: str = "", entity_id=None
     ) -> Optional[QBOOAuthToken]:
         """Exchange authorization code for tokens."""
         client_id = getattr(settings, "QBO_CLIENT_ID", None)
@@ -172,10 +172,16 @@ class QBOService:
             response.raise_for_status()
             data = response.json()
 
-            # Deactivate any existing tokens
-            await db.execute(
-                text("UPDATE qbo_oauth_tokens SET is_active = false WHERE is_active = true")
-            )
+            # Deactivate any existing tokens for this entity
+            if entity_id:
+                await db.execute(
+                    text("UPDATE qbo_oauth_tokens SET is_active = false WHERE is_active = true AND entity_id = :eid"),
+                    {"eid": str(entity_id)},
+                )
+            else:
+                await db.execute(
+                    text("UPDATE qbo_oauth_tokens SET is_active = false WHERE is_active = true AND entity_id IS NULL")
+                )
 
             import uuid as uuid_module
             token = QBOOAuthToken(
@@ -189,6 +195,7 @@ class QBOService:
                 ),
                 is_active=True,
                 connected_by=connected_by,
+                entity_id=entity_id,
             )
             db.add(token)
             await db.commit()
@@ -208,12 +215,18 @@ class QBOService:
             logger.error("QBO code exchange failed", exc_info=True)
             return None
 
-    async def disconnect(self, db: AsyncSession) -> bool:
-        """Deactivate all QBO tokens."""
+    async def disconnect(self, db: AsyncSession, entity_id=None) -> bool:
+        """Deactivate QBO tokens, optionally scoped by entity."""
         try:
-            await db.execute(
-                text("UPDATE qbo_oauth_tokens SET is_active = false WHERE is_active = true")
-            )
+            if entity_id:
+                await db.execute(
+                    text("UPDATE qbo_oauth_tokens SET is_active = false WHERE is_active = true AND entity_id = :eid"),
+                    {"eid": str(entity_id)},
+                )
+            else:
+                await db.execute(
+                    text("UPDATE qbo_oauth_tokens SET is_active = false WHERE is_active = true AND entity_id IS NULL")
+                )
             await db.commit()
             return True
         except Exception:
@@ -222,9 +235,9 @@ class QBOService:
 
     # ── Status ──────────────────────────────────────────────────
 
-    async def get_status(self, db: AsyncSession) -> dict:
+    async def get_status(self, db: AsyncSession, entity_id=None) -> dict:
         """Get QBO connection status."""
-        token = await self._get_token(db)
+        token = await self._get_token(db, entity_id=entity_id)
         if not token:
             return {
                 "connected": False,

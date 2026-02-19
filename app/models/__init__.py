@@ -1,3 +1,4 @@
+from app.models.company_entity import CompanyEntity
 from app.models.customer import Customer
 from app.models.work_order import WorkOrder
 from app.models.message import Message

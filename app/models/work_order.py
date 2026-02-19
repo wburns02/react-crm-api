@@ -126,6 +126,9 @@ class WorkOrder(Base):
     clock_out_gps_lat = Column(Numeric)
     clock_out_gps_lon = Column(Numeric)
 
+    # Multi-entity (LLC) support
+    entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)
+
     # Relationships
     customer = relationship("Customer", back_populates="work_orders")
 

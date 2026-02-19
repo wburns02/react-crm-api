@@ -17,7 +17,7 @@ from uuid import uuid4
 import os
 import logging
 
-from app.api.deps import DbSession, CurrentUser
+from app.api.deps import DbSession, CurrentUser, EntityCtx
 from app.services.qbo_service import get_qbo_service
 
 logger = logging.getLogger(__name__)
@@ -76,10 +76,11 @@ class QBOSyncResult(BaseModel):
 async def get_quickbooks_status(
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx = None,
 ) -> QBOConnectionStatus:
     """Get QuickBooks connection status."""
     qbo = get_qbo_service()
-    status = await qbo.get_status(db)
+    status = await qbo.get_status(db, entity_id=entity.id if entity else None)
 
     return QBOConnectionStatus(
         connected=status.get("connected", False),
@@ -122,6 +123,7 @@ async def quickbooks_oauth_callback(
     realmId: str = Query(""),
     db: DbSession = None,
     current_user: CurrentUser = None,
+    entity: EntityCtx = None,
 ) -> dict:
     """Handle QuickBooks OAuth callback — exchange code for tokens."""
     qbo = get_qbo_service()
@@ -131,7 +133,7 @@ async def quickbooks_oauth_callback(
         os.environ["QBO_REALM_ID"] = realmId
 
     connected_by = current_user.email if current_user else "system"
-    token = await qbo.exchange_code(db, code, QBO_REDIRECT_URI, connected_by)
+    token = await qbo.exchange_code(db, code, QBO_REDIRECT_URI, connected_by, entity_id=entity.id if entity else None)
 
     if not token:
         raise HTTPException(status_code=400, detail="Failed to exchange OAuth code")
@@ -148,10 +150,11 @@ async def quickbooks_oauth_callback(
 async def disconnect_quickbooks(
     db: DbSession,
     current_user: CurrentUser,
+    entity: EntityCtx = None,
 ) -> dict:
     """Disconnect QuickBooks integration."""
     qbo = get_qbo_service()
-    success = await qbo.disconnect(db)
+    success = await qbo.disconnect(db, entity_id=entity.id if entity else None)
 
     if not success:
         raise HTTPException(status_code=500, detail="Failed to disconnect")

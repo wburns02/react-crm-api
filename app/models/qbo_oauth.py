@@ -1,6 +1,6 @@
 """QuickBooks Online OAuth token storage model."""
 
-from sqlalchemy import Column, String, Boolean, DateTime, Text
+from sqlalchemy import Column, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.database import Base
@@ -22,6 +22,7 @@ class QBOOAuthToken(Base):
     company_name = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     connected_by = Column(String(255), nullable=True)
+    entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)
     last_sync_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())

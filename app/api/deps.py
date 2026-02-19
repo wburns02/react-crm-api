@@ -10,8 +10,8 @@ SECURITY NOTES:
 - Session cookies are supported but Bearer is preferred
 """
 
-from typing import Annotated
-from fastapi import Depends, HTTPException, status, Cookie
+from typing import Annotated, Optional
+from fastapi import Depends, HTTPException, status, Cookie, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -136,6 +136,53 @@ async def get_current_active_user(current_user: Annotated[User, Depends(get_curr
 # Type aliases for dependency injection
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_active_user)]
+
+
+# --- Multi-Entity (LLC) Support ---
+
+from app.models.company_entity import CompanyEntity
+
+
+async def get_entity_context(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: CurrentUser,
+) -> Optional[CompanyEntity]:
+    """
+    Extract entity context from X-Entity-ID header.
+    Falls back to user's default entity, then system default.
+    Returns None only if no entities exist yet.
+    """
+    entity_id = request.headers.get("X-Entity-ID")
+
+    if entity_id:
+        result = await db.execute(
+            select(CompanyEntity).where(
+                CompanyEntity.id == entity_id,
+                CompanyEntity.is_active == True,
+            )
+        )
+        entity = result.scalar_one_or_none()
+        if entity:
+            return entity
+
+    # Fallback: user's default entity
+    if current_user.default_entity_id:
+        result = await db.execute(
+            select(CompanyEntity).where(CompanyEntity.id == current_user.default_entity_id)
+        )
+        entity = result.scalar_one_or_none()
+        if entity:
+            return entity
+
+    # Fallback: system default entity (is_default=True)
+    result = await db.execute(
+        select(CompanyEntity).where(CompanyEntity.is_default == True)
+    )
+    return result.scalar_one_or_none()
+
+
+EntityCtx = Annotated[Optional[CompanyEntity], Depends(get_entity_context)]
 
 
 async def get_current_user_ws(token: str | None, session_cookie: str | None = None) -> User | None:
