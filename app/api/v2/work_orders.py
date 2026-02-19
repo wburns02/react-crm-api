@@ -600,6 +600,21 @@ async def create_work_order(
     data["id"] = str(uuid.uuid4())
     data["work_order_number"] = await generate_work_order_number(db)
 
+    # Set default estimated_duration_hours based on job type if not provided
+    if not data.get("estimated_duration_hours"):
+        job_type_durations = {
+            "inspection": 0.5,   # 30 minutes
+            "pumping": 1.0,      # 1 hour
+            "repair": 2.0,       # 2 hours
+            "installation": 4.0, # 4 hours
+            "maintenance": 1.0,  # 1 hour
+            "grease_trap": 1.0,  # 1 hour
+            "emergency": 2.0,    # 2 hours
+        }
+        data["estimated_duration_hours"] = job_type_durations.get(
+            data.get("job_type", ""), 1.0
+        )
+
     # Auto-resolve assigned_technician → technician_id if not already set
     if data.get("assigned_technician") and not data.get("technician_id"):
         tech_name = data["assigned_technician"].strip()

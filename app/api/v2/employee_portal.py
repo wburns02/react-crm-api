@@ -295,14 +295,22 @@ async def get_employee_jobs(
                 "time_window_start": str(wo.time_window_start) if wo.time_window_start else None,
                 "time_window_end": str(wo.time_window_end) if wo.time_window_end else None,
                 "address": wo.service_address_line1,
+                "service_address_line1": wo.service_address_line1,
                 "city": wo.service_city,
+                "service_city": wo.service_city,
                 "state": wo.service_state,
+                "service_state": wo.service_state,
                 "zip": wo.service_postal_code,
+                "service_postal_code": wo.service_postal_code,
                 "latitude": wo.service_latitude,
                 "longitude": wo.service_longitude,
                 "notes": wo.notes,
                 "checklist": wo.checklist,
-                "estimated_duration_hours": wo.estimated_duration_hours,
+                "estimated_duration_hours": wo.estimated_duration_hours or (
+                    0.5 if wo.job_type == "inspection" else
+                    1.0 if wo.job_type == "pumping" else
+                    wo.estimated_duration_hours
+                ),
                 "is_clocked_in": wo.is_clocked_in,
                 "total_amount": float(wo.total_amount) if wo.total_amount else None,
                 "system_type": wo.system_type or "conventional",
@@ -348,9 +356,13 @@ async def get_employee_job(
         "time_window_start": str(work_order.time_window_start) if work_order.time_window_start else None,
         "time_window_end": str(work_order.time_window_end) if work_order.time_window_end else None,
         "address": work_order.service_address_line1,
+        "service_address_line1": work_order.service_address_line1,
         "city": work_order.service_city,
+        "service_city": work_order.service_city,
         "state": work_order.service_state,
+        "service_state": work_order.service_state,
         "zip": work_order.service_postal_code,
+        "service_postal_code": work_order.service_postal_code,
         "latitude": work_order.service_latitude,
         "longitude": work_order.service_longitude,
         "notes": work_order.notes,
@@ -365,6 +377,9 @@ async def get_employee_job(
         "internal_notes": work_order.internal_notes,
         "assigned_technician": work_order.assigned_technician,
         "estimated_gallons": work_order.estimated_gallons,
+        # KPI timer fields (from checklist JSON)
+        "en_route_time": (work_order.checklist or {}).get("en_route_time"),
+        "on_site_time": (work_order.checklist or {}).get("on_site_time"),
     }
 
 
@@ -421,28 +436,104 @@ async def start_job(
     db: DbSession = None,
     current_user: CurrentUser = None,
 ):
-    """Start a job (mark as en_route or in_progress)."""
+    """Start a job (mark as en_route or in_progress).
+
+    Status flow: scheduled → en_route → in_progress
+    - scheduled → en_route: Records en_route_time in checklist JSON
+    - en_route → in_progress: Records actual_start_time, sets is_clocked_in
+    """
     wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == job_id))
     work_order = wo_result.scalar_one_or_none()
 
     if not work_order:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    now = datetime.now(timezone.utc)
+
     if work_order.status == "scheduled":
         work_order.status = "en_route"
+        # Track en_route timestamp in checklist JSON for KPI
+        checklist = work_order.checklist or {}
+        checklist["en_route_time"] = now.isoformat()
+        work_order.checklist = checklist
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(work_order, "checklist")
     elif work_order.status == "en_route":
         work_order.status = "in_progress"
-        work_order.actual_start_time = datetime.now(timezone.utc)
+        work_order.actual_start_time = now
         work_order.is_clocked_in = True
         if latitude and longitude:
             work_order.clock_in_gps_lat = latitude
             work_order.clock_in_gps_lon = longitude
+        # Track on_site_time in checklist for KPI
+        checklist = work_order.checklist or {}
+        checklist["on_site_time"] = now.isoformat()
+        work_order.checklist = checklist
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(work_order, "checklist")
 
     await db.commit()
 
     return {
         "id": str(work_order.id),
         "status": work_order.status,
+        "actual_start_time": work_order.actual_start_time.isoformat() if work_order.actual_start_time else None,
+        "en_route_time": (work_order.checklist or {}).get("en_route_time"),
+    }
+
+
+@router.post("/jobs/{job_id}/revert-status")
+async def revert_job_status(
+    job_id: str,
+    db: DbSession = None,
+    current_user: CurrentUser = None,
+):
+    """Revert a job to its previous status (undo accidental start).
+
+    Transitions:
+    - en_route → scheduled (undo "En Route")
+    - in_progress → en_route (undo "Start Job")
+    """
+    wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == job_id))
+    work_order = wo_result.scalar_one_or_none()
+
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    previous_status = work_order.status
+
+    if work_order.status == "en_route":
+        work_order.status = "scheduled"
+        # Clear en_route timestamp
+        checklist = work_order.checklist or {}
+        checklist.pop("en_route_time", None)
+        work_order.checklist = checklist
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(work_order, "checklist")
+    elif work_order.status == "in_progress":
+        work_order.status = "en_route"
+        work_order.actual_start_time = None
+        work_order.is_clocked_in = False
+        work_order.clock_in_gps_lat = None
+        work_order.clock_in_gps_lon = None
+        # Clear on_site timestamp
+        checklist = work_order.checklist or {}
+        checklist.pop("on_site_time", None)
+        work_order.checklist = checklist
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(work_order, "checklist")
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot revert from status '{work_order.status}'. Only en_route and in_progress can be reverted.",
+        )
+
+    await db.commit()
+
+    return {
+        "id": str(work_order.id),
+        "status": work_order.status,
+        "previous_status": previous_status,
     }
 
 
