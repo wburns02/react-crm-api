@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric, ARRAY
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, Date, Numeric, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -19,8 +19,8 @@ class Technician(Base):
     employee_id = Column(String(50), unique=True, index=True)
     is_active = Column(Boolean, default=True)
 
-    # Skills (PostgreSQL TEXT[] array - matches database schema)
-    skills = Column(ARRAY(String))
+    # Skills stored as JSON array for cross-database compatibility (PostgreSQL + SQLite)
+    skills = Column(JSON)
 
     # Vehicle info
     assigned_vehicle = Column(String(100))

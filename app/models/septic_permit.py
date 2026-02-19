@@ -26,7 +26,7 @@ from sqlalchemy import (
     UniqueConstraint,
     CheckConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID, TSVECTOR, ARRAY as PG_ARRAY
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -194,13 +194,14 @@ class SepticPermit(Base):
 
     # ===== SEARCH OPTIMIZATION =====
     # Semantic search embedding (384 dimensions for all-MiniLM-L6-v2)
-    # Note: Stored as JSON for SQLite test compatibility
-    embedding = Column(PG_ARRAY(Float), nullable=True)
+    # Stored as JSON array for cross-database compatibility (PostgreSQL + SQLite)
+    embedding = Column(JSON, nullable=True)
     embedding_model = Column(String(100), nullable=True)
     embedding_updated_at = Column(DateTime(timezone=True), nullable=True)
 
     # Full-text search vector (PostgreSQL tsvector, auto-populated by trigger)
-    search_vector = Column(TSVECTOR, nullable=True)
+    # Declared as Text for cross-database compatibility; actual column is tsvector in PostgreSQL
+    search_vector = Column(Text, nullable=True)
 
     # Combined searchable text for embedding generation
     searchable_text = Column(Text, nullable=True)
@@ -312,7 +313,7 @@ class PermitVersion(Base):
     permit_data = Column(JSON, nullable=False)  # Full record snapshot
 
     # Change tracking
-    changed_fields = Column(PG_ARRAY(Text), nullable=True)  # List of fields that changed
+    changed_fields = Column(JSON, nullable=True)  # List of fields that changed
     change_source = Column(String(50), nullable=False)  # 'scraper', 'manual', 'merge', 'api'
     change_reason = Column(Text, nullable=True)
 
@@ -356,7 +357,7 @@ class PermitDuplicate(Base):
     # Duplicate detection details
     detection_method = Column(String(50), nullable=False)  # 'address_hash', 'fuzzy_match', 'manual'
     confidence_score = Column(Float, nullable=True)  # 0-100
-    matching_fields = Column(PG_ARRAY(Text), nullable=True)  # Which fields matched
+    matching_fields = Column(JSON, nullable=True)  # Which fields matched
 
     # Resolution status
     status = Column(String(20), default="pending", nullable=False)  # pending, merged, rejected, reviewed
