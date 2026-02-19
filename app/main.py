@@ -866,6 +866,7 @@ app.add_middleware(
         "X-Correlation-ID",
         "X-Request-ID",
         "X-CSRF-Token",
+        "X-Entity-ID",
         "Accept",
     ],
     expose_headers=["X-Correlation-ID", "X-Request-ID"],  # Allow frontend to read correlation headers
