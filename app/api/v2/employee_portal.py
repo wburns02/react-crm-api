@@ -1832,10 +1832,12 @@ async def save_inspection_state(
         inspection_data = body.get("inspection")
         if inspection_data:
             checklist = wo.checklist or {}
-            # Preserve persisted AI analysis if frontend didn't include it
+            # Preserve persisted AI analysis and weather if frontend didn't include them
             existing_inspection = checklist.get("inspection", {})
             if "ai_analysis" not in inspection_data and "ai_analysis" in existing_inspection:
                 inspection_data["ai_analysis"] = existing_inspection["ai_analysis"]
+            if "weather" not in inspection_data and "weather" in existing_inspection:
+                inspection_data["weather"] = existing_inspection["weather"]
             checklist["inspection"] = inspection_data
             wo.checklist = checklist
             from sqlalchemy.orm.attributes import flag_modified
@@ -2288,6 +2290,56 @@ async def create_estimate_from_inspection(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/jobs/{job_id}/inspection/weather")
+async def get_inspection_weather(
+    job_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Fetch current weather + 7-day history for an inspection job using GPS coordinates."""
+    try:
+        result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        # GPS fallback chain: service location → clock-in GPS → San Marcos TX default
+        lat = None
+        lon = None
+        gps_source = "default"
+
+        if wo.service_latitude and wo.service_longitude:
+            lat = float(wo.service_latitude)
+            lon = float(wo.service_longitude)
+            gps_source = "service_location"
+        elif wo.clock_in_gps_lat and wo.clock_in_gps_lon:
+            lat = float(wo.clock_in_gps_lat)
+            lon = float(wo.clock_in_gps_lon)
+            gps_source = "clock_in"
+
+        from app.services.weather_service import weather_service
+        weather = await weather_service.fetch_weather(lat, lon, gps_source)
+
+        # Auto-save weather to checklist
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection", {})
+        inspection["weather"] = weather
+        checklist["inspection"] = inspection
+        wo.checklist = checklist
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(wo, "checklist")
+        await db.commit()
+
+        return {"success": True, "weather": weather}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error fetching inspection weather: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/jobs/{job_id}/inspection/ai-analysis")
 async def inspection_ai_analysis(
     job_id: str,
@@ -2365,16 +2417,18 @@ async def inspection_ai_analysis(
 
         system_prompt = """You are a septic system expert and customer communication specialist for MAC Septic Services in Central Texas.
 You help field technicians create professional, clear inspection reports for homeowners.
+Consider weather and precipitation data when analyzing findings — recent heavy rain affects drain field saturation, water levels, and soil conditions.
 Respond ONLY with valid JSON (no markdown, no code blocks). Use this exact structure:
 {
-  "overall_assessment": "2-3 sentence plain English summary of system health",
+  "overall_assessment": "2-3 sentence plain English summary of system health. Reference weather impact if relevant.",
+  "weather_impact": "1-2 sentences explaining how recent weather conditions relate to the inspection findings. For example: recent rainfall may explain saturated drain fields, or dry conditions mean issues are more concerning.",
   "priority_repairs": [
     {"issue": "what's wrong", "why_it_matters": "consequence if not fixed", "urgency": "Fix today|Schedule this week|Schedule this month"}
   ],
-  "homeowner_script": "Exactly what to say to the customer — conversational tone, no jargon, reference them by name",
+  "homeowner_script": "Exactly what to say to the customer — conversational tone, no jargon, reference them by name. If weather is relevant to findings, mention it naturally.",
   "maintenance_recommendation": "Next pumping, inspection frequency, preventive tips",
   "cost_notes": "If estimate is high, suggest phasing. If low, note good value.",
-  "what_to_expect": "2-3 sentences about what the homeowner should expect from their system over the next 6-12 months based on current condition",
+  "what_to_expect": "2-3 sentences about what the homeowner should expect from their system over the next 6-12 months based on current condition and weather patterns",
   "maintenance_schedule": [
     {"timeframe": "e.g. Every 3 months", "task": "what needs to happen", "why": "brief reason"}
   ],
@@ -2388,13 +2442,26 @@ Respond ONLY with valid JSON (no markdown, no code blocks). Use this exact struc
         if system_type == "conventional" and custom_field_summary:
             system_info_text = f"\nSystem details (conventional):\n" + chr(10).join(f"- {s}" for s in custom_field_summary) + "\n"
 
+        # Extract weather context if available
+        weather_text = ""
+        weather = inspection.get("weather")
+        if weather and weather.get("current"):
+            wc = weather["current"]
+            weather_text = f"\nWeather at time of inspection: {wc.get('condition', 'Unknown')}, {wc.get('temperature_f', '?')}°F, Humidity: {wc.get('humidity_pct', '?')}%, Wind: {wc.get('wind_speed_mph', '?')} mph"
+            total_precip = weather.get("seven_day_total_precip_in", 0)
+            weather_text += f"\n7-day precipitation total: {total_precip} inches"
+            notable = weather.get("notable_events", [])
+            if notable:
+                weather_text += f"\nNotable weather events: {', '.join(notable)}"
+            weather_text += "\n"
+
         user_message = f"""Analyze this {system_type} septic inspection for {cust_name}:
 
 System type: {system_type.upper()}
 Overall condition: {overall}
 Issues: {total_issues} total ({critical_issues} critical)
 Recommend pumping: {inspection.get('recommend_pumping', False)}
-{system_info_text}
+{weather_text}{system_info_text}
 Step-by-step findings:
 {chr(10).join(step_details)}
 
