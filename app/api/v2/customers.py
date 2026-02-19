@@ -48,11 +48,15 @@ async def list_customers(
 
     # Apply filters
     if search:
+        search = search.strip()
+        # Match against concatenated full name (handles "will bur" matching "Will Burns")
+        full_name = func.concat(Customer.first_name, ' ', Customer.last_name)
         search_filter = or_(
             Customer.first_name.ilike(f"%{search}%"),
             Customer.last_name.ilike(f"%{search}%"),
             Customer.email.ilike(f"%{search}%"),
             Customer.phone.ilike(f"%{search}%"),
+            full_name.ilike(f"%{search}%"),
         )
         query = query.where(search_filter)
 
