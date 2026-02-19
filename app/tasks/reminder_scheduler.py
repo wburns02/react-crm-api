@@ -135,30 +135,52 @@ async def process_schedule_reminders(db: AsyncSession, schedule: CustomerService
     service_name = interval.name
     due_date_str = schedule.next_due_date.strftime("%B %d, %Y")
 
-    message_body = (
-        f"Hi {customer_name}! This is a reminder from Mac Septic Services. "
-        f"Your {service_name} service is due on {due_date_str}. "
-        f"Please call us at (512) 555-0123 to schedule your appointment. Thank you!"
-    )
+    # Use manufacturer-specific message for Norweco post-pumping reminders
+    if service_name == "Norweco Post-Pumping Panel Reactivation":
+        message_body = (
+            f"Hi {customer_name}! This is MAC Septic. It has been 2.5 weeks since your "
+            f"Norweco system was pumped. Please turn your control panel back ON now. "
+            f"If you need help, call us at (512) 392-1232."
+        )
+        email_subject = "Action Required: Turn Norweco Control Panel Back ON"
+        email_body = f"""Dear {customer_name},
 
-    email_subject = f"Service Reminder: {service_name} Due {due_date_str}"
-    email_body = f"""
-Dear {customer_name},
+It has been 2.5 weeks since your Norweco aerobic septic system was pumped by MAC Septic Services.
+
+ACTION REQUIRED: Please turn your control panel back ON now.
+
+This step is essential for your Norweco system to resume its biological treatment process. The system needs to restart aeration to maintain proper wastewater treatment.
+
+If you need assistance or have any questions, please call us at (512) 392-1232.
+
+Thank you for choosing MAC Septic Services!
+
+Best regards,
+MAC Septic Services Team
+"""
+    else:
+        message_body = (
+            f"Hi {customer_name}! This is a reminder from Mac Septic Services. "
+            f"Your {service_name} service is due on {due_date_str}. "
+            f"Please call us at (512) 392-1232 to schedule your appointment. Thank you!"
+        )
+        email_subject = f"Service Reminder: {service_name} Due {due_date_str}"
+        email_body = f"""Dear {customer_name},
 
 This is a friendly reminder that your {service_name} service is scheduled to be due on {due_date_str}.
 
 To ensure your septic system continues to operate efficiently, we recommend scheduling your service appointment soon.
 
 Please contact us at:
-- Phone: (512) 555-0123
+- Phone: (512) 392-1232
 - Email: service@macseptic.com
 
 Or visit our website to schedule online.
 
-Thank you for choosing Mac Septic Services!
+Thank you for choosing MAC Septic Services!
 
 Best regards,
-Mac Septic Services Team
+MAC Septic Services Team
 """
 
     # Send SMS if customer has phone

@@ -2052,6 +2052,27 @@ async def complete_inspection(
         if body.recommend_pumping:
             recommendations.append("Technician recommends scheduling pumping service.")
 
+        # Add manufacturer-specific recommendations for aerobic systems
+        mfr_id_for_summary = None
+        if wo.system_type == "aerobic":
+            step6 = steps.get("6", {})
+            mfr_label = step6.get("custom_fields", {}).get("aerobic_manufacturer", "")
+            if mfr_label:
+                _mfr_lower = mfr_label.lower().replace(" ", "").replace("/", "")
+                _mfr_map = {"norweco": "norweco", "fujiclean": "fuji", "jetinc.": "jet", "clearstream": "clearstream", "otherunknown": "other"}
+                mfr_id_for_summary = _mfr_map.get(_mfr_lower, "other")
+
+                # Air filter for all aerobic systems
+                recommendations.append("Annual air filter replacement recommended ($10 part).")
+
+                if mfr_id_for_summary == "norweco":
+                    recommendations.append("Norweco: Annual bio-kinetic basket cleaning recommended (best in warm weather). Premium contract pricing recommended.")
+                    if body.recommend_pumping:
+                        recommendations.append("Norweco pumping: Extended service required ($795). Tank refill 500-800 gallons needed. Customer MUST turn control panel back on after 2.5 weeks.")
+                elif mfr_id_for_summary == "fuji":
+                    if body.recommend_pumping:
+                        recommendations.append("CRITICAL: Fuji fiberglass tank MUST be refilled immediately after pumping to prevent tank collapse.")
+
         upsell.append("Schedule regular pumping based on sludge level observed.")
         upsell.append("Consider a maintenance plan for quarterly inspections.")
         if attention_count > 0 or critical_count > 0:
@@ -2082,7 +2103,57 @@ async def complete_inspection(
         flag_modified(wo, "checklist")
         await db.commit()
 
-        return {"success": True, "summary": summary}
+        # Create post-pumping CRM reminder for Norweco systems
+        # Uses existing ServiceInterval → CustomerServiceSchedule chain
+        # The daily scheduler at 8 AM automatically sends SMS/email when due
+        reminder_created = False
+        if mfr_id_for_summary == "norweco" and body.recommend_pumping and wo.customer_id:
+            try:
+                from app.models.service_interval import ServiceInterval, CustomerServiceSchedule
+                import uuid as uuid_mod_reminder
+
+                # Get or create the Norweco post-pumping service interval
+                si_result = await db.execute(
+                    select(ServiceInterval).where(
+                        ServiceInterval.name == "Norweco Post-Pumping Panel Reactivation"
+                    )
+                )
+                interval = si_result.scalars().first()
+                if not interval:
+                    interval = ServiceInterval(
+                        id=uuid_mod_reminder.uuid4(),
+                        name="Norweco Post-Pumping Panel Reactivation",
+                        description="Reminder to turn Norweco control panel back ON 2.5 weeks after pumping.",
+                        service_type="maintenance",
+                        interval_months=0,  # One-time, not recurring
+                        reminder_days_before=[0],  # Send on the due date
+                        is_active=True,
+                    )
+                    db.add(interval)
+                    await db.flush()
+
+                reminder_date = (datetime.now(timezone.utc) + timedelta(days=18)).date()
+
+                schedule = CustomerServiceSchedule(
+                    id=uuid_mod_reminder.uuid4(),
+                    customer_id=wo.customer_id,
+                    service_interval_id=interval.id,
+                    last_service_date=datetime.now(timezone.utc).date(),
+                    next_due_date=reminder_date,
+                    status="upcoming",
+                    reminder_sent=False,
+                    notes=f"Auto-created from inspection WO {wo.id}. Customer must turn Norweco control panel back ON.",
+                )
+                db.add(schedule)
+                await db.commit()
+                reminder_created = True
+                logger.info(f"Created Norweco post-pumping reminder for customer {wo.customer_id} due {reminder_date}")
+            except Exception as e:
+                logger.warning(f"Failed to create Norweco post-pumping reminder: {e}")
+                await db.rollback()
+                # Don't fail the inspection completion over a reminder
+
+        return {"success": True, "summary": summary, "reminder_created": reminder_created}
     except HTTPException:
         raise
     except Exception as e:
@@ -2418,6 +2489,8 @@ async def inspection_ai_analysis(
         system_prompt = """You are a septic system expert and customer communication specialist for MAC Septic Services in Central Texas.
 You help field technicians create professional, clear inspection reports for homeowners.
 Consider weather and precipitation data when analyzing findings — recent heavy rain affects drain field saturation, water levels, and soil conditions.
+For aerobic systems, consider manufacturer-specific requirements: Norweco systems need annual bio-kinetic basket cleaning and higher pumping costs; Fuji fiberglass tanks MUST be refilled after pumping; all aerobic systems need annual air filter replacement.
+Include manufacturer-specific maintenance recommendations and warnings when a manufacturer is identified.
 Respond ONLY with valid JSON (no markdown, no code blocks). Use this exact structure:
 {
   "overall_assessment": "2-3 sentence plain English summary of system health. Reference weather impact if relevant.",
@@ -2442,6 +2515,60 @@ Respond ONLY with valid JSON (no markdown, no code blocks). Use this exact struc
         if system_type == "conventional" and custom_field_summary:
             system_info_text = f"\nSystem details (conventional):\n" + chr(10).join(f"- {s}" for s in custom_field_summary) + "\n"
 
+        # Extract manufacturer context for aerobic systems
+        manufacturer_text = ""
+        if system_type == "aerobic":
+            step6 = steps.get("6", {})
+            mfr_name = step6.get("custom_fields", {}).get("aerobic_manufacturer", "")
+            if mfr_name:
+                mfr_lower = mfr_name.lower().replace(" ", "").replace("/", "")
+                # Map frontend labels to manufacturer IDs
+                mfr_map = {
+                    "norweco": "norweco",
+                    "fujiclean": "fuji",
+                    "jetinc.": "jet",
+                    "clearstream": "clearstream",
+                    "otherunknown": "other",
+                }
+                mfr_id = mfr_map.get(mfr_lower, "other")
+                mfr_rules = {
+                    "norweco": {
+                        "name": "Norweco",
+                        "pumping_notes": "Pumping costs more ($795 vs $595) — trash tank must be dug up, refill 500-800 gallons required. Customer must turn control panel back on after 2.5 weeks.",
+                        "maintenance": "Annual air filter replacement ($10). Annual bio-kinetic basket cleaning (warm weather preferred). If basket needs cleaning again within the year, upcharge applies.",
+                        "refill": "Tank MUST be refilled after pumping (500-800 gallons via water hose or natural fill).",
+                        "contracts": "Norweco contracts should be priced higher to account for bio-kinetic basket cleaning and air filter replacement.",
+                    },
+                    "fuji": {
+                        "name": "Fuji Clean",
+                        "pumping_notes": "Pumping costs slightly more ($745 vs $595). CRITICAL: Fiberglass tank MUST be refilled immediately after pumping or it WILL collapse.",
+                        "maintenance": "Annual air filter replacement ($10).",
+                        "refill": "CRITICAL: Fuji tanks are fiberglass — failure to refill immediately after pumping causes catastrophic tank collapse.",
+                        "contracts": "Standard contract pricing with air filter line item.",
+                    },
+                    "jet": {
+                        "name": "Jet Inc.",
+                        "pumping_notes": "Standard aerobic pumping procedure ($595).",
+                        "maintenance": "Annual air filter replacement ($10).",
+                        "refill": "No special refill requirements.",
+                        "contracts": "Standard contract pricing.",
+                    },
+                    "clearstream": {
+                        "name": "Clearstream",
+                        "pumping_notes": "Standard aerobic pumping procedure ($595).",
+                        "maintenance": "Annual air filter replacement ($10).",
+                        "refill": "No special refill requirements.",
+                        "contracts": "Standard contract pricing.",
+                    },
+                }
+                rules = mfr_rules.get(mfr_id)
+                if rules:
+                    manufacturer_text = f"\nAerobic system manufacturer: {rules['name']}"
+                    manufacturer_text += f"\nPumping: {rules['pumping_notes']}"
+                    manufacturer_text += f"\nMaintenance: {rules['maintenance']}"
+                    manufacturer_text += f"\nRefill requirements: {rules['refill']}"
+                    manufacturer_text += f"\nContract notes: {rules['contracts']}\n"
+
         # Extract weather context if available
         weather_text = ""
         weather = inspection.get("weather")
@@ -2461,7 +2588,7 @@ System type: {system_type.upper()}
 Overall condition: {overall}
 Issues: {total_issues} total ({critical_issues} critical)
 Recommend pumping: {inspection.get('recommend_pumping', False)}
-{weather_text}{system_info_text}
+{weather_text}{manufacturer_text}{system_info_text}
 Step-by-step findings:
 {chr(10).join(step_details)}
 
