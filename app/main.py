@@ -1046,6 +1046,92 @@ async def database_health_check():
     return checks
 
 
+@app.post("/health/db/migrate-entities")
+async def run_entities_migration():
+    """Run migration 063: create company_entities table and add entity_id columns."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"steps": [], "errors": []}
+
+    async with async_session_maker() as session:
+        try:
+            # 1. Create company_entities table if not exists
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS company_entities (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name VARCHAR(100) NOT NULL,
+                    short_code VARCHAR(10) UNIQUE,
+                    tax_id VARCHAR(20),
+                    address_line1 VARCHAR(255),
+                    address_line2 VARCHAR(255),
+                    city VARCHAR(100),
+                    state VARCHAR(50),
+                    postal_code VARCHAR(20),
+                    phone VARCHAR(20),
+                    email VARCHAR(255),
+                    logo_url VARCHAR(500),
+                    invoice_prefix VARCHAR(10),
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ
+                )
+            """))
+            results["steps"].append("company_entities table ensured")
+
+            # 2. Seed default entity if empty
+            r = await session.execute(text("SELECT count(*) FROM company_entities"))
+            if r.scalar() == 0:
+                await session.execute(text("""
+                    INSERT INTO company_entities (id, name, short_code, invoice_prefix, is_active, is_default, state)
+                    VALUES (gen_random_uuid(), 'Mac Septic, LLC', 'MACLLC', 'MACLLC', TRUE, TRUE, 'SC')
+                """))
+                results["steps"].append("seeded default entity")
+
+            # 3. Add entity_id columns to core tables
+            tables_with_entity = [
+                "customers", "work_orders", "invoices", "payments",
+                "technicians", "clover_oauth_tokens", "qbo_oauth_tokens"
+            ]
+            for table in tables_with_entity:
+                r = await session.execute(text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = :t AND column_name = 'entity_id'"
+                ), {"t": table})
+                if r.fetchone() is None:
+                    await session.execute(text(
+                        f'ALTER TABLE {table} ADD COLUMN entity_id UUID REFERENCES company_entities(id)'
+                    ))
+                    await session.execute(text(
+                        f'CREATE INDEX IF NOT EXISTS ix_{table}_entity_id ON {table}(entity_id)'
+                    ))
+                    results["steps"].append(f"added entity_id to {table}")
+                else:
+                    results["steps"].append(f"{table}.entity_id already exists")
+
+            # 4. Add default_entity_id to api_users
+            r = await session.execute(text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'api_users' AND column_name = 'default_entity_id'"
+            ))
+            if r.fetchone() is None:
+                await session.execute(text(
+                    'ALTER TABLE api_users ADD COLUMN default_entity_id UUID REFERENCES company_entities(id)'
+                ))
+                results["steps"].append("added default_entity_id to api_users")
+            else:
+                results["steps"].append("api_users.default_entity_id already exists")
+
+            await session.commit()
+            results["success"] = True
+        except Exception as e:
+            results["errors"].append(f"{type(e).__name__}: {str(e)}")
+            results["success"] = False
+
+    return results
+
+
 @app.post("/health/db/migrate")
 async def run_database_migrations():
     """Reset alembic and run migrations from scratch."""
