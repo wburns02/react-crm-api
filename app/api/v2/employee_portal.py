@@ -1634,6 +1634,7 @@ class InspectionStepUpdate(BaseModel):
     sludge_level: Optional[str] = None
     psi_reading: Optional[str] = None
     selected_parts: Optional[List[str]] = None
+    custom_fields: Optional[dict] = None  # For conventional: {tank_location, tank_depth, ...}
 
 
 class InspectionStartRequest(BaseModel):
@@ -1781,6 +1782,11 @@ async def update_inspection_step(
             existing["psi_reading"] = body.psi_reading
         if body.selected_parts is not None:
             existing["selected_parts"] = body.selected_parts
+        if body.custom_fields is not None:
+            # Merge custom fields (don't overwrite entire dict on partial update)
+            existing_cf = existing.get("custom_fields", {})
+            existing_cf.update(body.custom_fields)
+            existing["custom_fields"] = existing_cf
 
         steps[step_key] = existing
         inspection["steps"] = steps
@@ -2117,8 +2123,12 @@ async def create_estimate_from_inspection(
         if not steps:
             raise HTTPException(status_code=400, detail="No inspection steps recorded")
 
+        # Determine system type
+        system_type = getattr(wo, "system_type", None) or "aerobic"
+
         # Parts catalog keyed by step number (mirrors frontend inspectionSteps.ts)
-        STEP_PARTS = {
+        # Aerobic parts (16-step aerobic inspection)
+        AEROBIC_STEP_PARTS = {
             7: [
                 {"service": "Replacement lid", "part": "LID-24-GRN", "rate": 125},
                 {"service": "Replacement lid screws", "part": "LID-SCR-SS", "rate": 8},
@@ -2147,6 +2157,30 @@ async def create_estimate_from_inspection(
                 {"service": "Spray head (replacement)", "part": "SPR-HD-360", "rate": 15},
             ],
         }
+
+        # Conventional parts (16-step conventional inspection)
+        CONVENTIONAL_STEP_PARTS = {
+            9: [  # Tank condition
+                {"service": "Replacement lid", "part": "LID-24-CON", "rate": 125},
+                {"service": "Inlet/outlet baffle repair", "part": "BFL-PVC-4IN", "rate": 85},
+                {"service": "Riser extension", "part": "RSR-24-CON", "rate": 65},
+            ],
+            10: [  # Visible damage
+                {"service": "Lid replacement", "part": "LID-24-CON", "rate": 125},
+                {"service": "Riser repair", "part": "RSR-REPAIR", "rate": 95},
+                {"service": "Root treatment", "part": "ROOT-TREAT-1GAL", "rate": 45},
+            ],
+            11: [  # Drain field leaching
+                {"service": "Drain field repair", "part": "DRN-REPAIR", "rate": 250},
+                {"service": "Distribution box repair", "part": "DBOX-REPAIR", "rate": 150},
+            ],
+            12: [  # Drain field saturation
+                {"service": "Drain field aeration", "part": "DRN-AERATE", "rate": 175},
+                {"service": "Drain field extension", "part": "DRN-EXT-50FT", "rate": 450},
+            ],
+        }
+
+        STEP_PARTS = CONVENTIONAL_STEP_PARTS if system_type == "conventional" else AEROBIC_STEP_PARTS
 
         line_items = []
         issue_step_count = 0
@@ -2287,11 +2321,23 @@ async def inspection_ai_analysis(
             if cust:
                 cust_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "the homeowner"
 
+        # Determine system type (conventional vs aerobic)
+        system_type = getattr(wo, "system_type", None) or "aerobic"
+
         # Build inspection context for AI
         step_details = []
+        custom_field_summary = []
         for step_num in sorted(steps.keys(), key=lambda x: int(x)):
             s = steps[step_num]
             finding = s.get("findings", "ok")
+
+            # Collect custom fields (conventional inspections store structured data)
+            cf = s.get("custom_fields", {})
+            for cf_key, cf_val in cf.items():
+                if cf_val:
+                    label = cf_key.replace("_", " ").title()
+                    custom_field_summary.append(f"{label}: {cf_val}")
+
             if finding == "ok":
                 step_details.append(f"Step {step_num}: OK")
             else:
@@ -2337,12 +2383,18 @@ Respond ONLY with valid JSON (no markdown, no code blocks). Use this exact struc
   ]
 }"""
 
-        user_message = f"""Analyze this septic inspection for {cust_name}:
+        # Build system info section for conventional
+        system_info_text = ""
+        if system_type == "conventional" and custom_field_summary:
+            system_info_text = f"\nSystem details (conventional):\n" + chr(10).join(f"- {s}" for s in custom_field_summary) + "\n"
 
+        user_message = f"""Analyze this {system_type} septic inspection for {cust_name}:
+
+System type: {system_type.upper()}
 Overall condition: {overall}
 Issues: {total_issues} total ({critical_issues} critical)
 Recommend pumping: {inspection.get('recommend_pumping', False)}
-
+{system_info_text}
 Step-by-step findings:
 {chr(10).join(step_details)}
 
