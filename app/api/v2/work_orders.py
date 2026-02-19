@@ -139,7 +139,10 @@ def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -
         "scheduled_date": wo.scheduled_date,
         "time_window_start": wo.time_window_start,
         "time_window_end": wo.time_window_end,
-        "estimated_duration_hours": wo.estimated_duration_hours,
+        "estimated_duration_hours": wo.estimated_duration_hours or {
+            "inspection": 0.5, "pumping": 1.0, "repair": 2.0,
+            "installation": 4.0, "maintenance": 1.0, "grease_trap": 1.0, "emergency": 2.0,
+        }.get(str(wo.job_type) if wo.job_type else "", 1.0),
         "service_address_line1": wo.service_address_line1,
         "service_address_line2": wo.service_address_line2,
         "service_city": wo.service_city,
