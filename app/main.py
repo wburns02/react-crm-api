@@ -1327,6 +1327,65 @@ async def fix_alembic_version():
     return results
 
 
+@app.post("/health/db/run-migration-065")
+async def run_migration_065():
+    """Run migration 065: change payments.invoice_id from INTEGER to UUID.
+
+    The alembic_version was stamped to 065 but the actual DDL never ran.
+    This endpoint applies the migration SQL directly.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"errors": [], "steps": []}
+
+    try:
+        async with async_session_maker() as session:
+            # Check current column type
+            col_result = await session.execute(text(
+                "SELECT data_type FROM information_schema.columns "
+                "WHERE table_name = 'payments' AND column_name = 'invoice_id'"
+            ))
+            current_type = col_result.scalar_one_or_none()
+            results["invoice_id_type_before"] = current_type
+
+            if current_type == "uuid":
+                results["steps"].append("invoice_id already UUID — no action needed")
+                results["success"] = True
+                return results
+
+            # Drop old INTEGER column and add UUID column
+            await session.execute(text("ALTER TABLE payments DROP COLUMN IF EXISTS invoice_id"))
+            results["steps"].append("dropped old invoice_id column")
+
+            await session.execute(text(
+                "ALTER TABLE payments ADD COLUMN invoice_id UUID"
+            ))
+            results["steps"].append("added invoice_id as UUID column")
+
+            await session.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_payments_invoice_id ON payments (invoice_id)"
+            ))
+            results["steps"].append("created index on invoice_id")
+
+            await session.commit()
+
+            # Verify
+            col_result = await session.execute(text(
+                "SELECT data_type FROM information_schema.columns "
+                "WHERE table_name = 'payments' AND column_name = 'invoice_id'"
+            ))
+            results["invoice_id_type_after"] = col_result.scalar_one_or_none()
+
+        results["success"] = True
+
+    except Exception as e:
+        results["errors"].append(f"{type(e).__name__}: {str(e)}")
+        results["success"] = False
+
+    return results
+
+
 @app.post("/health/db/create-admin")
 async def create_admin_user():
     """Create or reset admin user for testing."""
