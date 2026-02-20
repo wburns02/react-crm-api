@@ -12,11 +12,11 @@ Endpoints:
 """
 
 import logging
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import func, case, select, text, or_
+from sqlalchemy import func, case, select, or_
 from sqlalchemy.exc import OperationalError
 
 from app.api.deps import DbSession, CurrentUser
@@ -51,7 +51,7 @@ async def _compute_tech_stats(db: DbSession, days: int = 90) -> list[dict]:
         WorkOrder.technician_id == Technician.id,
         isouter=False,
     ).where(
-        WorkOrder.created_at >= datetime.combine(since, datetime.min.time()),
+        WorkOrder.scheduled_date >= since,
     ).group_by(Technician.id, Technician.first_name, Technician.last_name)
 
     uuid_result = await db.execute(uuid_q)
@@ -66,7 +66,7 @@ async def _compute_tech_stats(db: DbSession, days: int = 90) -> list[dict]:
         WorkOrder.assigned_technician.isnot(None),
         WorkOrder.assigned_technician != "",
         WorkOrder.technician_id.is_(None),  # only unclaimed by UUID
-        WorkOrder.created_at >= datetime.combine(since, datetime.min.time()),
+        WorkOrder.scheduled_date >= since,
     ).group_by(WorkOrder.assigned_technician)
 
     name_result = await db.execute(name_q)
@@ -79,7 +79,7 @@ async def _compute_tech_stats(db: DbSession, days: int = 90) -> list[dict]:
         func.count(WorkOrder.id).label("cnt"),
     ).where(
         WorkOrder.assigned_technician.isnot(None),
-        WorkOrder.created_at >= datetime.combine(since, datetime.min.time()),
+        WorkOrder.scheduled_date >= since,
     ).group_by(WorkOrder.assigned_technician, WorkOrder.job_type)
     top_job_result = await db.execute(top_job_q)
     top_job_rows = top_job_result.all()
@@ -99,7 +99,7 @@ async def _compute_tech_stats(db: DbSession, days: int = 90) -> list[dict]:
         func.count(WorkOrder.id).label("cnt"),
     ).where(
         WorkOrder.technician_id.isnot(None),
-        WorkOrder.created_at >= datetime.combine(since, datetime.min.time()),
+        WorkOrder.scheduled_date >= since,
     ).group_by(WorkOrder.technician_id, WorkOrder.job_type)
     top_job_uuid_result = await db.execute(top_job_uuid_q)
     top_job_uuid_rows = top_job_uuid_result.all()
@@ -444,7 +444,7 @@ async def get_team_benchmarks(
             func.count(WorkOrder.id).label("total"),
             func.count(case((WorkOrder.status == "completed", 1))).label("completed"),
         ).where(
-            WorkOrder.created_at >= datetime.combine(since, datetime.min.time()),
+            WorkOrder.scheduled_date >= since,
         )
         total_result = await db.execute(total_q)
         totals = total_result.one()
