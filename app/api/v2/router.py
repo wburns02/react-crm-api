@@ -103,6 +103,8 @@ from app.api.v2 import (
     email_templates,
     # Social Integrations (Yelp, Facebook)
     social_integrations,
+    # Integration Status
+    integration_status,
     # Phase 29: Smart Dispatch
     dispatch,
     # Phase 30: Company Assets Management
@@ -296,6 +298,9 @@ api_router.include_router(email_templates.router, prefix="/email-templates", tag
 
 # Social Integrations (Yelp, Facebook)
 api_router.include_router(social_integrations.router, prefix="/integrations/social", tags=["social-integrations"])
+
+# Integration Status (which env vars are configured)
+api_router.include_router(integration_status.router)
 
 # Phase 29: Smart Dispatch
 api_router.include_router(dispatch.router, prefix="/dispatch", tags=["dispatch"])

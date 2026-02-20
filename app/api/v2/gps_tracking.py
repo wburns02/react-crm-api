@@ -6,6 +6,8 @@ Real-time location tracking, ETA, geofencing, and customer tracking links
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, BackgroundTasks, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_
 from typing import Optional, List
 from datetime import datetime, timedelta
 
@@ -296,25 +298,45 @@ async def create_tracking_link(
     Returns a URL that customers can use to track their technician.
     """
     from app.models.work_order import WorkOrder
+    from app.models.gps_tracking import CustomerTrackingLink, TrackingLinkStatus
 
-    work_order = db.query(WorkOrder).filter(WorkOrder.id == data.work_order_id).first()
+    result = await db.execute(select(WorkOrder).where(WorkOrder.id == data.work_order_id))
+    work_order = result.scalar_one_or_none()
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
 
     if not work_order.technician_id:
         raise HTTPException(status_code=400, detail="Work order has no assigned technician")
 
-    service = GPSTrackingService(db)
-    link = service.create_tracking_link(
+    # Deactivate existing active links for this work order
+    existing = await db.execute(
+        select(CustomerTrackingLink).where(
+            and_(
+                CustomerTrackingLink.work_order_id == data.work_order_id,
+                CustomerTrackingLink.status == TrackingLinkStatus.ACTIVE,
+            )
+        )
+    )
+    for old_link in existing.scalars().all():
+        old_link.status = TrackingLinkStatus.EXPIRED
+
+    token = CustomerTrackingLink.generate_token()
+    expires_at = datetime.utcnow() + timedelta(hours=data.expires_hours)
+    link = CustomerTrackingLink(
+        token=token,
         work_order_id=data.work_order_id,
         customer_id=work_order.customer_id,
         technician_id=work_order.technician_id,
-        expires_hours=data.expires_hours,
+        status=TrackingLinkStatus.ACTIVE,
         show_technician_name=data.show_technician_name,
         show_technician_photo=data.show_technician_photo,
         show_live_map=data.show_live_map,
         show_eta=data.show_eta,
+        expires_at=expires_at,
     )
+    db.add(link)
+    await db.commit()
+    await db.refresh(link)
 
     return TrackingLinkResponse(
         id=link.id,
@@ -339,12 +361,12 @@ async def get_tracking_links(
     """Get all tracking links for a work order."""
     from app.models.gps_tracking import CustomerTrackingLink
 
-    links = (
-        db.query(CustomerTrackingLink)
-        .filter(CustomerTrackingLink.work_order_id == work_order_id)
+    result = await db.execute(
+        select(CustomerTrackingLink)
+        .where(CustomerTrackingLink.work_order_id == work_order_id)
         .order_by(CustomerTrackingLink.created_at.desc())
-        .all()
     )
+    links = result.scalars().all()
 
     return [
         TrackingLinkResponse(
@@ -836,7 +858,10 @@ async def update_global_config(
     """Update global GPS tracking configuration."""
     from app.models.gps_tracking import GPSTrackingConfig
 
-    config = db.query(GPSTrackingConfig).filter(GPSTrackingConfig.technician_id == None).first()
+    result = await db.execute(
+        select(GPSTrackingConfig).where(GPSTrackingConfig.technician_id == None)
+    )
+    config = result.scalar_one_or_none()
 
     if not config:
         config = GPSTrackingConfig(technician_id=None)
@@ -845,8 +870,8 @@ async def update_global_config(
     for key, value in update.model_dump(exclude_unset=True).items():
         setattr(config, key, value)
 
-    db.commit()
-    db.refresh(config)
+    await db.commit()
+    await db.refresh(config)
 
     return GPSConfigResponse(
         id=config.id,
@@ -879,11 +904,17 @@ async def get_technician_config(
     from app.models.gps_tracking import GPSTrackingConfig
 
     # Try technician-specific config
-    config = db.query(GPSTrackingConfig).filter(GPSTrackingConfig.technician_id == technician_id).first()
+    result = await db.execute(
+        select(GPSTrackingConfig).where(GPSTrackingConfig.technician_id == technician_id)
+    )
+    config = result.scalar_one_or_none()
 
     # Fall back to global
     if not config:
-        config = db.query(GPSTrackingConfig).filter(GPSTrackingConfig.technician_id == None).first()
+        result = await db.execute(
+            select(GPSTrackingConfig).where(GPSTrackingConfig.technician_id == None)
+        )
+        config = result.scalar_one_or_none()
 
     if not config:
         # Return defaults

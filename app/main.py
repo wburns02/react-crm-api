@@ -1728,7 +1728,6 @@ async def create_core_tables():
                 pto_balance_hours NUMERIC,
                 pto_accrual_rate NUMERIC,
                 hire_date DATE,
-                hired_date DATE,
                 department VARCHAR(100),
                 external_payroll_id VARCHAR(100),
                 notes TEXT,

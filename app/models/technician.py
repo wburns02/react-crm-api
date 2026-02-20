@@ -48,7 +48,6 @@ class Technician(Base):
 
     # Employment
     hire_date = Column(Date)
-    hired_date = Column(Date)  # Legacy duplicate column
     department = Column(String(100))
     external_payroll_id = Column(String(100))
 
