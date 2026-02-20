@@ -2103,6 +2103,20 @@ async def complete_inspection(
         flag_modified(wo, "checklist")
         await db.commit()
 
+        # Auto-update customer system_type + manufacturer if not already set
+        # This ensures the Norweco pricing callout fires in NewContractForm
+        if wo.customer_id and wo.system_type == "aerobic":
+            try:
+                cust_result = await db.execute(select(Customer).where(Customer.id == wo.customer_id))
+                cust = cust_result.scalar_one_or_none()
+                if cust and not cust.system_type:
+                    cust.system_type = "aerobic"
+                    if mfr_id_for_summary:
+                        cust.manufacturer = mfr_id_for_summary
+                    await db.commit()
+            except Exception:
+                pass  # Non-critical — don't fail the inspection completion
+
         # Create post-pumping CRM reminder for Norweco systems
         # Uses existing ServiceInterval → CustomerServiceSchedule chain
         # The daily scheduler at 8 AM automatically sends SMS/email when due
