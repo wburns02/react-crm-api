@@ -385,24 +385,16 @@ async def clover_webhook(
                 created_ms = data.get("createdTime") or 0
                 created_dt = datetime.utcfromtimestamp(created_ms / 1000) if created_ms else datetime.utcnow()
 
-                await db.execute(
-                    text("""
-                        INSERT INTO payments (amount, currency, payment_method, status,
-                            stripe_payment_intent_id, description, payment_date, processed_at)
-                        VALUES (:amount, :currency, :method, :status,
-                            :charge_id, :description, :payment_date, :processed_at)
-                    """),
-                    {
-                        "amount": round(amount_cents / 100, 2),
-                        "currency": "USD",
-                        "method": _normalize_payment_method(tender.get("label") or "card"),
-                        "status": "completed" if data.get("result") == "SUCCESS" else "pending",
-                        "charge_id": clover_payment_id,
-                        "description": "Clover payment (webhook)",
-                        "payment_date": created_dt,
-                        "processed_at": created_dt,
-                    },
-                )
+                db.add(Payment(
+                    amount=round(amount_cents / 100, 2),
+                    currency="USD",
+                    payment_method=_normalize_payment_method(tender.get("label") or "card"),
+                    status="completed" if data.get("result") == "SUCCESS" else "pending",
+                    stripe_payment_intent_id=clover_payment_id,
+                    description="Clover payment (webhook)",
+                    payment_date=created_dt,
+                    processed_at=created_dt,
+                ))
                 await db.commit()
                 logger.info(f"Auto-synced Clover payment {clover_payment_id} via webhook")
 
@@ -614,26 +606,16 @@ async def sync_clover_payments(
                 amount_val = round(amount_cents / 100, 2)
                 method_label = _normalize_payment_method(tender.get("label") or "card")
 
-                # Use raw SQL to avoid ORM type mismatch (model has invoice_id as UUID
-                # but actual DB column is integer)
-                await db.execute(
-                    text("""
-                        INSERT INTO payments (amount, currency, payment_method, status,
-                            stripe_payment_intent_id, description, payment_date, processed_at)
-                        VALUES (:amount, :currency, :method, :status,
-                            :charge_id, :description, :payment_date, :processed_at)
-                    """),
-                    {
-                        "amount": amount_val,
-                        "currency": "USD",
-                        "method": method_label,
-                        "status": "completed",
-                        "charge_id": clover_id,
-                        "description": "Clover POS payment (synced)",
-                        "payment_date": created_dt,
-                        "processed_at": created_dt,
-                    },
-                )
+                db.add(Payment(
+                    amount=amount_val,
+                    currency="USD",
+                    payment_method=method_label,
+                    status="completed",
+                    stripe_payment_intent_id=clover_id,
+                    description="Clover POS payment (synced)",
+                    payment_date=created_dt,
+                    processed_at=created_dt,
+                ))
                 synced += 1
             except Exception as e:
                 logger.error(f"Error syncing Clover payment {clover_id}: {e}")
@@ -851,28 +833,20 @@ async def collect_payment(
         desc_parts.append(request.notes)
     description = ". ".join(desc_parts)
 
-    # Insert payment via raw SQL (invoice_id type mismatch workaround)
-    await db.execute(
-        text("""
-            INSERT INTO payments (id, customer_id, work_order_id, amount, currency,
-                payment_method, status, description, payment_date, processed_at, entity_id)
-            VALUES (:id, :customer_id, :work_order_id, :amount, :currency,
-                :payment_method, :status, :description, :payment_date, :processed_at, :entity_id)
-        """),
-        {
-            "id": str(payment_id),
-            "customer_id": customer_id,
-            "work_order_id": request.work_order_id,
-            "amount": request.amount,
-            "currency": "USD",
-            "payment_method": request.payment_method,
-            "status": "completed",
-            "description": description,
-            "payment_date": now_naive,
-            "processed_at": now_naive,
-            "entity_id": str(entity.id) if entity else None,
-        },
-    )
+    db.add(Payment(
+        id=payment_id,
+        customer_id=uuid.UUID(customer_id) if customer_id else None,
+        work_order_id=uuid.UUID(request.work_order_id) if request.work_order_id else None,
+        invoice_id=uuid.UUID(invoice_id_str) if invoice_id_str else None,
+        amount=request.amount,
+        currency="USD",
+        payment_method=request.payment_method,
+        status="completed",
+        description=description,
+        payment_date=now_naive,
+        processed_at=now_naive,
+        entity_id=entity.id if entity else None,
+    ))
 
     # Add payment note to work order
     if work_order:

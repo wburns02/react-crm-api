@@ -59,8 +59,7 @@ class Quote(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     sent_at = Column(DateTime(timezone=True))
 
-    # Note: Relationship commented out to avoid import/backref issues
-    # customer = relationship("Customer", backref="quotes")
+    customer = relationship("Customer", foreign_keys=[customer_id], lazy="selectin")
 
     def __repr__(self):
         return f"<Quote {self.quote_number}>"

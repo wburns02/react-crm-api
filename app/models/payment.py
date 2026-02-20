@@ -50,8 +50,7 @@ class Payment(Base):
     # Multi-entity (LLC) support
     entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)
 
-    # Note: Relationship to Customer commented out to avoid import/backref issues
-    # customer = relationship("Customer", backref="payments")
+    customer = relationship("Customer", foreign_keys=[customer_id], lazy="selectin")
 
     def __repr__(self):
         return f"<Payment {self.id} ${self.amount}>"

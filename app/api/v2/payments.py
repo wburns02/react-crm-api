@@ -4,6 +4,7 @@ Payments API - Track invoice and customer payments.
 
 from fastapi import APIRouter, HTTPException, status as http_status, Query
 from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, date
 import logging
@@ -87,30 +88,27 @@ async def list_payments(
 
         # Apply pagination - Flask uses created_at not payment_date
         offset = (page - 1) * page_size
-        query = query.offset(offset).limit(page_size).order_by(Payment.created_at.desc())
+        query = (
+            query.offset(offset)
+            .limit(page_size)
+            .order_by(Payment.created_at.desc())
+            .options(selectinload(Payment.customer))
+        )
 
         # Execute query
         result = await db.execute(query)
         payments = result.scalars().all()
 
-        # Batch-fetch customer names for display
-        customer_ids = {p.customer_id for p in payments if p.customer_id}
-        customers_map = {}
-        if customer_ids:
-            cust_result = await db.execute(
-                select(Customer).where(Customer.id.in_(customer_ids))
-            )
-            for c in cust_result.scalars().all():
-                name = f"{c.first_name or ''} {c.last_name or ''}".strip()
-                customers_map[c.id] = name or None
-
-        # Build response with computed fields
+        # Build response with computed fields (customer loaded via relationship)
         items = []
         for p in payments:
+            customer_name = None
+            if p.customer:
+                customer_name = f"{p.customer.first_name or ''} {p.customer.last_name or ''}".strip() or None
             items.append(PaymentResponse(
                 id=p.id,
                 customer_id=p.customer_id,
-                customer_name=customers_map.get(p.customer_id),
+                customer_name=customer_name,
                 work_order_id=p.work_order_id,
                 amount=float(p.amount) if p.amount else 0,
                 currency=p.currency,
