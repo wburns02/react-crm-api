@@ -2167,6 +2167,55 @@ async def complete_inspection(
                 await db.rollback()
                 # Don't fail the inspection completion over a reminder
 
+        elif mfr_id_for_summary == "fuji" and body.recommend_pumping and wo.customer_id:
+            # Fuji Clean post-pumping refill reminder — 1 day after pumping.
+            # Technician calls customer the NEXT DAY to confirm tank was refilled.
+            # Fiberglass tanks will collapse if left empty — this is a critical safety reminder.
+            try:
+                from app.models.service_interval import ServiceInterval, CustomerServiceSchedule
+                import uuid as uuid_mod_fuji
+
+                # Get or create the Fuji Clean post-pumping service interval
+                si_result = await db.execute(
+                    select(ServiceInterval).where(
+                        ServiceInterval.name == "Fuji Clean Post-Pumping Refill Required"
+                    )
+                )
+                interval = si_result.scalars().first()
+                if not interval:
+                    interval = ServiceInterval(
+                        id=uuid_mod_fuji.uuid4(),
+                        name="Fuji Clean Post-Pumping Refill Required",
+                        description="Call customer the day after pumping to confirm fiberglass tank was refilled. Fuji tanks collapse without water weight.",
+                        service_type="maintenance",
+                        interval_months=0,  # One-time, not recurring
+                        reminder_days_before=[0],  # Send on the due date
+                        is_active=True,
+                    )
+                    db.add(interval)
+                    await db.flush()
+
+                reminder_date = (datetime.now(timezone.utc) + timedelta(days=1)).date()
+
+                schedule = CustomerServiceSchedule(
+                    id=uuid_mod_fuji.uuid4(),
+                    customer_id=wo.customer_id,
+                    service_interval_id=interval.id,
+                    last_service_date=datetime.now(timezone.utc).date(),
+                    next_due_date=reminder_date,
+                    status="upcoming",
+                    reminder_sent=False,
+                    notes=f"Auto-created from inspection WO {wo.id}. CRITICAL: Call customer to confirm Fuji Clean fiberglass tank was refilled after pumping. Tank will collapse if left empty.",
+                )
+                db.add(schedule)
+                await db.commit()
+                reminder_created = True
+                logger.info(f"Created Fuji Clean post-pumping refill reminder for customer {wo.customer_id} due {reminder_date}")
+            except Exception as e:
+                logger.warning(f"Failed to create Fuji Clean post-pumping reminder: {e}")
+                await db.rollback()
+                # Don't fail the inspection completion over a reminder
+
         return {"success": True, "summary": summary, "reminder_created": reminder_created}
     except HTTPException:
         raise
