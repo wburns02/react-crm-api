@@ -148,6 +148,9 @@ class WorkOrderResponse(WorkOrderBase):
     clock_out_gps_lat: Optional[float] = None
     clock_out_gps_lon: Optional[float] = None
 
+    # Notification (populated on PATCH responses when status → completed)
+    notification_sent: Optional[bool] = False
+
     class Config:
         from_attributes = True
 

@@ -835,6 +835,30 @@ async def update_work_order(
             await db.rollback()
             logger.warning(f"Auto-invoice generation failed for WO {work_order_id}: {e}")
 
+    # Auto-notify customer via SMS when job is marked completed
+    notification_sent = False
+    if old_status != new_status and new_status == "completed":
+        try:
+            from app.services.twilio_service import TwilioService
+            if work_order.customer_id and customer:
+                phone = customer.phone
+                if phone:
+                    addr_parts = [work_order.service_address_line1, work_order.service_city]
+                    addr = ", ".join(p for p in addr_parts if p) or "your property"
+                    msg = (
+                        f"Hi {customer.first_name}! Your septic service at {addr} is complete. "
+                        f"Thank you for choosing MAC Septic. Questions? Call (512) 353-0555."
+                    )
+                    sms = TwilioService()
+                    if sms.is_configured:
+                        await sms.send_sms(to=phone, body=msg)
+                        notification_sent = True
+                        logger.info(f"Completion SMS sent to {phone} for WO {work_order_id}")
+                    else:
+                        logger.info("Twilio not configured — completion SMS skipped")
+        except Exception as e:
+            logger.warning(f"Completion SMS failed for WO {work_order_id}: {e}")
+
     # Status change event
     if old_status != new_status:
         await manager.broadcast_event(
@@ -879,7 +903,9 @@ async def update_work_order(
             },
         )
 
-    return work_order_with_customer_name(work_order, customer)
+    response_data = work_order_with_customer_name(work_order, customer)
+    response_data["notification_sent"] = notification_sent
+    return response_data
 
 
 @router.delete("/{work_order_id}", status_code=status.HTTP_204_NO_CONTENT)

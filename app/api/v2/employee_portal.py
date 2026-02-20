@@ -413,6 +413,7 @@ async def patch_employee_job(
     if not work_order:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    old_status_patch = str(work_order.status) if work_order.status else None
     work_order.status = request.status
 
     if request.notes:
@@ -422,9 +423,33 @@ async def patch_employee_job(
 
     await db.commit()
 
+    # Auto-notify customer via SMS when status changes to completed
+    notification_sent = False
+    if old_status_patch != request.status and request.status == "completed":
+        try:
+            from app.services.twilio_service import TwilioService
+            if work_order.customer_id:
+                cust_result = await db.execute(select(Customer).where(Customer.id == work_order.customer_id))
+                cust = cust_result.scalar_one_or_none()
+                if cust and cust.phone:
+                    addr_parts = [work_order.service_address_line1, work_order.service_city]
+                    addr = ", ".join(p for p in addr_parts if p) or "your property"
+                    msg = (
+                        f"Hi {cust.first_name}! Your septic service at {addr} is complete. "
+                        f"Thank you for choosing MAC Septic. Questions? Call (512) 353-0555."
+                    )
+                    sms = TwilioService()
+                    if sms.is_configured:
+                        await sms.send_sms(to=cust.phone, body=msg)
+                        notification_sent = True
+                        logger.info(f"Completion SMS sent to {cust.phone} for job {job_id}")
+        except Exception as e:
+            logger.warning(f"Completion SMS failed for job {job_id}: {e}")
+
     return {
         "id": str(work_order.id),
         "status": work_order.status,
+        "notification_sent": notification_sent,
     }
 
 
@@ -582,12 +607,35 @@ async def complete_job(
 
     await db.commit()
 
+    # Auto-notify customer via SMS on job completion
+    notification_sent = False
+    try:
+        from app.services.twilio_service import TwilioService
+        if work_order.customer_id:
+            cust_result = await db.execute(select(Customer).where(Customer.id == work_order.customer_id))
+            cust = cust_result.scalar_one_or_none()
+            if cust and cust.phone:
+                addr_parts = [work_order.service_address_line1, work_order.service_city]
+                addr = ", ".join(p for p in addr_parts if p) or "your property"
+                msg = (
+                    f"Hi {cust.first_name}! Your septic service at {addr} is complete. "
+                    f"Thank you for choosing MAC Septic. Questions? Call (512) 353-0555."
+                )
+                sms = TwilioService()
+                if sms.is_configured:
+                    await sms.send_sms(to=cust.phone, body=msg)
+                    notification_sent = True
+                    logger.info(f"Completion SMS sent to {cust.phone} for job {job_id}")
+    except Exception as e:
+        logger.warning(f"Completion SMS failed for job {job_id}: {e}")
+
     return {
         "id": str(work_order.id),
         "status": work_order.status,
         "labor_minutes": work_order.total_labor_minutes,
         "commission_id": str(commission.id) if commission else None,
         "commission_amount": float(commission.commission_amount) if commission else None,
+        "notification_sent": notification_sent,
     }
 
 
@@ -964,6 +1012,7 @@ async def update_job_status(
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
 
+    old_status_field = str(work_order.status) if work_order.status else None
     work_order.status = request.status
 
     if request.notes:
@@ -973,7 +1022,30 @@ async def update_job_status(
 
     await db.commit()
 
-    return {"status": work_order.status}
+    # Auto-notify customer via SMS when status changes to completed
+    notification_sent = False
+    if old_status_field != request.status and request.status == "completed":
+        try:
+            from app.services.twilio_service import TwilioService
+            if work_order.customer_id:
+                cust_result = await db.execute(select(Customer).where(Customer.id == work_order.customer_id))
+                cust = cust_result.scalar_one_or_none()
+                if cust and cust.phone:
+                    addr_parts = [work_order.service_address_line1, work_order.service_city]
+                    addr = ", ".join(p for p in addr_parts if p) or "your property"
+                    msg = (
+                        f"Hi {cust.first_name}! Your septic service at {addr} is complete. "
+                        f"Thank you for choosing MAC Septic. Questions? Call (512) 353-0555."
+                    )
+                    sms = TwilioService()
+                    if sms.is_configured:
+                        await sms.send_sms(to=cust.phone, body=msg)
+                        notification_sent = True
+                        logger.info(f"Completion SMS sent to {cust.phone} for WO {work_order_id}")
+        except Exception as e:
+            logger.warning(f"Completion SMS failed for WO {work_order_id}: {e}")
+
+    return {"status": work_order.status, "notification_sent": notification_sent}
 
 
 @router.post("/jobs/{work_order_id}/checklist")
