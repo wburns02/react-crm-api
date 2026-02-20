@@ -1272,6 +1272,61 @@ async def run_uuid_migrations():
     return results
 
 
+@app.post("/health/db/fix-alembic")
+async def fix_alembic_version():
+    """Fix alembic_version table: widen version_num column and stamp to head (065)."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    import subprocess
+    import os
+
+    results = {"errors": [], "steps": []}
+
+    try:
+        async with async_session_maker() as session:
+            # Step 1: Widen alembic_version.version_num to VARCHAR(128)
+            await session.execute(text(
+                "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)"
+            ))
+            await session.commit()
+            results["steps"].append("widened version_num to VARCHAR(128)")
+
+            # Step 2: Clear current version (might be partial from failed run)
+            await session.execute(text("DELETE FROM alembic_version"))
+            await session.commit()
+            results["steps"].append("cleared alembic_version table")
+
+        # Step 3: Stamp to head revision (065)
+        os.chdir("/app")
+        proc = subprocess.run(
+            ["alembic", "stamp", "065"],
+            capture_output=True, text=True, timeout=60
+        )
+        results["stamp_returncode"] = proc.returncode
+        if proc.stdout:
+            results["stamp_stdout"] = proc.stdout[-500:]
+        if proc.stderr:
+            results["stamp_stderr"] = proc.stderr[-500:]
+
+        if proc.returncode == 0:
+            results["steps"].append("stamped alembic to revision 065")
+        else:
+            results["errors"].append("alembic stamp 065 failed")
+
+        # Step 4: Verify
+        async with async_session_maker() as session:
+            result = await session.execute(text("SELECT version_num FROM alembic_version"))
+            results["current_version"] = result.scalar_one_or_none()
+
+        results["success"] = len(results["errors"]) == 0
+
+    except Exception as e:
+        results["errors"].append(f"{type(e).__name__}: {str(e)}")
+        results["success"] = False
+
+    return results
+
+
 @app.post("/health/db/create-admin")
 async def create_admin_user():
     """Create or reset admin user for testing."""
