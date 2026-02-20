@@ -569,17 +569,25 @@ async def list_customer_enrollments(
     db: DbSession,
     current_user: CurrentUser,
     status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
 ):
-    """List all journey enrollments for a customer."""
+    """List journey enrollments for a customer (paginated)."""
     query = select(JourneyEnrollment).where(JourneyEnrollment.customer_id == customer_id)
 
     if status:
         query = query.where(JourneyEnrollment.status == status)
 
-    result = await db.execute(query.order_by(JourneyEnrollment.enrolled_at.desc()))
+    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    total = count_result.scalar()
+
+    offset = (page - 1) * page_size
+    result = await db.execute(
+        query.offset(offset).limit(page_size).order_by(JourneyEnrollment.enrolled_at.desc())
+    )
     enrollments = result.scalars().all()
 
-    return {"items": enrollments, "total": len(enrollments)}
+    return {"items": enrollments, "total": total, "page": page, "page_size": page_size}
 
 
 # Journey Step Templates for Seeding

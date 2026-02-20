@@ -5,7 +5,6 @@ Core business logic for the Enterprise Customer Success Platform.
 """
 
 from app.services.customer_success.health_calculator import HealthScoreCalculator
-from app.services.customer_success.segment_evaluator import SegmentEvaluator
 from app.services.customer_success.segment_engine import SegmentEngine
 from app.services.customer_success.segment_ai_service import SegmentAIService
 from app.services.customer_success.journey_orchestrator import JourneyOrchestrator
@@ -18,7 +17,6 @@ from app.services.customer_success.smart_segments import SmartSegmentService, se
 
 __all__ = [
     "HealthScoreCalculator",
-    "SegmentEvaluator",
     "SegmentEngine",
     "SegmentAIService",
     "JourneyOrchestrator",

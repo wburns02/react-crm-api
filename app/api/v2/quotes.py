@@ -133,16 +133,58 @@ async def list_quotes(
     total_result = await db.execute(count_query)
     total = total_result.scalar()
 
-    # Apply pagination
+    # Apply pagination + eager-load customer (avoids N+1)
     offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(Quote.created_at.desc())
+    query = (
+        query.offset(offset)
+        .limit(page_size)
+        .order_by(Quote.created_at.desc())
+        .options(selectinload(Quote.customer))
+    )
 
     # Execute query
     result = await db.execute(query)
     quotes = result.scalars().all()
 
+    # Enrich with customer details (customer already loaded via selectinload)
+    items = []
+    for quote in quotes:
+        c = quote.customer
+        items.append({
+            "id": quote.id,
+            "quote_number": quote.quote_number,
+            "customer_id": quote.customer_id,
+            "title": quote.title,
+            "description": quote.description,
+            "line_items": quote.line_items or [],
+            "subtotal": quote.subtotal,
+            "tax_rate": quote.tax_rate,
+            "tax": quote.tax,
+            "discount": quote.discount,
+            "total": quote.total,
+            "status": quote.status,
+            "valid_until": quote.valid_until,
+            "notes": quote.notes,
+            "terms": quote.terms,
+            "signature_data": quote.signature_data,
+            "signed_at": quote.signed_at,
+            "signed_by": quote.signed_by,
+            "approval_status": quote.approval_status,
+            "approved_by": quote.approved_by,
+            "approved_at": quote.approved_at,
+            "converted_to_work_order_id": quote.converted_to_work_order_id,
+            "converted_at": quote.converted_at,
+            "created_at": quote.created_at,
+            "updated_at": quote.updated_at,
+            "sent_at": quote.sent_at,
+            "customer_name": f"{c.first_name or ''} {c.last_name or ''}".strip() or None if c else None,
+            "customer_email": c.email if c else None,
+            "customer_phone": c.phone if c else None,
+            "customer_address": build_customer_address(c) if c else None,
+        })
+
     return QuoteListResponse(
-        items=quotes,
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
