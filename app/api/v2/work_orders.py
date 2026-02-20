@@ -559,6 +559,191 @@ async def bulk_delete_work_orders(
 
 
 # ============================================
+# Route Optimization
+# ============================================
+
+import math
+
+
+def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate great-circle distance between two points in miles."""
+    R = 3958.8  # Earth radius in miles
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(dlon / 2) ** 2
+    )
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+def _nearest_neighbor_route(
+    jobs: list[dict], start_lat: float, start_lng: float
+) -> tuple[list[dict], float]:
+    """Greedy nearest-neighbor TSP approximation."""
+    remaining = list(jobs)
+    ordered = []
+    current_lat, current_lng = start_lat, start_lng
+    total_dist = 0.0
+
+    while remaining:
+        nearest = min(
+            remaining,
+            key=lambda j: _haversine_miles(
+                current_lat, current_lng, j["lat"], j["lng"]
+            ),
+        )
+        dist = _haversine_miles(current_lat, current_lng, nearest["lat"], nearest["lng"])
+        total_dist += dist
+        current_lat, current_lng = nearest["lat"], nearest["lng"]
+        ordered.append(nearest)
+        remaining.remove(nearest)
+
+    return ordered, total_dist
+
+
+def _address_to_approx_coords(address: str) -> tuple[float, float]:
+    """
+    Deterministic address-based approximation for San Marcos TX area.
+    Used when no stored coordinates are available.
+    """
+    h = hash(address) % 10000
+    lat = 29.8 + (h % 100) / 500  # ~29.8 to 30.0
+    lng = -97.9 + (h // 100 % 100) / 500  # ~-97.9 to -97.7
+    return lat, lng
+
+
+class RouteOptimizeRequest(BaseModel):
+    job_ids: list[str]
+    start_lat: Optional[float] = None
+    start_lng: Optional[float] = None
+    start_address: Optional[str] = "105 S Comanche St, San Marcos, TX 78666"
+
+
+class RouteOptimizeResponse(BaseModel):
+    ordered_job_ids: list[str]
+    total_distance_miles: float
+    estimated_drive_minutes: int
+    waypoints: list[dict]  # [{job_id, address, lat, lng}]
+
+
+@router.post("/optimize-route", response_model=RouteOptimizeResponse)
+async def optimize_route(
+    request: RouteOptimizeRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Given a list of job IDs and a start location, return the jobs
+    reordered by nearest-neighbor haversine distance.
+
+    Input: { "job_ids": [...], "start_lat": 30.0, "start_lng": -97.0 }
+    OR: { "job_ids": [...], "start_address": "123 Main St, San Marcos TX" }
+
+    Output: {
+        "ordered_job_ids": [...],
+        "total_distance_miles": 47.3,
+        "estimated_drive_minutes": 68,
+        "waypoints": [{"job_id": ..., "address": ..., "lat": ..., "lng": ...}]
+    }
+    """
+    if not request.job_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="job_ids must not be empty",
+        )
+
+    # Determine start coordinates
+    if request.start_lat is not None and request.start_lng is not None:
+        start_lat = request.start_lat
+        start_lng = request.start_lng
+    else:
+        addr = request.start_address or "105 S Comanche St, San Marcos, TX 78666"
+        start_lat, start_lng = _address_to_approx_coords(addr)
+
+    # Fetch work orders with customer data for coordinates
+    query = (
+        select(WorkOrder, Customer)
+        .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        .where(WorkOrder.id.in_(request.job_ids))
+    )
+    result = await db.execute(query)
+    rows = result.all()
+
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No work orders found for the provided job_ids",
+        )
+
+    # Build job dicts with coordinates
+    jobs = []
+    for wo, customer in rows:
+        # Prefer work order service coords, then customer coords, then hash approximation
+        lat = None
+        lng = None
+
+        if wo.service_latitude is not None and wo.service_longitude is not None:
+            lat = float(wo.service_latitude)
+            lng = float(wo.service_longitude)
+        elif customer and customer.latitude is not None and customer.longitude is not None:
+            lat = float(customer.latitude)
+            lng = float(customer.longitude)
+        else:
+            # Build address string for hash approximation
+            address_parts = [
+                wo.service_address_line1 or (customer.address_line1 if customer else None),
+                wo.service_city or (customer.city if customer else None),
+                wo.service_state or (customer.state if customer else None),
+                wo.service_postal_code or (customer.postal_code if customer else None),
+            ]
+            address_str = ", ".join(p for p in address_parts if p)
+            lat, lng = _address_to_approx_coords(address_str or str(wo.id))
+
+        # Build human-readable address
+        addr_parts = [
+            wo.service_address_line1,
+            wo.service_city,
+            wo.service_state,
+            wo.service_postal_code,
+        ]
+        address = ", ".join(p for p in addr_parts if p) or "Unknown address"
+
+        jobs.append({
+            "job_id": str(wo.id),
+            "address": address,
+            "lat": lat,
+            "lng": lng,
+        })
+
+    # Run nearest-neighbor optimization
+    ordered_jobs, total_distance = _nearest_neighbor_route(jobs, start_lat, start_lng)
+
+    # Estimate drive time: assume average 35 mph for rural/suburban Texas
+    estimated_drive_minutes = int(round(total_distance / 35 * 60))
+
+    ordered_job_ids = [j["job_id"] for j in ordered_jobs]
+    waypoints = [
+        {
+            "job_id": j["job_id"],
+            "address": j["address"],
+            "lat": j["lat"],
+            "lng": j["lng"],
+        }
+        for j in ordered_jobs
+    ]
+
+    return RouteOptimizeResponse(
+        ordered_job_ids=ordered_job_ids,
+        total_distance_miles=round(total_distance, 2),
+        estimated_drive_minutes=estimated_drive_minutes,
+        waypoints=waypoints,
+    )
+
+
+# ============================================
 # Single Work Order Operations
 # ============================================
 
