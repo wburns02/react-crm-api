@@ -96,7 +96,7 @@ async def upload_work_order_photo(
 
         # Broadcast photo upload event
         await manager.broadcast_event(
-            event_type="work_order.photo_uploaded",
+            event_type="work_order_update",
             data={
                 "work_order_id": work_order_id,
                 "photo_id": photo.id,
@@ -143,7 +143,7 @@ async def delete_work_order_photo(
 
     # Broadcast photo delete event
     await manager.broadcast_event(
-        event_type="work_order.photo_deleted",
+        event_type="work_order_update",
         data={
             "work_order_id": work_order_id,
             "photo_id": photo_id,

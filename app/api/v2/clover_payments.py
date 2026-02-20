@@ -860,7 +860,7 @@ async def collect_payment(
     # Broadcast payment event
     try:
         await manager.broadcast_event(
-            event_type="payment.received",
+            event_type="payment_received",
             data={
                 "payment_id": str(payment_id),
                 "work_order_id": request.work_order_id,

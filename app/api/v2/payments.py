@@ -217,7 +217,7 @@ async def create_payment(
 
     # Broadcast payment received event via WebSocket
     await manager.broadcast_event(
-        event_type="payment.received",
+        event_type="payment_received",
         data={
             "id": payment.id,
             "customer_id": payment.customer_id,

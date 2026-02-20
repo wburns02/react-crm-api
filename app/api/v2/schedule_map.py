@@ -418,7 +418,7 @@ async def update_technician_location(
 
     try:
         await manager.broadcast_event(
-            event_type="technician.location_updated",
+            event_type="technician_location",
             data=location_data,
         )
     except Exception as e:

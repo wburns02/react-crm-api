@@ -328,7 +328,7 @@ async def create_notification(
         await manager.send_to_user(
             notification_data.target_user_id,
             {
-                "type": "notification.created",
+                "type": "notification",
                 "data": notification_dict,
                 "timestamp": now.isoformat(),
             },
@@ -338,7 +338,7 @@ async def create_notification(
         await manager.send_to_role(
             notification_data.target_role,
             {
-                "type": "notification.created",
+                "type": "notification",
                 "data": notification_dict,
                 "timestamp": now.isoformat(),
             },
@@ -346,7 +346,7 @@ async def create_notification(
     else:
         # Broadcast to all connected users
         await manager.broadcast_event(
-            event_type="notification.created",
+            event_type="notification",
             data=notification_dict,
         )
 

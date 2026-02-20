@@ -466,7 +466,7 @@ async def bulk_update_status(
 
     # Broadcast WebSocket event
     await manager.broadcast({
-        "type": "workorder:bulk_updated",
+        "type": "work_order_update",
         "data": {"count": success, "status": request.status},
     })
 
@@ -521,7 +521,7 @@ async def bulk_assign_technician(
     await cache.delete_pattern("work-orders:*")
 
     await manager.broadcast({
-        "type": "workorder:bulk_assigned",
+        "type": "dispatch_update",
         "data": {"count": success, "technician": request.assigned_technician},
     })
 
@@ -665,7 +665,7 @@ async def create_work_order(
 
     # Broadcast work order created event via WebSocket
     await manager.broadcast_event(
-        event_type="work_order.created",
+        event_type="work_order_update",
         data={
             "id": work_order.id,
             "customer_id": str(work_order.customer_id),
@@ -862,7 +862,7 @@ async def update_work_order(
     # Status change event
     if old_status != new_status:
         await manager.broadcast_event(
-            event_type="work_order.status_changed",
+            event_type="job_status",
             data={
                 **event_data,
                 "old_status": old_status,
@@ -873,7 +873,7 @@ async def update_work_order(
     # Technician assignment event
     if old_technician != new_technician:
         await manager.broadcast_event(
-            event_type="work_order.assigned",
+            event_type="dispatch_update",
             data={
                 **event_data,
                 "old_technician": old_technician,
@@ -883,7 +883,7 @@ async def update_work_order(
 
     # General update event (always sent)
     await manager.broadcast_event(
-        event_type="work_order.updated",
+        event_type="work_order_update",
         data=event_data,
     )
 
@@ -891,7 +891,7 @@ async def update_work_order(
     schedule_fields = {"scheduled_date", "time_window_start", "time_window_end", "assigned_technician"}
     if schedule_fields.intersection(update_data.keys()):
         await manager.broadcast_event(
-            event_type="schedule.updated",
+            event_type="schedule_change",
             data={
                 "work_order_id": work_order.id,
                 "customer_id": str(work_order.customer_id),
@@ -1116,7 +1116,7 @@ async def complete_work_order(
     # Broadcast WebSocket event (non-blocking, errors don't affect response)
     try:
         await manager.broadcast_event(
-            event_type="work_order.completed",
+            event_type="job_status",
             data={
                 "id": wo_id,
                 "status": "completed",

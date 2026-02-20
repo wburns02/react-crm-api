@@ -1411,7 +1411,7 @@ async def record_job_payment(
     # Broadcast payment received event
     try:
         await manager.broadcast_event(
-            event_type="payment.received",
+            event_type="payment_received",
             data={
                 "payment_id": str(payment_id),
                 "work_order_id": work_order_id,
