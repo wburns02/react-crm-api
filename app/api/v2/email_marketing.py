@@ -23,6 +23,7 @@ from app.models.customer import Customer
 from app.models.system_settings import SystemSettingStore
 from app.services.email_service import EmailService
 from app.services.ai_gateway import AIGateway
+from app.services import sendgrid_service
 
 logger = logging.getLogger(__name__)
 
@@ -386,6 +387,45 @@ def _format_suggestion(s: AISuggestion) -> dict:
         "status": s.status or "pending",
         "created_at": s.created_at.isoformat() if s.created_at else None,
     }
+
+
+# ============================================================================
+# SendGrid: Contacts & Stats Endpoints
+# ============================================================================
+
+
+@router.get("/contacts")
+async def get_email_contacts(db: DbSession, current_user: CurrentUser) -> dict:
+    """Return customers with email addresses from the DB.
+
+    This is used by the frontend to show the contact list and by campaign
+    send logic to resolve 'send_to_all' recipients.
+    """
+    result = await db.execute(
+        select(Customer.id, Customer.first_name, Customer.last_name, Customer.email)
+        .where(Customer.email.isnot(None))
+        .where(Customer.email != "")
+        .where(Customer.is_active == True)
+        .limit(1000)
+    )
+    contacts = result.all()
+    return {
+        "total": len(contacts),
+        "contacts": [
+            {
+                "id": str(r.id),
+                "name": f"{r.first_name or ''} {r.last_name or ''}".strip() or "Unknown",
+                "email": r.email,
+            }
+            for r in contacts
+        ],
+    }
+
+
+@router.get("/stats")
+async def get_sendgrid_stats(current_user: CurrentUser, days: int = 7) -> dict:
+    """Proxy to SendGrid Stats API. Returns graceful response if not configured."""
+    return await sendgrid_service.get_stats(days=days)
 
 
 # ============================================================================
@@ -915,10 +955,14 @@ async def _send_campaign_emails(
     template_text: Optional[str],
     customers: List[dict],
 ):
-    """Background task to send campaign emails via Brevo."""
+    """Background task to send campaign emails.
+
+    Uses SendGrid when SENDGRID_API_KEY is set, falls back to Brevo.
+    """
     from app.database import async_session_maker
 
-    email_service = EmailService()
+    use_sendgrid = sendgrid_service.is_configured()
+    email_service = None if use_sendgrid else EmailService()
     sent = 0
     failed = 0
 
@@ -940,12 +984,20 @@ async def _send_campaign_emails(
                 text_body = text_body.replace(f"{{{{{key}}}}}", str(value) if value else "")
 
             try:
-                result = await email_service.send_email(
-                    to=cust["email"],
-                    subject=subject,
-                    body=text_body or subject,
-                    html_body=html_body,
-                )
+                if use_sendgrid:
+                    result = await sendgrid_service.send_email(
+                        to_email=cust["email"],
+                        to_name=context["customer_name"],
+                        subject=subject,
+                        html_content=html_body or f"<p>{subject}</p>",
+                    )
+                else:
+                    result = await email_service.send_email(
+                        to=cust["email"],
+                        subject=subject,
+                        body=text_body or subject,
+                        html_body=html_body,
+                    )
 
                 # Create message record
                 msg = Message(
