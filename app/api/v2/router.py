@@ -33,6 +33,7 @@ from app.api.v2 import (
     ai,
     ai_jobs,
     ai_coaching,
+    coaching,
     # Phase 3: E-Signatures
     signatures,
     # Phase 4: Pricing Engine
@@ -181,6 +182,7 @@ api_router.include_router(call_dispositions.router, prefix="/call-dispositions",
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
 api_router.include_router(ai_jobs.router, prefix="/ai/jobs", tags=["ai-jobs"])
 api_router.include_router(ai_coaching.router, prefix="/ai/technicians", tags=["ai-coaching"])
+api_router.include_router(coaching.router, prefix="/coaching", tags=["coaching"])
 
 # Phase 3: E-Signatures
 api_router.include_router(signatures.router, prefix="/signatures", tags=["signatures"])
