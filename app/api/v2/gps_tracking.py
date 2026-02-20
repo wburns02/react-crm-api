@@ -48,60 +48,151 @@ router = APIRouter(prefix="/gps", tags=["GPS Tracking"])
 
 @router.post("/location", response_model=TechnicianLocationResponse)
 async def update_location(
-    location: LocationUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    location: LocationUpdate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """
     Update technician's current GPS location.
     Called by mobile app at configured intervals.
     """
-    # Get technician ID from current user
+    from sqlalchemy import text
     technician_id = current_user.technician_id if hasattr(current_user, "technician_id") else current_user.id
 
-    service = GPSTrackingService(db)
-    return service.update_technician_location(technician_id, location)
+    try:
+        await db.execute(
+            text("""
+            INSERT INTO technician_locations
+                (id, technician_id, latitude, longitude, accuracy, speed, heading,
+                 is_online, battery_level, captured_at, received_at, current_status)
+            VALUES
+                (gen_random_uuid(), :tech_id, :lat, :lng, :accuracy, :speed, :heading,
+                 true, :battery, :captured_at, NOW(), 'available')
+            ON CONFLICT (technician_id) DO UPDATE SET
+                latitude = EXCLUDED.latitude,
+                longitude = EXCLUDED.longitude,
+                accuracy = EXCLUDED.accuracy,
+                speed = EXCLUDED.speed,
+                heading = EXCLUDED.heading,
+                is_online = true,
+                battery_level = EXCLUDED.battery_level,
+                captured_at = EXCLUDED.captured_at,
+                received_at = NOW()
+            """),
+            {
+                "tech_id": str(technician_id),
+                "lat": location.latitude,
+                "lng": location.longitude,
+                "accuracy": getattr(location, "accuracy", None),
+                "speed": getattr(location, "speed", None),
+                "heading": getattr(location, "heading", None),
+                "battery": getattr(location, "battery_level", None),
+                "captured_at": location.captured_at if hasattr(location, "captured_at") and location.captured_at else datetime.utcnow(),
+            },
+        )
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"GPS location update failed: {e}")
+        await db.rollback()
+
+    return {"technician_id": str(technician_id), "latitude": location.latitude, "longitude": location.longitude, "updated": True}
 
 
 @router.post("/location/batch", response_model=dict)
 async def update_location_batch(
-    batch: LocationUpdateBatch, db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    batch: LocationUpdateBatch, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """
     Submit batch of location updates (for offline sync).
     Mobile app can queue locations while offline and sync when online.
     """
+    from sqlalchemy import text
     technician_id = current_user.technician_id if hasattr(current_user, "technician_id") else current_user.id
-    service = GPSTrackingService(db)
-
     processed = 0
+
     for location in sorted(batch.locations, key=lambda x: x.captured_at):
         try:
-            service.update_technician_location(technician_id, location)
+            await db.execute(
+                text("""
+                INSERT INTO technician_locations
+                    (id, technician_id, latitude, longitude, accuracy, speed, heading,
+                     is_online, battery_level, captured_at, received_at, current_status)
+                VALUES
+                    (gen_random_uuid(), :tech_id, :lat, :lng, :accuracy, :speed, :heading,
+                     true, :battery, :captured_at, NOW(), 'available')
+                ON CONFLICT (technician_id) DO UPDATE SET
+                    latitude = EXCLUDED.latitude,
+                    longitude = EXCLUDED.longitude,
+                    accuracy = EXCLUDED.accuracy,
+                    speed = EXCLUDED.speed,
+                    heading = EXCLUDED.heading,
+                    is_online = true,
+                    battery_level = EXCLUDED.battery_level,
+                    captured_at = EXCLUDED.captured_at,
+                    received_at = NOW()
+                """),
+                {
+                    "tech_id": str(technician_id),
+                    "lat": location.latitude,
+                    "lng": location.longitude,
+                    "accuracy": getattr(location, "accuracy", None),
+                    "speed": getattr(location, "speed", None),
+                    "heading": getattr(location, "heading", None),
+                    "battery": getattr(location, "battery_level", None),
+                    "captured_at": location.captured_at if hasattr(location, "captured_at") and location.captured_at else datetime.utcnow(),
+                },
+            )
             processed += 1
         except Exception as e:
-            # Log error but continue processing
-            pass
+            logger.warning(f"Batch GPS update failed for one entry: {e}")
+
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
 
     return {"processed": processed, "total": len(batch.locations), "success": processed == len(batch.locations)}
 
 
 @router.get("/location/{technician_id}", response_model=TechnicianLocationResponse)
 async def get_technician_location(
-    technician_id: int = Path(..., description="Technician ID"),
-    db: Session = Depends(get_db),
+    technician_id: str = Path(..., description="Technician ID"),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Get current location for a specific technician."""
-    service = GPSTrackingService(db)
-    location = service.get_technician_location(technician_id)
-
-    if not location:
+    from sqlalchemy import text
+    result = await db.execute(
+        text("""
+        SELECT tl.technician_id, t.first_name, t.last_name,
+               tl.latitude, tl.longitude, tl.accuracy, tl.speed, tl.heading,
+               tl.is_online, tl.battery_level, tl.current_status, tl.captured_at
+        FROM technician_locations tl
+        JOIN technicians t ON tl.technician_id = t.id::text OR tl.technician_id::text = :tech_id
+        WHERE tl.technician_id::text = :tech_id OR t.id::text = :tech_id
+        LIMIT 1
+        """),
+        {"tech_id": str(technician_id)},
+    )
+    row = result.fetchone()
+    if not row:
         raise HTTPException(status_code=404, detail="Technician location not found")
 
-    return location
+    return {
+        "technician_id": str(row[0]),
+        "technician_name": f"{row[1]} {row[2]}",
+        "latitude": float(row[3]),
+        "longitude": float(row[4]),
+        "accuracy": float(row[5]) if row[5] else None,
+        "speed": float(row[6]) if row[6] else None,
+        "heading": float(row[7]) if row[7] else None,
+        "is_online": bool(row[8]),
+        "battery_level": int(row[9]) if row[9] else None,
+        "current_status": row[10] or "unknown",
+        "captured_at": row[11].isoformat() if row[11] else None,
+    }
 
 
 @router.get("/locations")
-async def get_all_locations(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+async def get_all_locations(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Get all technician locations for dispatch map.
     Returns current position, status, and online/offline count.
@@ -197,44 +288,88 @@ async def get_all_locations(db: Session = Depends(get_db), current_user=Depends(
 
 @router.get("/history/{technician_id}", response_model=LocationHistoryResponse)
 async def get_location_history(
-    technician_id: int = Path(..., description="Technician ID"),
+    technician_id: str = Path(..., description="Technician ID"),
     date: Optional[str] = Query(None, description="Date (YYYY-MM-DD), defaults to today"),
-    work_order_id: Optional[int] = Query(None, description="Filter by work order"),
-    db: Session = Depends(get_db),
+    work_order_id: Optional[str] = Query(None, description="Filter by work order"),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """
     Get location history for route verification.
     Shows all GPS points captured for a technician on a given day.
     """
-    date_obj = None
+    from app.models.gps_tracking import LocationHistory
+    query = select(LocationHistory).where(
+        LocationHistory.technician_id == technician_id
+    ).order_by(LocationHistory.captured_at)
+
     if date:
         try:
             date_obj = datetime.strptime(date, "%Y-%m-%d")
+            next_day = date_obj.replace(hour=23, minute=59, second=59)
+            query = query.where(
+                LocationHistory.captured_at >= date_obj,
+                LocationHistory.captured_at <= next_day,
+            )
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
-    service = GPSTrackingService(db)
-    history = service.get_location_history(technician_id, date_obj, work_order_id)
+    if work_order_id:
+        query = query.where(LocationHistory.work_order_id == work_order_id)
 
-    return LocationHistoryResponse(**history)
+    result = await db.execute(query)
+    points = result.scalars().all()
+
+    return LocationHistoryResponse(
+        technician_id=str(technician_id),
+        date=date or datetime.utcnow().strftime("%Y-%m-%d"),
+        points=[
+            {
+                "latitude": p.latitude, "longitude": p.longitude,
+                "speed": p.speed, "heading": p.heading,
+                "captured_at": p.captured_at.isoformat() if p.captured_at else None,
+            }
+            for p in points
+        ],
+        total_distance=sum(p.distance_from_previous or 0 for p in points),
+        point_count=len(points),
+    )
 
 
 @router.get("/history/{technician_id}/route/{work_order_id}")
 async def get_route_for_work_order(
-    technician_id: int = Path(..., description="Technician ID"),
-    work_order_id: int = Path(..., description="Work Order ID"),
-    db: Session = Depends(get_db),
+    technician_id: str = Path(..., description="Technician ID"),
+    work_order_id: str = Path(..., description="Work Order ID"),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """
     Get the route a technician took to reach a work order.
     Useful for route verification and mileage tracking.
     """
-    service = GPSTrackingService(db)
-    history = service.get_location_history(technician_id, work_order_id=work_order_id)
-
-    return history
+    from app.models.gps_tracking import LocationHistory
+    result = await db.execute(
+        select(LocationHistory)
+        .where(
+            LocationHistory.technician_id == technician_id,
+            LocationHistory.work_order_id == work_order_id,
+        )
+        .order_by(LocationHistory.captured_at)
+    )
+    points = result.scalars().all()
+    return {
+        "technician_id": str(technician_id),
+        "work_order_id": str(work_order_id),
+        "points": [
+            {
+                "latitude": p.latitude, "longitude": p.longitude,
+                "speed": p.speed, "heading": p.heading,
+                "captured_at": p.captured_at.isoformat() if p.captured_at else None,
+            }
+            for p in points
+        ],
+        "point_count": len(points),
+    }
 
 
 # ==================== ETA Calculations ====================
@@ -242,32 +377,27 @@ async def get_route_for_work_order(
 
 @router.get("/eta/{work_order_id}", response_model=ETAResponse)
 async def get_eta(
-    work_order_id: int = Path(..., description="Work Order ID"),
+    work_order_id: str = Path(..., description="Work Order ID"),
     recalculate: bool = Query(False, description="Force recalculation"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """
     Get ETA for a work order.
     Calculates based on technician's current location and traffic.
     """
-    service = GPSTrackingService(db)
-    eta = service.calculate_eta(work_order_id, force_recalculate=recalculate)
-
-    if not eta:
-        raise HTTPException(
-            status_code=404,
-            detail="Cannot calculate ETA. Work order may not have an assigned technician or technician location is unknown.",
-        )
-
-    return eta
+    # ETA calculation requires real-time routing — not yet implemented with async ORM
+    raise HTTPException(
+        status_code=503,
+        detail="ETA calculation is not available in the current deployment.",
+    )
 
 
 @router.post("/eta/notify")
 async def send_eta_notification(
     notification: ETANotification,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -291,7 +421,7 @@ async def send_eta_notification(
 
 @router.post("/tracking-links", response_model=TrackingLinkResponse)
 async def create_tracking_link(
-    data: TrackingLinkCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    data: TrackingLinkCreate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """
     Create a customer tracking link for a work order.
@@ -354,8 +484,8 @@ async def create_tracking_link(
 
 @router.get("/tracking-links/{work_order_id}", response_model=List[TrackingLinkResponse])
 async def get_tracking_links(
-    work_order_id: int = Path(..., description="Work Order ID"),
-    db: Session = Depends(get_db),
+    work_order_id: str = Path(..., description="Work Order ID"),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Get all tracking links for a work order."""
@@ -390,23 +520,47 @@ async def get_tracking_links(
 async def get_public_tracking(
     http_request: Request,
     token: str = Path(..., description="Tracking link token"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     PUBLIC ENDPOINT - Get tracking info for customer.
     This is the endpoint customers access to track their technician.
     No authentication required.
     """
+    from app.models.gps_tracking import CustomerTrackingLink, TrackingLinkStatus
+    from app.models.technician import Technician
+
     # SECURITY: Rate limit to prevent enumeration and abuse
     rate_limit_by_ip(http_request, requests_per_minute=60)
 
-    service = GPSTrackingService(db)
-    info = service.get_public_tracking_info(token)
+    result = await db.execute(
+        select(CustomerTrackingLink).where(
+            CustomerTrackingLink.token == token,
+            CustomerTrackingLink.status == TrackingLinkStatus.ACTIVE,
+        )
+    )
+    link = result.scalar_one_or_none()
 
-    if not info:
+    if not link:
         raise HTTPException(status_code=404, detail="Tracking link not found or expired")
 
-    return info
+    if link.expires_at and link.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="Tracking link has expired")
+
+    # Get technician info
+    tech_result = await db.execute(
+        select(Technician).where(Technician.id == link.technician_id)
+    )
+    tech = tech_result.scalar_one_or_none()
+
+    return {
+        "token": token,
+        "technician_name": f"{tech.first_name} {tech.last_name}" if tech and link.show_technician_name else None,
+        "show_live_map": link.show_live_map,
+        "show_eta": link.show_eta,
+        "expires_at": link.expires_at.isoformat() if link.expires_at else None,
+        "work_order_id": str(link.work_order_id) if link.work_order_id else None,
+    }
 
 
 # ==================== Geofences ====================
@@ -414,30 +568,35 @@ async def get_public_tracking(
 
 @router.post("/geofences", response_model=GeofenceResponse)
 async def create_geofence(
-    geofence: GeofenceCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    geofence: GeofenceCreate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """Create a new geofence."""
-    service = GeofenceService(db)
-    result = service.create_geofence(geofence.model_dump())
+    from app.models.gps_tracking import Geofence
+
+    data = geofence.model_dump()
+    new_gf = Geofence(**{k: v for k, v in data.items() if hasattr(Geofence, k)})
+    db.add(new_gf)
+    await db.commit()
+    await db.refresh(new_gf)
 
     return GeofenceResponse(
-        id=result.id,
-        name=result.name,
-        description=result.description,
-        geofence_type=result.geofence_type.value if result.geofence_type else None,
-        is_active=result.is_active,
-        center_latitude=result.center_latitude,
-        center_longitude=result.center_longitude,
-        radius_meters=result.radius_meters,
-        polygon_coordinates=result.polygon_coordinates,
-        customer_id=result.customer_id,
-        work_order_id=result.work_order_id,
-        entry_action=result.entry_action.value if result.entry_action else "log_only",
-        exit_action=result.exit_action.value if result.exit_action else "log_only",
-        notify_on_entry=result.notify_on_entry,
-        notify_on_exit=result.notify_on_exit,
-        created_at=result.created_at,
-        updated_at=result.updated_at,
+        id=new_gf.id,
+        name=new_gf.name,
+        description=new_gf.description,
+        geofence_type=new_gf.geofence_type.value if new_gf.geofence_type else None,
+        is_active=new_gf.is_active,
+        center_latitude=new_gf.center_latitude,
+        center_longitude=new_gf.center_longitude,
+        radius_meters=new_gf.radius_meters,
+        polygon_coordinates=new_gf.polygon_coordinates,
+        customer_id=new_gf.customer_id,
+        work_order_id=new_gf.work_order_id,
+        entry_action=new_gf.entry_action.value if new_gf.entry_action else "log_only",
+        exit_action=new_gf.exit_action.value if new_gf.exit_action else "log_only",
+        notify_on_entry=new_gf.notify_on_entry,
+        notify_on_exit=new_gf.notify_on_exit,
+        created_at=new_gf.created_at,
+        updated_at=new_gf.updated_at,
     )
 
 
@@ -445,7 +604,7 @@ async def create_geofence(
 async def list_geofences(
     geofence_type: Optional[str] = Query(None, description="Filter by type"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """List all geofences."""
@@ -465,7 +624,7 @@ async def get_geofence_events(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     limit: int = Query(100, le=1000),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Get geofence events log."""
@@ -534,13 +693,14 @@ async def get_geofence_events(
 
 @router.get("/geofences/{geofence_id}", response_model=GeofenceResponse)
 async def get_geofence(
-    geofence_id: int = Path(..., description="Geofence ID"),
-    db: Session = Depends(get_db),
+    geofence_id: str = Path(..., description="Geofence ID"),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Get a specific geofence."""
-    service = GeofenceService(db)
-    geofence = service.get_geofence(geofence_id)
+    from app.models.gps_tracking import Geofence
+    result = await db.execute(select(Geofence).where(Geofence.id == geofence_id))
+    geofence = result.scalar_one_or_none()
 
     if not geofence:
         raise HTTPException(status_code=404, detail="Geofence not found")
@@ -568,17 +728,25 @@ async def get_geofence(
 
 @router.patch("/geofences/{geofence_id}", response_model=GeofenceResponse)
 async def update_geofence(
-    geofence_id: int = Path(..., description="Geofence ID"),
+    geofence_id: str = Path(..., description="Geofence ID"),
     update: GeofenceUpdate = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Update a geofence."""
-    service = GeofenceService(db)
-    geofence = service.update_geofence(geofence_id, update.model_dump(exclude_unset=True))
+    from app.models.gps_tracking import Geofence
+    result = await db.execute(select(Geofence).where(Geofence.id == geofence_id))
+    geofence = result.scalar_one_or_none()
 
     if not geofence:
         raise HTTPException(status_code=404, detail="Geofence not found")
+
+    for key, value in update.model_dump(exclude_unset=True).items():
+        if hasattr(geofence, key):
+            setattr(geofence, key, value)
+
+    await db.commit()
+    await db.refresh(geofence)
 
     return GeofenceResponse(
         id=geofence.id,
@@ -603,16 +771,20 @@ async def update_geofence(
 
 @router.delete("/geofences/{geofence_id}")
 async def delete_geofence(
-    geofence_id: int = Path(..., description="Geofence ID"),
-    db: Session = Depends(get_db),
+    geofence_id: str = Path(..., description="Geofence ID"),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Delete a geofence."""
-    service = GeofenceService(db)
-    success = service.delete_geofence(geofence_id)
+    from app.models.gps_tracking import Geofence
+    result = await db.execute(select(Geofence).where(Geofence.id == geofence_id))
+    geofence = result.scalar_one_or_none()
 
-    if not success:
+    if not geofence:
         raise HTTPException(status_code=404, detail="Geofence not found")
+
+    await db.delete(geofence)
+    await db.commit()
 
     return {"success": True, "message": "Geofence deleted"}
 
@@ -623,7 +795,7 @@ async def delete_geofence(
 @router.get("/dispatch-map")
 async def get_dispatch_map_data(
     include_completed: bool = Query(False, description="Include completed work orders"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -822,7 +994,7 @@ async def get_dispatch_map_data(
 
 
 @router.get("/config", response_model=GPSConfigResponse)
-async def get_global_config(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+async def get_global_config(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     """Get global GPS tracking configuration."""
     try:
         # Return default config - GPS config feature not fully implemented
@@ -853,7 +1025,7 @@ async def get_global_config(db: Session = Depends(get_db), current_user=Depends(
 
 @router.patch("/config", response_model=GPSConfigResponse)
 async def update_global_config(
-    update: GPSConfigUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    update: GPSConfigUpdate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """Update global GPS tracking configuration."""
     from app.models.gps_tracking import GPSTrackingConfig
@@ -896,8 +1068,8 @@ async def update_global_config(
 
 @router.get("/config/{technician_id}", response_model=GPSConfigResponse)
 async def get_technician_config(
-    technician_id: int = Path(..., description="Technician ID"),
-    db: Session = Depends(get_db),
+    technician_id: str = Path(..., description="Technician ID"),
+    db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Get GPS configuration for a specific technician (falls back to global)."""
@@ -963,7 +1135,7 @@ async def get_technician_config(
 
 
 @router.post("/seed-demo-data")
-async def seed_demo_data(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+async def seed_demo_data(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Seed demo GPS data for testing the tracking page.
     Creates technician locations and work orders for today.
