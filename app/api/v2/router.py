@@ -114,6 +114,8 @@ from app.api.v2 import (
     ai_providers,
     # Phase 32: Multi-Entity (Multi-LLC) Support
     entities,
+    # Session 5A: Customer Self-Service Portal
+    customer_portal,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -315,6 +317,9 @@ api_router.include_router(ai_providers.router, prefix="/ai-providers", tags=["ai
 
 # Phase 32: Multi-Entity (Multi-LLC) Support
 api_router.include_router(entities.router, prefix="/entities", tags=["entities"])
+
+# Session 5A: Customer Self-Service Portal (OTP auth, no password)
+api_router.include_router(customer_portal.router, prefix="/customer-portal", tags=["customer-portal"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
