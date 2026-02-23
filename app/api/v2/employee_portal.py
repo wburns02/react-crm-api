@@ -2040,10 +2040,18 @@ async def save_inspection_state(
                             # Strip data URL prefix if present
                             if "," in pdf_base64:
                                 pdf_base64 = pdf_base64.split(",", 1)[1]
+                            # Check size — Brevo limit is 10 MB; base64 adds ~33% overhead so raw limit ~7.5 MB
+                            pdf_bytes = len(pdf_base64)
+                            if pdf_bytes > 10_000_000:
+                                logger.warning(f"PDF too large for email attachment ({pdf_bytes} bytes base64) — skipping attachment")
+                                pdf_base64 = None
+                        if pdf_base64:
                             attachments = [{
                                 "content": pdf_base64,
                                 "name": f"MAC-Septic-Inspection-{str(wo.id)[:8]}.pdf",
+                                "type": "application/pdf",
                             }]
+                            logger.info(f"Attaching PDF to inspection email ({len(pdf_base64)} base64 bytes)")
 
                         result = await email_svc.send_email(
                             to=to,

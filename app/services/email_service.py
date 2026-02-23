@@ -126,9 +126,17 @@ class EmailService:
         if reply_to:
             payload["replyTo"] = {"email": reply_to}
 
-        # Add attachments (Brevo format: [{content: base64, name: filename}])
+        # Add attachments (Brevo format: [{content: base64, name: filename, type: mime}])
         if attachments:
-            payload["attachment"] = attachments
+            # Ensure each attachment has required fields
+            normalized = []
+            for att in attachments:
+                normalized.append({
+                    "content": att.get("content", ""),
+                    "name": att.get("name", "attachment"),
+                    **({"type": att["type"]} if "type" in att else {}),
+                })
+            payload["attachment"] = normalized
 
         headers = {
             "accept": "application/json",
