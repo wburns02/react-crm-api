@@ -19,7 +19,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # Google Ads REST API
-GOOGLE_ADS_API_VERSION = "v18"
+GOOGLE_ADS_API_VERSION = "v19"
 GOOGLE_ADS_BASE_URL = f"https://googleads.googleapis.com/{GOOGLE_ADS_API_VERSION}"
 GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
