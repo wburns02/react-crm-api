@@ -1,7 +1,7 @@
 """
 Google Ads API Service
 
-Integrates with Google Ads REST API v18 for campaign performance data.
+Integrates with Google Ads REST API v20 for campaign performance data.
 Uses httpx for async HTTP, OAuth2 token refresh, and in-memory caching.
 
 Basic Access: 15,000 operations/day limit.
@@ -19,7 +19,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # Google Ads REST API
-GOOGLE_ADS_API_VERSION = "v19"
+GOOGLE_ADS_API_VERSION = "v20"
 GOOGLE_ADS_BASE_URL = f"https://googleads.googleapis.com/{GOOGLE_ADS_API_VERSION}"
 GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
@@ -191,7 +191,7 @@ class GoogleAdsService:
                     logger.error(
                         "Google Ads API query failed: %s %s",
                         response.status_code,
-                        response.text[:300],
+                        response.text[:1000],
                     )
                     return None
 
