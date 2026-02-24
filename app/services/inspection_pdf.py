@@ -83,13 +83,15 @@ def generate_inspection_pdf(
             step_status = step.get("status", "not_started")
             notes = step.get("notes", "")
             label = step_labels.get(step_key, f"Step {step_key}")
-            status_icon = "✅" if step_status == "pass" else "⚠️" if step_status == "flag" else "❌" if step_status == "fail" else "⏭️" if step_status == "skip" else "—"
+            dot_color = "#22c55e" if step_status == "pass" else "#f59e0b" if step_status == "flag" else "#ef4444" if step_status == "fail" else "#9ca3af" if step_status == "skip" else "#d1d5db"
+            row_bg = "#f0fdf4" if step_status == "pass" else "#fffbeb" if step_status == "flag" else "#fef2f2" if step_status == "fail" else "#f9fafb"
+            status_text = "Pass" if step_status == "pass" else "Needs Attention" if step_status == "flag" else "Fail" if step_status == "fail" else "Skipped" if step_status == "skip" else step_status.replace('_', ' ').title()
             notes_html = f"<p class='step-notes'>{notes}</p>" if notes else ""
             steps_html += f"""
-            <div class="step-row">
-                <span class="step-icon">{status_icon}</span>
+            <div class="step-row" style="background:{row_bg}">
+                <span class="step-dot" style="background:{dot_color}"></span>
                 <span class="step-label">{label}</span>
-                <span class="step-status">{step_status.replace('_', ' ').title()}</span>
+                <span class="step-status" style="color:{dot_color}">{status_text}</span>
             </div>
             {notes_html}
             """
@@ -125,10 +127,10 @@ def generate_inspection_pdf(
             h3 {{ color: #1e3a5f; font-size: 13pt; margin: 20px 0 10px; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px; }}
             ul {{ padding-left: 20px; }}
             li {{ margin-bottom: 6px; }}
-            .step-row {{ display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f3f4f6; }}
-            .step-icon {{ font-size: 14pt; width: 24px; text-align: center; }}
-            .step-label {{ flex: 1; font-weight: 500; }}
-            .step-status {{ font-size: 9pt; color: #6b7280; text-transform: uppercase; }}
+            .step-row {{ display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid #f3f4f6; border-radius: 4px; margin-bottom: 2px; }}
+            .step-dot {{ width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }}
+            .step-label {{ flex: 1; font-weight: 500; font-size: 10.5pt; }}
+            .step-status {{ font-size: 9pt; font-weight: 600; text-align: right; }}
             .step-notes {{ margin: 2px 0 8px 32px; font-size: 10pt; color: #4b5563; font-style: italic; }}
             .ai-section {{ background: #f0f4ff; border-left: 4px solid #2563eb; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 20px 0; }}
             .ai-section h3 {{ border: none; margin-top: 0; padding-bottom: 0; }}

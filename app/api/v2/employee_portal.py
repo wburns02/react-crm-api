@@ -2212,9 +2212,13 @@ async def send_inspection_email_report(
             if isinstance(s, dict) and s.get("status") not in ("not_started", None):
                 label = step_labels.get(sk, f"Step {sk}")
                 st = s.get("status", "")
-                icon = "&#9989;" if st == "pass" else "&#9888;&#65039;" if st == "flag" else "&#10060;" if st == "fail" else "&#9193;" if st == "skip" else "—"
+                # Stoplight colors: green=pass, yellow=flag, red=fail, gray=skip
+                dot_color = "#22c55e" if st == "pass" else "#f59e0b" if st == "flag" else "#ef4444" if st == "fail" else "#9ca3af"
                 bg = "#f0fdf4" if st == "pass" else "#fffbeb" if st == "flag" else "#fef2f2" if st == "fail" else "#f9fafb"
-                steps_rows += f'<tr><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:16px;width:32px;text-align:center">{icon}</td><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#1f2937;background:{bg}">{label}</td><td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;text-transform:uppercase;background:{bg}">{st.replace("_"," ").title()}</td></tr>'
+                status_label = "Pass" if st == "pass" else "Needs Attention" if st == "flag" else "Fail" if st == "fail" else "Skipped" if st == "skip" else st.replace("_", " ").title()
+                notes = s.get("notes", "")
+                notes_row = f'<tr><td style="padding:0 12px 8px 44px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;font-style:italic;background:{bg}" colspan="3">{notes}</td></tr>' if notes else ""
+                steps_rows += f'<tr><td style="padding:10px 12px;border-bottom:{"1px solid #f3f4f6" if not notes else "none"};width:32px;text-align:center;background:{bg}"><div style="width:14px;height:14px;border-radius:50%;background:{dot_color};display:inline-block"></div></td><td style="padding:10px 12px;border-bottom:{"1px solid #f3f4f6" if not notes else "none"};font-size:14px;color:#1f2937;font-weight:500;background:{bg}">{label}</td><td style="padding:10px 12px;border-bottom:{"1px solid #f3f4f6" if not notes else "none"};font-size:12px;color:{dot_color};font-weight:600;text-align:right;background:{bg}">{status_label}</td></tr>{notes_row}'
 
         steps_html = ""
         if steps_rows:
@@ -2237,15 +2241,14 @@ async def send_inspection_email_report(
               <p style="margin:0;font-size:13px;color:#374151;line-height:1.5">{snippet}</p>
             </div>"""
 
-        from app.services.logos import LOGO_WHITE_DATA_URI
-        logo_data_uri = LOGO_WHITE_DATA_URI
-
         html_body = f"""
         <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
           <!-- Header -->
           <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);color:white;padding:32px 24px;text-align:center">
-            <img src="{logo_data_uri}" alt="MAC Septic" style="height:44px;margin-bottom:8px">
-            <p style="margin:0;font-size:14px;color:#93c5fd">Septic System Inspection Report</p>
+            <div style="font-size:32px;font-weight:800;letter-spacing:2px;margin:0 0 2px;font-family:Arial,Helvetica,sans-serif"><span style="color:#f97316">/&#8725;</span> MAC</div>
+            <div style="font-size:16px;font-weight:600;letter-spacing:6px;margin:0 0 10px;color:#93c5fd">SEPTIC</div>
+            <div style="width:60px;height:2px;background:#f97316;margin:0 auto 10px"></div>
+            <p style="margin:0;font-size:13px;color:#93c5fd;letter-spacing:0.5px">Septic System Inspection Report</p>
           </div>
 
           <div style="padding:28px 24px">
