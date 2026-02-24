@@ -11,6 +11,7 @@ Features:
 
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, case, and_, or_
+from sqlalchemy.orm import selectinload
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timedelta
@@ -282,7 +283,7 @@ async def list_contracts(
 ):
     """List contracts with filtering."""
     try:
-        query = select(Contract)
+        query = select(Contract).options(selectinload(Contract.customer))
 
         if customer_id:
             query = query.where(Contract.customer_id == customer_id)

@@ -128,7 +128,7 @@ async def list_calls(
 ):
     """List call logs with filtering and pagination."""
     try:
-        query = select(CallLog)
+        query = select(CallLog).options(selectinload(CallLog.customer))
 
         # Apply filters
         if direction:

@@ -6,6 +6,7 @@ The column names here must match the actual call_logs table.
 
 from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Time, JSON, Float, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 
@@ -76,6 +77,9 @@ class CallLog(Base):
     resolution_score = Column(Float, nullable=True)  # 0-100
     topics = Column(JSON, nullable=True)  # List of topic strings
     analyzed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    customer = relationship("Customer", foreign_keys=[customer_id], lazy="noload")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

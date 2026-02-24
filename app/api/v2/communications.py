@@ -9,6 +9,7 @@ SECURITY:
 
 from fastapi import APIRouter, HTTPException, status, Query, Depends
 from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime
 import logging
@@ -60,7 +61,7 @@ async def get_communication_history(
     """Get communication history with pagination and filtering."""
     try:
         # Base query
-        query = select(Message)
+        query = select(Message).options(selectinload(Message.customer))
 
         # Apply filters
         if customer_id:

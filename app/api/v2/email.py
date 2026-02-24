@@ -10,6 +10,7 @@ Provides email-specific endpoints for:
 from fastapi import APIRouter, HTTPException, status, Query
 from pydantic import BaseModel
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime
 import logging
@@ -39,7 +40,7 @@ async def list_email_conversations(
 ):
     """List email conversations (messages with type=email)."""
     # Query for email messages
-    query = select(Message).where(Message.message_type == "email")
+    query = select(Message).options(selectinload(Message.customer)).where(Message.message_type == "email")
 
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())

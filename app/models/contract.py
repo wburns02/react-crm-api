@@ -2,6 +2,7 @@
 
 from sqlalchemy import Column, String, DateTime, Text, Integer, Date, Boolean, Float, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 
@@ -84,6 +85,9 @@ class Contract(Base):
     referral_credit = Column(Float, nullable=True)  # e.g., 50.0
     annual_increase_percent = Column(Float, nullable=True, default=5.0)
     upsell_from_id = Column(UUID(as_uuid=True), nullable=True)  # contract this was upgraded from
+
+    # Relationships
+    customer = relationship("Customer", foreign_keys=[customer_id], lazy="noload")
 
     # Notes
     notes = Column(Text, nullable=True)

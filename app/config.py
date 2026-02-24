@@ -208,6 +208,20 @@ class Settings(BaseSettings):
             if not self.TWILIO_AUTH_TOKEN:
                 logger.warning("SECURITY WARNING: TWILIO_AUTH_TOKEN not set. Twilio webhooks will reject all requests.")
 
+            # Warn about missing optional-but-recommended vars
+            recommended = {
+                "REDIS_URL": self.REDIS_URL,
+                "SENTRY_DSN": self.SENTRY_DSN,
+                "SENDGRID_API_KEY": self.SENDGRID_API_KEY,
+            }
+            missing = [k for k, v in recommended.items() if not v]
+            if missing:
+                logger.warning(
+                    "PRODUCTION NOTICE: Recommended env vars not set: %s. "
+                    "Some features may be degraded.",
+                    ", ".join(missing),
+                )
+
         return self
 
     @property
