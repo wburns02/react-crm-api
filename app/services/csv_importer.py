@@ -624,13 +624,13 @@ async def process_import(
                 called = data.get("called_number") or ""
                 await db_session.execute(
                     text("""
-                        INSERT INTO call_logs (id, rc_account_id, rc_call_id, rc_session_id,
+                        INSERT INTO call_logs (id, rc_call_id, rc_session_id,
                             caller_number, called_number, from_number, to_number,
                             user_id, direction, status, call_disposition, call_type,
                             has_recording, contact_name,
                             call_date, call_time, duration_seconds, ring_duration,
                             notes, external_system)
-                        VALUES (:id, :rc_account_id, :rc_call_id, :rc_session_id,
+                        VALUES (:id, :rc_call_id, :rc_session_id,
                             :caller_number, :called_number, :from_number, :to_number,
                             :user_id, :direction, :status, :call_disposition, :call_type,
                             :has_recording, :contact_name,
@@ -639,7 +639,6 @@ async def process_import(
                     """),
                     {
                         "id": log_id,
-                        "rc_account_id": uuid.uuid4(),
                         "rc_call_id": f"import-{log_id}",
                         "rc_session_id": f"import-{log_id}",
                         "caller_number": caller,
