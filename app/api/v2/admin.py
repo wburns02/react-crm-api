@@ -270,6 +270,19 @@ class SecuritySettings(BaseModel):
     ip_whitelist: list[str] = []
 
 
+class PricingBenchmarks(BaseModel):
+    """Competitor pricing benchmarks from market research (Competitor Pricing.docx)."""
+    conventional_1000gal_pump: float = 500.00
+    aerobic_atu_pump: float = 575.00  # midpoint of $550-$600
+    aerobic_atu_pump_low: float = 550.00
+    aerobic_atu_pump_high: float = 600.00
+    per_gallon_overage: float = 0.30  # per gallon over 1500 gal
+    overage_threshold_gallons: int = 1500
+    dig_access_fee_hourly: float = 175.00
+    cc_surcharge_pct: float = 3.5
+    notes: str = "Source: Competitor Pricing.docx (OneDrive). Updated 2026-02."
+
+
 async def _get_settings(db, category: str, model_class):
     """Load settings from DB, falling back to defaults."""
     try:
@@ -390,6 +403,27 @@ async def update_security_settings(
 ) -> SecuritySettings:
     """Update security settings. Requires admin access."""
     return await _save_settings(db, "security", settings, current_user.id)
+
+
+@router.get("/settings/pricing-benchmarks")
+async def get_pricing_benchmarks(
+    db: DbSession,
+    current_user: CurrentUser,
+    _: None = Depends(require_admin),
+) -> PricingBenchmarks:
+    """Get competitor pricing benchmarks. Requires admin access."""
+    return await _get_settings(db, "pricing_benchmarks", PricingBenchmarks)
+
+
+@router.patch("/settings/pricing-benchmarks")
+async def update_pricing_benchmarks(
+    settings: PricingBenchmarks,
+    db: DbSession,
+    current_user: CurrentUser,
+    _: None = Depends(require_admin),
+) -> PricingBenchmarks:
+    """Update competitor pricing benchmarks. Requires admin access."""
+    return await _save_settings(db, "pricing_benchmarks", settings, current_user.id)
 
 
 # ============ Customer Success Seed Data ============

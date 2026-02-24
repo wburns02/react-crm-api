@@ -6,12 +6,14 @@ Supports:
 - Technician import
 - Equipment import
 - Inventory import
+- Assets import (company vehicles, tools, etc.)
+- Call logs import
 """
 
 import csv
 import io
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, date
+from datetime import datetime, date, time
 from pydantic import BaseModel, ValidationError, EmailStr, field_validator
 from enum import Enum
 import re
@@ -23,6 +25,8 @@ class ImportType(str, Enum):
     TECHNICIANS = "technicians"
     EQUIPMENT = "equipment"
     INVENTORY = "inventory"
+    ASSETS = "assets"
+    CALL_LOGS = "call_logs"
 
 
 class ImportResult(BaseModel):
@@ -125,6 +129,61 @@ class InventoryImportRow(BaseModel):
     supplier: Optional[str] = None
 
 
+class AssetImportRow(BaseModel):
+    name: str
+    asset_type: str = "vehicle"
+    asset_tag: Optional[str] = None
+    make: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    year: Optional[int] = None
+    purchase_price: Optional[float] = None
+    status: str = "available"
+    condition: str = "good"
+    odometer_miles: Optional[float] = None
+    notes: Optional[str] = None
+
+    @field_validator("year", mode="before")
+    @classmethod
+    def parse_year(cls, v):
+        if v is None or v == "":
+            return None
+        try:
+            return int(float(str(v)))
+        except (ValueError, TypeError):
+            return None
+
+    @field_validator("purchase_price", "odometer_miles", mode="before")
+    @classmethod
+    def parse_float(cls, v):
+        if v is None or v == "":
+            return None
+        try:
+            return float(str(v).replace(",", ""))
+        except (ValueError, TypeError):
+            return None
+
+
+class CallLogImportRow(BaseModel):
+    caller_number: Optional[str] = None
+    called_number: Optional[str] = None
+    direction: str = "inbound"
+    call_date: Optional[str] = None
+    call_time: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    notes: Optional[str] = None
+
+    @field_validator("duration_seconds", mode="before")
+    @classmethod
+    def parse_duration(cls, v):
+        if v is None or v == "":
+            return None
+        try:
+            return int(float(str(v)))
+        except (ValueError, TypeError):
+            return None
+
+
 # ========================
 # Template Generators
 # ========================
@@ -174,6 +233,29 @@ TEMPLATES = {
         "notes",
     ],
     ImportType.INVENTORY: ["name", "sku", "category", "quantity", "unit", "unit_cost", "reorder_point", "supplier"],
+    ImportType.ASSETS: [
+        "name",
+        "asset_type",
+        "asset_tag",
+        "make",
+        "model",
+        "serial_number",
+        "year",
+        "purchase_price",
+        "status",
+        "condition",
+        "odometer_miles",
+        "notes",
+    ],
+    ImportType.CALL_LOGS: [
+        "caller_number",
+        "called_number",
+        "direction",
+        "call_date",
+        "call_time",
+        "duration_seconds",
+        "notes",
+    ],
 }
 
 
@@ -194,6 +276,8 @@ def generate_template_with_examples(import_type: ImportType) -> str:
         ImportType.TECHNICIANS: 'Mike,Smith,mike@company.com,(555) 987-6543,EMP001,"pumping,repair",25.00,LIC-12345',
         ImportType.EQUIPMENT: "Vacuum Truck 1,truck,VT-2024-001,ProVac 3000,ProVac Inc,2024-01-15,good,Primary pump truck",
         ImportType.INVENTORY: "4 inch PVC Pipe,PVC-4IN-10,Pipes and Fittings,50,feet,2.50,20,ABC Plumbing Supply",
+        ImportType.ASSETS: "2022 Ford F-550,vehicle,MAC-001,Ford,F-550,1FDUF5HT8NED12345,2022,65000,in_use,good,45230,Primary vacuum truck",
+        ImportType.CALL_LOGS: "(615) 555-1234,(615) 345-2544,inbound,2025-01-14,09:30:00,180,Customer inquiry about pumping service",
     }
 
     return template + examples.get(import_type, "")
@@ -219,6 +303,10 @@ def validate_row(
             validated = EquipmentImportRow(**row)
         elif import_type == ImportType.INVENTORY:
             validated = InventoryImportRow(**row)
+        elif import_type == ImportType.ASSETS:
+            validated = AssetImportRow(**row)
+        elif import_type == ImportType.CALL_LOGS:
+            validated = CallLogImportRow(**row)
         else:
             return False, None, f"Unknown import type: {import_type}"
 
@@ -251,6 +339,8 @@ def validate_headers(headers: List[str], import_type: ImportType) -> Tuple[bool,
         ImportType.TECHNICIANS: ["first_name", "last_name"],
         ImportType.EQUIPMENT: ["name", "equipment_type"],
         ImportType.INVENTORY: ["name"],
+        ImportType.ASSETS: ["name"],
+        ImportType.CALL_LOGS: [],
     }
 
     missing = []
@@ -311,6 +401,14 @@ async def validate_csv_file(content: str, import_type: ImportType) -> ImportResu
     )
 
 
+def _split_name(full_name: str) -> Tuple[str, str]:
+    """Split 'First Last' into (first_name, last_name)."""
+    parts = full_name.strip().split(None, 1)
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return full_name.strip(), ""
+
+
 async def process_import(
     content: str,
     import_type: ImportType,
@@ -367,18 +465,22 @@ async def process_import(
         try:
             if import_type == ImportType.CUSTOMERS:
                 # Parse tags from comma-separated string
-                tags = []
+                tags = ""
                 if data.get("tags"):
-                    tags = [t.strip() for t in data["tags"].split(",")]
+                    tags = data["tags"]
+
+                # Split name into first_name / last_name
+                first_name, last_name = _split_name(data["name"])
 
                 customer = Customer(
-                    name=data["name"],
+                    first_name=first_name,
+                    last_name=last_name,
                     email=data.get("email"),
                     phone=data.get("phone"),
-                    address=data.get("address"),
+                    address_line1=data.get("address"),
                     city=data.get("city"),
                     state=data.get("state"),
-                    zip_code=data.get("zip_code"),
+                    postal_code=data.get("zip_code"),
                     customer_type=data.get("customer_type", "residential"),
                     tags=tags,
                     notes=data.get("notes"),
@@ -386,7 +488,6 @@ async def process_import(
                 db_session.add(customer)
                 imported += 1
 
-            # Add handlers for other import types as needed
             elif import_type == ImportType.TECHNICIANS:
                 from app.models.technician import Technician
                 import uuid
@@ -409,7 +510,121 @@ async def process_import(
                 db_session.add(tech)
                 imported += 1
 
-            # Other import types would be added here
+            elif import_type == ImportType.WORK_ORDERS:
+                from app.models.work_order import WorkOrder
+                from sqlalchemy import select
+                import uuid
+
+                # Look up customer by name or email
+                customer_id = None
+                if data.get("customer_email"):
+                    result = await db_session.execute(
+                        select(Customer.id).where(Customer.email == data["customer_email"]).limit(1)
+                    )
+                    row_result = result.scalar_one_or_none()
+                    if row_result:
+                        customer_id = row_result
+
+                if not customer_id and data.get("customer_name"):
+                    first, last = _split_name(data["customer_name"])
+                    result = await db_session.execute(
+                        select(Customer.id).where(
+                            Customer.first_name == first,
+                            Customer.last_name == last,
+                        ).limit(1)
+                    )
+                    row_result = result.scalar_one_or_none()
+                    if row_result:
+                        customer_id = row_result
+
+                if not customer_id:
+                    # Create stub customer
+                    first, last = _split_name(data["customer_name"])
+                    stub = Customer(
+                        first_name=first,
+                        last_name=last,
+                        email=data.get("customer_email"),
+                        address_line1=data.get("service_address"),
+                    )
+                    db_session.add(stub)
+                    await db_session.flush()
+                    customer_id = stub.id
+
+                scheduled = None
+                if data.get("scheduled_date"):
+                    try:
+                        scheduled = datetime.strptime(data["scheduled_date"], "%Y-%m-%d").date()
+                    except ValueError:
+                        pass
+
+                wo = WorkOrder(
+                    id=uuid.uuid4(),
+                    customer_id=customer_id,
+                    job_type=data["job_type"],
+                    service_address_line1=data.get("service_address"),
+                    scheduled_date=scheduled,
+                    status=data.get("status", "draft"),
+                    priority=data.get("priority", "normal"),
+                    notes=data.get("notes"),
+                    internal_notes=data.get("description"),
+                    source="import",
+                )
+                db_session.add(wo)
+                imported += 1
+
+            elif import_type == ImportType.ASSETS:
+                from app.models.asset import Asset
+                import uuid
+
+                asset = Asset(
+                    id=uuid.uuid4(),
+                    name=data["name"],
+                    asset_type=data.get("asset_type", "vehicle"),
+                    asset_tag=data.get("asset_tag") or None,
+                    make=data.get("make") or None,
+                    model=data.get("model") or None,
+                    serial_number=data.get("serial_number") or None,
+                    year=data.get("year"),
+                    purchase_price=data.get("purchase_price"),
+                    status=data.get("status", "available"),
+                    condition=data.get("condition", "good"),
+                    odometer_miles=data.get("odometer_miles"),
+                    notes=data.get("notes"),
+                )
+                db_session.add(asset)
+                imported += 1
+
+            elif import_type == ImportType.CALL_LOGS:
+                from app.models.call_log import CallLog
+                import uuid
+
+                call_date = None
+                if data.get("call_date"):
+                    try:
+                        call_date = datetime.strptime(data["call_date"], "%Y-%m-%d").date()
+                    except ValueError:
+                        pass
+
+                call_time = None
+                if data.get("call_time"):
+                    try:
+                        call_time = datetime.strptime(data["call_time"], "%H:%M:%S").time()
+                    except ValueError:
+                        pass
+
+                log = CallLog(
+                    id=uuid.uuid4(),
+                    caller_number=data.get("caller_number"),
+                    called_number=data.get("called_number"),
+                    direction=data.get("direction", "inbound"),
+                    call_date=call_date,
+                    call_time=call_time,
+                    duration_seconds=data.get("duration_seconds"),
+                    notes=data.get("notes"),
+                    external_system="onedrive_import",
+                )
+                db_session.add(log)
+                imported += 1
 
         except Exception as e:
             if skip_errors:

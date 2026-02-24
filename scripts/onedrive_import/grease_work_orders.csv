@@ -1,0 +1,5 @@
+customer_name,customer_email,service_address,job_type,scheduled_date,status,priority,description,notes
+The Salty Burrito,,"2115 Belcourt Ave., Nashville, TN 37212",pumping,2025-01-01,completed,normal,Grease trap pumping service,Metro Nashville grease hauler manifest on file
+The Salty Burrito,,"2115 Belcourt Ave., Nashville, TN 37212",maintenance,2025-06-01,completed,normal,Grease trap maintenance service,Metro Nashville grease hauler manifest on file
+The Brentwood Market,,"925 Franklin Rd., Brentwood, TN 37027",pumping,2025-01-01,completed,normal,Grease trap pumping service,Metro Nashville grease hauler manifest on file
+The Brentwood Market,,"925 Franklin Rd., Brentwood, TN 37027",maintenance,2025-06-01,completed,normal,Grease trap maintenance service,Metro Nashville grease hauler manifest on file

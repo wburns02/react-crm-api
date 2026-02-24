@@ -1,0 +1,31 @@
+name,asset_type,asset_tag,make,model,serial_number,year,purchase_price,status,condition,odometer_miles,notes
+2021 Ford Transit,vehicle,RKY-5226,Ford,Transit,1FTBR1C81MKA81414,2021,,in_use,good,N/A,License plate: RKY-5226
+2020 GMC Savana 2500,vehicle,MZG-6757,GMC,Savana 2500,1GTW7BFG4L1125071,2020,,in_use,good,300000,License plate: MZG-6757
+2018 Chevorlet Express 2500,vehicle,MNR-5316,Chevorlet,Express 2500,1GCWGBFP2J1338002,2018,,in_use,good,241000,License plate: MNR-5316
+2018 Chevorlet Express 2500,vehicle,TNB-4664,Chevorlet,Express 2500,1GCWGAFP4J1337816,2018,,in_use,good,189000,License plate: TNB-4664
+2021 Ford Transit,vehicle,PMZ-0144,Ford,Transit,NM0LS6E25M1497970,2021,,in_use,good,167000,License plate: PMZ-0144
+2020 Ford Transit,vehicle,NPX-8174,Ford,Transit,NM0LS7E20L1472821,2020,,in_use,good,129000,License plate: NPX-8174
+2021 Ford Transit,vehicle,PFH-2052,Ford,Transit,NM0LS7E28M1488671,2021,,in_use,good,128000,License plate: PFH-2052
+2019 Ford Transit,vehicle,RTY-5184,Ford,Transit,NM0LS7E20K1405165,2019,,in_use,good,125000,License plate: RTY-5184
+2023 Ford Maverick,vehicle,THD-0900,Ford,Maverick,3FTTW8E36PRA29218,2023,,in_use,good,106000,License plate: THD-0900
+2021 Ford Transit,vehicle,TDR=4791,Ford,Transit,NM0lS7E22M1498922,2021,,in_use,good,93000,License plate: TDR=4791
+2017 Ford Transit,vehicle,JWB-4305,Ford,Transit,NM0LS6E74H1330033,2017,,in_use,good,84000,License plate: JWB-4305
+2022 Ford Maverick,vehicle,TRK-6156,Ford,Maverick,3FTTW8F91NRA27716,2022,,in_use,good,76000,License plate: TRK-6156
+2024 Ford Maverick,vehicle,TXX-5491,Ford,Maverick,3FTTW8J97RRA05880,2024,,in_use,good,49000,License plate: TXX-5491
+2024 Ford Maverick,vehicle,Temp,Ford,Maverick,3FTTW8J91RRA04398,2024,,in_use,good,43000,License plate: Temp
+2024 Maverick Maverick,vehicle,TXX-5490,Maverick,Maverick,3FTTW8J97RRA04406,2024,,in_use,good,41000,License plate: TXX-5490
+2000 Chevorlet PU,vehicle,DJR-2507,Chevorlet,PU,1GCEC14T4YE304616,2000,,in_use,good,39000,License plate: DJR-2507
+2024 Ford Maverick,vehicle,,Ford,Maverick,?,2024,,in_use,good,37000,Imported from Luna Vehicles
+2023? RAM Promaster City,vehicle,SJL-5314,RAM,Promaster City,,2023?,,in_use,good,30000,License plate: SJL-5314
+PUMP TRUCKS Yes,vehicle,,,,,,,in_use,good,5000,Imported from Luna Vehicles
+2019 Pump Truck Peterbuilt,vehicle,LMX-7243,Pump Truck,Peterbuilt,2NP3LJ0X9KM620495,2019,,in_use,good,,License plate: LMX-7243
+2013 Pump Truck Western Star,vehicle,SYN-9119,Pump Truck,Western Star,5KKHAXDV0DPBY2814,2013,,in_use,good,,License plate: SYN-9119
+1996 Pump Truck Peterbuilt,vehicle,FJH-5168,Pump Truck,Peterbuilt,1XP5DB9X6TD98008,1996,,in_use,good,,License plate: FJH-5168
+Pump Truck Freightliner,vehicle,,Pump Truck,Freightliner,,,,in_use,good,,Imported from Luna Vehicles
+Biennial Update for #/details of trucks,vehicle,USDOT#: 4176627,,,,,,in_use,good,,"Permit: USDOT#: 4176627, Expires: 2025-07-01 00:00:00"
+Annual DoT Truck Inspections,vehicle,,,,,,,in_use,good,,
+Annual Vehicle Registrations,vehicle,,,,,,,in_use,good,,
+Pump Truck - 2016 Freightliner M2 Vin: 3ALACXDT9GDGA22,vehicle,Tag: TN H608826,,,,,,in_use,good,,"Permit: Tag: TN H608826, Expires: 2026-02-28 00:00:00"
+Box Truck - 2019 GMC Savanna Vin: 7GZ37TCG8KN005748,vehicle,Tag: TN 0H22799,,,,,,in_use,good,,"Permit: Tag: TN 0H22799, Expires: 2026-02-28 00:00:00"
+Pump Truck - 2000 Intl 4700 Vin: 1HTSAAAN4YH267073,vehicle,Tag: SC P892664,,,,,,in_use,good,,"Permit: Tag: SC P892664, Expires: 2025-08-31 00:00:00"
+Box Truck - 2018 GMC Savanna Vin:7GZ37TCG7JN901098,vehicle,Tag: SC P885579,,,,,,in_use,good,,"Permit: Tag: SC P885579, Expires: 2026-04-30 00:00:00"

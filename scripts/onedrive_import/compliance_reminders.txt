@@ -1,0 +1,30 @@
+=== COMPLIANCE REMINDERS (for manual task creation) ===
+
+Columbia | Permit: HP060 | Expires: 2025-12-31 00:00:00 | Org: Columbia Wastewater System | Fees: $37.50 & $20.00/truck
+Metro Nashville | Permit: 501 | Expires: 2025-06-30 00:00:00 | Org: Metro Nashville Water Services | Fees: $50/vehicle (grease & septic)
+Music City Environmental | Permit: N/A | Expires: N/A | Org: Music City Environmental | Fees: 
+Lewisburg | Permit: LB972 | Expires: 2027-03-01 00:00:00 | Org: Lewisburg Water & Wastewater | Fees: 
+Dickson | Permit: HW-24-006 | Expires: 2025-06-30 00:00:00 | Org: Water Authority of Dickson County | Fees: 50
+Murfreesboro | Permit: 1019 | Expires: 2025-12-31 00:00:00 | Org: Murfreesboro Water Resources | Fees: $25 & $10/Truck
+TDEC | Permit: 972 | Expires: 2025-12-31 00:00:00 | Org: TDEC | Fees: 200
+DHEC | Permit: 32-368-32022 | Expires: 2025-03-01 00:00:00 | Org: DHEC | Fees: 
+Doug Carter | Permit: TBD | Expires: 2025-12-31 00:00:00 | Org: TDEC | Fees: $200 Conventional                $100 Mound  $100 LPP
+Hayden Cole | Permit: TBD | Expires: 2025-12-31 00:00:00 | Org: TDEC | Fees: $200 Conventional
+Matt Carter | Permit: 14228 (CLM) | Expires: 2025-12-31 00:00:00 | Org: TDEC | Fees: $200 Conventional                $100 Mound  $100 LPP
+Marvin Carter | Permit: 32-368-32022 | Expires: 2025-03-01 00:00:00 | Org: DHEC | Fees: Tier 1 Installer/Pumper/Hauler: $150
+Tier 2 Installer/Pumper/Hauler: $150
+Tier 3 Installer/Pumper/Hauler: $250
+Williamson County (Doug) | Permit: TBD | Expires: TBD | Org:  | Fees: 
+Williamson County (Hayden) | Permit: TBD | Expires: TBD | Org:  | Fees: 
+Biennial Update for #/details of trucks | Permit: USDOT#: 4176627 | Expires: 2025-07-01 00:00:00 | Org: FMCSA (Federal Motor Carrier Safety Administration) | Fees: 
+2016 Freightliner M2 | Permit: Vin: 3ALACXDT9GDGA22 | Expires: 2025-02-22 00:00:00 | Org: Tomlin Diesel | Fees: 
+2000 Intl 4700 | Permit: Vin: 1HTSAAAN4YH267073 | Expires: TBD | Org: Lathrop Enterprises | Fees: 
+Pump Truck - 2016 Freightliner M2 Vin: 3ALACXDT9GDGA22 | Permit: Tag: TN H608826 | Expires: 2026-02-28 00:00:00 | Org: Williamson County, TN | Fees: 781.19
+Box Truck - 2019 GMC Savanna Vin: 7GZ37TCG8KN005748 | Permit: Tag: TN 0H22799 | Expires: 2026-02-28 00:00:00 | Org: Williamson County, TN | Fees: 164.11
+Trailer | Permit:  | Expires: None | Org: Williamson County, TN | Fees: $30 (one time fee)
+Pump Truck - 2000 Intl 4700 Vin: 1HTSAAAN4YH267073 | Permit: Tag: SC P892664 | Expires: 2025-08-31 00:00:00 | Org:  | Fees: 21.62
+Box Truck - 2018 GMC Savanna Vin:7GZ37TCG7JN901098 | Permit: Tag: SC P885579 | Expires: 2026-04-30 00:00:00 | Org:  | Fees: 758.28
+Trailer | Permit:  | Expires: N/A | Org:  | Fees: 
+TNTAP Business Tax | Permit:  | Expires: 2025-04-15 00:00:00 | Org: TNTAP | Fees: ~$100
+TNTAP Franchise & Exercise Tax | Permit:  | Expires: 2025-04-15 00:00:00 | Org: TNTAP | Fees: 
+Tennessee SOS Annual Report | Permit: Control #: 001258394 | Expires: 2025-04-15 00:00:00 | Org: TN Secretary of State | Fees: 300
