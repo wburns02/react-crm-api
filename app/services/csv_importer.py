@@ -614,6 +614,7 @@ async def process_import(
 
                 log = CallLog(
                     id=uuid.uuid4(),
+                    rc_account_id=uuid.uuid4(),  # placeholder for NOT NULL constraint
                     caller_number=data.get("caller_number"),
                     called_number=data.get("called_number"),
                     direction=data.get("direction", "inbound"),
