@@ -7,15 +7,48 @@ Provides:
 - GET /admin/user-activity/sessions — login session history
 - DELETE /admin/user-activity/prune — clean up old records
 """
-from fastapi import APIRouter, Query
-from sqlalchemy import text
-from typing import Optional
+import asyncio
 import logging
+from typing import Optional
+
+from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel
+from sqlalchemy import text
 
 from app.api.deps import DbSession, CurrentUser
+from app.services.activity_tracker import log_activity, get_client_ip
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+class TrackEvent(BaseModel):
+    category: str
+    action: str
+    description: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+@router.post("/admin/user-activity/track")
+async def track_frontend_event(
+    event: TrackEvent,
+    current_user: CurrentUser,
+    request: Request,
+):
+    """Receive lightweight page-view / session events from the frontend."""
+    asyncio.create_task(log_activity(
+        category=event.category,
+        action=event.action,
+        description=event.description,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        user_name=f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or None,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent", "")[:500],
+        source="frontend",
+        session_id=event.session_id,
+    ))
+    return {"ok": True}
 
 
 @router.get("/admin/user-activity")

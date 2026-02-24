@@ -144,7 +144,8 @@ async def prune_old_activity(days: int = 90) -> int:
     try:
         async with async_session_maker() as db:
             result = await db.execute(
-                text(f"DELETE FROM user_activity_log WHERE created_at < NOW() - INTERVAL '{days} days'")
+                text("DELETE FROM user_activity_log WHERE created_at < NOW() - MAKE_INTERVAL(days => :days)"),
+                {"days": days},
             )
             await db.commit()
             return result.rowcount

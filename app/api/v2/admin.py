@@ -1909,7 +1909,9 @@ async def normalize_names(
                     if formatted != c[4]:
                         updates["phone"] = formatted
             if updates:
-                set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+                ALLOWED_CUSTOMER_COLS = {"first_name", "last_name", "city", "phone"}
+                safe_keys = [k for k in updates if k in ALLOWED_CUSTOMER_COLS]
+                set_clause = ", ".join(f"{k} = :{k}" for k in safe_keys)
                 updates["cid"] = str(c[0])
                 await db.execute(text(f"UPDATE customers SET {set_clause} WHERE id = :cid"), updates)
                 results["customers_updated"] += 1
@@ -1924,7 +1926,9 @@ async def normalize_names(
             if wo[2] and wo[2] != wo[2].strip().title():
                 updates["service_city"] = wo[2].strip().title()
             if updates:
-                set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+                ALLOWED_WO_COLS = {"assigned_technician", "service_city"}
+                safe_keys = [k for k in updates if k in ALLOWED_WO_COLS]
+                set_clause = ", ".join(f"{k} = :{k}" for k in safe_keys)
                 updates["wid"] = str(wo[0])
                 await db.execute(text(f"UPDATE work_orders SET {set_clause} WHERE id = :wid"), updates)
                 results["work_orders_updated"] += 1
@@ -1939,7 +1943,9 @@ async def normalize_names(
             if t[2] and t[2] != t[2].strip().title():
                 updates["last_name"] = t[2].strip().title()
             if updates:
-                set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+                ALLOWED_TECH_COLS = {"first_name", "last_name"}
+                safe_keys = [k for k in updates if k in ALLOWED_TECH_COLS]
+                set_clause = ", ".join(f"{k} = :{k}" for k in safe_keys)
                 updates["tid"] = str(t[0])
                 await db.execute(text(f"UPDATE technicians SET {set_clause} WHERE id = :tid"), updates)
                 results["technicians_updated"] += 1

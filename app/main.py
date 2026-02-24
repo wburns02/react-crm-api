@@ -717,6 +717,34 @@ async def ensure_user_activity_table():
             logger.warning(f"Could not ensure user_activity_log table: {type(e).__name__}: {e}")
 
 
+async def ensure_missing_indexes():
+    """Ensure critical indexes exist (migration 070). Idempotent."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    indexes = [
+        ("ix_customers_entity_id", "customers", "entity_id"),
+        ("ix_work_orders_entity_id", "work_orders", "entity_id"),
+        ("ix_payments_entity_id", "payments", "entity_id"),
+        ("ix_payments_invoice_id", "payments", "invoice_id"),
+    ]
+    async with async_session_maker() as session:
+        try:
+            for idx_name, table, column in indexes:
+                await session.execute(text(
+                    f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({column})"
+                ))
+            await session.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_work_orders_scheduled_date_status "
+                "ON work_orders(scheduled_date, status)"
+            ))
+            await session.commit()
+            logger.info("Missing indexes ensured")
+        except Exception as e:
+            await session.rollback()
+            logger.warning(f"Could not ensure indexes: {type(e).__name__}: {e}")
+
+
 async def ensure_mfa_tables():
     """
     Ensure MFA tables exist for authentication.
@@ -860,6 +888,7 @@ async def lifespan(app: FastAPI):
 
         await ensure_work_order_audit_columns()
         await ensure_user_activity_table()
+        await ensure_missing_indexes()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
