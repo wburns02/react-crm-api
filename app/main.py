@@ -596,6 +596,79 @@ async def ensure_commissions_columns():
             logger.warning(f"Could not ensure commissions columns: {type(e).__name__}: {e}")
 
 
+async def ensure_work_order_audit_columns():
+    """Ensure work_orders has audit trail columns and audit log table exists (migration 068)."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    async with async_session_maker() as session:
+        try:
+            # Add audit columns to work_orders if missing
+            for col, col_type, default in [
+                ("created_by", "VARCHAR(100)", None),
+                ("updated_by", "VARCHAR(100)", None),
+                ("source", "VARCHAR(50)", "'crm'"),
+            ]:
+                result = await session.execute(text(
+                    f"SELECT 1 FROM information_schema.columns WHERE table_name='work_orders' AND column_name='{col}'"
+                ))
+                if not result.scalar():
+                    default_clause = f" DEFAULT {default}" if default else ""
+                    await session.execute(text(f"ALTER TABLE work_orders ADD COLUMN {col} {col_type}{default_clause}"))
+                    logger.info(f"Added work_orders.{col} column")
+
+            # Fix created_at/updated_at to have proper defaults
+            await session.execute(text(
+                "ALTER TABLE work_orders ALTER COLUMN created_at SET DEFAULT NOW()"
+            ))
+            await session.execute(text(
+                "ALTER TABLE work_orders ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC'"
+            ))
+
+            # Backfill NULL created_at
+            await session.execute(text(
+                "UPDATE work_orders SET created_at = scheduled_date::timestamp WHERE created_at IS NULL AND scheduled_date IS NOT NULL"
+            ))
+            await session.execute(text(
+                "UPDATE work_orders SET created_at = NOW() WHERE created_at IS NULL"
+            ))
+            await session.execute(text(
+                "UPDATE work_orders SET source = 'crm' WHERE source IS NULL"
+            ))
+
+            # Create audit log table if missing
+            result = await session.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='work_order_audit_log')"
+            ))
+            if not result.scalar():
+                logger.info("Creating work_order_audit_log table...")
+                await session.execute(text("""
+                    CREATE TABLE work_order_audit_log (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        work_order_id UUID NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+                        action VARCHAR(30) NOT NULL,
+                        description TEXT,
+                        user_email VARCHAR(100),
+                        user_name VARCHAR(200),
+                        source VARCHAR(50),
+                        ip_address VARCHAR(45),
+                        user_agent VARCHAR(500),
+                        changes JSONB,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """))
+                await session.execute(text("CREATE INDEX IF NOT EXISTS ix_wo_audit_work_order_id ON work_order_audit_log(work_order_id)"))
+                await session.execute(text("CREATE INDEX IF NOT EXISTS ix_wo_audit_action ON work_order_audit_log(action)"))
+                await session.execute(text("CREATE INDEX IF NOT EXISTS ix_wo_audit_created_at ON work_order_audit_log(created_at)"))
+                logger.info("work_order_audit_log table created")
+
+            await session.commit()
+            logger.info("Work order audit columns ensured")
+        except Exception as e:
+            await session.rollback()
+            logger.warning(f"Could not ensure work order audit columns: {type(e).__name__}: {e}")
+
+
 async def ensure_mfa_tables():
     """
     Ensure MFA tables exist for authentication.
@@ -736,6 +809,8 @@ async def lifespan(app: FastAPI):
 
         # Ensure MFA tables exist (fix for migration 038 not running)
         await ensure_mfa_tables()
+
+        await ensure_work_order_audit_columns()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
