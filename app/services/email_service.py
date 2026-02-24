@@ -126,23 +126,27 @@ class EmailService:
         if reply_to:
             payload["replyTo"] = {"email": reply_to}
 
-        # Add attachments (Brevo format: [{content: base64, name: filename, type: mime}])
+        # Add attachments — Brevo expects: [{content: base64, name: filename}]
         if attachments:
-            # Ensure each attachment has required fields
             normalized = []
             for att in attachments:
                 content = att.get("content", "")
                 name = att.get("name", "attachment")
-                logger.info(f"[EMAIL-SVC] Processing attachment: name={name}, content_len={len(content) if content else 0}, content_starts_with={content[:50] if content else 'EMPTY'}")
-                normalized.append({
-                    "content": content,
-                    "name": name,
-                    **({"type": att["type"]} if "type" in att else {}),
-                })
-            payload["attachment"] = normalized
-            logger.info(f"[EMAIL-SVC] Payload has {len(normalized)} attachment(s)")
+                logger.info(f"[EMAIL-SVC] Attachment: name={name}, content_len={len(content) if content else 0}, starts={content[:30] if content else 'EMPTY'}...")
+                if content:
+                    normalized.append({
+                        "content": content,
+                        "name": name,
+                    })
+                else:
+                    logger.warning(f"[EMAIL-SVC] Skipping attachment '{name}' — empty content")
+            if normalized:
+                payload["attachment"] = normalized
+                logger.info(f"[EMAIL-SVC] Payload includes {len(normalized)} attachment(s)")
+            else:
+                logger.warning("[EMAIL-SVC] All attachments had empty content — sending without attachments")
         else:
-            logger.info(f"[EMAIL-SVC] No attachments provided (attachments={attachments})")
+            logger.info(f"[EMAIL-SVC] No attachments param provided")
 
         headers = {
             "accept": "application/json",

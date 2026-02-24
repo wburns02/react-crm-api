@@ -1920,6 +1920,7 @@ async def save_inspection_state(
         send_report = body.get("send_report")
         report_sent = False
         email_error = None
+        pdf_was_attached = False
         if send_report:
             method = send_report.get("method")
             to = send_report.get("to")
@@ -2039,25 +2040,50 @@ async def save_inspection_state(
 
                         # Attach PDF if provided
                         attachments = None
-                        pdf_base64 = send_report.get("pdf_base64") or send_report.get("pdfBase64")
-                        if pdf_base64:
-                            # Strip data URL prefix if present
-                            if "," in pdf_base64:
-                                pdf_base64 = pdf_base64.split(",", 1)[1]
-                            # Check size — Brevo limit is 10 MB; base64 adds ~33% overhead so raw limit ~7.5 MB
-                            pdf_bytes = len(pdf_base64)
-                            if pdf_bytes > 10_000_000:
-                                logger.warning(f"PDF too large for email attachment ({pdf_bytes} bytes base64) — skipping attachment")
-                                pdf_base64 = None
-                        if pdf_base64:
-                            attachments = [{
-                                "content": pdf_base64,
-                                "name": f"MAC-Septic-Inspection-{str(wo.id)[:8]}.pdf",
-                                "type": "application/pdf",
-                            }]
-                            logger.info(f"Attaching PDF to inspection email ({len(pdf_base64)} base64 bytes)")
+                        raw_pdf = send_report.get("pdf_base64") or send_report.get("pdfBase64")
+                        logger.info(f"[INSPECTION-EMAIL] raw_pdf type={type(raw_pdf).__name__}, len={len(raw_pdf) if raw_pdf else 0}, truthy={bool(raw_pdf)}")
+                        if raw_pdf and isinstance(raw_pdf, str) and len(raw_pdf) > 100:
+                            # Strip data URL prefix if present (e.g. "data:application/pdf;base64,...")
+                            if raw_pdf.startswith("data:"):
+                                raw_pdf = raw_pdf.split(",", 1)[1] if "," in raw_pdf else raw_pdf
+                            # Clean base64: remove any whitespace/newlines that could corrupt it
+                            import re
+                            pdf_base64_clean = re.sub(r'\s+', '', raw_pdf)
+                            # Ensure proper base64 padding
+                            pad = len(pdf_base64_clean) % 4
+                            if pad:
+                                pdf_base64_clean += "=" * (4 - pad)
+                            # Validate it's actually valid base64
+                            try:
+                                import base64
+                                decoded = base64.b64decode(pdf_base64_clean)
+                                logger.info(f"[INSPECTION-EMAIL] PDF decoded OK: {len(decoded)} bytes, starts_with={decoded[:4]}")
+                                # Verify it starts with PDF header (%PDF)
+                                if not decoded[:4].startswith(b'%PDF'):
+                                    logger.warning(f"[INSPECTION-EMAIL] Decoded content does NOT start with %PDF header: {decoded[:20]}")
+                                # Re-encode cleanly to ensure no corruption
+                                pdf_base64_final = base64.b64encode(decoded).decode('ascii')
+                            except Exception as b64_err:
+                                logger.error(f"[INSPECTION-EMAIL] Base64 decode FAILED: {b64_err}")
+                                pdf_base64_final = None
 
-                        logger.info(f"Sending inspection email to={to}, has_pdf={pdf_base64 is not None}, has_attachments={attachments is not None}")
+                            if pdf_base64_final:
+                                # Check size — Brevo limit is 20 MB total email
+                                pdf_bytes = len(pdf_base64_final)
+                                if pdf_bytes > 15_000_000:
+                                    logger.warning(f"[INSPECTION-EMAIL] PDF too large ({pdf_bytes} base64 bytes) — skipping")
+                                    pdf_base64_final = None
+                                else:
+                                    attachments = [{
+                                        "content": pdf_base64_final,
+                                        "name": f"MAC-Septic-Inspection-{str(wo.id)[:8]}.pdf",
+                                    }]
+                                    pdf_was_attached = True
+                                    logger.info(f"[INSPECTION-EMAIL] Attachment ready: {pdf_bytes} base64 bytes")
+                        else:
+                            logger.warning(f"[INSPECTION-EMAIL] No valid PDF data received (raw_pdf is empty or too short)")
+
+                        logger.info(f"[INSPECTION-EMAIL] Sending email to={to}, has_attachments={attachments is not None}")
                         result = await email_svc.send_email(
                             to=to,
                             subject=f"Your Septic Inspection Report — {condition_label}",
@@ -2076,7 +2102,7 @@ async def save_inspection_state(
                     email_error = str(email_err)
                     logger.warning(f"Failed to send report via email: {email_err}")
 
-        resp = {"success": True, "report_sent": report_sent}
+        resp = {"success": True, "report_sent": report_sent, "pdf_attached": pdf_was_attached}
         if not report_sent and send_report and send_report.get("method") == "email":
             resp["email_error"] = email_error or "Email not attempted"
         return resp
