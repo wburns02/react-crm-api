@@ -2245,9 +2245,8 @@ async def send_inspection_email_report(
         <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
           <!-- Header -->
           <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);color:white;padding:32px 24px;text-align:center">
-            <div style="font-size:32px;font-weight:800;letter-spacing:2px;margin:0 0 2px;font-family:Arial,Helvetica,sans-serif"><span style="color:#f97316">/&#8725;</span> MAC</div>
-            <div style="font-size:16px;font-weight:600;letter-spacing:6px;margin:0 0 10px;color:#93c5fd">SEPTIC</div>
-            <div style="width:60px;height:2px;background:#f97316;margin:0 auto 10px"></div>
+            <h1 style="margin:0;font-size:28px;font-weight:800;letter-spacing:3px;font-family:Arial,Helvetica,sans-serif">MAC SEPTIC</h1>
+            <div style="width:50px;height:3px;background:#f97316;margin:8px auto 10px"></div>
             <p style="margin:0;font-size:13px;color:#93c5fd;letter-spacing:0.5px">Septic System Inspection Report</p>
           </div>
 
