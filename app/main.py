@@ -162,6 +162,8 @@ async def ensure_work_order_photos_table():
 
     Creates the table if it doesn't exist. This is a runtime fix for
     the migration that may have failed silently.
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
     """
     from sqlalchemy import text
     from app.database import async_session_maker
@@ -218,6 +220,8 @@ async def ensure_pay_rate_columns():
 
     This is a runtime fix for missing database columns that should have been
     added by migration 025. Runs on startup to ensure columns exist.
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
     """
     from sqlalchemy import text
     from app.database import async_session_maker
@@ -283,6 +287,8 @@ async def ensure_messages_columns():
 
     This is a runtime fix for missing database columns that should have been
     added by migration 036. Runs on startup to ensure columns exist.
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
     """
     from sqlalchemy import text
     from app.database import async_session_maker
@@ -371,6 +377,8 @@ async def ensure_email_templates_table():
     Ensure email_templates table exists.
 
     This table was added by migration 037. Runs on startup to ensure table exists.
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
     """
     from sqlalchemy import text
     from app.database import async_session_maker
@@ -432,6 +440,8 @@ async def ensure_work_order_number_column():
     Ensure work_orders table has work_order_number column and backfill existing rows.
 
     This column provides human-readable work order numbers in WO-NNNNNN format.
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
     """
     from sqlalchemy import text
     from app.database import async_session_maker
@@ -494,6 +504,8 @@ async def ensure_is_admin_column():
 
     This column is needed for RBAC admin role detection.
     Added by migration 043 but may not have run on Railway.
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
     """
     from sqlalchemy import text
     from app.database import async_session_maker
@@ -535,6 +547,8 @@ async def ensure_commissions_columns():
 
     These columns are needed for auto-commission creation on work order completion.
     Added by migration 026/039 but may not have run on Railway.
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
     """
     from sqlalchemy import text
     from app.database import async_session_maker
@@ -597,7 +611,10 @@ async def ensure_commissions_columns():
 
 
 async def ensure_work_order_audit_columns():
-    """Ensure work_orders has audit trail columns and audit log table exists (migration 068)."""
+    """Ensure work_orders has audit trail columns and audit log table exists (migration 068).
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
+    """
     from sqlalchemy import text
     from app.database import async_session_maker
 
@@ -670,7 +687,10 @@ async def ensure_work_order_audit_columns():
 
 
 async def ensure_user_activity_table():
-    """Ensure user_activity_log table exists (migration 069)."""
+    """Ensure user_activity_log table exists (migration 069).
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
+    """
     from sqlalchemy import text
     from app.database import async_session_maker
 
@@ -718,7 +738,10 @@ async def ensure_user_activity_table():
 
 
 async def ensure_missing_indexes():
-    """Ensure critical indexes exist (migration 070). Idempotent."""
+    """Ensure critical indexes exist (migration 070). Idempotent.
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
+    """
     from sqlalchemy import text
     from app.database import async_session_maker
 
@@ -751,6 +774,8 @@ async def ensure_mfa_tables():
 
     These tables are needed for the User.mfa_settings relationship.
     Added by migration 038 but may not have run on Railway.
+
+    NOTE: Migrated to Alembic 071. Kept as safety net for deployments that skip migrations.
     """
     from sqlalchemy import text
     from app.database import async_session_maker

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, date
 import uuid
@@ -130,7 +131,7 @@ async def list_invoices(
     """List invoices with pagination, filtering, and search."""
     try:
         # Base query
-        query = select(Invoice)
+        query = select(Invoice).options(selectinload(Invoice.customer))
 
         # Apply status filter
         if status_filter:

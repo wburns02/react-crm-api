@@ -10,6 +10,7 @@ from decimal import Decimal
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select, and_, text
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.booking import Booking
@@ -397,7 +398,7 @@ async def list_bookings(
 
     Requires authentication.
     """
-    query = select(Booking)
+    query = select(Booking).options(selectinload(Booking.customer))
 
     if not include_test:
         query = query.where(Booking.is_test == False)
