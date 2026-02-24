@@ -595,36 +595,38 @@ async def process_import(
                 imported += 1
 
             elif import_type == ImportType.CALL_LOGS:
-                from app.models.call_log import CallLog
+                from sqlalchemy import text
                 import uuid
 
-                call_date = None
-                if data.get("call_date"):
-                    try:
-                        call_date = datetime.strptime(data["call_date"], "%Y-%m-%d").date()
-                    except ValueError:
-                        pass
+                call_date_str = data.get("call_date") or None
+                call_time_str = data.get("call_time") or None
 
-                call_time = None
-                if data.get("call_time"):
-                    try:
-                        call_time = datetime.strptime(data["call_time"], "%H:%M:%S").time()
-                    except ValueError:
-                        pass
-
-                log = CallLog(
-                    id=uuid.uuid4(),
-                    rc_account_id=uuid.uuid4(),  # placeholder for NOT NULL constraint
-                    caller_number=data.get("caller_number"),
-                    called_number=data.get("called_number"),
-                    direction=data.get("direction", "inbound"),
-                    call_date=call_date,
-                    call_time=call_time,
-                    duration_seconds=data.get("duration_seconds"),
-                    notes=data.get("notes"),
-                    external_system="onedrive_import",
+                log_id = uuid.uuid4()
+                await db_session.execute(
+                    text("""
+                        INSERT INTO call_logs (id, rc_account_id, rc_call_id, rc_session_id,
+                            caller_number, called_number, user_id, direction,
+                            call_date, call_time, duration_seconds, notes, external_system)
+                        VALUES (:id, :rc_account_id, :rc_call_id, :rc_session_id,
+                            :caller_number, :called_number, :user_id, :direction,
+                            :call_date::date, :call_time::time, :duration_seconds, :notes, :external_system)
+                    """),
+                    {
+                        "id": str(log_id),
+                        "rc_account_id": str(uuid.uuid4()),
+                        "rc_call_id": f"import-{log_id}",
+                        "rc_session_id": f"import-{log_id}",
+                        "caller_number": data.get("caller_number"),
+                        "called_number": data.get("called_number"),
+                        "user_id": "1",
+                        "direction": data.get("direction", "inbound"),
+                        "call_date": call_date_str,
+                        "call_time": call_time_str,
+                        "duration_seconds": data.get("duration_seconds"),
+                        "notes": data.get("notes"),
+                        "external_system": "onedrive_import",
+                    },
                 )
-                db_session.add(log)
                 imported += 1
 
         except Exception as e:
