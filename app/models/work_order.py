@@ -104,8 +104,13 @@ class WorkOrder(Base):
     assigned_technician = Column(String(100))
 
     # Timestamps
-    created_at = Column(DateTime)
-    updated_at = Column(DateTime)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Audit trail — who created/updated and from where
+    created_by = Column(String(100), nullable=True)  # User email
+    updated_by = Column(String(100), nullable=True)  # User email
+    source = Column(String(50), nullable=True, default="crm")  # crm, booking, customer_portal, api, import, employee_portal
 
     # Financial
     total_amount = Column(Numeric)

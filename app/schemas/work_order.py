@@ -131,6 +131,9 @@ class WorkOrderResponse(WorkOrderBase):
     customer_phone: Optional[str] = None  # Populated from Customer JOIN
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
+    source: Optional[str] = None
 
     # Time tracking
     actual_start_time: Optional[datetime] = None
@@ -171,3 +174,22 @@ class WorkOrderCursorResponse(BaseModel):
     next_cursor: Optional[str] = None
     has_more: bool
     total: Optional[int] = None  # Optional for performance
+
+
+class WorkOrderAuditLogResponse(BaseModel):
+    """Single audit log entry."""
+
+    id: UUIDStr
+    work_order_id: UUIDStr
+    action: str
+    description: Optional[str] = None
+    user_email: Optional[str] = None
+    user_name: Optional[str] = None
+    source: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    changes: Optional[Any] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

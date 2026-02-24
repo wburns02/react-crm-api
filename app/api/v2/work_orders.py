@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Request
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import select, func, cast, String, text, and_, or_
+from sqlalchemy import select, func, cast, String, text, and_, or_, desc
 from typing import Optional, List
 from datetime import datetime, date as date_type
 from pydantic import BaseModel, Field
@@ -10,6 +10,7 @@ import traceback
 
 from app.api.deps import DbSession, CurrentUser, EntityCtx
 from app.models.work_order import WorkOrder
+from app.models.work_order_audit import WorkOrderAuditLog
 from app.models.customer import Customer
 from app.models.technician import Technician
 from app.services.commission_service import auto_create_commission
@@ -20,6 +21,7 @@ from app.schemas.work_order import (
     WorkOrderResponse,
     WorkOrderListResponse,
     WorkOrderCursorResponse,
+    WorkOrderAuditLogResponse,
 )
 from app.schemas.pagination import decode_cursor, encode_cursor
 from app.services.websocket_manager import manager
@@ -793,6 +795,7 @@ async def generate_work_order_number(db: DbSession) -> str:
 @router.post("", response_model=WorkOrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_work_order(
     work_order_data: WorkOrderCreate,
+    request: Request,
     db: DbSession,
     current_user: CurrentUser,
     entity: EntityCtx,
@@ -803,6 +806,13 @@ async def create_work_order(
     if entity:
         data["entity_id"] = str(entity.id)
     data["work_order_number"] = await generate_work_order_number(db)
+
+    # Audit trail fields
+    data["created_by"] = current_user.email if current_user else None
+    data["updated_by"] = current_user.email if current_user else None
+    data["source"] = request.headers.get("X-Source", "crm")
+    data["created_at"] = datetime.utcnow()
+    data["updated_at"] = datetime.utcnow()
 
     # Set default estimated_duration_hours based on job type if not provided
     if not data.get("estimated_duration_hours"):
@@ -848,6 +858,25 @@ async def create_work_order(
     await db.commit()
     await db.refresh(work_order)
 
+    # Create audit log entry
+    try:
+        client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else None)
+        audit_entry = WorkOrderAuditLog(
+            work_order_id=work_order.id,
+            action="created",
+            description=f"Work order {work_order.work_order_number} created for {work_order.job_type}",
+            user_email=current_user.email if current_user else None,
+            user_name=getattr(current_user, "full_name", None) or (current_user.email if current_user else "System"),
+            source=request.headers.get("X-Source", "crm"),
+            ip_address=client_ip,
+            user_agent=request.headers.get("User-Agent", None),
+            changes={"status": {"old": None, "new": work_order.status}, "job_type": {"old": None, "new": work_order.job_type}},
+        )
+        db.add(audit_entry)
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to create audit log for WO {work_order.id}: {e}")
+
     # Broadcast work order created event via WebSocket
     await manager.broadcast_event(
         event_type="work_order_update",
@@ -881,6 +910,7 @@ async def create_work_order(
 async def update_work_order(
     work_order_id: str,
     work_order_data: WorkOrderUpdate,
+    request: Request,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -910,6 +940,16 @@ async def update_work_order(
     # Track status change for WebSocket event
     old_status = str(work_order.status) if work_order.status else None
     old_technician = work_order.assigned_technician
+
+    # Capture before-state for audit diff
+    audit_changes = {}
+    for field, new_value in update_data.items():
+        old_value = getattr(work_order, field, None)
+        # Serialize for JSON comparison
+        old_ser = str(old_value) if old_value is not None else None
+        new_ser = str(new_value) if new_value is not None else None
+        if old_ser != new_ser:
+            audit_changes[field] = {"old": old_ser, "new": new_ser}
 
     try:
         # Use SQLAlchemy ORM update - handles ENUM types correctly
@@ -942,11 +982,45 @@ async def update_work_order(
                 work_order.technician_id = matched_tech.id
                 logger.info(f"Auto-resolved technician '{tech_name}' → {matched_tech.id}")
 
-        # Update timestamp
+        # Update timestamp and audit
         work_order.updated_at = datetime.utcnow()
+        work_order.updated_by = current_user.email if current_user else None
 
         await db.commit()
         await db.refresh(work_order)
+
+        # Create audit log entry for the update
+        if audit_changes:
+            try:
+                # Determine action type from changes
+                action = "updated"
+                desc_parts = []
+                if "status" in audit_changes:
+                    action = "status_changed"
+                    desc_parts.append(f"Status: {audit_changes['status']['old']} → {audit_changes['status']['new']}")
+                if "assigned_technician" in audit_changes or "technician_id" in audit_changes:
+                    action = "assigned" if "status" not in audit_changes else action
+                    desc_parts.append(f"Technician: {audit_changes.get('assigned_technician', {}).get('old', '?')} → {audit_changes.get('assigned_technician', {}).get('new', '?')}")
+                if not desc_parts:
+                    desc_parts.append(f"Updated {', '.join(audit_changes.keys())}")
+
+                client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else None)
+                audit_entry = WorkOrderAuditLog(
+                    work_order_id=work_order.id,
+                    action=action,
+                    description="; ".join(desc_parts),
+                    user_email=current_user.email if current_user else None,
+                    user_name=getattr(current_user, "full_name", None) or (current_user.email if current_user else "System"),
+                    source=request.headers.get("X-Source", "crm"),
+                    ip_address=client_ip,
+                    user_agent=request.headers.get("User-Agent", None),
+                    changes=audit_changes,
+                )
+                db.add(audit_entry)
+                await db.commit()
+            except Exception as audit_err:
+                logger.warning(f"Failed to create audit log for WO {work_order_id}: {audit_err}")
+
     except Exception as e:
         await db.rollback()
         logger.error(f"Error updating work order {work_order_id}: {e}")
@@ -1473,3 +1547,23 @@ async def generate_invoice_from_work_order(
         "status": invoice.status,
         "line_items": line_items,
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Audit Log Endpoint
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/{work_order_id}/audit-log", response_model=list[WorkOrderAuditLogResponse])
+async def get_work_order_audit_log(
+    work_order_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get the full audit trail for a work order (newest first)."""
+    result = await db.execute(
+        select(WorkOrderAuditLog)
+        .where(WorkOrderAuditLog.work_order_id == work_order_id)
+        .order_by(desc(WorkOrderAuditLog.created_at))
+    )
+    entries = result.scalars().all()
+    return entries
