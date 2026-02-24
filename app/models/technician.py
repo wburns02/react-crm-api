@@ -70,6 +70,10 @@ class Technician(Base):
     # Multi-entity (LLC) support
     entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)
 
+    # Microsoft 365 integration
+    microsoft_user_id = Column(String(255), nullable=True)
+    microsoft_email = Column(String(255), nullable=True)
+
     def __repr__(self):
         return f"<Technician {self.first_name} {self.last_name}>"
 

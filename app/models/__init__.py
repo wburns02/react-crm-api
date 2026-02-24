@@ -108,6 +108,9 @@ from app.models.mfa import UserMFASettings, UserBackupCode, MFASession
 # User Activity Tracking
 from app.models.user_activity import UserActivityLog
 
+# Microsoft 365 Inbound Emails
+from app.models.inbound_email import InboundEmail
+
 __all__ = [
     # Core models
     "Customer",
@@ -220,4 +223,6 @@ __all__ = [
     "MFASession",
     # User Activity Tracking
     "UserActivityLog",
+    # Microsoft 365 Inbound Emails
+    "InboundEmail",
 ]

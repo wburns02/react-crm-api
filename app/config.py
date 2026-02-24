@@ -121,6 +121,16 @@ class Settings(BaseSettings):
     GOOGLE_CALENDAR_ID: str | None = None
     GOOGLE_CALENDAR_CREDENTIALS_JSON: str | None = None
 
+    # Microsoft 365
+    MS365_CLIENT_ID: str | None = None
+    MS365_CLIENT_SECRET: str | None = None
+    MS365_TENANT_ID: str | None = None
+    MS365_REDIRECT_URI: str | None = None
+    MS_TEAMS_WEBHOOK_URL: str | None = None
+    MS365_SHAREPOINT_SITE_ID: str | None = None
+    MS365_SHAREPOINT_DRIVE_ID: str | None = None
+    MS365_MONITORED_MAILBOX: str | None = None
+
     # AI Services
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None

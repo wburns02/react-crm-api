@@ -82,6 +82,9 @@ class Customer(Base):
     # Multi-entity (LLC) support
     entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)
 
+    # Microsoft 365 integration
+    sharepoint_folder_url = Column(String(500), nullable=True)
+
     # Relationships
     work_orders = relationship("WorkOrder", back_populates="customer", cascade="all, delete-orphan", passive_deletes=True)
     messages = relationship("Message", back_populates="customer", cascade="all, delete-orphan", passive_deletes=True)

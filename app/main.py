@@ -32,6 +32,8 @@ from app.config import settings
 from app.database import init_db
 from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
 from app.tasks.reminder_scheduler import start_reminder_scheduler, stop_reminder_scheduler
+from app.tasks.calendar_sync import start_calendar_sync, stop_calendar_sync
+from app.tasks.email_poller import start_email_poller, stop_email_poller
 
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
@@ -941,6 +943,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start Samsara feed poller: {e}")
 
+    # Start MS365 calendar sync scheduler
+    try:
+        start_calendar_sync()
+    except Exception as e:
+        logger.warning(f"Failed to start calendar sync: {e}")
+
+    # Start MS365 email poller
+    try:
+        start_email_poller()
+    except Exception as e:
+        logger.warning(f"Failed to start email poller: {e}")
+
     # Background task watchdog — restarts crashed tasks every 5 minutes
     import asyncio
 
@@ -995,6 +1009,8 @@ async def lifespan(app: FastAPI):
         stop_feed_poller()
     except Exception:
         pass
+    stop_calendar_sync()
+    stop_email_poller()
 
 
 # SECURITY: Conditionally enable docs based on settings

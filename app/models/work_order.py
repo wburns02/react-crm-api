@@ -134,6 +134,10 @@ class WorkOrder(Base):
     # Multi-entity (LLC) support
     entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)
 
+    # Microsoft 365 integration
+    outlook_event_id = Column(String(255), nullable=True)
+    sharepoint_item_id = Column(String(255), nullable=True)
+
     # Relationships
     customer = relationship("Customer", back_populates="work_orders")
 

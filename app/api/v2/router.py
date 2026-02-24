@@ -118,6 +118,8 @@ from app.api.v2 import (
     customer_portal,
     # User Activity Tracking
     user_activity,
+    # Microsoft 365 Integration
+    microsoft365,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -325,6 +327,9 @@ api_router.include_router(customer_portal.router, prefix="/customer-portal", tag
 
 # User Activity Tracking & Analytics
 api_router.include_router(user_activity.router, tags=["user-activity"])
+
+# Microsoft 365 Integration (SSO, Calendar, Teams, SharePoint, Email)
+api_router.include_router(microsoft365.router, prefix="/microsoft365", tags=["microsoft365"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])

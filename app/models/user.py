@@ -19,6 +19,8 @@ class User(Base):
     is_superuser = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False, nullable=False)
     default_entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True)
+    microsoft_id = Column(String(255), unique=True, nullable=True)
+    microsoft_email = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
