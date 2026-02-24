@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, date
 import logging
 
 from app.api.deps import DbSession, CurrentUser
+from app.services.cache_service import cache_service, TTL
 from app.models.customer import Customer
 from app.models.customer_success import (
     HealthScore,
@@ -37,6 +38,11 @@ async def get_cs_overview(
     current_user: CurrentUser,
 ):
     """Get Customer Success platform overview metrics."""
+    entity_id = getattr(current_user, "default_entity_id", None) or "default"
+    cache_key = f"cs:overview:{entity_id}"
+    cached = await cache_service.get(cache_key)
+    if cached is not None:
+        return cached
     try:
         # Health Score Distribution
         health_counts = {}
@@ -116,7 +122,7 @@ async def get_cs_overview(
         except Exception:
             pass
 
-        return {
+        result = {
             "health_distribution": health_counts,
             "avg_health_score": round(avg_health, 1),
             "total_at_risk": health_counts.get(HealthStatus.AT_RISK.value, 0)
@@ -128,6 +134,8 @@ async def get_cs_overview(
             "recent_touchpoints_7d": recent_touchpoints,
             "active_segments": active_segments,
         }
+        await cache_service.set(cache_key, result, ttl=TTL.MEDIUM)
+        return result
     except Exception as e:
         logger.warning(f"Error getting CS overview: {e}")
         return {
@@ -150,6 +158,11 @@ async def get_at_risk_customers(
     limit: int = Query(10, ge=1, le=50),
 ):
     """Get customers with at-risk or critical health scores."""
+    entity_id = getattr(current_user, "default_entity_id", None) or "default"
+    cache_key = f"cs:at_risk:{entity_id}:{limit}"
+    cached = await cache_service.get(cache_key)
+    if cached is not None:
+        return cached
     try:
         result = await db.execute(
             select(HealthScore)
@@ -159,7 +172,7 @@ async def get_at_risk_customers(
         )
         scores = result.scalars().all()
 
-        return {
+        result = {
             "items": [
                 {
                     "customer_id": s.customer_id,
@@ -172,6 +185,8 @@ async def get_at_risk_customers(
             ],
             "total": len(scores),
         }
+        await cache_service.set(cache_key, result, ttl=TTL.MEDIUM)
+        return result
     except Exception as e:
         logger.warning(f"Error getting at-risk customers: {e}")
         return {
@@ -234,6 +249,11 @@ async def get_journey_performance(
     days: int = Query(30, ge=7, le=90),
 ):
     """Get journey performance metrics."""
+    entity_id = getattr(current_user, "default_entity_id", None) or "default"
+    cache_key = f"cs:journey_perf:{entity_id}:{days}"
+    cached = await cache_service.get(cache_key)
+    if cached is not None:
+        return cached
     try:
         period_start = datetime.utcnow() - timedelta(days=days)
 
@@ -278,10 +298,12 @@ async def get_journey_performance(
                 }
             )
 
-        return {
+        result = {
             "period_days": days,
             "journeys": journey_stats,
         }
+        await cache_service.set(cache_key, result, ttl=TTL.LONG)
+        return result
     except Exception as e:
         logger.warning(f"Error getting journey performance: {e}")
         return {
@@ -297,6 +319,11 @@ async def get_playbook_performance(
     days: int = Query(30, ge=7, le=90),
 ):
     """Get playbook performance metrics."""
+    entity_id = getattr(current_user, "default_entity_id", None) or "default"
+    cache_key = f"cs:playbook_perf:{entity_id}"
+    cached = await cache_service.get(cache_key)
+    if cached is not None:
+        return cached
     try:
         period_start = datetime.utcnow() - timedelta(days=days)
 
@@ -343,10 +370,12 @@ async def get_playbook_performance(
                 }
             )
 
-        return {
+        result = {
             "period_days": days,
             "playbooks": playbook_stats,
         }
+        await cache_service.set(cache_key, result, ttl=TTL.LONG)
+        return result
     except Exception as e:
         logger.warning(f"Error getting playbook performance: {e}")
         return {

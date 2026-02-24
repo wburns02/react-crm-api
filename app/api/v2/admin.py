@@ -15,6 +15,7 @@ import random
 import logging
 
 from app.api.deps import CurrentUser, DbSession, get_password_hash
+from app.security.password_policy import validate_password
 from app.models.user import User
 from app.models.technician import Technician
 from app.models.system_settings import SystemSettingStore
@@ -159,6 +160,14 @@ async def create_user(
     _: None = Depends(require_admin),
 ):
     """Create a new user. Requires admin access."""
+    # Validate password complexity
+    password_errors = validate_password(request.password)
+    if password_errors:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=password_errors,
+        )
+
     # Check if email already exists
     existing = await db.execute(select(User).where(User.email == request.email))
     if existing.scalar_one_or_none():
@@ -231,6 +240,12 @@ async def update_user(
     if request.is_active is not None:
         user.is_active = request.is_active
     if request.password is not None:
+        password_errors = validate_password(request.password)
+        if password_errors:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=password_errors,
+            )
         user.hashed_password = get_password_hash(request.password)
 
     await db.commit()

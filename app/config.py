@@ -155,7 +155,7 @@ class Settings(BaseSettings):
 
     # Error Tracking
     SENTRY_DSN: str | None = None
-    VERSION: str = "3.0.0"
+    VERSION: str = "3.1.0"
 
     # Redis Cache (optional)
     REDIS_URL: str | None = None

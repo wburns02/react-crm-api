@@ -30,6 +30,7 @@ from app.schemas.auth import (
     MFADisableRequest,
 )
 from app.core.rate_limit import rate_limit_by_ip
+from app.security.password_policy import validate_password
 from app.services.mfa_service import MFAManager
 from app.services.activity_tracker import log_activity, get_client_ip
 
@@ -291,6 +292,14 @@ async def register(
     """Register a new user."""
     # Rate limit: 10 requests/minute per IP to prevent account enumeration
     rate_limit_by_ip(request, requests_per_minute=10)
+
+    # Validate password complexity
+    password_errors = validate_password(user_data.password)
+    if password_errors:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=password_errors,
+        )
 
     # Check if user exists
     result = await db.execute(select(User).where(User.email == user_data.email))
