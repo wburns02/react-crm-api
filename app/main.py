@@ -669,6 +669,54 @@ async def ensure_work_order_audit_columns():
             logger.warning(f"Could not ensure work order audit columns: {type(e).__name__}: {e}")
 
 
+async def ensure_user_activity_table():
+    """Ensure user_activity_log table exists (migration 069)."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    async with async_session_maker() as session:
+        try:
+            result = await session.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='user_activity_log')"
+            ))
+            if not result.scalar():
+                logger.info("Creating user_activity_log table...")
+                await session.execute(text("""
+                    CREATE TABLE user_activity_log (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        user_id INTEGER,
+                        user_email VARCHAR(100),
+                        user_name VARCHAR(200),
+                        category VARCHAR(30) NOT NULL,
+                        action VARCHAR(50) NOT NULL,
+                        description TEXT,
+                        ip_address VARCHAR(45),
+                        user_agent VARCHAR(500),
+                        source VARCHAR(50),
+                        resource_type VARCHAR(50),
+                        resource_id VARCHAR(100),
+                        endpoint VARCHAR(200),
+                        http_method VARCHAR(10),
+                        status_code INTEGER,
+                        response_time_ms INTEGER,
+                        session_id VARCHAR(50),
+                        entity_id VARCHAR(100),
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """))
+                await session.execute(text("CREATE INDEX ix_ual_user_id ON user_activity_log(user_id)"))
+                await session.execute(text("CREATE INDEX ix_ual_category ON user_activity_log(category)"))
+                await session.execute(text("CREATE INDEX ix_ual_action ON user_activity_log(action)"))
+                await session.execute(text("CREATE INDEX ix_ual_created_at ON user_activity_log(created_at)"))
+                await session.execute(text("CREATE INDEX ix_ual_user_created ON user_activity_log(user_id, created_at)"))
+                await session.execute(text("CREATE INDEX ix_ual_category_created ON user_activity_log(category, created_at)"))
+                logger.info("user_activity_log table created")
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            logger.warning(f"Could not ensure user_activity_log table: {type(e).__name__}: {e}")
+
+
 async def ensure_mfa_tables():
     """
     Ensure MFA tables exist for authentication.
@@ -811,6 +859,7 @@ async def lifespan(app: FastAPI):
         await ensure_mfa_tables()
 
         await ensure_work_order_audit_columns()
+        await ensure_user_activity_table()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
@@ -892,6 +941,11 @@ app = FastAPI(
 # GZip compression middleware - compress responses > 500 bytes
 # This can reduce response sizes by 60-80% for JSON payloads
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# User Activity Tracking middleware - logs authenticated API actions
+# Runs AFTER response (fire-and-forget async task), ~0ms overhead
+from app.middleware.activity import ActivityTrackingMiddleware
+app.add_middleware(ActivityTrackingMiddleware)
 
 # Server-Timing middleware - adds performance timing headers
 # Visible in browser DevTools for debugging TTFB

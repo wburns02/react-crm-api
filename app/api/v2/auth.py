@@ -31,6 +31,7 @@ from app.schemas.auth import (
 )
 from app.core.rate_limit import rate_limit_by_ip
 from app.services.mfa_service import MFAManager
+from app.services.activity_tracker import log_activity, get_client_ip
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -107,8 +108,35 @@ async def login(
             path="/",
         )
 
+        # Log successful login
+        import asyncio
+        asyncio.create_task(log_activity(
+            category="auth",
+            action="login",
+            description=f"Login successful for {user.email}",
+            user_id=user.id,
+            user_email=user.email,
+            user_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+            ip_address=get_client_ip(request),
+            user_agent=(request.headers.get("user-agent", ""))[:500],
+            source=request.headers.get("x-source", "crm"),
+            session_id=request.headers.get("x-correlation-id", ""),
+        ))
+
         return Token(access_token=access_token, token=access_token, token_type="bearer")
-    except HTTPException:
+    except HTTPException as he:
+        # Log failed login attempt
+        if he.status_code == 401:
+            import asyncio
+            asyncio.create_task(log_activity(
+                category="auth",
+                action="login_failed",
+                description=f"Failed login for {login_data.email}: {he.detail}",
+                user_email=login_data.email,
+                ip_address=get_client_ip(request),
+                user_agent=(request.headers.get("user-agent", ""))[:500],
+                source=request.headers.get("x-source", "crm"),
+            ))
         raise
     except Exception as e:
         logger.error(f"Login error: {type(e).__name__}: {str(e)}")
@@ -118,8 +146,31 @@ async def login(
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
     """Logout user by clearing session cookie."""
+    # Best-effort: decode JWT from cookie to identify user for logging
+    try:
+        from jose import jwt as jwt_lib
+        token = request.cookies.get("session")
+        if token:
+            payload = jwt_lib.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            user_email = payload.get("email")
+            user_id = payload.get("sub")
+            import asyncio
+            asyncio.create_task(log_activity(
+                category="auth",
+                action="logout",
+                description=f"Logout for {user_email}",
+                user_id=int(user_id) if user_id else None,
+                user_email=user_email,
+                ip_address=get_client_ip(request),
+                user_agent=(request.headers.get("user-agent", ""))[:500],
+                source=request.headers.get("x-source", "crm"),
+                session_id=request.headers.get("x-correlation-id", ""),
+            ))
+    except Exception:
+        pass  # Logout should always succeed
+
     # SECURITY: Must match the cookie settings used when setting the cookie
     response.delete_cookie(
         key="session",
@@ -241,6 +292,20 @@ async def login_mfa(
     )
 
     logger.info(f"MFA login successful for user {user.id}")
+
+    # Log MFA login
+    import asyncio
+    asyncio.create_task(log_activity(
+        category="auth",
+        action="mfa_verified",
+        description=f"MFA login successful for {user.email}",
+        user_id=user.id,
+        user_email=user.email,
+        ip_address=get_client_ip(request),
+        user_agent=(request.headers.get("user-agent", ""))[:500],
+        source=request.headers.get("x-source", "crm"),
+    ))
+
     return Token(access_token=access_token, token=access_token, token_type="bearer")
 
 

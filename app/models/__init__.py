@@ -105,6 +105,9 @@ from app.models.asset import Asset, AssetMaintenanceLog, AssetAssignment
 # MFA (Multi-Factor Authentication)
 from app.models.mfa import UserMFASettings, UserBackupCode, MFASession
 
+# User Activity Tracking
+from app.models.user_activity import UserActivityLog
+
 __all__ = [
     # Core models
     "Customer",
@@ -215,4 +218,6 @@ __all__ = [
     "UserMFASettings",
     "UserBackupCode",
     "MFASession",
+    # User Activity Tracking
+    "UserActivityLog",
 ]

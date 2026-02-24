@@ -116,6 +116,8 @@ from app.api.v2 import (
     entities,
     # Session 5A: Customer Self-Service Portal
     customer_portal,
+    # User Activity Tracking
+    user_activity,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -320,6 +322,9 @@ api_router.include_router(entities.router, prefix="/entities", tags=["entities"]
 
 # Session 5A: Customer Self-Service Portal (OTP auth, no password)
 api_router.include_router(customer_portal.router, prefix="/customer-portal", tags=["customer-portal"])
+
+# User Activity Tracking & Analytics
+api_router.include_router(user_activity.router, tags=["user-activity"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
