@@ -609,7 +609,7 @@ async def process_import(
                             call_date, call_time, duration_seconds, notes, external_system)
                         VALUES (:id, :rc_account_id, :rc_call_id, :rc_session_id,
                             :caller_number, :called_number, :user_id, :direction,
-                            :call_date::date, :call_time::time, :duration_seconds, :notes, :external_system)
+                            CAST(:call_date AS date), CAST(:call_time AS time), :duration_seconds, :notes, :external_system)
                     """),
                     {
                         "id": str(log_id),
