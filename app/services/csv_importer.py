@@ -626,11 +626,11 @@ async def process_import(
                     text("""
                         INSERT INTO call_logs (id, rc_account_id, rc_call_id, rc_session_id,
                             caller_number, called_number, from_number, to_number,
-                            user_id, direction,
+                            user_id, direction, status, call_disposition,
                             call_date, call_time, duration_seconds, notes, external_system)
                         VALUES (:id, :rc_account_id, :rc_call_id, :rc_session_id,
                             :caller_number, :called_number, :from_number, :to_number,
-                            :user_id, :direction,
+                            :user_id, :direction, :status, :call_disposition,
                             :call_date, :call_time, :duration_seconds, :notes, :external_system)
                     """),
                     {
@@ -647,6 +647,8 @@ async def process_import(
                         "call_date": call_date_val,
                         "call_time": call_time_val,
                         "duration_seconds": dur,
+                        "status": "completed",
+                        "call_disposition": "completed",
                         "notes": data.get("notes"),
                         "external_system": "onedrive_import",
                     },
