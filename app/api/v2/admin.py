@@ -36,6 +36,47 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# ============ Test Email ============
+
+
+@router.post("/test-email")
+async def test_email(
+    request: Request,
+    current_user: CurrentUser,
+):
+    """Send a simple test email to verify Brevo is working."""
+    body = await request.json()
+    to = body.get("to")
+    if not to:
+        raise HTTPException(status_code=400, detail="'to' is required")
+
+    from app.services.email_service import EmailService
+    svc = EmailService()
+    logger.info(f"[TEST-EMAIL] is_configured={svc.is_configured}, api_key={'SET' if svc.api_key else 'MISSING'}, from={svc.from_address}")
+
+    if not svc.is_configured:
+        return {"success": False, "error": "Email not configured", "status": svc.get_status()}
+
+    # Simple test with a tiny PDF attachment to prove attachments work
+    import base64
+    # Minimal valid PDF (just says "Test PDF")
+    test_pdf_content = b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 44>>\nstream\nBT /F1 16 Tf 72 700 Td (Test PDF) Tj ET\nendstream\nendobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\nxref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000266 00000 n \n0000000360 00000 n \ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n0\n%%EOF"
+    pdf_b64 = base64.b64encode(test_pdf_content).decode("ascii")
+
+    result = await svc.send_email(
+        to=to,
+        subject="MAC Septic CRM - Test Email with PDF",
+        body="This is a test email from MAC Septic CRM. If you can see the attached PDF, email with attachments is working correctly!",
+        html_body="<div style='font-family:Arial;padding:20px'><h2>MAC Septic CRM</h2><p>This is a test email. If you can see the attached PDF, email with attachments is working correctly!</p></div>",
+        attachments=[{
+            "content": pdf_b64,
+            "name": "test-attachment.pdf",
+        }],
+    )
+    logger.info(f"[TEST-EMAIL] Result: {result}")
+    return result
+
+
 # ============ User Management ============
 
 

@@ -2114,6 +2114,164 @@ async def save_inspection_state(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/jobs/{job_id}/inspection/send-email-report")
+async def send_inspection_email_report(
+    job_id: str,
+    request: Request,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Generate PDF server-side and email the inspection report.
+
+    This endpoint generates the PDF on the server using WeasyPrint,
+    eliminating the fragile base64 transfer from frontend.
+
+    Request body: {"to": "customer@email.com"}
+    """
+    try:
+        body = await request.json()
+        to = body.get("to")
+        if not to:
+            raise HTTPException(status_code=400, detail="'to' email address is required")
+
+        # Load work order
+        result = await db.execute(
+            select(WorkOrder).where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        # Get inspection data
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection", {})
+        if not inspection:
+            raise HTTPException(status_code=400, detail="No inspection data found for this work order")
+
+        # Get customer info
+        customer_name = "Valued Customer"
+        customer_address = ""
+        if wo.customer_id:
+            cust_result = await db.execute(
+                select(Customer).where(Customer.id == wo.customer_id)
+            )
+            cust = cust_result.scalars().first()
+            if cust:
+                customer_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Valued Customer"
+                addr_parts = [p for p in [cust.address_line1, cust.city, cust.state, cust.postal_code] if p]
+                customer_address = ", ".join(addr_parts)
+
+        # Generate PDF server-side
+        from app.services.inspection_pdf import generate_inspection_pdf, pdf_to_base64
+        pdf_bytes = generate_inspection_pdf(
+            customer_name=customer_name,
+            customer_address=customer_address,
+            inspection_data=inspection,
+            work_order_id=str(wo.id),
+            job_type=wo.job_type or "Inspection",
+            scheduled_date=str(wo.scheduled_date) if wo.scheduled_date else None,
+        )
+        logger.info(f"[SEND-REPORT] Generated PDF: {len(pdf_bytes)} bytes for WO {job_id}")
+
+        # Convert to base64 for Brevo
+        pdf_b64 = pdf_to_base64(pdf_bytes)
+        logger.info(f"[SEND-REPORT] PDF base64: {len(pdf_b64)} chars, starts with: {pdf_b64[:20]}")
+
+        # Build email
+        summary = inspection.get("summary", {})
+        condition = summary.get("overall_condition", "N/A")
+        issues = summary.get("total_issues", 0)
+        recs = summary.get("recommendations", [])
+        condition_color = "#22c55e" if condition == "good" else "#f59e0b" if condition == "fair" else "#ef4444"
+        condition_label = "Good" if condition == "good" else "Needs Attention" if condition == "fair" else "Needs Repair"
+
+        recs_html = ""
+        if recs:
+            items = "".join(f"<li style='margin-bottom:8px;color:#374151'>{r}</li>" for r in recs)
+            recs_html = f"<div style='margin-top:20px'><h3 style='margin:0 0 12px;font-size:16px;color:#1e3a5f'>Key Findings:</h3><ul style='margin:0;padding-left:20px'>{items}</ul></div>"
+
+        html_body = f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+          <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);color:white;padding:28px;text-align:center">
+            <h1 style="margin:0;font-size:22px;font-weight:700">MAC SEPTIC SERVICES</h1>
+            <p style="margin:6px 0 0;font-size:14px;color:#93c5fd">Septic System Inspection Report</p>
+          </div>
+          <div style="padding:24px">
+            <p style="font-size:16px;color:#1f2937">Hi {customer_name},</p>
+            <p style="font-size:14px;color:#4b5563;line-height:1.6">Thank you for choosing MAC Septic Services. Below is a summary of your recent septic system inspection. <strong>Your complete PDF report is attached.</strong></p>
+            <div style="background:{condition_color};color:white;padding:20px;border-radius:10px;text-align:center;margin:20px 0">
+              <strong style="font-size:20px">Overall Condition: {condition_label}</strong>
+              <br><span style="font-size:14px;opacity:0.9">{issues} item(s) noted during inspection</span>
+            </div>
+            {recs_html}
+            <div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:8px;text-align:center">
+              <p style="margin:0 0 4px;font-size:13px;color:#6b7280">Questions about your report?</p>
+              <p style="margin:0;font-size:16px;font-weight:600;color:#1e3a5f">(512) 392-1232 | macseptic.com</p>
+            </div>
+            <p style="margin-top:20px;font-size:14px;color:#4b5563">Thank you,<br><strong>MAC Septic Services</strong></p>
+          </div>
+        </div>
+        """
+
+        plain_text = f"MAC Septic Inspection Report\n\nHi {customer_name},\n\nOverall Condition: {condition_label}\nIssues: {issues}\n\nYour complete PDF report is attached.\n\nCall us: (512) 392-1232\nThank you for choosing MAC Septic Services!"
+
+        # Send via Brevo with PDF attachment
+        from app.services.email_service import EmailService
+        email_svc = EmailService()
+        if not email_svc.is_configured:
+            status = email_svc.get_status()
+            raise HTTPException(status_code=503, detail=f"Email not configured: {status.get('message')}")
+
+        attachments = [{
+            "content": pdf_b64,
+            "name": f"MAC-Septic-Inspection-{str(wo.id)[:8]}.pdf",
+        }]
+        logger.info(f"[SEND-REPORT] Sending to={to} with {len(attachments)} attachment(s)")
+
+        result = await email_svc.send_email(
+            to=to,
+            subject=f"Your Septic Inspection Report — {condition_label}",
+            body=plain_text,
+            html_body=html_body,
+            attachments=attachments,
+        )
+        logger.info(f"[SEND-REPORT] Email result: {result}")
+
+        if result.get("success"):
+            # Mark in checklist that report was sent
+            inspection.setdefault("summary", {})
+            inspection["summary"]["reportSentVia"] = inspection["summary"].get("reportSentVia", [])
+            if "email" not in inspection["summary"]["reportSentVia"]:
+                inspection["summary"]["reportSentVia"].append("email")
+            inspection["summary"]["reportSentAt"] = datetime.utcnow().isoformat() + "Z"
+            checklist["inspection"] = inspection
+            wo.checklist = checklist
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(wo, "checklist")
+            await db.commit()
+
+            return {
+                "success": True,
+                "report_sent": True,
+                "pdf_attached": True,
+                "pdf_size_bytes": len(pdf_bytes),
+                "message_id": result.get("message_id"),
+            }
+        else:
+            return {
+                "success": False,
+                "report_sent": False,
+                "pdf_attached": False,
+                "email_error": result.get("error", "Unknown error"),
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[SEND-REPORT] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/jobs/{job_id}/inspection/complete")
 async def complete_inspection(
     job_id: str,
