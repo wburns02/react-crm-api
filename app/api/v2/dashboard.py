@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import select, func, and_, text
+from sqlalchemy import select, func, and_, or_, text
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import Optional
@@ -83,6 +83,7 @@ class DashboardStats(BaseModel):
 
     total_prospects: int
     active_prospects: int
+    archived_contacts: int = 0
     total_customers: int
     total_work_orders: int
     scheduled_work_orders: int
@@ -169,20 +170,37 @@ async def get_dashboard_stats(
 
     # Wrap all database queries in try/except for robustness
     try:
-        # Total prospects
+        # Total prospects (exclude archived)
         total_prospects_result = await db.execute(
-            select(func.count()).where(Customer.prospect_stage.in_(prospect_stages))
+            select(func.count()).where(
+                Customer.prospect_stage.in_(prospect_stages),
+                or_(Customer.is_archived == False, Customer.is_archived == None),
+            )
         )
         total_prospects = total_prospects_result.scalar() or 0
     except Exception:
         logger.warning("Dashboard query failed", exc_info=True)
 
     try:
-        # Total customers (won)
-        total_customers_result = await db.execute(select(func.count()).where(Customer.prospect_stage == "won"))
+        # Total customers (won, exclude archived)
+        total_customers_result = await db.execute(
+            select(func.count()).where(
+                Customer.prospect_stage == "won",
+                or_(Customer.is_archived == False, Customer.is_archived == None),
+            )
+        )
         total_customers = total_customers_result.scalar() or 0
     except Exception:
         logger.warning("Dashboard query failed", exc_info=True)
+
+    archived_contacts = 0
+    try:
+        archived_result = await db.execute(
+            select(func.count()).where(Customer.is_archived == True)
+        )
+        archived_contacts = archived_result.scalar() or 0
+    except Exception:
+        logger.warning("Dashboard archived count query failed", exc_info=True)
 
     try:
         # Work order stats
@@ -347,6 +365,7 @@ async def get_dashboard_stats(
     stats = DashboardStats(
         total_prospects=total_prospects,
         active_prospects=total_prospects,
+        archived_contacts=archived_contacts,
         total_customers=total_customers,
         total_work_orders=total_work_orders,
         scheduled_work_orders=scheduled_work_orders,

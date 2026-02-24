@@ -34,6 +34,7 @@ class CustomerBase(BaseModel):
 
     # Status
     is_active: Optional[bool] = True
+    is_archived: Optional[bool] = False
 
     # Lead/Sales tracking
     lead_source: Optional[str] = None

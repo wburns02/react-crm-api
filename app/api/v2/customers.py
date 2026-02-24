@@ -35,11 +35,12 @@ async def list_customers(
     prospect_stage: Optional[str] = None,
     is_active: Optional[bool] = True,
     include_all: Optional[bool] = None,
+    is_archived: Optional[bool] = None,
 ):
     """List customers with pagination and filtering."""
     # Check cache first
     cache = get_cache_service()
-    cache_key = f"customers:list:{page}:{page_size}:{search}:{customer_type}:{prospect_stage}:{is_active}:{include_all}"
+    cache_key = f"customers:list:{page}:{page_size}:{search}:{customer_type}:{prospect_stage}:{is_active}:{include_all}:{is_archived}"
     cached = await cache.get(cache_key)
     if cached is not None:
         return cached
@@ -70,6 +71,13 @@ async def list_customers(
     # Default to active-only; pass include_all=true to see everything
     if not include_all and is_active is not None:
         query = query.where(Customer.is_active == is_active)
+
+    # Archive filter: by default exclude archived unless explicitly requested
+    if is_archived is True:
+        query = query.where(Customer.is_archived == True)
+    elif is_archived is False or is_archived is None:
+        # Default: exclude archived records
+        query = query.where(or_(Customer.is_archived == False, Customer.is_archived == None))
 
     # Multi-entity filtering: NULL entity_id = default entity
     if entity:
@@ -211,3 +219,41 @@ async def delete_customer(
     await db.commit()
     await get_cache_service().delete_pattern("customers:*")
     await get_cache_service().delete_pattern("dashboard:*")
+
+
+@router.post("/{customer_id}/archive")
+async def archive_customer(
+    customer_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Archive a customer — removes from active lists but preserves data."""
+    result = await db.execute(select(Customer).where(Customer.id == customer_id))
+    customer = result.scalar_one_or_none()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    customer.is_archived = True
+    await db.commit()
+    await db.refresh(customer)
+    await get_cache_service().delete_pattern("customers:*")
+    await get_cache_service().delete_pattern("dashboard:*")
+    return {"success": True, "id": str(customer.id), "is_archived": True}
+
+
+@router.post("/{customer_id}/unarchive")
+async def unarchive_customer(
+    customer_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Unarchive a customer — restores to active lists."""
+    result = await db.execute(select(Customer).where(Customer.id == customer_id))
+    customer = result.scalar_one_or_none()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    customer.is_archived = False
+    await db.commit()
+    await db.refresh(customer)
+    await get_cache_service().delete_pattern("customers:*")
+    await get_cache_service().delete_pattern("dashboard:*")
+    return {"success": True, "id": str(customer.id), "is_archived": False}

@@ -1984,3 +1984,102 @@ async def fix_call_logs_schema(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/data/add-archive-column")
+async def add_archive_column(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Add is_archived column to customers table if it doesn't exist."""
+    from sqlalchemy import text
+
+    require_admin(current_user)
+
+    try:
+        # Check if column exists
+        result = await db.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'customers' AND column_name = 'is_archived'"
+        ))
+        exists = result.fetchone()
+        if exists:
+            return {"success": True, "message": "Column already exists"}
+
+        await db.execute(text(
+            "ALTER TABLE customers ADD COLUMN is_archived BOOLEAN DEFAULT FALSE"
+        ))
+        await db.execute(text(
+            "CREATE INDEX ix_customers_is_archived ON customers (is_archived)"
+        ))
+        await db.commit()
+        return {"success": True, "message": "Column added"}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/data/archive-legacy-imports")
+async def archive_legacy_imports(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Archive all customers imported from OneDrive (lead_source='import' or 'research')
+    that have prospect_stage='new_lead' and were bulk-imported."""
+    from sqlalchemy import text
+
+    require_admin(current_user)
+
+    try:
+        # Archive customers where lead_source indicates import
+        result = await db.execute(text("""
+            UPDATE customers
+            SET is_archived = TRUE
+            WHERE is_archived IS NOT TRUE
+              AND (lead_source IN ('import', 'research', 'unknown'))
+              AND prospect_stage = 'new_lead'
+              AND (tags IS NULL OR tags NOT LIKE '%do_not_archive%')
+        """))
+        archived_count = result.rowcount
+
+        await db.commit()
+        return {
+            "success": True,
+            "archived_count": archived_count,
+            "message": f"Archived {archived_count} legacy import records"
+        }
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/data/unarchive-customers")
+async def unarchive_customers(
+    db: DbSession,
+    current_user: CurrentUser,
+    customer_ids: list[str] = None,
+    unarchive_all: bool = False,
+):
+    """Unarchive specific customers or all archived customers."""
+    from sqlalchemy import text
+
+    require_admin(current_user)
+
+    try:
+        if unarchive_all:
+            result = await db.execute(text("UPDATE customers SET is_archived = FALSE WHERE is_archived = TRUE"))
+            count = result.rowcount
+        elif customer_ids:
+            result = await db.execute(
+                text("UPDATE customers SET is_archived = FALSE WHERE id = ANY(:ids)"),
+                {"ids": customer_ids},
+            )
+            count = result.rowcount
+        else:
+            return {"success": False, "message": "Provide customer_ids or unarchive_all=true"}
+
+        await db.commit()
+        return {"success": True, "unarchived_count": count}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
