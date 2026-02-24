@@ -1079,6 +1079,13 @@ app.include_router(api_router, prefix="/api/v2")
 app.include_router(public_router, prefix="/api/public/v1", tags=["Public API"])
 app.include_router(twilio_router, prefix="/webhooks/twilio", tags=["webhooks"])
 
+# Serve static assets (logos, etc.) — no auth required
+from starlette.staticfiles import StaticFiles
+import pathlib
+_static_dir = pathlib.Path(__file__).parent / "static"
+if _static_dir.is_dir():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
 
 @app.get("/")
 async def root():
