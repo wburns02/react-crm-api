@@ -2017,7 +2017,7 @@ async def save_inspection_state(
                             {ai_section}
                             <div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:8px;text-align:center">
                               <p style="margin:0 0 4px;font-size:13px;color:#6b7280">Questions about your report?</p>
-                              <p style="margin:0;font-size:16px;font-weight:600;color:#1e3a5f">(512) 392-1232 &nbsp;|&nbsp; macseptic.com</p>
+                              <p style="margin:0;font-size:16px;font-weight:600;color:#1e3a5f">(512) 737-8711 &nbsp;|&nbsp; macseptic.com</p>
                             </div>
                             <p style="margin-top:20px;font-size:14px;color:#4b5563">Thank you,<br><strong>MAC Septic Services</strong><br><span style="font-size:12px;color:#9ca3af">San Marcos, TX</span></p>
                           </div>
@@ -2035,7 +2035,7 @@ async def save_inspection_state(
                             for r in recs:
                                 plain_text += f"- {r}\n"
                         plain_text += "\nA complete PDF report with photos is attached."
-                        plain_text += "\n\nQuestions? Call us at (512) 392-1232"
+                        plain_text += "\n\nQuestions? Call us at (512) 737-8711"
                         plain_text += "\nThank you for choosing MAC Septic Services!"
 
                         # Attach PDF if provided
@@ -2282,13 +2282,13 @@ async def send_inspection_email_report(
 
             <!-- Attachment callout -->
             <div style="margin-top:24px;padding:14px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;text-align:center">
-              <p style="margin:0;font-size:14px;color:#1e40af">&#128206; <strong>Your full inspection report is attached as a PDF</strong></p>
+              <p style="margin:0;font-size:14px;color:#1e40af">&#9993; <strong>Your full inspection report is attached as a PDF</strong></p>
             </div>
 
             <!-- Contact -->
             <div style="margin-top:24px;padding:18px;background:#f9fafb;border-radius:8px;text-align:center">
               <p style="margin:0 0 4px;font-size:12px;color:#6b7280">Questions about your report?</p>
-              <p style="margin:0;font-size:17px;font-weight:700;color:#1e3a5f">(512) 392-1232</p>
+              <p style="margin:0;font-size:17px;font-weight:700;color:#1e3a5f">(512) 737-8711</p>
               <p style="margin:4px 0 0;font-size:13px;color:#2563eb">macseptic.com</p>
             </div>
 
@@ -2303,7 +2303,7 @@ async def send_inspection_email_report(
         </div>
         """
 
-        plain_text = f"MAC Septic Inspection Report\n\nHi {customer_name},\n\nOverall Condition: {condition_label}\nIssues: {issues}\n\nYour complete PDF report is attached.\n\nCall us: (512) 392-1232\nThank you for choosing MAC Septic Services!"
+        plain_text = f"MAC Septic Inspection Report\n\nHi {customer_name},\n\nOverall Condition: {condition_label}\nIssues: {issues}\n\nYour complete PDF report is attached.\n\nCall us: (512) 737-8711\nThank you for choosing MAC Septic Services!"
 
         # Send via Brevo with PDF attachment
         from app.services.email_service import EmailService

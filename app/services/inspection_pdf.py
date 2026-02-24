@@ -176,7 +176,7 @@ def generate_inspection_pdf(
         {f'<div class="info-box" style="margin-top:20px"><label>Weather Conditions</label><span>{weather_text}</span></div>' if weather_text else ''}
 
         <div class="footer">
-            <p class="phone">(512) 392-1232 &nbsp;|&nbsp; macseptic.com</p>
+            <p class="phone">(512) 737-8711 &nbsp;|&nbsp; macseptic.com</p>
             <p>MAC Septic Services — San Marcos, TX</p>
             <p>Report ID: {work_order_id[:8] if work_order_id else 'N/A'}</p>
         </div>
@@ -219,7 +219,7 @@ def _generate_simple_pdf(customer_name, condition, cond_label, issues, recs, dat
             lines.append(f"  - {r}")
         lines.append("")
     lines.append("Thank you for choosing MAC Septic Services!")
-    lines.append("(512) 392-1232 | macseptic.com")
+    lines.append("(512) 737-8711 | macseptic.com")
 
     text = "\n".join(lines)
 
