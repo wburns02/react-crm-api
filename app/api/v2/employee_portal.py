@@ -1974,53 +1974,68 @@ async def save_inspection_state(
                             if cust:
                                 cust_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Valued Customer"
 
-                        # Build HTML email — premium branded design
+                        # Reuse the same polished template as send-email-report
                         condition_color = "#22c55e" if condition == "good" else "#f59e0b" if condition == "fair" else "#ef4444"
                         condition_label = "Good" if condition == "good" else "Needs Attention" if condition == "fair" else "Needs Repair"
 
                         recs_html = ""
                         if recs:
                             recs_items = "".join(f"<li style='margin-bottom:8px;color:#374151'>{r}</li>" for r in recs)
-                            recs_html = f"""
-                            <div style="margin-top:20px">
-                              <h3 style="margin:0 0 12px;font-size:16px;color:#1e3a5f">Key Findings:</h3>
-                              <ul style="margin:0;padding-left:20px">{recs_items}</ul>
-                            </div>"""
+                            recs_html = f"<div style='margin-top:20px'><h3 style='margin:0 0 12px;font-size:16px;color:#1e3a5f'>Key Findings:</h3><ul style='margin:0;padding-left:20px'>{recs_items}</ul></div>"
 
-                        # AI analysis snippet if available
+                        # Steps with stoplight colors
+                        steps_data = insp.get("steps", {})
+                        _step_labels = {"1":"Locate System","2":"Visual Assessment","3":"Check Inlet","4":"Check Baffles","5":"Measure Sludge","6":"Check Outlet","7":"Check Distribution","8":"Check Drainfield","9":"Check Risers","10":"Pump Tank","11":"Final Inspection","12":"Aerobic - Air Pump","13":"Aerobic - Chlorinator","14":"Aerobic - Spray Heads","15":"Aerobic - Control Panel","16":"Aerobic - Manufacturer"}
+                        steps_rows = ""
+                        for sk in sorted(steps_data.keys(), key=lambda x: int(x) if x.isdigit() else 999):
+                            s = steps_data[sk]
+                            if isinstance(s, dict) and s.get("status") not in ("not_started", None):
+                                lbl = _step_labels.get(sk, f"Step {sk}")
+                                st = s.get("status", "")
+                                dc = "#22c55e" if st=="pass" else "#f59e0b" if st=="flag" else "#ef4444" if st=="fail" else "#9ca3af"
+                                bg = "#f0fdf4" if st=="pass" else "#fffbeb" if st=="flag" else "#fef2f2" if st=="fail" else "#f9fafb"
+                                sl = "Pass" if st=="pass" else "Needs Attention" if st=="flag" else "Fail" if st=="fail" else "Skipped" if st=="skip" else st.replace("_"," ").title()
+                                n = s.get("notes", "")
+                                nr = f'<tr><td style="padding:0 12px 8px 44px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;font-style:italic;background:{bg}" colspan="3">{n}</td></tr>' if n else ""
+                                bb = "none" if n else "1px solid #f3f4f6"
+                                steps_rows += f'<tr><td style="padding:10px 12px;border-bottom:{bb};width:32px;text-align:center;background:{bg}"><div style="width:14px;height:14px;border-radius:50%;background:{dc};display:inline-block"></div></td><td style="padding:10px 12px;border-bottom:{bb};font-size:14px;color:#1f2937;font-weight:500;background:{bg}">{lbl}</td><td style="padding:10px 12px;border-bottom:{bb};font-size:12px;color:{dc};font-weight:600;text-align:right;background:{bg}">{sl}</td></tr>{nr}'
+                        steps_html = f'<div style="margin-top:24px"><h3 style="margin:0 0 12px;font-size:15px;color:#1e3a5f;border-bottom:2px solid #e5e7eb;padding-bottom:8px">Inspection Summary</h3><table style="width:100%;border-collapse:collapse">{steps_rows}</table></div>' if steps_rows else ""
+
+                        # AI analysis
                         ai_analysis = insp.get("ai_analysis", {})
                         ai_section = ""
                         if ai_analysis and ai_analysis.get("overall_assessment"):
-                            assessment = ai_analysis["overall_assessment"][:300]
-                            if len(ai_analysis["overall_assessment"]) > 300:
-                                assessment += "..."
-                            ai_section = f"""
-                            <div style="margin-top:20px;padding:16px;background:#f0f4ff;border-left:4px solid #2563eb;border-radius:0 8px 8px 0">
-                              <h3 style="margin:0 0 8px;font-size:14px;color:#1e3a5f">Expert Analysis</h3>
-                              <p style="margin:0;font-size:14px;color:#374151;line-height:1.5">{assessment}</p>
-                            </div>"""
+                            assessment = ai_analysis["overall_assessment"][:300] + ("..." if len(ai_analysis["overall_assessment"]) > 300 else "")
+                            ai_section = f'<div style="margin-top:20px;background:#f0f4ff;border-left:4px solid #2563eb;padding:14px 16px;border-radius:0 8px 8px 0"><p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#1e3a5f">Expert Analysis</p><p style="margin:0;font-size:13px;color:#374151;line-height:1.5">{assessment}</p></div>'
 
+                        # Date
+                        _rd = str(wo.scheduled_date) if wo.scheduled_date else datetime.utcnow().strftime("%Y-%m-%d")
+                        try:
+                            _dt = datetime.fromisoformat(_rd.replace("Z", "+00:00"))
+                            _rdf = _dt.strftime("%B %d, %Y")
+                        except Exception:
+                            _rdf = _rd
+
+                        logo_url = "https://react-crm-api-production.up.railway.app/static/logo-white.png"
                         html_body = f"""
-                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
-                          <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);color:white;padding:28px;text-align:center">
-                            <h1 style="margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px">MAC SEPTIC SERVICES</h1>
-                            <p style="margin:6px 0 0;font-size:14px;color:#93c5fd">Septic System Inspection Report</p>
+                        <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;background:#fff">
+                          <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);color:white;padding:32px 24px;text-align:center">
+                            <img src="{logo_url}" alt="MAC Septic" style="height:48px;margin-bottom:10px">
+                            <p style="margin:0;font-size:13px;color:#93c5fd">Septic System Inspection Report</p>
                           </div>
-                          <div style="padding:24px">
-                            <p style="font-size:16px;color:#1f2937">Hi {cust_name},</p>
-                            <p style="font-size:14px;color:#4b5563;line-height:1.6">Thank you for choosing MAC Septic Services. Below is a summary of your recent septic system inspection. A complete PDF report with photos is attached.</p>
-                            <div style="background:{condition_color};color:white;padding:20px;border-radius:10px;text-align:center;margin:20px 0">
-                              <strong style="font-size:20px">Overall Condition: {condition_label}</strong>
-                              <br><span style="font-size:14px;opacity:0.9">{issues} item(s) noted during inspection</span>
-                            </div>
+                          <div style="padding:28px 24px">
+                            <p style="font-size:16px;color:#1f2937;margin:0 0 8px">Hi {cust_name},</p>
+                            <p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 24px">Thank you for choosing MAC Septic Services. Below is a summary of your recent septic system inspection. <strong>Your complete PDF report is attached.</strong></p>
+                            <table style="width:100%;border-collapse:collapse;margin-bottom:20px"><tr><td style="padding:10px 14px;background:#f9fafb;border:1px solid #e5e7eb;width:50%"><span style="font-size:10px;color:#6b7280;text-transform:uppercase;display:block">Date</span><span style="font-size:14px;font-weight:600;color:#1f2937">{_rdf}</span></td><td style="padding:10px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-left:none;width:50%"><span style="font-size:10px;color:#6b7280;text-transform:uppercase;display:block">Service Type</span><span style="font-size:14px;font-weight:600;color:#1f2937">{wo.job_type or 'Inspection'}</span></td></tr></table>
+                            <div style="background:{condition_color};color:white;padding:20px;border-radius:10px;text-align:center"><strong style="font-size:20px;display:block">Overall Condition: {condition_label}</strong><span style="font-size:13px;opacity:0.9;display:block;margin-top:4px">{issues} item(s) noted during inspection</span></div>
                             {recs_html}
+                            {steps_html}
                             {ai_section}
-                            <div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:8px;text-align:center">
-                              <p style="margin:0 0 4px;font-size:13px;color:#6b7280">Questions about your report?</p>
-                              <p style="margin:0;font-size:16px;font-weight:600;color:#1e3a5f">(512) 737-8711 &nbsp;|&nbsp; macseptic.com</p>
-                            </div>
-                            <p style="margin-top:20px;font-size:14px;color:#4b5563">Thank you,<br><strong>MAC Septic Services</strong><br><span style="font-size:12px;color:#9ca3af">San Marcos, TX</span></p>
+                            <div style="margin-top:24px;padding:14px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;text-align:center"><p style="margin:0;font-size:14px;color:#1e40af">&#9993; <strong>Your full inspection report is attached as a PDF</strong></p></div>
+                            <div style="margin-top:24px;padding:18px;background:#f9fafb;border-radius:8px;text-align:center"><p style="margin:0 0 4px;font-size:12px;color:#6b7280">Questions about your report?</p><p style="margin:0;font-size:17px;font-weight:700;color:#1e3a5f">(512) 737-8711</p><p style="margin:4px 0 0;font-size:13px;color:#2563eb">macseptic.com</p></div>
+                            <p style="margin:24px 0 0;font-size:14px;color:#4b5563">Thank you for your business,<br><strong>MAC Septic Services</strong><br><span style="font-size:12px;color:#9ca3af">San Marcos, TX</span></p>
                           </div>
+                          <div style="background:#1e3a5f;padding:16px 24px;text-align:center"><p style="margin:0;font-size:11px;color:#93c5fd">Report ID: {str(wo.id)[:8]} | MAC Septic Services</p></div>
                         </div>
                         """
 
