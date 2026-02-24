@@ -483,7 +483,7 @@ async def process_import(
                     postal_code=data.get("zip_code"),
                     customer_type=data.get("customer_type", "residential"),
                     tags=tags,
-                    notes=data.get("notes"),
+                    lead_notes=data.get("notes"),
                 )
                 db_session.add(customer)
                 imported += 1
