@@ -711,8 +711,7 @@ async def get_user_calls(
     This is a stub endpoint for the Phone page that filters calls by user.
     In a full implementation, this would filter by the user's RingCentral extension.
     """
-    # For now, just return all calls (same as /calls endpoint)
-    # TODO: Filter by current_user.phone_extension once user extensions are tracked
+    # Returns all calls — per-user filtering requires user.phone_extension column
     query = select(CallLog).order_by(CallLog.created_at.desc())
 
     # Count
@@ -1683,7 +1682,7 @@ async def get_agent_performance(
             if agent_id not in agents_data:
                 agents_data[agent_id] = {
                     "agent_id": agent_id,
-                    "agent_name": f"Agent {agent_id}",  # TODO: Join with users table
+                    "agent_name": f"Agent {agent_id}",  # Placeholder — no user join yet
                     "total_calls": 0,
                     "calls": [],
                 }

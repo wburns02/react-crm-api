@@ -665,13 +665,13 @@ async def get_marketing_tasks(current_user: CurrentUser) -> MarketingTasksRespon
             performanceScore=pagespeed_data["performanceScore"],
             seoScore=pagespeed_data["seoScore"],
             indexedPages=sitemap_count if sitemap_count > 0 else FALLBACK_METRICS["indexedPages"],
-            trackedKeywords=FALLBACK_METRICS["trackedKeywords"],  # TODO: GSC integration
+            trackedKeywords=FALLBACK_METRICS["trackedKeywords"],  # Fallback — no GSC integration yet
             unresolvedAlerts=0,
-            publishedPosts=FALLBACK_METRICS["publishedPosts"],  # TODO: DB query
-            totalReviews=FALLBACK_METRICS["totalReviews"],  # TODO: Yelp/Facebook API
+            publishedPosts=FALLBACK_METRICS["publishedPosts"],  # Fallback
+            totalReviews=FALLBACK_METRICS["totalReviews"],  # Fallback — no Yelp/FB aggregation yet
             averageRating=FALLBACK_METRICS["averageRating"],
             pendingResponses=FALLBACK_METRICS["pendingResponses"],
-            contentGenerated=FALLBACK_METRICS["contentGenerated"],  # TODO: DB query
+            contentGenerated=FALLBACK_METRICS["contentGenerated"],  # Fallback
         )
         alert_list = []  # No alerts when using real data
         demo_mode = False

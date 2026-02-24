@@ -385,7 +385,6 @@ async def get_signing_page(
         sig_request.user_agent = http_request.headers.get("user-agent")
         await db.commit()
 
-    # TODO: Load actual document content based on document_type/document_id
     document_content = None
     if sig_request.document_type == "quote":
         quote_result = await db.execute(select(Quote).where(Quote.id == sig_request.document_id))

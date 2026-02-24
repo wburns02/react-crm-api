@@ -232,6 +232,43 @@ class Settings(BaseSettings):
                     ", ".join(missing),
                 )
 
+        # Validate integration env var groups (partial configs are likely mistakes)
+        integration_groups = {
+            "Clover OAuth": {
+                "required_together": ["CLOVER_CLIENT_ID", "CLOVER_CLIENT_SECRET", "CLOVER_REDIRECT_URI"],
+                "any_set": lambda: any([self.CLOVER_CLIENT_ID, self.CLOVER_CLIENT_SECRET, self.CLOVER_REDIRECT_URI]),
+            },
+            "Microsoft 365": {
+                "required_together": ["MS365_CLIENT_ID", "MS365_CLIENT_SECRET", "MS365_TENANT_ID"],
+                "any_set": lambda: any([self.MS365_CLIENT_ID, self.MS365_CLIENT_SECRET, self.MS365_TENANT_ID]),
+            },
+            "Google Ads": {
+                "required_together": ["GOOGLE_ADS_DEVELOPER_TOKEN", "GOOGLE_ADS_CLIENT_ID", "GOOGLE_ADS_CLIENT_SECRET", "GOOGLE_ADS_CUSTOMER_ID"],
+                "any_set": lambda: any([self.GOOGLE_ADS_DEVELOPER_TOKEN, self.GOOGLE_ADS_CLIENT_ID, self.GOOGLE_ADS_CLIENT_SECRET]),
+            },
+            "Twilio": {
+                "required_together": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
+                "any_set": lambda: any([self.TWILIO_ACCOUNT_SID, self.TWILIO_AUTH_TOKEN]),
+            },
+            "RingCentral": {
+                "required_together": ["RINGCENTRAL_CLIENT_ID", "RINGCENTRAL_CLIENT_SECRET", "RINGCENTRAL_JWT_TOKEN"],
+                "any_set": lambda: any([self.RINGCENTRAL_CLIENT_ID, self.RINGCENTRAL_CLIENT_SECRET]),
+            },
+        }
+
+        for name, group in integration_groups.items():
+            if group["any_set"]():
+                missing = [
+                    k for k in group["required_together"]
+                    if not getattr(self, k, None)
+                ]
+                if missing:
+                    logger.warning(
+                        "PARTIAL CONFIG: %s integration has some vars set but is missing: %s",
+                        name,
+                        ", ".join(missing),
+                    )
+
         return self
 
     @property

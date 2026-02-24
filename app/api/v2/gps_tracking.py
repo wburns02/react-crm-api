@@ -609,8 +609,7 @@ async def list_geofences(
 ):
     """List all geofences."""
     try:
-        # Return empty list - geofence feature not fully implemented
-        # TODO: Implement proper async geofence queries
+        # Geofence feature stub — returns empty list (no geofence table yet)
         return []
     except Exception as e:
         logger.error(f"Error listing geofences: {e}")
@@ -997,8 +996,7 @@ async def get_dispatch_map_data(
 async def get_global_config(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     """Get global GPS tracking configuration."""
     try:
-        # Return default config - GPS config feature not fully implemented
-        # TODO: Implement proper async GPS config queries
+        # GPS config stub — returns defaults (no gps_config table yet)
         return GPSConfigResponse(
             id=0,
             technician_id=None,

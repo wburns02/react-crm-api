@@ -36,7 +36,6 @@ from app.schemas.content_generator import (
 router = APIRouter()
 
 # In-memory storage (content persists only during server session, lost on restart)
-# TODO: Migrate to database-backed storage when ContentLibrary model is created
 _saved_content: dict = {}
 _user_preferences: dict = {}
 
