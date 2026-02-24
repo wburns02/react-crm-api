@@ -131,12 +131,18 @@ class EmailService:
             # Ensure each attachment has required fields
             normalized = []
             for att in attachments:
+                content = att.get("content", "")
+                name = att.get("name", "attachment")
+                logger.info(f"[EMAIL-SVC] Processing attachment: name={name}, content_len={len(content) if content else 0}, content_starts_with={content[:50] if content else 'EMPTY'}")
                 normalized.append({
-                    "content": att.get("content", ""),
-                    "name": att.get("name", "attachment"),
+                    "content": content,
+                    "name": name,
                     **({"type": att["type"]} if "type" in att else {}),
                 })
             payload["attachment"] = normalized
+            logger.info(f"[EMAIL-SVC] Payload has {len(normalized)} attachment(s)")
+        else:
+            logger.info(f"[EMAIL-SVC] No attachments provided (attachments={attachments})")
 
         headers = {
             "accept": "application/json",
@@ -150,7 +156,7 @@ class EmailService:
                     BREVO_API_URL,
                     json=payload,
                     headers=headers,
-                    timeout=30.0,
+                    timeout=60.0,
                 )
 
             if response.status_code in (200, 201):

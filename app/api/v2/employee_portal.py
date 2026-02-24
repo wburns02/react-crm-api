@@ -1923,6 +1923,7 @@ async def save_inspection_state(
         if send_report:
             method = send_report.get("method")
             to = send_report.get("to")
+            logger.info(f"[INSPECTION-EMAIL] send_report received: method={method}, to={to}, keys={list(send_report.keys())}, has_pdf_base64={'pdf_base64' in send_report}, has_pdfBase64={'pdfBase64' in send_report}, pdf_base64_len={len(send_report.get('pdf_base64') or send_report.get('pdfBase64') or '')}")
             if method == "sms" and to:
                 try:
                     from app.services.twilio_service import TwilioService
