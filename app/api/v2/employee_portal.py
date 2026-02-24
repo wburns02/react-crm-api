@@ -1919,6 +1919,7 @@ async def save_inspection_state(
         # Send report if requested
         send_report = body.get("send_report")
         report_sent = False
+        email_error = None
         if send_report:
             method = send_report.get("method")
             to = send_report.get("to")
@@ -1951,7 +1952,9 @@ async def save_inspection_state(
                     from app.services.email_service import EmailService
                     email_svc = EmailService()
                     if not email_svc.is_configured:
-                        logger.warning("Brevo email service not configured")
+                        status = email_svc.get_status()
+                        email_error = f"Email not configured: {status.get('message', 'unknown')}"
+                        logger.warning(f"Brevo email service not configured: api_key={'SET' if email_svc.api_key else 'MISSING'}, from_address={email_svc.from_address or 'MISSING'}")
                     else:
                         insp = (wo.checklist or {}).get("inspection", {})
                         summary = insp.get("summary", {})
@@ -2053,6 +2056,7 @@ async def save_inspection_state(
                             }]
                             logger.info(f"Attaching PDF to inspection email ({len(pdf_base64)} base64 bytes)")
 
+                        logger.info(f"Sending inspection email to={to}, has_pdf={pdf_base64 is not None}, has_attachments={attachments is not None}")
                         result = await email_svc.send_email(
                             to=to,
                             subject=f"Your Septic Inspection Report — {condition_label}",
@@ -2060,13 +2064,21 @@ async def save_inspection_state(
                             html_body=html_body,
                             attachments=attachments,
                         )
+                        logger.info(f"Email send result: {result}")
                         report_sent = result.get("success", False)
                         if not report_sent:
-                            logger.warning(f"Brevo email failed: {result.get('error')}")
+                            email_error = result.get("error", "Unknown email error")
+                            logger.warning(f"Brevo email failed: {email_error}")
+                        else:
+                            email_error = None
                 except Exception as email_err:
+                    email_error = str(email_err)
                     logger.warning(f"Failed to send report via email: {email_err}")
 
-        return {"success": True, "report_sent": report_sent}
+        resp = {"success": True, "report_sent": report_sent}
+        if not report_sent and send_report and send_report.get("method") == "email":
+            resp["email_error"] = email_error or "Email not attempted"
+        return resp
     except HTTPException:
         raise
     except Exception as e:
