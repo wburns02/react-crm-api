@@ -169,7 +169,7 @@ class GoogleAdsService:
                 response = await client.post(
                     url,
                     headers=self._get_headers(access_token),
-                    json={"query": query, "pageSize": 1000},
+                    json={"query": query},
                 )
 
                 self._increment_ops()
@@ -183,7 +183,7 @@ class GoogleAdsService:
                         response = await client.post(
                             url,
                             headers=self._get_headers(access_token),
-                            json={"query": query, "pageSize": 1000},
+                            json={"query": query},
                         )
                         self._increment_ops()
 
