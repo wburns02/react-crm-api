@@ -38,6 +38,16 @@ async def list_customers(
     is_archived: Optional[bool] = None,
 ):
     """List customers with pagination and filtering."""
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        return await _list_customers_impl(db, current_user, entity, page, page_size, search, customer_type, prospect_stage, is_active, include_all, is_archived)
+    except Exception as e:
+        logger.error(f"list_customers error: {type(e).__name__}: {e}", exc_info=True)
+        raise
+
+
+async def _list_customers_impl(db, current_user, entity, page, page_size, search, customer_type, prospect_stage, is_active, include_all, is_archived):
     # Check cache first
     cache = get_cache_service()
     cache_key = f"customers:list:{page}:{page_size}:{search}:{customer_type}:{prospect_stage}:{is_active}:{include_all}:{is_archived}"
@@ -68,16 +78,16 @@ async def list_customers(
     if prospect_stage:
         query = query.where(Customer.prospect_stage == prospect_stage)
 
-    # Default to active-only; pass include_all=true to see everything
-    if not include_all and is_active is not None:
-        query = query.where(Customer.is_active == is_active)
-
     # Archive filter: by default exclude archived unless explicitly requested
     if is_archived is True:
         query = query.where(Customer.is_archived == True)
-    elif is_archived is False or is_archived is None:
+        # Skip is_active filter for archived view — show all archived regardless
+    else:
         # Default: exclude archived records
         query = query.where(or_(Customer.is_archived == False, Customer.is_archived == None))
+        # Default to active-only; pass include_all=true to see everything
+        if not include_all and is_active is not None:
+            query = query.where(Customer.is_active == is_active)
 
     # Multi-entity filtering: NULL entity_id = default entity
     if entity:
