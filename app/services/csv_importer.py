@@ -624,7 +624,7 @@ async def process_import(
                 called = data.get("called_number") or ""
                 await db_session.execute(
                     text("""
-                        INSERT INTO call_logs (id, rc_account_id, ringcentral_call_id, ringcentral_session_id,
+                        INSERT INTO call_logs (id, rc_account_id, rc_call_id, rc_session_id,
                             caller_number, called_number, from_number, to_number,
                             user_id, direction,
                             call_date, call_time, duration_seconds, notes, external_system)
