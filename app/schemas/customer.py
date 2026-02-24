@@ -22,8 +22,15 @@ class CustomerBase(BaseModel):
 
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None  # Allow empty strings from legacy imports (EmailStr rejects '')
     phone: Optional[str] = Field(None, max_length=20)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def empty_email_to_none(cls, v: object) -> object:
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
     # Address
     address_line1: Optional[str] = Field(None, max_length=255)
