@@ -598,8 +598,26 @@ async def process_import(
                 from sqlalchemy import text
                 import uuid
 
-                call_date_str = data.get("call_date") or None
-                call_time_str = data.get("call_time") or None
+                call_date_val = None
+                if data.get("call_date"):
+                    try:
+                        call_date_val = datetime.strptime(data["call_date"], "%Y-%m-%d").date()
+                    except ValueError:
+                        pass
+
+                call_time_val = None
+                if data.get("call_time"):
+                    try:
+                        call_time_val = datetime.strptime(data["call_time"], "%H:%M:%S").time()
+                    except ValueError:
+                        pass
+
+                dur = data.get("duration_seconds")
+                if dur is not None:
+                    try:
+                        dur = int(dur)
+                    except (ValueError, TypeError):
+                        dur = None
 
                 log_id = uuid.uuid4()
                 await db_session.execute(
@@ -609,20 +627,20 @@ async def process_import(
                             call_date, call_time, duration_seconds, notes, external_system)
                         VALUES (:id, :rc_account_id, :rc_call_id, :rc_session_id,
                             :caller_number, :called_number, :user_id, :direction,
-                            CAST(:call_date AS date), CAST(:call_time AS time), :duration_seconds, :notes, :external_system)
+                            :call_date, :call_time, :duration_seconds, :notes, :external_system)
                     """),
                     {
-                        "id": str(log_id),
-                        "rc_account_id": str(uuid.uuid4()),
+                        "id": log_id,
+                        "rc_account_id": uuid.uuid4(),
                         "rc_call_id": f"import-{log_id}",
                         "rc_session_id": f"import-{log_id}",
                         "caller_number": data.get("caller_number"),
                         "called_number": data.get("called_number"),
                         "user_id": "1",
                         "direction": data.get("direction", "inbound"),
-                        "call_date": call_date_str,
-                        "call_time": call_time_str,
-                        "duration_seconds": data.get("duration_seconds"),
+                        "call_date": call_date_val,
+                        "call_time": call_time_val,
+                        "duration_seconds": dur,
                         "notes": data.get("notes"),
                         "external_system": "onedrive_import",
                     },
