@@ -5,7 +5,7 @@ Provides settings management for system, notifications, integrations, and securi
 Also provides user management endpoints.
 """
 
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Depends, Request
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from sqlalchemy import select, delete, func
