@@ -916,6 +916,23 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start Samsara feed poller: {e}")
 
+    # Background task watchdog — restarts crashed tasks every 5 minutes
+    import asyncio
+
+    async def _watchdog():
+        while True:
+            await asyncio.sleep(300)
+            try:
+                # Check RingCentral sync
+                from app.api.v2.ringcentral import _sync_task
+                if _sync_task and _sync_task.done():
+                    logger.warning("RingCentral sync task died — restarting")
+                    start_auto_sync()
+            except Exception as e:
+                logger.debug(f"Watchdog check failed: {e}")
+
+    _watchdog_task = asyncio.create_task(_watchdog())
+
     # Pre-warm database connection pool for faster first request
     logger.info("Pre-warming database connections...")
     try:
@@ -946,6 +963,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down React CRM API...")
+    _watchdog_task.cancel()
     stop_auto_sync()
     stop_reminder_scheduler()
     try:

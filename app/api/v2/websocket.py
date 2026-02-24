@@ -85,7 +85,10 @@ async def websocket_endpoint(
             }
         )
 
-        # Message handling loop
+        # Message handling loop with rate limiting
+        _msg_count = 0
+        _msg_window_start = datetime.utcnow()
+        _MSG_LIMIT = 30  # max messages per 10 seconds
         while True:
             try:
                 data = await websocket.receive_json()
@@ -96,6 +99,16 @@ async def websocket_endpoint(
                         "message": "Invalid JSON format",
                     }
                 )
+                continue
+
+            # Rate limiting: reset window every 10 seconds
+            now = datetime.utcnow()
+            if (now - _msg_window_start).total_seconds() > 10:
+                _msg_count = 0
+                _msg_window_start = now
+            _msg_count += 1
+            if _msg_count > _MSG_LIMIT:
+                await websocket.send_json({"type": "error", "message": "Rate limit exceeded"})
                 continue
 
             message_type = data.get("type")

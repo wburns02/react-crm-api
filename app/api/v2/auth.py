@@ -48,6 +48,17 @@ async def login(
     # Rate limit: 60 requests/minute per IP to prevent brute force
     rate_limit_by_ip(request, requests_per_minute=60)
 
+    # Per-email rate limit: 5 attempts per minute to prevent credential stuffing
+    from app.core.rate_limit import get_public_api_rate_limiter
+    import hashlib
+    email_hash = hashlib.sha256(login_data.email.lower().encode()).hexdigest()[:16]
+    email_limiter = get_public_api_rate_limiter()
+    email_limiter.check_rate_limit(
+        client_id=f"login_email:{email_hash}",
+        rate_limit_per_minute=5,
+        rate_limit_per_hour=30,
+    )
+
     try:
         # Find user (without MFA eager loading to avoid errors if MFA tables don't exist)
         logger.info(f"Login attempt for: {login_data.email}")
@@ -106,6 +117,21 @@ async def login(
             samesite="none",
             max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             path="/",
+        )
+
+        # Set refresh cookie (longer-lived, HTTP-only)
+        refresh_token = create_access_token(
+            data={"sub": str(user.id), "email": user.email, "type": "refresh"},
+            expires_delta=timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES),
+        )
+        response.set_cookie(
+            key="refresh",
+            value=refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=settings.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
+            path="/api/v2/auth/refresh",
         )
 
         # Log successful login
@@ -178,7 +204,57 @@ async def logout(request: Request, response: Response):
         secure=True,
         samesite="none",
     )
+    response.delete_cookie(
+        key="refresh",
+        path="/api/v2/auth/refresh",
+        secure=True,
+        samesite="none",
+    )
     return {"message": "Successfully logged out"}
+
+
+@router.post("/refresh")
+async def refresh_token(request: Request, response: Response, db: DbSession):
+    """Issue a new access token using the refresh cookie."""
+    from jose import jwt as jwt_lib, JWTError
+
+    refresh = request.cookies.get("refresh")
+    if not refresh:
+        raise HTTPException(status_code=401, detail="No refresh token")
+
+    try:
+        payload = jwt_lib.decode(refresh, settings.SECRET_KEY, algorithms=["HS256"])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+
+        user_id = payload.get("sub")
+        user_email = payload.get("email")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+        # Verify user still exists and is active
+        result = await db.execute(select(User).where(User.id == int(user_id)))
+        user = result.scalar_one_or_none()
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User not found or inactive")
+
+        # Issue new access token
+        access_token = create_access_token(
+            data={"sub": str(user.id), "email": user.email},
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        )
+        response.set_cookie(
+            key="session",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            path="/",
+        )
+        return Token(access_token=access_token, token=access_token, token_type="bearer")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Refresh token expired or invalid")
 
 
 @router.get("/me", response_model=AuthMeResponse)
