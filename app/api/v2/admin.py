@@ -1951,3 +1951,30 @@ async def normalize_names(
         await db.rollback()
         logger.error(f"Error normalizing data: {e}")
         raise HTTPException(status_code=500, detail=f"Error: {type(e).__name__}: {str(e)}")
+
+
+@router.post("/data/fix-call-logs-schema")
+async def fix_call_logs_schema(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Drop FK constraint on call_logs.rc_account_id and make it nullable for imports."""
+    from sqlalchemy import text
+
+    require_admin(current_user)
+
+    results = {}
+    try:
+        await db.execute(text(
+            "ALTER TABLE call_logs DROP CONSTRAINT IF EXISTS call_logs_rc_account_id_fkey"
+        ))
+        results["fk_dropped"] = True
+        await db.execute(text(
+            "ALTER TABLE call_logs ALTER COLUMN rc_account_id DROP NOT NULL"
+        ))
+        results["rc_account_id_nullable"] = True
+        await db.commit()
+        return {"success": True, "results": results}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
