@@ -25,6 +25,9 @@ def generate_inspection_pdf(
     Uses WeasyPrint to render HTML → PDF. Falls back to a simple
     text-based PDF if WeasyPrint is unavailable.
     """
+    from app.services.logos import LOGO_WHITE_DATA_URI
+    logo_data_uri = LOGO_WHITE_DATA_URI
+
     summary = inspection_data.get("summary", {})
     condition = summary.get("overall_condition", "N/A")
     issues = summary.get("total_issues", 0)
@@ -136,7 +139,7 @@ def generate_inspection_pdf(
     </head>
     <body>
         <div class="header">
-            <h1>MAC SEPTIC SERVICES</h1>
+            <img src="{logo_data_uri}" alt="MAC Septic" style="height:50px;margin-bottom:8px;">
             <p>Septic System Inspection Report</p>
         </div>
 

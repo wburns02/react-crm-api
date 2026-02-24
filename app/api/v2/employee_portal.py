@@ -2237,12 +2237,15 @@ async def send_inspection_email_report(
               <p style="margin:0;font-size:13px;color:#374151;line-height:1.5">{snippet}</p>
             </div>"""
 
+        from app.services.logos import LOGO_WHITE_DATA_URI
+        logo_data_uri = LOGO_WHITE_DATA_URI
+
         html_body = f"""
         <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
           <!-- Header -->
           <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);color:white;padding:32px 24px;text-align:center">
-            <h1 style="margin:0;font-size:24px;font-weight:700;letter-spacing:0.5px">MAC SEPTIC SERVICES</h1>
-            <p style="margin:8px 0 0;font-size:14px;color:#93c5fd">Septic System Inspection Report</p>
+            <img src="{logo_data_uri}" alt="MAC Septic" style="height:44px;margin-bottom:8px">
+            <p style="margin:0;font-size:14px;color:#93c5fd">Septic System Inspection Report</p>
           </div>
 
           <div style="padding:28px 24px">
