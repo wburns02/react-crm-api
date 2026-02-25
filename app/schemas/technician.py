@@ -41,6 +41,10 @@ class TechnicianBase(BaseModel):
     # Notes
     notes: Optional[str] = None
 
+    # Microsoft 365 integration
+    microsoft_email: Optional[str] = Field(None, max_length=255)
+    microsoft_user_id: Optional[str] = Field(None, max_length=255)
+
 
 class TechnicianCreate(TechnicianBase):
     """Schema for creating a technician."""
@@ -83,6 +87,10 @@ class TechnicianUpdate(BaseModel):
 
     # Notes
     notes: Optional[str] = None
+
+    # Microsoft 365 integration
+    microsoft_email: Optional[str] = Field(None, max_length=255)
+    microsoft_user_id: Optional[str] = Field(None, max_length=255)
 
 
 class TechnicianResponse(TechnicianBase):
