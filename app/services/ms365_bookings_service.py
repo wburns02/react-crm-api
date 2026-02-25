@@ -19,7 +19,7 @@ class MS365BookingsService(MS365BaseService):
 
     @classmethod
     def is_configured(cls) -> bool:
-        return cls.is_configured.__func__(cls) and bool(settings.MS365_BOOKING_BUSINESS_ID)
+        return MS365BaseService.is_configured() and bool(settings.MS365_BOOKING_BUSINESS_ID)
 
     @classmethod
     def _business_path(cls) -> str:
