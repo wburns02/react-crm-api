@@ -124,6 +124,8 @@ from app.api.v2 import (
     gamification,
     # Predictive Service Engine
     predictive_service,
+    # Live Operations Center
+    ops_center,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -337,6 +339,9 @@ api_router.include_router(microsoft365.router, prefix="/microsoft365", tags=["mi
 
 # Technician Gamification (Streaks, Badges, Leaderboard)
 api_router.include_router(gamification.router, prefix="/gamification", tags=["gamification"])
+
+# Live Operations Center — "God Mode"
+api_router.include_router(ops_center.router, prefix="/ops-center", tags=["ops-center"])
 
 # Predictive Service Engine — "Know Before They Call"
 api_router.include_router(predictive_service.router, prefix="/predictive-service", tags=["predictive-service"])
