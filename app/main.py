@@ -770,6 +770,74 @@ async def ensure_missing_indexes():
             logger.warning(f"Could not ensure indexes: {type(e).__name__}: {e}")
 
 
+async def ensure_ms365_columns():
+    """Ensure MS365 integration columns exist (migrations 072-075).
+
+    NOTE: Safety net for deployments that skip migrations.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    # (table, column, type, extra)
+    columns = [
+        ("api_users", "microsoft_id", "VARCHAR(255) UNIQUE", "072"),
+        ("api_users", "microsoft_email", "VARCHAR(255)", "072"),
+        ("work_orders", "outlook_event_id", "VARCHAR(255)", "073"),
+        ("technicians", "microsoft_user_id", "VARCHAR(255)", "073"),
+        ("technicians", "microsoft_email", "VARCHAR(255)", "073"),
+        ("work_orders", "sharepoint_item_id", "VARCHAR(255)", "074"),
+        ("customers", "sharepoint_folder_url", "VARCHAR(500)", "074"),
+    ]
+
+    async with async_session_maker() as session:
+        try:
+            for table, column, col_type, migration in columns:
+                result = await session.execute(text(
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                    f"WHERE table_name='{table}' AND column_name='{column}')"
+                ))
+                if not result.scalar():
+                    logger.info(f"Adding {table}.{column} (migration {migration})...")
+                    await session.execute(text(
+                        f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+                    ))
+
+            # Ensure inbound_emails table (migration 075)
+            result = await session.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                "WHERE table_name='inbound_emails')"
+            ))
+            if not result.scalar():
+                logger.info("Creating inbound_emails table (migration 075)...")
+                await session.execute(text("""
+                    CREATE TABLE inbound_emails (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        message_id VARCHAR(500) UNIQUE NOT NULL,
+                        sender_email VARCHAR(255) NOT NULL,
+                        sender_name VARCHAR(255),
+                        subject VARCHAR(500),
+                        body_preview TEXT,
+                        received_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                        customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+                        action_taken VARCHAR(50) DEFAULT 'none',
+                        entity_id UUID,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    )
+                """))
+                await session.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_inbound_emails_sender ON inbound_emails(sender_email)"
+                ))
+                await session.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_inbound_emails_received ON inbound_emails(received_at DESC)"
+                ))
+
+            await session.commit()
+            logger.info("MS365 columns and tables ensured")
+        except Exception as e:
+            await session.rollback()
+            logger.warning(f"Could not ensure MS365 columns: {type(e).__name__}: {e}")
+
+
 async def ensure_mfa_tables():
     """
     Ensure MFA tables exist for authentication.
@@ -916,6 +984,9 @@ async def lifespan(app: FastAPI):
         await ensure_work_order_audit_columns()
         await ensure_user_activity_table()
         await ensure_missing_indexes()
+
+        # Ensure MS365 integration columns exist (migrations 072-075)
+        await ensure_ms365_columns()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
