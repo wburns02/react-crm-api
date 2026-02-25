@@ -120,6 +120,8 @@ from app.api.v2 import (
     user_activity,
     # Microsoft 365 Integration
     microsoft365,
+    # Technician Gamification
+    gamification,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -330,6 +332,9 @@ api_router.include_router(user_activity.router, tags=["user-activity"])
 
 # Microsoft 365 Integration (SSO, Calendar, Teams, SharePoint, Email)
 api_router.include_router(microsoft365.router, prefix="/microsoft365", tags=["microsoft365"])
+
+# Technician Gamification (Streaks, Badges, Leaderboard)
+api_router.include_router(gamification.router, prefix="/gamification", tags=["gamification"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
