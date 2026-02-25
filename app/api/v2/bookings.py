@@ -269,7 +269,7 @@ async def create_booking(
         time_window_end=time_end,
         estimated_duration_hours=2.0,
         service_address_line1=booking_data.service_address,
-        notes=f"Online Booking #{booking.id[:8]}\n{booking_data.notes or ''}".strip(),
+        notes=f"Online Booking #{str(booking.id)[:8]}\n{booking_data.notes or ''}".strip(),
         estimated_gallons=1750,
         booking_source="web",
     )
