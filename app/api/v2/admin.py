@@ -1635,6 +1635,39 @@ async def get_migration_status(
         return {"current_version": None, "error": str(e)}
 
 
+@router.post("/migrations/stamp")
+async def stamp_migration(
+    db: DbSession,
+    current_user: CurrentUser,
+    revision: str = "078_add_ms_bookings_fields",
+):
+    """Stamp alembic_version to a specific revision without running migrations.
+
+    Use this when the DB schema is already up-to-date but alembic_version is empty/wrong.
+    """
+    from sqlalchemy import text
+
+    try:
+        # Ensure alembic_version table exists
+        await db.execute(text(
+            "CREATE TABLE IF NOT EXISTS alembic_version ("
+            "version_num VARCHAR(32) NOT NULL, "
+            "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
+        ))
+
+        # Clear and insert the target revision
+        await db.execute(text("DELETE FROM alembic_version"))
+        await db.execute(text(
+            "INSERT INTO alembic_version (version_num) VALUES (:rev)"
+        ), {"rev": revision})
+        await db.commit()
+
+        return {"success": True, "stamped_at": revision}
+    except Exception as e:
+        logger.error(f"Error stamping migration: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @router.post("/migrations/run")
 async def run_migrations(
     current_user: CurrentUser,
