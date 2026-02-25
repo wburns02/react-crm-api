@@ -241,7 +241,11 @@ class GoogleAdsService:
 
     def _date_range_clause(self, days: int) -> str:
         """Build a GAQL date range clause."""
-        if days <= 7:
+        if days == 0:
+            return "DURING TODAY"
+        elif days == 1:
+            return "DURING YESTERDAY"
+        elif days <= 7:
             return "DURING LAST_7_DAYS"
         elif days <= 14:
             return "DURING LAST_14_DAYS"
@@ -347,6 +351,108 @@ class GoogleAdsService:
 
         self._set_cache(cache_key, campaigns)
         return campaigns
+
+    async def get_ad_groups(self, days: int = 0) -> Optional[list]:
+        """Get ad group level performance data."""
+        cache_key = f"ad_groups_{days}"
+        cached = self._get_cached(cache_key, CACHE_TTL_CAMPAIGNS)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        query = f"""
+            SELECT
+                ad_group.id,
+                ad_group.name,
+                ad_group.status,
+                campaign.id,
+                campaign.name,
+                metrics.cost_micros,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions,
+                metrics.ctr
+            FROM ad_group
+            WHERE segments.date {date_range}
+                AND campaign.status = 'ENABLED'
+                AND metrics.impressions > 0
+            ORDER BY metrics.conversions DESC, metrics.clicks DESC
+            LIMIT 30
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        ad_groups = []
+        for row in results:
+            ag = row.get("adGroup", {})
+            c = row.get("campaign", {})
+            m = row.get("metrics", {})
+            cost_micros = int(m.get("costMicros", 0))
+            cost = cost_micros / 1_000_000
+            conversions = float(m.get("conversions", 0))
+            ad_groups.append({
+                "ad_group_id": str(ag.get("id", "")),
+                "ad_group_name": ag.get("name", "Unknown"),
+                "ad_group_status": (ag.get("status", "UNKNOWN")).lower(),
+                "campaign_id": str(c.get("id", "")),
+                "campaign_name": c.get("name", "Unknown"),
+                "cost": round(cost, 2),
+                "clicks": int(m.get("clicks", 0)),
+                "impressions": int(m.get("impressions", 0)),
+                "conversions": round(conversions, 1),
+                "ctr": round(float(m.get("ctr", 0)), 4),
+                "cpa": round(cost / conversions, 2) if conversions > 0 else None,
+            })
+
+        self._set_cache(cache_key, ad_groups)
+        return ad_groups
+
+    async def get_search_terms(self, days: int = 7) -> Optional[list]:
+        """Get search terms that triggered ads."""
+        cache_key = f"search_terms_{days}"
+        cached = self._get_cached(cache_key, CACHE_TTL_CAMPAIGNS)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        query = f"""
+            SELECT
+                search_term_view.search_term,
+                campaign.name,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions,
+                metrics.cost_micros
+            FROM search_term_view
+            WHERE segments.date {date_range}
+                AND metrics.clicks > 0
+            ORDER BY metrics.conversions DESC, metrics.clicks DESC
+            LIMIT 50
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        terms = []
+        for row in results:
+            stv = row.get("searchTermView", {})
+            c = row.get("campaign", {})
+            m = row.get("metrics", {})
+            cost = int(m.get("costMicros", 0)) / 1_000_000
+            conversions = float(m.get("conversions", 0))
+            terms.append({
+                "search_term": stv.get("searchTerm", ""),
+                "campaign": c.get("name", "Unknown"),
+                "clicks": int(m.get("clicks", 0)),
+                "impressions": int(m.get("impressions", 0)),
+                "conversions": round(conversions, 1),
+                "cost": round(cost, 2),
+                "cpa": round(cost / conversions, 2) if conversions > 0 else None,
+            })
+
+        self._set_cache(cache_key, terms)
+        return terms
 
     async def get_recommendations(self) -> Optional[list]:
         """Get optimization recommendations from Google Ads."""

@@ -196,6 +196,40 @@ async def get_ads_performance(
         }
 
 
+@router.get("/ads/ad-groups")
+async def get_ads_ad_groups(
+    current_user: CurrentUser,
+    days: int = 0,
+) -> dict:
+    """Get ad group level performance. days=0 for today, 1 for yesterday."""
+    ads_service = get_google_ads_service()
+    if not ads_service.is_configured():
+        return {"success": False, "ad_groups": [], "message": "Google Ads not configured"}
+    try:
+        ad_groups = await ads_service.get_ad_groups(days)
+        return {"success": True, "ad_groups": ad_groups or []}
+    except Exception as e:
+        logger.error("Google Ads ad groups fetch failed: %s", str(e))
+        return {"success": True, "ad_groups": []}
+
+
+@router.get("/ads/search-terms")
+async def get_ads_search_terms(
+    current_user: CurrentUser,
+    days: int = 7,
+) -> dict:
+    """Get search terms that triggered ads."""
+    ads_service = get_google_ads_service()
+    if not ads_service.is_configured():
+        return {"success": False, "search_terms": [], "message": "Google Ads not configured"}
+    try:
+        terms = await ads_service.get_search_terms(days)
+        return {"success": True, "search_terms": terms or []}
+    except Exception as e:
+        logger.error("Google Ads search terms fetch failed: %s", str(e))
+        return {"success": True, "search_terms": []}
+
+
 @router.get("/ads/status")
 async def get_ads_status(current_user: CurrentUser) -> dict:
     """Get Google Ads connection status."""
