@@ -1,14 +1,14 @@
 """Add Microsoft Bookings fields to work_orders
 
 Revision ID: 078_add_ms_bookings_fields
-Revises: 077_add_missing_performance_indexes
+Revises: 077
 Create Date: 2026-02-25
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "078_add_ms_bookings_fields"
-down_revision = "077_add_missing_performance_indexes"
+down_revision = "077"
 branch_labels = None
 depends_on = None
 
