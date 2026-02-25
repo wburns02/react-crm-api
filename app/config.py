@@ -150,6 +150,10 @@ class Settings(BaseSettings):
     HCTG_AI_URL: str = "https://hctg-ai.tailad2d5f.ts.net"
     HCTG_AI_MODEL: str = "qwen2.5:32b"
 
+    # Voice AI
+    TWILIO_FORWARD_NUMBER: str = "+19792361958"
+    VOICE_AI_ENABLED: bool = True
+
     # Legacy backend (for webhook routing)
     LEGACY_BACKEND_URL: str = "http://localhost:5000"
 

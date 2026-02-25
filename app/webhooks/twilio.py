@@ -7,16 +7,23 @@ SECURITY:
 - No sensitive data is logged
 """
 
-from fastapi import APIRouter, Request, HTTPException, Response, Depends
-from sqlalchemy import select
+from fastapi import APIRouter, Request, HTTPException, Response, Depends, BackgroundTasks
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 import httpx
 import logging
+import uuid
+from datetime import date, datetime, timezone
 
 from app.database import async_session_maker
 from app.models.message import Message, MessageStatus
+from app.models.call_log import CallLog
+from app.models.customer import Customer
+from app.models.work_order import WorkOrder
 from app.config import settings
 from app.security.twilio_validator import validate_twilio_signature
+from app.services.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
 
@@ -182,5 +189,247 @@ async def handle_status_callback(
                     )
             except httpx.RequestError as e:
                 logger.error(f"Failed to forward status to legacy: {type(e).__name__}")
+
+    return {"status": "ok"}
+
+
+def _normalize_phone(raw: str) -> str:
+    """Normalize +1XXXXXXXXXX to (XXX) XXX-XXXX for DB lookup."""
+    digits = "".join(c for c in (raw or "") if c.isdigit())
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) == 10:
+        return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+    return raw or ""
+
+
+@twilio_router.post("/voice")
+async def handle_incoming_voice(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    _signature_valid: bool = Depends(validate_twilio_signature),
+):
+    """
+    Handle incoming voice call from Twilio.
+
+    - Looks up caller in customers table
+    - Creates CallLog record
+    - Broadcasts screen pop via WebSocket
+    - Returns TwiML to dial forward number with recording
+    """
+    form_data = await request.form()
+
+    call_sid = form_data.get("CallSid", "")
+    from_number = form_data.get("From", "")
+    to_number = form_data.get("To", "")
+
+    logger.info("Incoming voice call", extra={"call_sid": call_sid, "from_suffix": from_number[-4:] if from_number else None})
+
+    normalized = _normalize_phone(from_number)
+
+    async with async_session_maker() as db:
+        # Look up customer by phone
+        customer = None
+        customer_data = None
+        last_service_data = None
+        open_wo_data = []
+
+        result = await db.execute(
+            select(Customer).where(
+                or_(Customer.phone == normalized, Customer.phone == from_number)
+            ).limit(1)
+        )
+        customer = result.scalar_one_or_none()
+
+        if customer:
+            customer_data = {
+                "id": str(customer.id),
+                "name": f"{customer.first_name or ''} {customer.last_name or ''}".strip(),
+                "address": f"{customer.address_line1 or ''}, {customer.city or ''}, {customer.state or ''}".strip(", "),
+                "email": customer.email,
+                "phone": customer.phone,
+            }
+
+            # Last completed service
+            last_wo_result = await db.execute(
+                select(WorkOrder)
+                .where(WorkOrder.customer_id == customer.id, WorkOrder.status == "completed")
+                .order_by(WorkOrder.scheduled_date.desc())
+                .limit(1)
+            )
+            last_wo = last_wo_result.scalar_one_or_none()
+            if last_wo:
+                last_service_data = {
+                    "id": str(last_wo.id),
+                    "job_type": last_wo.job_type,
+                    "date": str(last_wo.scheduled_date) if last_wo.scheduled_date else None,
+                    "status": last_wo.status,
+                }
+
+            # Open work orders
+            open_wo_result = await db.execute(
+                select(WorkOrder)
+                .where(
+                    WorkOrder.customer_id == customer.id,
+                    WorkOrder.status.notin_(["completed", "canceled"]),
+                )
+                .order_by(WorkOrder.scheduled_date.asc())
+            )
+            for wo in open_wo_result.scalars():
+                open_wo_data.append({
+                    "id": str(wo.id),
+                    "job_type": wo.job_type,
+                    "status": wo.status,
+                    "scheduled_date": str(wo.scheduled_date) if wo.scheduled_date else None,
+                })
+
+        # Create CallLog
+        call_log = CallLog(
+            id=uuid.uuid4(),
+            direction="inbound",
+            call_type="voice",
+            caller_number=from_number,
+            called_number=to_number,
+            customer_id=customer.id if customer else None,
+            call_date=date.today(),
+            call_disposition="ringing",
+            external_system="twilio",
+            user_id="1",
+        )
+        db.add(call_log)
+        await db.commit()
+
+        call_log_id = str(call_log.id)
+
+    # Broadcast screen pop
+    ws_payload = {
+        "call_sid": call_sid,
+        "caller_number": from_number,
+        "caller_display": normalized,
+        "customer": customer_data,
+        "last_service": last_service_data,
+        "open_work_orders": open_wo_data,
+        "call_log_id": call_log_id,
+    }
+    background_tasks.add_background_task(manager.broadcast_event, "incoming_call", ws_payload)
+
+    # Return TwiML — dial forward number with recording
+    forward = settings.TWILIO_FORWARD_NUMBER
+    base_url = str(request.base_url).rstrip("/")
+    # Use forwarded headers for public URL
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
+    public_base = f"{proto}://{host}" if host else base_url
+
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial record="record-from-answer-dual"
+        recordingStatusCallback="{public_base}/webhooks/twilio/recording-status"
+        recordingStatusCallbackMethod="POST"
+        action="{public_base}/webhooks/twilio/voice-status">
+    {forward}
+  </Dial>
+</Response>"""
+
+    return Response(content=twiml, media_type="application/xml")
+
+
+@twilio_router.post("/voice-status")
+async def handle_voice_status(
+    request: Request,
+    _signature_valid: bool = Depends(validate_twilio_signature),
+):
+    """Handle voice call status updates (ringing → in-progress → completed)."""
+    form_data = await request.form()
+
+    call_sid = form_data.get("CallSid", "")
+    call_status = form_data.get("CallStatus", "")  # completed, busy, no-answer, failed, canceled
+    duration = form_data.get("CallDuration") or form_data.get("Duration")
+
+    logger.info("Voice status callback", extra={"call_sid": call_sid, "status": call_status})
+
+    # Map Twilio status to disposition
+    disposition_map = {
+        "completed": "answered",
+        "busy": "busy",
+        "no-answer": "no-answer",
+        "failed": "failed",
+        "canceled": "canceled",
+    }
+
+    async with async_session_maker() as db:
+        # Find by caller_number match on recent calls (CallSid not stored as column)
+        # Find most recent ringing call log
+        result = await db.execute(
+            select(CallLog)
+            .where(CallLog.external_system == "twilio", CallLog.call_disposition == "ringing")
+            .order_by(CallLog.created_at.desc())
+            .limit(1)
+        )
+        call_log = result.scalar_one_or_none()
+
+        if call_log:
+            call_log.call_disposition = disposition_map.get(call_status, call_status)
+            if duration:
+                try:
+                    call_log.duration_seconds = int(duration)
+                except (ValueError, TypeError):
+                    pass
+            await db.commit()
+
+            # Broadcast call ended
+            await manager.broadcast_event("call_ended", {
+                "call_sid": call_sid,
+                "call_log_id": str(call_log.id),
+                "duration": call_log.duration_seconds,
+                "disposition": call_log.call_disposition,
+            })
+
+    # Return TwiML (Twilio expects XML from action URL)
+    return Response(
+        content='<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        media_type="application/xml",
+    )
+
+
+@twilio_router.post("/recording-status")
+async def handle_recording_status(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    _signature_valid: bool = Depends(validate_twilio_signature),
+):
+    """Handle recording ready callback — save URL and kick off AI analysis."""
+    form_data = await request.form()
+
+    recording_url = form_data.get("RecordingUrl", "")
+    recording_duration = form_data.get("RecordingDuration")
+    call_sid = form_data.get("CallSid", "")
+
+    logger.info("Recording status callback", extra={"call_sid": call_sid, "duration": recording_duration})
+
+    async with async_session_maker() as db:
+        # Find the most recent call log with twilio external_system
+        result = await db.execute(
+            select(CallLog)
+            .where(CallLog.external_system == "twilio")
+            .order_by(CallLog.created_at.desc())
+            .limit(1)
+        )
+        call_log = result.scalar_one_or_none()
+
+        if call_log:
+            call_log.recording_url = recording_url
+            if recording_duration:
+                try:
+                    call_log.duration_seconds = int(recording_duration)
+                except (ValueError, TypeError):
+                    pass
+            call_log.transcription_status = "pending"
+            await db.commit()
+
+            # Kick off AI analysis in background
+            if settings.VOICE_AI_ENABLED:
+                from app.services.call_analysis_service import analyze_call
+                background_tasks.add_background_task(analyze_call, str(call_log.id))
 
     return {"status": "ok"}
