@@ -77,98 +77,66 @@ async def _compute_stats(db, tech_id) -> dict:
     today = date.today()
     year_ago = today - timedelta(days=365)
     ninety_ago = today - timedelta(days=90)
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+
+    base = and_(WorkOrder.technician_id == tech_id)
+    completed = and_(base, WorkOrder.status == "completed")
 
     # Dates for streak calc
     dates = await _completed_dates(db, tech_id, year_ago)
 
-    # Aggregates (90 days)
-    agg = await db.execute(
-        select(
-            func.count().label("total"),
-            func.count().filter(WorkOrder.status == "completed").label("completed"),
-            func.avg(WorkOrder.total_labor_minutes).filter(WorkOrder.status == "completed").label("avg_dur"),
-        ).where(
-            and_(
-                WorkOrder.technician_id == tech_id,
-                WorkOrder.scheduled_date >= ninety_ago,
-            )
-        )
-    )
-    row = agg.one()
-    total_90 = row.total or 0
-    completed_90 = row.completed or 0
+    # Total assigned last 90 days
+    total_90 = (await db.execute(
+        select(func.count()).where(and_(base, WorkOrder.scheduled_date >= ninety_ago))
+    )).scalar() or 0
 
-    # On-time rate (90 days)
-    on_time_q = await db.execute(
-        select(
-            func.count().label("total"),
-            func.count().filter(
-                WorkOrder.actual_start_time <= func.concat(
-                    func.cast(WorkOrder.scheduled_date, func.text()),  # noqa
-                )
-            ).label("on_time"),
-        ).where(
-            and_(
-                WorkOrder.technician_id == tech_id,
-                WorkOrder.status == "completed",
-                WorkOrder.scheduled_date >= ninety_ago,
-                WorkOrder.actual_start_time != None,
-                WorkOrder.time_window_end != None,
-            )
-        )
-    )
-    ot = on_time_q.one()
+    # Completed last 90 days
+    completed_90 = (await db.execute(
+        select(func.count()).where(and_(completed, WorkOrder.scheduled_date >= ninety_ago))
+    )).scalar() or 0
 
-    # Simpler on-time: just count where actual_start_time exists and WO is completed
-    on_time_result = await db.execute(
+    # Avg duration (completed, 90 days)
+    avg_dur = (await db.execute(
+        select(func.avg(WorkOrder.total_labor_minutes)).where(
+            and_(completed, WorkOrder.scheduled_date >= ninety_ago)
+        )
+    )).scalar() or 0
+
+    # On-time: completed jobs with actual_start_time set (90 days)
+    on_time_count = (await db.execute(
         select(func.count()).where(
-            and_(
-                WorkOrder.technician_id == tech_id,
-                WorkOrder.status == "completed",
-                WorkOrder.scheduled_date >= ninety_ago,
-                WorkOrder.actual_start_time != None,
-            )
+            and_(completed, WorkOrder.scheduled_date >= ninety_ago, WorkOrder.actual_start_time != None)
         )
-    )
-    total_with_start = on_time_result.scalar() or 0
+    )).scalar() or 0
 
-    # Week / Month / Lifetime counts
-    week_ago = today - timedelta(days=7)
-    month_ago = today - timedelta(days=30)
+    # Week / Month / Lifetime
+    week_count = (await db.execute(
+        select(func.count()).where(and_(completed, WorkOrder.scheduled_date >= week_ago))
+    )).scalar() or 0
 
-    counts = await db.execute(
-        select(
-            func.count().filter(
-                and_(WorkOrder.scheduled_date >= week_ago, WorkOrder.status == "completed")
-            ).label("week"),
-            func.count().filter(
-                and_(WorkOrder.scheduled_date >= month_ago, WorkOrder.status == "completed")
-            ).label("month"),
-            func.count().filter(WorkOrder.status == "completed").label("lifetime"),
-        ).where(WorkOrder.technician_id == tech_id)
-    )
-    c = counts.one()
+    month_count = (await db.execute(
+        select(func.count()).where(and_(completed, WorkOrder.scheduled_date >= month_ago))
+    )).scalar() or 0
+
+    lifetime_count = (await db.execute(
+        select(func.count()).where(completed)
+    )).scalar() or 0
 
     # Distinct job types
-    jt = await db.execute(
-        select(func.count(distinct(WorkOrder.job_type))).where(
-            and_(
-                WorkOrder.technician_id == tech_id,
-                WorkOrder.status == "completed",
-            )
-        )
-    )
-    job_types = jt.scalar() or 0
+    job_types = (await db.execute(
+        select(func.count(distinct(WorkOrder.job_type))).where(completed)
+    )).scalar() or 0
 
     return {
         "current_streak": _current_streak(dates),
         "best_streak": _best_streak(dates),
         "completion_rate": round(completed_90 / total_90 * 100, 1) if total_90 else 0,
-        "avg_job_duration_minutes": round(float(row.avg_dur or 0), 1),
-        "jobs_completed_week": c.week or 0,
-        "jobs_completed_month": c.month or 0,
-        "jobs_completed_lifetime": c.lifetime or 0,
-        "on_time_rate": round(total_with_start / completed_90 * 100, 1) if completed_90 else 0,
+        "avg_job_duration_minutes": round(float(avg_dur), 1),
+        "jobs_completed_week": week_count,
+        "jobs_completed_month": month_count,
+        "jobs_completed_lifetime": lifetime_count,
+        "on_time_rate": round(on_time_count / completed_90 * 100, 1) if completed_90 else 0,
         "job_types_completed": job_types,
     }
 
