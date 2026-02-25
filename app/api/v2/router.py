@@ -122,6 +122,8 @@ from app.api.v2 import (
     microsoft365,
     # Technician Gamification
     gamification,
+    # Predictive Service Engine
+    predictive_service,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -335,6 +337,9 @@ api_router.include_router(microsoft365.router, prefix="/microsoft365", tags=["mi
 
 # Technician Gamification (Streaks, Badges, Leaderboard)
 api_router.include_router(gamification.router, prefix="/gamification", tags=["gamification"])
+
+# Predictive Service Engine — "Know Before They Call"
+api_router.include_router(predictive_service.router, prefix="/predictive-service", tags=["predictive-service"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
