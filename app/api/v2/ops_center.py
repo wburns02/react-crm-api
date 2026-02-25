@@ -98,19 +98,23 @@ async def get_live_state(db: DbSession, user: CurrentUser):
     techs_q = await db.execute(
         select(
             Technician.id, Technician.first_name, Technician.last_name,
-            Technician.email, Technician.phone, Technician.status,
+            Technician.email, Technician.phone,
             Technician.home_latitude, Technician.home_longitude,
         ).where(Technician.is_active == True)
     )
     techs_raw = techs_q.all()
 
-    # Try GPS locations
-    gps_q = await db.execute(text("""
-        SELECT technician_id, latitude, longitude, current_status, speed, captured_at
-        FROM technician_locations
-        WHERE captured_at > NOW() - INTERVAL '30 minutes'
-    """))
-    gps_map = {str(r.technician_id): r for r in gps_q.all()}
+    # Try GPS locations (table may not exist)
+    gps_map: dict = {}
+    try:
+        gps_q = await db.execute(text("""
+            SELECT technician_id, latitude, longitude, current_status, speed, captured_at
+            FROM technician_locations
+            WHERE captured_at > NOW() - INTERVAL '30 minutes'
+        """))
+        gps_map = {str(r.technician_id): r for r in gps_q.all()}
+    except Exception:
+        await db.rollback()
 
     # 2. Today's work orders
     jobs_q = await db.execute(
@@ -160,7 +164,7 @@ async def get_live_state(db: DbSession, user: CurrentUser):
                 }
                 break
 
-        live_status = "on_job" if active_job else (t.status or "available")
+        live_status = "on_job" if active_job else "available"
 
         technicians.append({
             "id": tid,
@@ -297,19 +301,23 @@ async def recommend_dispatch(db: DbSession, user: CurrentUser, work_order_id: st
     techs_q = await db.execute(
         select(
             Technician.id, Technician.first_name, Technician.last_name,
-            Technician.phone, Technician.status,
+            Technician.phone,
             Technician.home_latitude, Technician.home_longitude,
         ).where(Technician.is_active == True)
     )
     techs = techs_q.all()
 
-    # GPS
-    gps_q = await db.execute(text("""
-        SELECT technician_id, latitude, longitude, current_status
-        FROM technician_locations
-        WHERE captured_at > NOW() - INTERVAL '30 minutes'
-    """))
-    gps_map = {str(r.technician_id): r for r in gps_q.all()}
+    # GPS (table may not exist)
+    gps_map: dict = {}
+    try:
+        gps_q = await db.execute(text("""
+            SELECT technician_id, latitude, longitude, current_status
+            FROM technician_locations
+            WHERE captured_at > NOW() - INTERVAL '30 minutes'
+        """))
+        gps_map = {str(r.technician_id): r for r in gps_q.all()}
+    except Exception:
+        await db.rollback()
 
     # Job counts today
     today = date.today()
@@ -331,7 +339,7 @@ async def recommend_dispatch(db: DbSession, user: CurrentUser, work_order_id: st
             "latitude": float(gps.latitude) if gps else (float(t.home_latitude) if t.home_latitude else None),
             "longitude": float(gps.longitude) if gps else (float(t.home_longitude) if t.home_longitude else None),
             "location_source": "gps" if gps else "home",
-            "status": (gps.current_status if gps and gps.current_status else t.status) or "available",
+            "status": (gps.current_status if gps and gps.current_status else "available"),
         }
         scored = _score_tech_for_job(tech_data, job_lat, job_lon, wo.job_type or "", count_map.get(tid, 0))
         recommendations.append(scored)
