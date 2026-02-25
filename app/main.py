@@ -751,7 +751,11 @@ async def ensure_missing_indexes():
         ("ix_customers_entity_id", "customers", "entity_id"),
         ("ix_work_orders_entity_id", "work_orders", "entity_id"),
         ("ix_payments_entity_id", "payments", "entity_id"),
+        ("ix_invoices_entity_id", "invoices", "entity_id"),
+        ("ix_technicians_entity_id", "technicians", "entity_id"),
         ("ix_payments_invoice_id", "payments", "invoice_id"),
+        ("ix_work_orders_customer_id", "work_orders", "customer_id"),
+        ("ix_time_entries_payroll_period", "time_entries", "payroll_period_id"),
     ]
     async with async_session_maker() as session:
         try:
@@ -763,8 +767,14 @@ async def ensure_missing_indexes():
                 "CREATE INDEX IF NOT EXISTS ix_work_orders_scheduled_date_status "
                 "ON work_orders(scheduled_date, status)"
             ))
+            # GIN trigram index for customer search
+            await session.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+            await session.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_customers_name_trgm "
+                "ON customers USING gin ((first_name || ' ' || last_name) gin_trgm_ops)"
+            ))
             await session.commit()
-            logger.info("Missing indexes ensured")
+            logger.info("Missing indexes ensured (migration 077)")
         except Exception as e:
             await session.rollback()
             logger.warning(f"Could not ensure indexes: {type(e).__name__}: {e}")

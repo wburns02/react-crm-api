@@ -69,119 +69,45 @@ async def list_technicians(
         return cached
 
     try:
-        from sqlalchemy import text as sql_text
-
-        # Build WHERE clause based on filters
-        where_clauses = []
-        params = {"limit": page_size, "offset": (page - 1) * page_size}
+        # Build query using SQLAlchemy ORM (no raw SQL)
+        query = select(Technician)
 
         if active_only:
-            where_clauses.append("is_active = true")
+            query = query.where(Technician.is_active == True)
 
         if search:
-            where_clauses.append(
-                "(first_name ILIKE :search OR last_name ILIKE :search OR email ILIKE :search OR employee_id ILIKE :search)"
+            search_pattern = f"%{search}%"
+            query = query.where(
+                or_(
+                    Technician.first_name.ilike(search_pattern),
+                    Technician.last_name.ilike(search_pattern),
+                    Technician.email.ilike(search_pattern),
+                    Technician.employee_id.ilike(search_pattern),
+                )
             )
-            params["search"] = f"%{search}%"
 
         # Multi-entity filtering
         if entity:
             if entity.is_default:
-                where_clauses.append("(entity_id = :entity_id OR entity_id IS NULL)")
+                query = query.where(
+                    or_(Technician.entity_id == entity.id, Technician.entity_id.is_(None))
+                )
             else:
-                where_clauses.append("entity_id = :entity_id")
-            params["entity_id"] = str(entity.id)
+                query = query.where(Technician.entity_id == entity.id)
 
-        where_sql = ""
-        if where_clauses:
-            where_sql = "WHERE " + " AND ".join(where_clauses)
-
-        # Use raw SQL to avoid ORM issues
-        sql = f"""
-            SELECT id, first_name, last_name, email, phone, employee_id, is_active,
-                   skills, assigned_vehicle, vehicle_capacity_gallons,
-                   license_number, license_expiry, hourly_rate, notes,
-                   home_region, home_address, home_city, home_state, home_postal_code,
-                   home_latitude, home_longitude, created_at, updated_at
-            FROM technicians
-            {where_sql}
-            ORDER BY first_name, last_name
-            LIMIT :limit OFFSET :offset
-        """
-        result = await db.execute(sql_text(sql), params)
-        rows = result.fetchall()
-
-        # Count total with same filter
-        count_sql = f"SELECT COUNT(*) FROM technicians {where_sql}"
-        count_result = await db.execute(sql_text(count_sql), params)
+        # Count total
+        count_query = select(func.count()).select_from(query.subquery())
+        count_result = await db.execute(count_query)
         total = count_result.scalar()
 
-        # Convert rows to response dicts
-        items = []
-        for row in rows:
-            first_name = row[1] or ""
-            last_name = row[2] or ""
+        # Apply ordering and pagination
+        query = query.order_by(Technician.first_name, Technician.last_name)
+        query = query.limit(page_size).offset((page - 1) * page_size)
 
-            # Handle skills - may be list, tuple, or comma-separated string
-            # Note: Database has corrupted data where skills were stored as char arrays
-            skills_val = row[7]
-            if skills_val is None:
-                skills = []
-            elif isinstance(skills_val, (list, tuple)):
-                # Check if this is a corrupted char array (all items are single chars)
-                if skills_val and all(isinstance(s, str) and len(s) <= 1 for s in skills_val):
-                    joined = "".join(skills_val)
-                    skills = [s.strip() for s in joined.split(",") if s.strip()]
-                else:
-                    skills = list(skills_val)
-            elif isinstance(skills_val, str):
-                skills = [s.strip() for s in skills_val.split(",") if s.strip()]
-            else:
-                skills = []
+        result = await db.execute(query)
+        techs = result.scalars().all()
 
-            # Handle datetime fields - convert to ISO string for serialization
-            created_at = None
-            if row[21]:
-                try:
-                    created_at = row[21].isoformat() if hasattr(row[21], "isoformat") else str(row[21])
-                except Exception:
-                    created_at = None
-
-            updated_at = None
-            if row[22]:
-                try:
-                    updated_at = row[22].isoformat() if hasattr(row[22], "isoformat") else str(row[22])
-                except Exception:
-                    updated_at = None
-
-            items.append(
-                {
-                    "id": str(row[0]),
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "full_name": f"{first_name} {last_name}".strip(),
-                    "email": row[3],
-                    "phone": row[4],
-                    "employee_id": row[5],
-                    "is_active": bool(row[6]) if row[6] is not None else True,
-                    "skills": skills,
-                    "assigned_vehicle": row[8],
-                    "vehicle_capacity_gallons": float(row[9]) if row[9] else None,
-                    "license_number": row[10],
-                    "license_expiry": str(row[11]) if row[11] else None,
-                    "hourly_rate": float(row[12]) if row[12] else None,
-                    "notes": row[13],
-                    "home_region": row[14],
-                    "home_address": row[15],
-                    "home_city": row[16],
-                    "home_state": row[17],
-                    "home_postal_code": row[18],
-                    "home_latitude": float(row[19]) if row[19] else None,
-                    "home_longitude": float(row[20]) if row[20] else None,
-                    "created_at": created_at,
-                    "updated_at": updated_at,
-                }
-            )
+        items = [technician_to_response(tech) for tech in techs]
 
         result = {
             "items": items,
