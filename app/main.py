@@ -1032,14 +1032,30 @@ async def lifespan(app: FastAPI):
     async def _watchdog():
         while True:
             await asyncio.sleep(300)
+            # Check RingCentral sync
             try:
-                # Check RingCentral sync
                 from app.api.v2.ringcentral import _sync_task
                 if _sync_task and _sync_task.done():
-                    logger.warning("RingCentral sync task died — restarting")
+                    logger.warning("Watchdog: RingCentral sync task died — restarting")
                     start_auto_sync()
             except Exception as e:
-                logger.debug(f"Watchdog check failed: {e}")
+                logger.debug(f"Watchdog RingCentral check failed: {e}")
+            # Check Samsara feed poller
+            try:
+                from app.api.v2.samsara import _feed_poller_task, start_feed_poller as restart_samsara
+                if _feed_poller_task and _feed_poller_task.done():
+                    logger.warning("Watchdog: Samsara feed poller died — restarting")
+                    restart_samsara()
+            except Exception as e:
+                logger.debug(f"Watchdog Samsara check failed: {e}")
+            # Check APScheduler
+            try:
+                from app.tasks.reminder_scheduler import scheduler as _sched
+                if _sched and not _sched.running:
+                    logger.warning("Watchdog: Reminder scheduler stopped — restarting")
+                    _sched.start()
+            except Exception as e:
+                logger.debug(f"Watchdog scheduler check failed: {e}")
 
     _watchdog_task = asyncio.create_task(_watchdog())
 
