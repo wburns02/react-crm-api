@@ -218,10 +218,11 @@ async def get_leaderboard(db: DbSession, user: CurrentUser):
     month_start = today.replace(day=1)
 
     # All techs with completed jobs this month
+    tech_name = func.concat(Technician.first_name, " ", Technician.last_name).label("tech_name")
     result = await db.execute(
         select(
             Technician.id,
-            Technician.name,
+            tech_name,
             func.count().label("jobs_completed"),
         )
         .join(WorkOrder, WorkOrder.technician_id == Technician.id)
@@ -231,7 +232,7 @@ async def get_leaderboard(db: DbSession, user: CurrentUser):
                 WorkOrder.scheduled_date >= month_start,
             )
         )
-        .group_by(Technician.id, Technician.name)
+        .group_by(Technician.id, Technician.first_name, Technician.last_name)
         .order_by(func.count().desc())
     )
     rows = result.all()
@@ -242,7 +243,7 @@ async def get_leaderboard(db: DbSession, user: CurrentUser):
         entry = {
             "rank": i + 1,
             "technician_id": str(row.id),
-            "name": row.name or "Unknown",
+            "name": row.tech_name or "Unknown",
             "jobs_completed": row.jobs_completed,
             "is_current_user": str(row.id) == str(tech_id),
         }
