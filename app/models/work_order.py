@@ -137,6 +137,8 @@ class WorkOrder(Base):
     # Microsoft 365 integration
     outlook_event_id = Column(String(255), nullable=True)
     sharepoint_item_id = Column(String(255), nullable=True)
+    ms_booking_appointment_id = Column(String(255), nullable=True, index=True)
+    booking_source = Column(String(50), nullable=True)  # "web" or "microsoft_bookings"
 
     # Relationships
     customer = relationship("Customer", back_populates="work_orders")

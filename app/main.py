@@ -34,6 +34,7 @@ from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
 from app.tasks.reminder_scheduler import start_reminder_scheduler, stop_reminder_scheduler
 from app.tasks.calendar_sync import start_calendar_sync, stop_calendar_sync
 from app.tasks.email_poller import start_email_poller, stop_email_poller
+from app.tasks.bookings_sync import start_bookings_sync, stop_bookings_sync
 
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
@@ -1036,6 +1037,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start email poller: {e}")
 
+    # Start MS365 bookings sync
+    try:
+        start_bookings_sync()
+    except Exception as e:
+        logger.warning(f"Failed to start bookings sync: {e}")
+
     # Background task watchdog — restarts crashed tasks every 5 minutes
     import asyncio
 
@@ -1108,6 +1115,7 @@ async def lifespan(app: FastAPI):
         pass
     stop_calendar_sync()
     stop_email_poller()
+    stop_bookings_sync()
 
 
 # SECURITY: Conditionally enable docs based on settings

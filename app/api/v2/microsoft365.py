@@ -182,6 +182,7 @@ async def get_microsoft_status(user: CurrentUser):
     from app.services.teams_webhook_service import TeamsWebhookService
     from app.services.ms365_sharepoint_service import MS365SharePointService
     from app.services.ms365_email_service import MS365EmailService
+    from app.services.ms365_bookings_service import MS365BookingsService
 
     return {
         "configured": MS365BaseService.is_configured(),
@@ -191,6 +192,7 @@ async def get_microsoft_status(user: CurrentUser):
         "teams_webhook": TeamsWebhookService.is_configured(),
         "sharepoint": MS365SharePointService.is_configured(),
         "email_monitoring": MS365EmailService.is_configured(),
+        "bookings": MS365BookingsService.is_configured(),
     }
 
 
@@ -297,4 +299,105 @@ async def poll_now(user: CurrentUser):
     import asyncio
 
     asyncio.create_task(poll_inbound_emails())
+    return {"triggered": True}
+
+
+# ── Session 6 (Phase 2): Microsoft Bookings ──
+
+@router.get("/bookings/status")
+async def bookings_status(user: CurrentUser):
+    """Get Microsoft Bookings integration status."""
+    from app.services.ms365_bookings_service import MS365BookingsService
+
+    configured = MS365BookingsService.is_configured()
+    business = None
+    public_url = None
+
+    if configured:
+        business = await MS365BookingsService.get_business()
+        public_url = await MS365BookingsService.get_booking_page_url()
+
+    return {
+        "configured": configured,
+        "business_id": settings.MS365_BOOKING_BUSINESS_ID,
+        "business_name": business.get("displayName") if business else None,
+        "public_url": public_url,
+    }
+
+
+@router.get("/bookings/services")
+async def bookings_services(user: CurrentUser):
+    """List services defined in Microsoft Bookings."""
+    from app.services.ms365_bookings_service import MS365BookingsService
+
+    if not MS365BookingsService.is_configured():
+        raise HTTPException(status_code=503, detail="Microsoft Bookings not configured")
+
+    services = await MS365BookingsService.list_services()
+    return {
+        "services": [
+            {
+                "id": s.get("id"),
+                "name": s.get("displayName"),
+                "description": s.get("description"),
+                "duration": s.get("defaultDuration"),
+                "price": s.get("defaultPrice"),
+                "price_type": s.get("defaultPriceType"),
+            }
+            for s in services
+        ]
+    }
+
+
+@router.get("/bookings/staff")
+async def bookings_staff(user: CurrentUser):
+    """List staff members in Microsoft Bookings."""
+    from app.services.ms365_bookings_service import MS365BookingsService
+
+    if not MS365BookingsService.is_configured():
+        raise HTTPException(status_code=503, detail="Microsoft Bookings not configured")
+
+    staff = await MS365BookingsService.list_staff()
+    return {
+        "staff": [
+            {
+                "id": s.get("id"),
+                "display_name": s.get("displayName"),
+                "email": s.get("emailAddress"),
+                "role": s.get("role"),
+            }
+            for s in staff
+        ]
+    }
+
+
+@router.get("/bookings/appointments")
+async def bookings_appointments(
+    user: CurrentUser,
+    start_date: str | None = None,
+    end_date: str | None = None,
+):
+    """List recent appointments from Microsoft Bookings."""
+    from app.services.ms365_bookings_service import MS365BookingsService
+
+    if not MS365BookingsService.is_configured():
+        raise HTTPException(status_code=503, detail="Microsoft Bookings not configured")
+
+    appointments = await MS365BookingsService.get_appointments(start_date, end_date)
+    return {
+        "appointments": [
+            MS365BookingsService.parse_appointment_to_work_order_data(a)
+            for a in appointments
+        ],
+        "total": len(appointments),
+    }
+
+
+@router.post("/bookings/sync-now")
+async def bookings_sync_now(user: CurrentUser):
+    """Trigger immediate bookings sync."""
+    from app.tasks.bookings_sync import sync_bookings
+    import asyncio
+
+    asyncio.create_task(sync_bookings())
     return {"triggered": True}
