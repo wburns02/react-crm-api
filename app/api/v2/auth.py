@@ -56,8 +56,8 @@ async def login(
     email_limiter = get_public_api_rate_limiter()
     email_limiter.check_rate_limit(
         client_id=f"login_email:{email_hash}",
-        rate_limit_per_minute=5,
-        rate_limit_per_hour=30,
+        rate_limit_per_minute=10,
+        rate_limit_per_hour=100,
     )
 
     try:
