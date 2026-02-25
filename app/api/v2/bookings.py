@@ -179,29 +179,21 @@ async def create_booking(
     # Get time window from slot
     time_start, time_end = TIME_SLOTS.get(booking_data.time_slot or "any", TIME_SLOTS["any"])
 
-    # SECURITY: Disable test mode in production
-    if booking_data.test_mode and settings.ENVIRONMENT == "production":
-        raise HTTPException(
-            status_code=400,
-            detail="Test mode is not available in production. Please provide a valid payment token."
-        )
-
-    # Process payment (pre-authorize)
-    clover = get_clover_service()
-    preauth_cents = int(pricing["preauth_amount"] * 100)
+    # Process payment (pre-authorize) or skip for test mode
+    payment_charge_id = None
+    payment_status = "test"
 
     if booking_data.test_mode:
-        # Test mode - simulate payment
-        payment_result = await clover.preauthorize(
-            amount_cents=preauth_cents,
-            token="test_token",
-            description=f"Septic Pumping - {booking_data.scheduled_date}",
-            test_mode=True,
-        )
+        # Test mode - skip Clover entirely, just create the booking + work order
+        logger.info(f"Test mode booking for {booking_data.first_name} {booking_data.last_name}")
+        payment_charge_id = f"test_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
     else:
-        # Live mode - require token
+        # Live mode - require token and process via Clover
         if not booking_data.payment_token:
             raise HTTPException(status_code=400, detail="Payment token is required for live bookings")
+
+        clover = get_clover_service()
+        preauth_cents = int(pricing["preauth_amount"] * 100)
         payment_result = await clover.preauthorize(
             amount_cents=preauth_cents,
             token=booking_data.payment_token,
@@ -209,8 +201,10 @@ async def create_booking(
             test_mode=False,
         )
 
-    if not payment_result.success:
-        raise HTTPException(status_code=402, detail=f"Payment authorization failed: {payment_result.error_message}")
+        if not payment_result.success:
+            raise HTTPException(status_code=402, detail=f"Payment authorization failed: {payment_result.error_message}")
+        payment_charge_id = payment_result.charge_id
+        payment_status = "preauthorized"
 
     # Find or create customer by phone number
     customer_result = await db.execute(select(Customer).where(Customer.phone == booking_data.phone))
@@ -248,8 +242,8 @@ async def create_booking(
         included_gallons=pricing["included_gallons"],
         overage_rate=pricing["overage_rate"],
         preauth_amount=pricing["preauth_amount"],
-        clover_charge_id=payment_result.charge_id,
-        payment_status="preauthorized" if not booking_data.test_mode else "test",
+        clover_charge_id=payment_charge_id,
+        payment_status=payment_status,
         is_test=booking_data.test_mode,
         overage_acknowledged=booking_data.overage_acknowledged,
         sms_consent=booking_data.sms_consent,
@@ -277,6 +271,7 @@ async def create_booking(
         service_address_line1=booking_data.service_address,
         notes=f"Online Booking #{booking.id[:8]}\n{booking_data.notes or ''}".strip(),
         estimated_gallons=1750,
+        booking_source="web",
     )
     db.add(work_order)
     await db.flush()
