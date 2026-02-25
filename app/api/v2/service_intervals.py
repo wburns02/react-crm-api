@@ -202,7 +202,11 @@ async def list_customer_schedules(
     current_user=Depends(get_current_user),
 ):
     """Get customer service schedules with optional filters."""
-    query = select(CustomerServiceSchedule).options(selectinload(CustomerServiceSchedule.service_interval))
+    query = (
+        select(CustomerServiceSchedule, Customer)
+        .options(selectinload(CustomerServiceSchedule.service_interval))
+        .outerjoin(Customer, CustomerServiceSchedule.customer_id == Customer.id)
+    )
 
     if status:
         query = query.where(CustomerServiceSchedule.status == status)
@@ -212,14 +216,11 @@ async def list_customer_schedules(
     query = query.order_by(CustomerServiceSchedule.next_due_date).limit(limit)
 
     result = await db.execute(query)
-    schedules = result.scalars().all()
+    rows = result.all()
 
-    # Build response with customer names
+    # Build response with customer names (no N+1 — customer loaded via JOIN)
     schedules_data = []
-    for schedule in schedules:
-        # Get customer name
-        customer_result = await db.execute(select(Customer).where(Customer.id == schedule.customer_id))
-        customer = customer_result.scalar_one_or_none()
+    for schedule, customer in rows:
         customer_name = (
             f"{customer.first_name} {customer.last_name}" if customer else f"Customer #{schedule.customer_id}"
         )
