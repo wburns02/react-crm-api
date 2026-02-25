@@ -116,7 +116,7 @@ async def get_live_state(db: DbSession, user: CurrentUser):
     except Exception:
         await db.rollback()
 
-    # 2. Today's work orders
+    # 2. Today's work orders (with customer name)
     jobs_q = await db.execute(
         select(
             WorkOrder.id, WorkOrder.work_order_number, WorkOrder.customer_id,
@@ -126,7 +126,9 @@ async def get_live_state(db: DbSession, user: CurrentUser):
             WorkOrder.service_address_line1, WorkOrder.service_city,
             WorkOrder.service_latitude, WorkOrder.service_longitude,
             WorkOrder.total_amount, WorkOrder.actual_start_time,
-        ).where(
+            Customer.first_name.label("customer_first"),
+            Customer.last_name.label("customer_last"),
+        ).outerjoin(Customer, WorkOrder.customer_id == Customer.id).where(
             and_(
                 WorkOrder.scheduled_date == today,
                 WorkOrder.status.notin_(["canceled", "cancelled"]),
@@ -199,6 +201,7 @@ async def get_live_state(db: DbSession, user: CurrentUser):
             "longitude": float(j.service_longitude) if j.service_longitude else None,
             "amount": float(j.total_amount) if j.total_amount else None,
             "is_started": j.actual_start_time is not None,
+            "customer_name": f"{j.customer_first or ''} {j.customer_last or ''}".strip() or None,
         })
 
     # 5. Alerts
