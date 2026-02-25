@@ -1027,6 +1027,80 @@ async def update_work_order(
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
+    # Outlook calendar sync — fire-and-forget when technician is assigned
+    if ("assigned_technician" in update_data or "technician_id" in update_data) and work_order.technician_id:
+        try:
+            import asyncio
+            from app.services.ms365_calendar_service import MS365CalendarService
+            tech_result2 = await db.execute(
+                select(Technician).where(Technician.id == work_order.technician_id)
+            )
+            tech = tech_result2.scalar_one_or_none()
+            ms_email = getattr(tech, "microsoft_email", None) if tech else None
+            if ms_email and MS365CalendarService.is_configured():
+                customer2 = None
+                if work_order.customer_id:
+                    cr = await db.execute(select(Customer).where(Customer.id == work_order.customer_id))
+                    customer2 = cr.scalar_one_or_none()
+                cust_name = f"{customer2.first_name} {customer2.last_name}" if customer2 else "Unknown"
+                job = str(work_order.job_type) if work_order.job_type else "Service"
+                addr = work_order.service_address_line1 or ""
+                sched = work_order.scheduled_date.isoformat() if work_order.scheduled_date else ""
+                t_start = work_order.time_window_start
+                t_end = work_order.time_window_end
+
+                from datetime import datetime as dt2, time as time2
+                # Build start datetime from scheduled_date + time_window_start
+                if sched and t_start:
+                    start_datetime = dt2.combine(work_order.scheduled_date, t_start)
+                elif sched:
+                    start_datetime = dt2.fromisoformat(f"{sched}T08:00:00")
+                else:
+                    start_datetime = dt2.now()
+                dur = work_order.estimated_duration_hours or 2.0
+                wo_id = str(work_order.id)
+                wo_notes = work_order.notes or ""
+                existing_event_id = work_order.outlook_event_id
+
+                async def _sync_calendar():
+                    try:
+                        if existing_event_id:
+                            await MS365CalendarService.update_event(
+                                technician_microsoft_email=ms_email,
+                                event_id=existing_event_id,
+                                subject=f"{job.title()} - {cust_name}",
+                                location=addr,
+                                body=f"Work Order: {wo_id}\nNotes: {wo_notes}",
+                                start_dt=start_datetime,
+                                duration_hours=dur,
+                            )
+                        else:
+                            new_event_id = await MS365CalendarService.create_event(
+                                technician_microsoft_email=ms_email,
+                                subject=f"{job.title()} - {cust_name}",
+                                location=addr,
+                                body=f"Work Order: {wo_id}\nNotes: {wo_notes}",
+                                start_dt=start_datetime,
+                                duration_hours=dur,
+                            )
+                            if new_event_id:
+                                # Save event ID back — need a fresh DB session
+                                from app.database import async_session_maker
+                                async with async_session_maker() as sess:
+                                    from sqlalchemy import text as sql_text
+                                    await sess.execute(
+                                        sql_text("UPDATE work_orders SET outlook_event_id = :eid WHERE id = :wid"),
+                                        {"eid": new_event_id, "wid": wo_id},
+                                    )
+                                    await sess.commit()
+                                logger.info(f"Outlook event {new_event_id} created for WO {wo_id}")
+                    except Exception as cal_err:
+                        logger.warning(f"Outlook calendar sync failed for WO {wo_id}: {cal_err}")
+
+                asyncio.create_task(_sync_calendar())
+        except Exception as e:
+            logger.warning(f"Calendar sync setup error: {e}")
+
     # Invalidate caches
     await get_cache_service().delete_pattern("workorders:*")
     await get_cache_service().delete_pattern("dashboard:*")
