@@ -45,6 +45,8 @@ def technician_to_response(tech: Technician) -> dict:
         "license_expiry": str(tech.license_expiry) if tech.license_expiry else None,
         "hourly_rate": tech.hourly_rate,
         "notes": tech.notes,
+        "microsoft_email": getattr(tech, "microsoft_email", None),
+        "microsoft_user_id": getattr(tech, "microsoft_user_id", None),
         "created_at": tech.created_at.isoformat() if tech.created_at else None,
         "updated_at": tech.updated_at.isoformat() if tech.updated_at else None,
     }
