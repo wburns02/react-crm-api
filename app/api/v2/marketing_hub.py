@@ -1467,18 +1467,25 @@ async def ga4_realtime(current_user: CurrentUser) -> dict:
 
 # Known competitor brand names for septic industry in Texas
 COMPETITOR_BRANDS = [
-    "al's septic", "b&b septic", "ace septic", "roto-rooter", "mr rooter",
-    "blueline", "blue line", "van delden", "t&g septic", "aaa septic",
-    "all american septic", "lone star septic", "texas pride septic",
-    "affordable septic", "budget septic", "economy septic",
+    # SC market competitors
+    "meetze plumbing", "metts plumbing", "lucas septic", "ce taylor", "c e taylor",
+    "shamrock septic", "jones septic", "brigman septic", "reeves septic",
+    "sharps septic", "poyner septic", "coleman septic", "all points septic",
+    "complete septic", "star septic", "al and ralph",
+    # TN market competitors
+    "maxwell septic",
+    # National brands
+    "roto-rooter", "mr rooter", "blueline", "blue line",
+    # Generic competitor patterns
+    "budget septic", "economy septic", "affordable septic",
 ]
 
-# Out-of-area cities (not in MAC Septic service area)
+# Out-of-area cities (MAC operates in SC, TN, KY — flag major cities outside service area)
 OUT_OF_AREA_TERMS = [
     "houston", "dallas", "san antonio", "fort worth", "el paso",
     "arlington", "corpus christi", "lubbock", "laredo", "amarillo",
-    "brownsville", "mcallen", "midland", "odessa", "beaumont",
-    "pasadena", "mesquite", "garland", "irving", "plano",
+    "atlanta", "charlotte", "jacksonville", "orlando", "miami",
+    "new york", "chicago", "los angeles", "phoenix", "denver",
 ]
 
 
@@ -1509,12 +1516,18 @@ async def get_search_terms_analysis(
             flag = None
             category = None
 
-            # Check competitor brands
+            # Skip own brand
+            if "mac septic" in search_text or "mac service" in search_text:
+                analyzed.append({**term, "flag": None, "category": None})
+                continue
+
+            # Check competitor brands (only flag as waste if no conversions)
             for brand in COMPETITOR_BRANDS:
                 if brand in search_text:
                     flag = "competitor"
                     category = "competitor"
-                    competitor_waste += cost
+                    if conversions == 0:
+                        competitor_waste += cost
                     break
 
             # Check out-of-area
