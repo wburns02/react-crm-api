@@ -182,6 +182,40 @@ class SMSTemplate(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class NegativeKeywordQueue(Base):
+    """Negative keyword queue for Google Ads optimization."""
+
+    __tablename__ = "negative_keyword_queue"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    keyword = Column(String(255), nullable=False)
+    match_type = Column(String(20), nullable=False, default="exact")  # exact, phrase, broad
+    source = Column(String(50), nullable=True)  # search_terms, manual
+    campaign_id = Column(String(50), nullable=True)
+    campaign_name = Column(String(255), nullable=True)
+    category = Column(String(50), nullable=True)  # competitor, irrelevant, out_of_area
+    estimated_waste = Column(Float, nullable=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending, applied, dismissed
+    created_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MarketingDailyReport(Base):
+    """Daily marketing performance report."""
+
+    __tablename__ = "marketing_daily_reports"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    report_date = Column(DateTime(timezone=False), nullable=False, unique=True)
+    ads_data = Column(JSON, nullable=True)
+    ga4_data = Column(JSON, nullable=True)
+    deltas = Column(JSON, nullable=True)
+    alerts = Column(JSON, nullable=True)
+    summary = Column(Text, nullable=True)
+    email_sent = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class AISuggestion(Base):
     """AI-generated campaign suggestion."""
 

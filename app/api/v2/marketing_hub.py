@@ -24,7 +24,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.customer import Customer
 from app.models.work_order import WorkOrder
-from app.models.marketing import MarketingCampaign, AISuggestion
+from app.models.marketing import MarketingCampaign, AISuggestion, NegativeKeywordQueue, MarketingDailyReport
 from app.models.social_integrations import SocialReview, SocialIntegration
 from app.services.google_ads_service import get_google_ads_service
 from app.services.ga4_service import get_ga4_service
