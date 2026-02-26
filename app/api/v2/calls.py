@@ -28,7 +28,7 @@ router = APIRouter()
 
 
 class CallResponse(BaseModel):
-    id: int
+    id: str
     ringcentral_call_id: Optional[str] = None
     caller_number: Optional[str] = None
     called_number: Optional[str] = None
@@ -57,7 +57,7 @@ class CallListResponse(BaseModel):
 
 
 class CallDispositionResponse(BaseModel):
-    id: int
+    id: str
     name: str
     description: Optional[str] = None
     color: str
@@ -91,7 +91,7 @@ class CallAnalyticsResponse(BaseModel):
 def call_to_response(call: CallLog) -> dict:
     """Convert CallLog model to response dict."""
     return {
-        "id": call.id,
+        "id": str(call.id),
         "ringcentral_call_id": call.ringcentral_call_id,
         "caller_number": call.caller_number,
         "called_number": call.called_number,
@@ -104,7 +104,7 @@ def call_to_response(call: CallLog) -> dict:
         "ring_duration": call.ring_duration,
         "recording_url": call.recording_url,
         "notes": call.notes,
-        "customer_id": call.customer_id,
+        "customer_id": str(call.customer_id) if call.customer_id else None,
         "answered_by": call.answered_by,
         "created_at": call.created_at,
     }
