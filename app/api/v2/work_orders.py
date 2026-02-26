@@ -33,6 +33,106 @@ router = APIRouter()
 # PostgreSQL ENUM fields that need explicit type casting
 ENUM_FIELDS = {"status", "job_type", "priority"}
 
+# Real estate inspection reports are always sent to Doug
+REAL_ESTATE_INSPECTION_RECIPIENT = "Doug@macseptic.com"
+
+
+async def _send_real_estate_inspection_report(wo: WorkOrder, db) -> None:
+    """Auto-email the inspection report PDF to Doug when a real_estate_inspection is completed."""
+    if str(wo.job_type) != "real_estate_inspection":
+        return
+
+    checklist = wo.checklist or {}
+    inspection = checklist.get("inspection", {})
+    if not inspection:
+        logger.info(f"[RE-INSPECTION] No inspection data for WO {wo.id}, skipping email")
+        return
+
+    try:
+        # Get customer info
+        customer_name = "Valued Customer"
+        customer_address = ""
+        if wo.customer_id:
+            cust_result = await db.execute(select(Customer).where(Customer.id == wo.customer_id))
+            cust = cust_result.scalars().first()
+            if cust:
+                customer_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Valued Customer"
+                addr_parts = [p for p in [cust.address_line1, cust.city, cust.state, cust.postal_code] if p]
+                customer_address = ", ".join(addr_parts)
+
+        # Generate PDF
+        from app.services.inspection_pdf import generate_inspection_pdf, pdf_to_base64
+        pdf_bytes = generate_inspection_pdf(
+            customer_name=customer_name,
+            customer_address=customer_address,
+            inspection_data=inspection,
+            work_order_id=str(wo.id),
+            job_type="Real Estate Inspection",
+            scheduled_date=str(wo.scheduled_date) if wo.scheduled_date else None,
+        )
+        pdf_b64 = pdf_to_base64(pdf_bytes)
+
+        # Build email
+        summary = inspection.get("summary", {})
+        condition = summary.get("overall_condition", "N/A")
+        condition_label = "Good" if condition == "good" else "Needs Attention" if condition == "fair" else "Needs Repair" if condition in ("poor", "critical") else condition.title()
+
+        wo_number = wo.work_order_number or str(wo.id)[:8]
+        addr_parts = [wo.service_address_line1, wo.service_city, wo.service_state]
+        service_addr = ", ".join(p for p in addr_parts if p) or "N/A"
+
+        subject = f"Real Estate Inspection Complete — {customer_name} — {condition_label}"
+        plain_text = (
+            f"Real Estate Inspection Report\n\n"
+            f"Work Order: {wo_number}\n"
+            f"Customer: {customer_name}\n"
+            f"Address: {service_addr}\n"
+            f"Overall Condition: {condition_label}\n\n"
+            f"The full PDF report is attached."
+        )
+        html_body = f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+          <div style="background:#1e3a5f;color:white;padding:20px;text-align:center;border-radius:8px 8px 0 0">
+            <h2 style="margin:0;font-size:18px">Real Estate Inspection Report</h2>
+          </div>
+          <div style="padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+            <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+              <tr><td style="padding:6px 0;color:#6b7280;font-size:13px">Work Order</td><td style="padding:6px 0;font-weight:600">{wo_number}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280;font-size:13px">Customer</td><td style="padding:6px 0;font-weight:600">{customer_name}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280;font-size:13px">Address</td><td style="padding:6px 0;font-weight:600">{service_addr}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280;font-size:13px">Condition</td><td style="padding:6px 0;font-weight:700;color:{'#22c55e' if condition == 'good' else '#f59e0b' if condition == 'fair' else '#ef4444'}">{condition_label}</td></tr>
+            </table>
+            <p style="margin:16px 0 0;padding:12px;background:#eff6ff;border-radius:6px;text-align:center;font-size:14px;color:#1e40af">
+              <strong>Full PDF report is attached.</strong>
+            </p>
+          </div>
+        </div>
+        """
+
+        from app.services.email_service import EmailService
+        email_svc = EmailService()
+        if not email_svc.is_configured:
+            logger.warning("[RE-INSPECTION] Email service not configured, skipping report email")
+            return
+
+        result = await email_svc.send_email(
+            to=REAL_ESTATE_INSPECTION_RECIPIENT,
+            subject=subject,
+            body=plain_text,
+            html_body=html_body,
+            attachments=[{
+                "content": pdf_b64,
+                "name": f"RE-Inspection-{wo_number}.pdf",
+            }],
+        )
+        if result.get("success"):
+            logger.info(f"[RE-INSPECTION] Report emailed to {REAL_ESTATE_INSPECTION_RECIPIENT} for WO {wo.id}")
+        else:
+            logger.warning(f"[RE-INSPECTION] Email failed for WO {wo.id}: {result.get('error')}")
+
+    except Exception as e:
+        logger.error(f"[RE-INSPECTION] Failed to send report email for WO {wo.id}: {e}")
+
 
 @router.post("/fix-table")
 async def fix_work_orders_table(db: DbSession, current_user: CurrentUser):
@@ -1208,6 +1308,10 @@ async def update_work_order(
         except Exception as e:
             logger.warning(f"Completion SMS failed for WO {work_order_id}: {e}")
 
+    # Auto-email real estate inspection report to Doug on completion
+    if old_status != new_status and new_status == "completed":
+        await _send_real_estate_inspection_report(work_order, db)
+
     # Status change event
     if old_status != new_status:
         await manager.broadcast_event(
@@ -1476,6 +1580,9 @@ async def complete_work_order(
         )
     except Exception as e:
         logger.warning(f"Failed to broadcast WebSocket event: {e}")
+
+    # Auto-email real estate inspection report to Doug on completion
+    await _send_real_estate_inspection_report(work_order, db)
 
     return {
         "id": wo_id,
