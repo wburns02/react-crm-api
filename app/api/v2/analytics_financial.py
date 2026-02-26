@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from decimal import Decimal
 
+from app.services.cache_service import cache_service, TTL
+
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
 from app.models.invoice import Invoice
@@ -172,6 +174,11 @@ async def get_financial_snapshot(
     period: str = Query("month", description="Primary period: week, month, quarter, year"),
 ) -> FinancialSnapshot:
     """Get complete financial snapshot."""
+    cache_key = "analytics:financial:snapshot"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     today = date.today()
 
     # Revenue by period
@@ -275,7 +282,7 @@ async def get_financial_snapshot(
             )
         )
 
-    return FinancialSnapshot(
+    result = FinancialSnapshot(
         revenue_periods=revenue_periods,
         total_outstanding=round(total_outstanding, 2),
         overdue_amount=round(overdue_amount, 2),
@@ -283,6 +290,8 @@ async def get_financial_snapshot(
         ar_aging=ar_aging,
         margins_by_type=margins_by_type,
     )
+    await cache_service.set(cache_key, result.model_dump(), TTL.MEDIUM)
+    return result
 
 
 @router.get("/ar-aging")
@@ -291,6 +300,11 @@ async def get_ar_aging_details(
     current_user: CurrentUser,
 ) -> dict:
     """Get detailed AR aging report with individual invoices."""
+    cache_key = "analytics:financial:ar_aging"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     # Simplified response - in production, query actual invoices
     buckets = [
         ARAgingBucket(bucket="current", label="Current", amount=50000, count=45, percentage=45.5),
@@ -305,7 +319,9 @@ async def get_ar_aging_details(
         {"id": "INV-002", "customer_name": "XYZ Corp", "amount": 1800.00, "days_outstanding": 45, "bucket": "31_60"},
     ]
 
-    return {"buckets": [b.model_dump() for b in buckets], "invoices": invoices}
+    result = {"buckets": [b.model_dump() for b in buckets], "invoices": invoices}
+    await cache_service.set(cache_key, result, TTL.MEDIUM)
+    return result
 
 
 @router.get("/margins")
@@ -314,6 +330,11 @@ async def get_margin_analysis(
     current_user: CurrentUser,
 ) -> dict:
     """Get detailed margin analysis by job type."""
+    cache_key = "analytics:financial:margins"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     today = date.today()
 
     margins = []
@@ -343,7 +364,9 @@ async def get_margin_analysis(
             }
         )
 
-    return {"margins": margins}
+    result = {"margins": margins}
+    await cache_service.set(cache_key, result, TTL.LONG)
+    return result
 
 
 @router.get("/cash-flow/forecast")
@@ -353,6 +376,11 @@ async def get_cash_flow_forecast(
     period: str = Query("weekly", description="Forecast period: daily, weekly, monthly"),
 ) -> CashFlowForecast:
     """Get cash flow forecast."""
+    cache_key = "analytics:financial:cashflow"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     today = date.today()
 
     # Generate projections
@@ -406,9 +434,11 @@ async def get_cash_flow_forecast(
         recommendations.append("Consider accelerating collections on overdue invoices")
     recommendations.append("Review recurring expenses for optimization opportunities")
 
-    return CashFlowForecast(
+    result = CashFlowForecast(
         current_balance=50000.0, projections=projections, risk_periods=risk_periods, recommendations=recommendations
     )
+    await cache_service.set(cache_key, result.model_dump(), TTL.LONG)
+    return result
 
 
 @router.get("/collection-recommendations")

@@ -44,6 +44,7 @@ from app.models.certification import Certification
 from app.models.inspection import Inspection
 
 # Phase 12: Contracts
+from app.models.neighborhood_bundle import NeighborhoodBundle
 from app.models.contract import Contract
 from app.models.contract_template import ContractTemplate
 
@@ -111,6 +112,35 @@ from app.models.user_activity import UserActivityLog
 # Microsoft 365 Inbound Emails
 from app.models.inbound_email import InboundEmail
 
+# AI Provider Configuration
+from app.models.ai_provider_config import AIProviderConfig, AIUsageLog
+
+# Clover POS Integration
+from app.models.clover_oauth import CloverOAuthToken
+
+# Dump Sites
+from app.models.dump_site import DumpSite
+
+# GPS Tracking
+from app.models.gps_tracking import (
+    TechnicianLocation,
+    LocationHistory,
+    Geofence,
+    GeofenceEvent,
+    CustomerTrackingLink,
+    ETACalculation,
+    GPSTrackingConfig,
+)
+
+# QuickBooks Online Integration
+from app.models.qbo_oauth import QBOOAuthToken
+
+# Social Platform Integrations
+from app.models.social_integrations import SocialIntegration, SocialReview
+
+# Work Order Audit Log
+from app.models.work_order_audit import WorkOrderAuditLog
+
 __all__ = [
     # Core models
     "Customer",
@@ -172,6 +202,7 @@ __all__ = [
     "Certification",
     "Inspection",
     # Phase 12: Contracts
+    "NeighborhoodBundle",
     "Contract",
     "ContractTemplate",
     # Phase 13: Job Costing
@@ -227,4 +258,26 @@ __all__ = [
     "UserActivityLog",
     # Microsoft 365 Inbound Emails
     "InboundEmail",
+    # AI Provider Configuration
+    "AIProviderConfig",
+    "AIUsageLog",
+    # Clover POS Integration
+    "CloverOAuthToken",
+    # Dump Sites
+    "DumpSite",
+    # GPS Tracking
+    "TechnicianLocation",
+    "LocationHistory",
+    "Geofence",
+    "GeofenceEvent",
+    "CustomerTrackingLink",
+    "ETACalculation",
+    "GPSTrackingConfig",
+    # QuickBooks Online Integration
+    "QBOOAuthToken",
+    # Social Platform Integrations
+    "SocialIntegration",
+    "SocialReview",
+    # Work Order Audit Log
+    "WorkOrderAuditLog",
 ]

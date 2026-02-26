@@ -12,7 +12,7 @@ class WorkOrderPhoto(Base):
     __tablename__ = "work_order_photos"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=False, index=True)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Photo type (before, during, after, issue, signature, etc.)
     photo_type = Column(String(50), nullable=False)

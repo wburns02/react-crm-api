@@ -1,8 +1,11 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 
 from app.schemas.types import UUIDStr
+
+# Valid payment status values
+PAYMENT_STATUSES = Literal["pending", "completed", "failed", "refunded", "cancelled"]
 
 
 class PaymentBase(BaseModel):
@@ -10,10 +13,10 @@ class PaymentBase(BaseModel):
 
     customer_id: Optional[UUIDStr] = None
     work_order_id: Optional[UUIDStr] = None  # Flask uses work_order_id not invoice_id
-    amount: float = Field(..., description="Payment amount")
+    amount: float = Field(..., ge=0, description="Payment amount")
     currency: Optional[str] = Field("USD", max_length=3)
     payment_method: Optional[str] = Field(None, max_length=50)
-    status: Optional[str] = Field("pending", max_length=30)
+    status: Optional[PAYMENT_STATUSES] = Field("pending", max_length=30)
     description: Optional[str] = None
     payment_date: Optional[datetime] = None
 
@@ -34,10 +37,17 @@ class PaymentUpdate(BaseModel):
 
     amount: Optional[float] = None
     payment_method: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[PAYMENT_STATUSES] = None
     description: Optional[str] = None
     receipt_url: Optional[str] = None
     payment_date: Optional[datetime] = None
+
+    @field_validator("amount", mode="after")
+    @classmethod
+    def validate_amount_non_negative(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v < 0:
+            raise ValueError("Amount must be >= 0")
+        return v
 
 
 class PaymentResponse(PaymentBase):

@@ -36,7 +36,7 @@ class CallLog(Base):
     user_id = Column(String(36), nullable=False, default="1")
 
     # CRM entity linking
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
     answered_by = Column(String(255), nullable=True)
     assigned_to = Column(String(255), nullable=True)
 

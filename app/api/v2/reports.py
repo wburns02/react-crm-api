@@ -144,21 +144,28 @@ async def get_technician_report(
     techs_result = await db.execute(select(Technician).where(Technician.is_active == True))
     technicians = techs_result.scalars().all()
 
-    metrics = []
-    for tech in technicians:
-        jobs_result = await db.execute(
-            select(func.count()).where(
-                and_(
-                    WorkOrder.assigned_technician == f"{tech.first_name} {tech.last_name}",
-                    WorkOrder.status == "completed",
-                )
+    # Batch query: count completed jobs per technician name in one query
+    tech_names = [f"{t.first_name} {t.last_name}" for t in technicians]
+    jobs_count_result = await db.execute(
+        select(WorkOrder.assigned_technician, func.count(WorkOrder.id))
+        .where(
+            and_(
+                WorkOrder.assigned_technician.in_(tech_names),
+                WorkOrder.status == "completed",
             )
         )
-        jobs = jobs_result.scalar() or 0
+        .group_by(WorkOrder.assigned_technician)
+    )
+    jobs_count_map = dict(jobs_count_result.all())
+
+    metrics = []
+    for tech in technicians:
+        full_name = f"{tech.first_name} {tech.last_name}"
+        jobs = jobs_count_map.get(full_name, 0)
         metrics.append(
             TechnicianMetrics(
                 technician_id=str(tech.id),
-                technician_name=f"{tech.first_name} {tech.last_name}",
+                technician_name=full_name,
                 jobs_completed=jobs,
                 total_revenue=jobs * 350.0,
                 on_time_completion_rate=95.0,
@@ -313,20 +320,26 @@ async def get_revenue_by_technician(
     techs_result = await db.execute(select(Technician).where(Technician.is_active == True))
     technicians = techs_result.scalars().all()
 
+    # Batch query: count completed jobs per technician name in one query
+    tech_names = [f"{t.first_name} {t.last_name}" for t in technicians]
+    jobs_count_result = await db.execute(
+        select(WorkOrder.assigned_technician, func.count(WorkOrder.id))
+        .where(
+            and_(
+                WorkOrder.assigned_technician.in_(tech_names),
+                WorkOrder.status == "completed",
+            )
+        )
+        .group_by(WorkOrder.assigned_technician)
+    )
+    jobs_count_map = dict(jobs_count_result.all())
+
     tech_data = []
     total_revenue = 0.0
 
     for tech in technicians:
         full_name = f"{tech.first_name} {tech.last_name}"
-        jobs_result = await db.execute(
-            select(func.count()).where(
-                and_(
-                    WorkOrder.assigned_technician == full_name,
-                    WorkOrder.status == "completed",
-                )
-            )
-        )
-        jobs = jobs_result.scalar() or 0
+        jobs = jobs_count_map.get(full_name, 0)
         revenue = jobs * 350.0  # Average job value
         total_revenue += revenue
 
@@ -417,19 +430,24 @@ async def get_customer_lifetime_value(
     customers_result = await db.execute(select(Customer).where(Customer.prospect_stage == "won"))
     customers = customers_result.scalars().all()
 
+    # Batch query: count completed work orders per customer in one query
+    customer_ids = [c.id for c in customers]
+    wo_count_result = await db.execute(
+        select(WorkOrder.customer_id, func.count(WorkOrder.id))
+        .where(
+            and_(
+                WorkOrder.customer_id.in_(customer_ids),
+                WorkOrder.status == "completed",
+            )
+        )
+        .group_by(WorkOrder.customer_id)
+    )
+    wo_count_map = dict(wo_count_result.all())
+
     customer_ltv = []
 
     for customer in customers:
-        # Count work orders for this customer
-        wo_result = await db.execute(
-            select(func.count()).where(
-                and_(
-                    WorkOrder.customer_id == customer.id,
-                    WorkOrder.status == "completed",
-                )
-            )
-        )
-        wo_count = wo_result.scalar() or 0
+        wo_count = wo_count_map.get(customer.id, 0)
 
         if wo_count > 0:
             # Estimate LTV (jobs * avg value)
@@ -483,56 +501,65 @@ async def get_technician_performance(
     techs_result = await db.execute(select(Technician).where(Technician.is_active == True))
     technicians = techs_result.scalars().all()
 
+    tech_names = [f"{t.first_name} {t.last_name}" for t in technicians]
+
+    # Batch query 1: completed jobs per technician
+    completed_result = await db.execute(
+        select(WorkOrder.assigned_technician, func.count(WorkOrder.id))
+        .where(
+            and_(
+                WorkOrder.assigned_technician.in_(tech_names),
+                WorkOrder.status == "completed",
+            )
+        )
+        .group_by(WorkOrder.assigned_technician)
+    )
+    completed_map = dict(completed_result.all())
+
+    # Batch query 2: total assigned jobs per technician
+    total_result = await db.execute(
+        select(WorkOrder.assigned_technician, func.count(WorkOrder.id))
+        .where(WorkOrder.assigned_technician.in_(tech_names))
+        .group_by(WorkOrder.assigned_technician)
+    )
+    total_map = dict(total_result.all())
+
+    # Batch query 3: revenue from invoices linked to each technician's work orders
+    rev_result = await db.execute(
+        select(WorkOrder.assigned_technician, func.coalesce(func.sum(Invoice.amount), 0))
+        .join(Invoice, Invoice.work_order_id == WorkOrder.id)
+        .where(WorkOrder.assigned_technician.in_(tech_names))
+        .group_by(WorkOrder.assigned_technician)
+    )
+    revenue_map = dict(rev_result.all())
+
+    # Batch query 4: on-time completed jobs per technician
+    on_time_result = await db.execute(
+        select(WorkOrder.assigned_technician, func.count(WorkOrder.id))
+        .where(
+            and_(
+                WorkOrder.assigned_technician.in_(tech_names),
+                WorkOrder.status == "completed",
+                WorkOrder.actual_end_time.isnot(None),
+                WorkOrder.scheduled_date.isnot(None),
+                func.date(WorkOrder.actual_end_time) <= WorkOrder.scheduled_date,
+            )
+        )
+        .group_by(WorkOrder.assigned_technician)
+    )
+    on_time_map = dict(on_time_result.all())
+
     tech_performance = []
 
     for tech in technicians:
         full_name = f"{tech.first_name} {tech.last_name}"
 
-        # Completed jobs
-        completed_result = await db.execute(
-            select(func.count()).where(
-                and_(
-                    WorkOrder.assigned_technician == full_name,
-                    WorkOrder.status == "completed",
-                )
-            )
-        )
-        completed = completed_result.scalar() or 0
-
-        # Total assigned jobs
-        total_result = await db.execute(select(func.count()).where(WorkOrder.assigned_technician == full_name))
-        total = total_result.scalar() or 0
-
-        # Calculate metrics
+        completed = completed_map.get(full_name, 0)
+        total = total_map.get(full_name, 0)
         completion_rate = (completed / total * 100) if total > 0 else 0
-
-        # Revenue from actual invoices linked to technician's work orders
-        rev_result = await db.execute(
-            select(func.coalesce(func.sum(Invoice.amount), 0)).where(
-                Invoice.work_order_id.in_(
-                    select(WorkOrder.id).where(WorkOrder.assigned_technician == full_name)
-                )
-            )
-        )
-        revenue = float(rev_result.scalar() or 0)
-
-        # On-time rate: completed jobs where actual_end_time <= scheduled_date end-of-day
-        if completed > 0:
-            on_time_result = await db.execute(
-                select(func.count()).where(
-                    and_(
-                        WorkOrder.assigned_technician == full_name,
-                        WorkOrder.status == "completed",
-                        WorkOrder.actual_end_time.isnot(None),
-                        WorkOrder.scheduled_date.isnot(None),
-                        func.date(WorkOrder.actual_end_time) <= WorkOrder.scheduled_date,
-                    )
-                )
-            )
-            on_time = on_time_result.scalar() or 0
-            on_time_rate = round(on_time / completed * 100, 1)
-        else:
-            on_time_rate = 0.0
+        revenue = float(revenue_map.get(full_name, 0))
+        on_time = on_time_map.get(full_name, 0)
+        on_time_rate = round(on_time / completed * 100, 1) if completed > 0 else 0.0
 
         # Estimate efficiency (jobs per working day)
         work_days = 22

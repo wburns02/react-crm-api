@@ -39,7 +39,7 @@ class Message(Base):
     __tablename__ = "messages"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), index=True)
     work_order_id = Column(UUID(as_uuid=True), nullable=True)
 
     # Type, direction, status - stored as VARCHAR in DB

@@ -16,6 +16,8 @@ from typing import Optional
 from decimal import Decimal
 import logging
 
+from app.services.cache_service import cache_service, TTL
+
 from app.api.deps import DbSession, CurrentUser
 from app.models.technician import Technician
 from app.models.work_order import WorkOrder
@@ -114,6 +116,11 @@ async def get_technician_locations(
     current_user: CurrentUser,
 ) -> dict:
     """Get live technician locations and status."""
+    cache_key = "analytics:ops:locations"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     try:
         # Get active technicians
         result = await db.execute(select(Technician).where(Technician.is_active == True))
@@ -202,7 +209,9 @@ async def get_technician_locations(
                 )
             )
 
-        return {"locations": [loc.model_dump() for loc in locations]}
+        result = {"locations": [loc.model_dump() for loc in locations]}
+        await cache_service.set(cache_key, result, TTL.SHORT)
+        return result
     except Exception as e:
         logger.warning(f"Error getting technician locations: {e}")
         return {"locations": []}
@@ -307,6 +316,11 @@ async def get_today_stats(
     current_user: CurrentUser,
 ) -> TodayStats:
     """Get today's operational statistics."""
+    cache_key = "analytics:ops:today"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     try:
         today = date.today()
 
@@ -363,7 +377,7 @@ async def get_today_stats(
         # Available technicians
         technicians_available = max(0, total_techs - technicians_active)
 
-        return TodayStats(
+        result = TodayStats(
             jobs_scheduled=jobs_scheduled,
             jobs_completed=jobs_completed,
             jobs_in_progress=jobs_in_progress,
@@ -375,6 +389,8 @@ async def get_today_stats(
             customer_satisfaction=None,
             on_time_arrival_rate=85.0,
         )
+        await cache_service.set(cache_key, result.model_dump(), TTL.SHORT)
+        return result
     except Exception as e:
         logger.warning(f"Error getting today stats: {e}")
         return TodayStats(

@@ -1,9 +1,12 @@
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, date
-from typing import Optional, List, Any, Union
+from typing import Optional, List, Any, Union, Literal
 from decimal import Decimal
 
 from app.schemas.types import UUIDStr
+
+# Valid quote status values
+QUOTE_STATUSES = Literal["draft", "sent", "accepted", "declined", "expired"]
 
 
 class QuoteLineItem(BaseModel):
@@ -29,7 +32,7 @@ class QuoteBase(BaseModel):
     tax: Optional[Decimal] = None
     discount: Optional[Decimal] = None
     total: Optional[Decimal] = None
-    status: Optional[str] = Field("draft", max_length=30)
+    status: Optional[QUOTE_STATUSES] = Field("draft", max_length=30)
     valid_until: Optional[datetime] = None
     notes: Optional[str] = None
     terms: Optional[str] = None
@@ -84,7 +87,7 @@ class QuoteUpdate(BaseModel):
     tax: Optional[Decimal] = None
     discount: Optional[Decimal] = None
     total: Optional[Decimal] = None
-    status: Optional[str] = None
+    status: Optional[QUOTE_STATUSES] = None
     valid_until: Optional[datetime] = None
     notes: Optional[str] = None
     terms: Optional[str] = None

@@ -1,7 +1,18 @@
-from pydantic import BaseModel, Field
+import re
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
 from app.schemas.types import UUIDStr
+
+
+def _normalize_phone(phone: str) -> str:
+    """Normalize phone number to (XXX) XXX-XXXX format for US numbers."""
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) == 11 and digits[0] == "1":
+        digits = digits[1:]
+    if len(digits) == 10:
+        return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+    return phone  # Return as-is if not a standard US number
 
 
 class TechnicianBase(BaseModel):
@@ -44,6 +55,32 @@ class TechnicianBase(BaseModel):
     # Microsoft 365 integration
     microsoft_email: Optional[str] = Field(None, max_length=255)
     microsoft_user_id: Optional[str] = Field(None, max_length=255)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email(cls, v: object) -> object:
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return None
+            if "@" not in v or "." not in v:
+                raise ValueError("Invalid email format: must contain '@' and '.'")
+        return v
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone_number(cls, v: Optional[str]) -> Optional[str]:
+        if v and isinstance(v, str):
+            stripped = v.strip()
+            if stripped == "":
+                return None
+            digits = re.sub(r"\D", "", stripped)
+            if len(digits) not in (10, 11):
+                raise ValueError(
+                    f"Phone number must have 10 or 11 digits, got {len(digits)}"
+                )
+            return _normalize_phone(stripped)
+        return v
 
 
 class TechnicianCreate(TechnicianBase):
@@ -91,6 +128,32 @@ class TechnicianUpdate(BaseModel):
     # Microsoft 365 integration
     microsoft_email: Optional[str] = Field(None, max_length=255)
     microsoft_user_id: Optional[str] = Field(None, max_length=255)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email(cls, v: object) -> object:
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return None
+            if "@" not in v or "." not in v:
+                raise ValueError("Invalid email format: must contain '@' and '.'")
+        return v
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone_number(cls, v: Optional[str]) -> Optional[str]:
+        if v and isinstance(v, str):
+            stripped = v.strip()
+            if stripped == "":
+                return None
+            digits = re.sub(r"\D", "", stripped)
+            if len(digits) not in (10, 11):
+                raise ValueError(
+                    f"Phone number must have 10 or 11 digits, got {len(digits)}"
+                )
+            return _normalize_phone(stripped)
+        return v
 
 
 class TechnicianResponse(TechnicianBase):

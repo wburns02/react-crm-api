@@ -52,8 +52,8 @@ class Customer(Base):
     tags = Column(String(500))
 
     # Timestamps
-    created_at = Column(DateTime)
-    updated_at = Column(DateTime)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
 
     # Marketing attribution
     utm_source = Column(String(255))

@@ -64,8 +64,8 @@ class Technician(Base):
     notes = Column(Text)
 
     # Timestamps
-    created_at = Column(DateTime)
-    updated_at = Column(DateTime)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
 
     # Multi-entity (LLC) support
     entity_id = Column(UUID(as_uuid=True), ForeignKey("company_entities.id"), nullable=True, index=True)

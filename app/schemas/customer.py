@@ -1,10 +1,15 @@
 import re
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, Literal
 from decimal import Decimal
 
 from app.schemas.types import UUIDStr
+
+# Valid prospect stage values
+PROSPECT_STAGE_VALUES = Literal[
+    "new_lead", "contacted", "qualified", "quoted", "negotiation", "won", "lost"
+]
 
 
 def _normalize_phone(phone: str) -> str:
@@ -27,9 +32,13 @@ class CustomerBase(BaseModel):
 
     @field_validator("email", mode="before")
     @classmethod
-    def empty_email_to_none(cls, v: object) -> object:
-        if isinstance(v, str) and v.strip() == "":
-            return None
+    def validate_email(cls, v: object) -> object:
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return None
+            if "@" not in v or "." not in v:
+                raise ValueError("Invalid email format: must contain '@' and '.'")
         return v
 
     # Address
@@ -46,7 +55,7 @@ class CustomerBase(BaseModel):
     # Lead/Sales tracking
     lead_source: Optional[str] = None
     lead_notes: Optional[str] = None
-    prospect_stage: Optional[str] = None
+    prospect_stage: Optional[PROSPECT_STAGE_VALUES] = None
     assigned_sales_rep: Optional[str] = None
     estimated_value: Optional[float] = None
     customer_type: Optional[str] = None
@@ -103,7 +112,15 @@ class CustomerBase(BaseModel):
     @classmethod
     def normalize_phone_number(cls, v: Optional[str]) -> Optional[str]:
         if v and isinstance(v, str):
-            return _normalize_phone(v.strip())
+            stripped = v.strip()
+            if stripped == "":
+                return None
+            digits = re.sub(r"\D", "", stripped)
+            if len(digits) not in (10, 11):
+                raise ValueError(
+                    f"Phone number must have 10 or 11 digits, got {len(digits)}"
+                )
+            return _normalize_phone(stripped)
         return v
 
 

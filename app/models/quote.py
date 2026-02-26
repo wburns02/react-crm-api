@@ -13,7 +13,7 @@ class Quote(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     quote_number = Column(String(50), unique=True, index=True)
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Quote details
     title = Column(String(255))

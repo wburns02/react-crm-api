@@ -22,7 +22,7 @@ class Contract(Base):
     contract_type = Column(String(50), nullable=False)  # maintenance, service, annual, multi-year
 
     # Customer
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     customer_name = Column(String(255), nullable=True)
 
     # Template reference
@@ -88,6 +88,7 @@ class Contract(Base):
 
     # Relationships
     customer = relationship("Customer", foreign_keys=[customer_id], lazy="noload")
+    neighborhood_bundle = relationship("NeighborhoodBundle", back_populates="contracts")
 
     # Notes
     notes = Column(Text, nullable=True)

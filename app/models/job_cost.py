@@ -1,6 +1,6 @@
 """Job Cost model for tracking costs associated with work orders."""
 
-from sqlalchemy import Column, String, DateTime, Text, Integer, Float, Boolean, Date
+from sqlalchemy import Column, String, DateTime, Text, Integer, Float, Boolean, Date, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -16,7 +16,7 @@ class JobCost(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
     # Work order reference
-    work_order_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Cost identification
     cost_type = Column(

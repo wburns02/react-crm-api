@@ -2,7 +2,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import StaticPool
 
 # Import the FastAPI application explicitly
 from app.main import app as fastapi_app
@@ -21,16 +21,18 @@ from tests.factories import (
     InvoiceFactory,
 )
 
-# Test database URL (SQLite for testing)
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+# In-memory SQLite with StaticPool to avoid file locking issues
+# when multiple test modules run concurrently.
+TEST_DATABASE_URL = "sqlite+aiosqlite://"
 
 
 @pytest_asyncio.fixture
 async def test_db():
-    """Create test database and tables."""
+    """Create a fresh in-memory test database with all tables."""
     engine = create_async_engine(
         TEST_DATABASE_URL,
-        poolclass=NullPool,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
 
     async with engine.begin() as conn:
@@ -42,9 +44,6 @@ async def test_db():
 
     async with async_session() as session:
         yield session
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
     await engine.dispose()
 

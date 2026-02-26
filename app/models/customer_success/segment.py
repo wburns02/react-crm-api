@@ -119,10 +119,10 @@ class Segment(Base):
     tags = Column(JSON)  # ["high-value", "enterprise", "at-risk"]
 
     # Actions on entry/exit
-    on_entry_playbook_id = Column(Integer, ForeignKey("cs_playbooks.id", ondelete="SET NULL"))
-    on_entry_journey_id = Column(Integer, ForeignKey("cs_journeys.id", ondelete="SET NULL"))
-    on_exit_playbook_id = Column(Integer, ForeignKey("cs_playbooks.id", ondelete="SET NULL"))
-    on_exit_journey_id = Column(Integer, ForeignKey("cs_journeys.id", ondelete="SET NULL"))
+    on_entry_playbook_id = Column(Integer, ForeignKey("cs_playbooks.id", ondelete="SET NULL", use_alter=True))
+    on_entry_journey_id = Column(Integer, ForeignKey("cs_journeys.id", ondelete="SET NULL", use_alter=True))
+    on_exit_playbook_id = Column(Integer, ForeignKey("cs_playbooks.id", ondelete="SET NULL", use_alter=True))
+    on_exit_journey_id = Column(Integer, ForeignKey("cs_journeys.id", ondelete="SET NULL", use_alter=True))
 
     # Ownership
     created_by_user_id = Column(Integer, ForeignKey("api_users.id"))

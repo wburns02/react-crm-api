@@ -1,11 +1,16 @@
 """
-User Activity Analytics endpoints — admin-only.
+User Activity Analytics endpoints -- admin-only.
 
 Provides:
-- GET /admin/user-activity — paginated activity log with filters
-- GET /admin/user-activity/stats — aggregated usage statistics
-- GET /admin/user-activity/sessions — login session history
-- DELETE /admin/user-activity/prune — clean up old records
+- GET /admin/user-activity -- paginated activity log with filters
+- GET /admin/user-activity/stats -- aggregated usage statistics
+- GET /admin/user-activity/sessions -- login session history
+- DELETE /admin/user-activity/prune -- clean up old records
+
+SECURITY FIX (2026-02-26): Replaced all f-string INTERVAL interpolation with
+bound parameters using make_interval(days => :days). Although the `days`
+parameter was validated as int by FastAPI's Query(), defense-in-depth requires
+that NO user-supplied value ever appear in an f-string passed to text().
 """
 import asyncio
 import logging
@@ -67,31 +72,21 @@ async def get_user_activity(
         from fastapi import HTTPException, status
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    conditions = ["created_at > NOW() - INTERVAL ':days days'"]
     params = {"days": days, "limit": page_size, "offset": (page - 1) * page_size}
 
-    if category:
-        conditions.append("category = :category")
-        params["category"] = category
-    if action:
-        conditions.append("action = :action")
-        params["action"] = action
-    if user_email:
-        conditions.append("user_email ILIKE :user_email")
-        params["user_email"] = f"%{user_email}%"
-
-    where = " AND ".join(conditions)
-
-    # Use string interpolation ONLY for the days interval (integer, validated by Query)
-    # All other params are parameterized
-    base_where = f"created_at > NOW() - INTERVAL '{days} days'"
+    # FIX: Use make_interval() with a bound :days parameter instead of f-string interpolation.
+    # Previously: f"created_at > NOW() - INTERVAL '{days} days'"
+    base_where = "created_at > NOW() - make_interval(days => :days)"
     extra_conditions = []
     if category:
         extra_conditions.append("category = :category")
+        params["category"] = category
     if action:
         extra_conditions.append("action = :action")
+        params["action"] = action
     if user_email:
         extra_conditions.append("user_email ILIKE :user_email")
+        params["user_email"] = f"%{user_email}%"
 
     where_clause = base_where
     if extra_conditions:
@@ -159,86 +154,88 @@ async def get_activity_stats(
         from fastapi import HTTPException, status
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    interval = f"{days} days"
+    # FIX: All INTERVAL expressions now use make_interval() with bound :days parameter.
+    # Previously: interval = f"{days} days" then f"INTERVAL '{interval}'"
+    interval_params = {"days": days}
 
     # Active users (unique emails)
-    active_users = await db.execute(text(f"""
+    active_users = await db.execute(text("""
         SELECT COUNT(DISTINCT user_email) FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}' AND user_email IS NOT NULL
-    """))
+        WHERE created_at > NOW() - make_interval(days => :days) AND user_email IS NOT NULL
+    """), interval_params)
 
     # Total events
-    total_events = await db.execute(text(f"""
+    total_events = await db.execute(text("""
         SELECT COUNT(*) FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}'
-    """))
+        WHERE created_at > NOW() - make_interval(days => :days)
+    """), interval_params)
 
     # Logins count
-    logins = await db.execute(text(f"""
+    logins = await db.execute(text("""
         SELECT COUNT(*) FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}' AND action = 'login'
-    """))
+        WHERE created_at > NOW() - make_interval(days => :days) AND action = 'login'
+    """), interval_params)
 
     # Failed logins
-    failed_logins = await db.execute(text(f"""
+    failed_logins = await db.execute(text("""
         SELECT COUNT(*) FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}' AND action = 'login_failed'
-    """))
+        WHERE created_at > NOW() - make_interval(days => :days) AND action = 'login_failed'
+    """), interval_params)
 
     # Events by category
-    by_category = await db.execute(text(f"""
+    by_category = await db.execute(text("""
         SELECT category, COUNT(*) as count
         FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}'
+        WHERE created_at > NOW() - make_interval(days => :days)
         GROUP BY category ORDER BY count DESC
-    """))
+    """), interval_params)
 
     # Events by action (top 15)
-    by_action = await db.execute(text(f"""
+    by_action = await db.execute(text("""
         SELECT action, COUNT(*) as count
         FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}'
+        WHERE created_at > NOW() - make_interval(days => :days)
         GROUP BY action ORDER BY count DESC LIMIT 15
-    """))
+    """), interval_params)
 
     # Most active users
-    top_users = await db.execute(text(f"""
+    top_users = await db.execute(text("""
         SELECT user_email, COUNT(*) as count
         FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}' AND user_email IS NOT NULL
+        WHERE created_at > NOW() - make_interval(days => :days) AND user_email IS NOT NULL
         GROUP BY user_email ORDER BY count DESC LIMIT 10
-    """))
+    """), interval_params)
 
     # Most accessed resources
-    top_resources = await db.execute(text(f"""
+    top_resources = await db.execute(text("""
         SELECT resource_type, COUNT(*) as count
         FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}' AND resource_type IS NOT NULL
+        WHERE created_at > NOW() - make_interval(days => :days) AND resource_type IS NOT NULL
         GROUP BY resource_type ORDER BY count DESC LIMIT 10
-    """))
+    """), interval_params)
 
     # Activity by hour of day (for heatmap)
-    by_hour = await db.execute(text(f"""
+    by_hour = await db.execute(text("""
         SELECT EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as count
         FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}'
+        WHERE created_at > NOW() - make_interval(days => :days)
         GROUP BY hour ORDER BY hour
-    """))
+    """), interval_params)
 
     # Activity by day
-    by_day = await db.execute(text(f"""
+    by_day = await db.execute(text("""
         SELECT DATE(created_at) as day, COUNT(*) as count
         FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}'
+        WHERE created_at > NOW() - make_interval(days => :days)
         GROUP BY day ORDER BY day
-    """))
+    """), interval_params)
 
     # Average response time for tracked requests
-    avg_response = await db.execute(text(f"""
+    avg_response = await db.execute(text("""
         SELECT AVG(response_time_ms), MAX(response_time_ms), PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time_ms)
         FROM user_activity_log
-        WHERE created_at > NOW() - INTERVAL '{interval}' AND response_time_ms IS NOT NULL
-    """))
+        WHERE created_at > NOW() - make_interval(days => :days) AND response_time_ms IS NOT NULL
+    """), interval_params)
     resp_row = avg_response.fetchone()
 
     return {
@@ -275,9 +272,10 @@ async def get_login_sessions(
         from fastapi import HTTPException, status
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
-    interval = f"{days} days"
+    # FIX: Replaced f-string interval interpolation with bound parameter.
+    # Previously: interval = f"{days} days" then f"INTERVAL '{interval}'"
     extra = ""
-    params = {"limit": page_size, "offset": (page - 1) * page_size}
+    params = {"days": days, "limit": page_size, "offset": (page - 1) * page_size}
 
     if user_email:
         extra = " AND user_email ILIKE :user_email"
@@ -288,7 +286,7 @@ async def get_login_sessions(
             SELECT id, user_id, user_email, user_name, action, description,
                    ip_address, user_agent, source, session_id, created_at
             FROM user_activity_log
-            WHERE category = 'auth' AND created_at > NOW() - INTERVAL '{interval}'{extra}
+            WHERE category = 'auth' AND created_at > NOW() - make_interval(days => :days){extra}
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
         """),
@@ -298,7 +296,7 @@ async def get_login_sessions(
     count_result = await db.execute(
         text(f"""
             SELECT COUNT(*) FROM user_activity_log
-            WHERE category = 'auth' AND created_at > NOW() - INTERVAL '{interval}'{extra}
+            WHERE category = 'auth' AND created_at > NOW() - make_interval(days => :days){extra}
         """),
         params,
     )
@@ -338,8 +336,11 @@ async def prune_activity_log(
         from fastapi import HTTPException, status
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
 
+    # FIX: Replaced f-string INTERVAL interpolation with bound parameter.
+    # Previously: text(f"DELETE FROM user_activity_log WHERE created_at < NOW() - INTERVAL '{days} days'")
     result = await db.execute(
-        text(f"DELETE FROM user_activity_log WHERE created_at < NOW() - INTERVAL '{days} days'")
+        text("DELETE FROM user_activity_log WHERE created_at < NOW() - make_interval(days => :days)"),
+        {"days": days},
     )
     await db.commit()
     return {"deleted": result.rowcount, "older_than_days": days}

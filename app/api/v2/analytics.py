@@ -18,6 +18,8 @@ from typing import Optional
 from decimal import Decimal
 import logging
 
+from app.services.cache_service import cache_service, TTL
+
 logger = logging.getLogger(__name__)
 
 from app.api.deps import DbSession, CurrentUser
@@ -434,6 +436,11 @@ async def get_ftfr(
     a return visit. A return visit is defined as a work order for the same
     customer with a similar job type within 14 days of the original.
     """
+    cache_key = f"analytics:ftfr:{period}"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     current_start, current_end, prev_start, prev_end = get_period_dates(period)
 
     # Get all completed work orders for the current period
@@ -541,7 +548,7 @@ async def get_ftfr(
         for job_type, stats in job_type_stats.items()
     ]
 
-    return FTFRResponse(
+    result = FTFRResponse(
         overall_ftfr=round(overall_ftfr, 1),
         total_jobs=total_jobs,
         first_time_fixes=first_time_fixes,
@@ -553,6 +560,8 @@ async def get_ftfr(
         period_start=current_start.isoformat(),
         period_end=current_end.isoformat(),
     )
+    await cache_service.set(cache_key, result.model_dump(), TTL.MEDIUM)
+    return result
 
 
 @router.get("/equipment-health", response_model=EquipmentHealthResponse)
@@ -572,6 +581,11 @@ async def get_equipment_health(
     - Condition status
     - Failure history
     """
+    cache_key = "analytics:equipment_health"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     # Get all equipment with customer info
     query = select(Equipment, Customer).outerjoin(Customer, Equipment.customer_id == Customer.id)
 
@@ -582,20 +596,27 @@ async def get_equipment_health(
     total_score = 0.0
     risk_counts = {"low": 0, "medium": 0, "high": 0, "critical": 0}
 
-    for equip, customer in equipment_rows:
-        # Count services for this equipment (work orders at same customer)
-        service_count_query = await db.execute(
-            select(func.count())
-            .select_from(WorkOrder)
+    # Batch query: get service counts per customer_id in a single GROUP BY query
+    customer_ids = [equip.customer_id for equip, _ in equipment_rows if equip.customer_id]
+    if customer_ids:
+        svc_result = await db.execute(
+            select(WorkOrder.customer_id, func.count(WorkOrder.id))
             .where(
                 and_(
-                    WorkOrder.customer_id == equip.customer_id,
+                    WorkOrder.customer_id.in_(customer_ids),
                     WorkOrder.status == "completed",
                     WorkOrder.job_type.in_(["maintenance", "inspection", "repair"]),
                 )
             )
+            .group_by(WorkOrder.customer_id)
         )
-        service_count = service_count_query.scalar() or 0
+        svc_count_map = dict(svc_result.all())
+    else:
+        svc_count_map = {}
+
+    for equip, customer in equipment_rows:
+        # Look up pre-fetched service count for this equipment's customer
+        service_count = svc_count_map.get(equip.customer_id, 0)
 
         # Calculate health score
         health_score, equip_risk_level, recommendations = calculate_equipment_health_score(equip, service_count)
@@ -644,7 +665,7 @@ async def get_equipment_health(
     total_equipment = len(equipment_list)
     avg_score = total_score / total_equipment if total_equipment > 0 else 0.0
 
-    return EquipmentHealthResponse(
+    result = EquipmentHealthResponse(
         total_equipment=total_equipment,
         average_health_score=round(avg_score, 1),
         critical_count=risk_counts["critical"],
@@ -653,6 +674,8 @@ async def get_equipment_health(
         low_risk_count=risk_counts["low"],
         equipment=equipment_list,
     )
+    await cache_service.set(cache_key, result.model_dump(), TTL.MEDIUM)
+    return result
 
 
 @router.get("/customer-intelligence", response_model=CustomerIntelligenceResponse)
@@ -674,6 +697,11 @@ async def get_customer_intelligence(
 
     Engagement score: Composite of activity frequency and recency
     """
+    cache_key = f"analytics:customer_intel:{limit}"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     # Get customers who are "won" (actual customers, not prospects)
     customers_query = await db.execute(
         select(Customer).where(Customer.prospect_stage == "won").limit(limit * 2)  # Get extra to filter later
@@ -685,16 +713,27 @@ async def get_customer_intelligence(
     total_engagement = 0.0
     risk_counts = {"low": 0, "medium": 0, "high": 0}
 
-    for customer in customers:
-        # Get work order stats
-        wo_stats = await db.execute(
-            select(func.count().label("total"), func.max(WorkOrder.scheduled_date).label("last_date")).where(
-                WorkOrder.customer_id == customer.id
+    # Batch query: get work order stats per customer_id in a single GROUP BY query
+    customer_ids = [customer.id for customer in customers]
+    if customer_ids:
+        wo_batch_result = await db.execute(
+            select(
+                WorkOrder.customer_id,
+                func.count().label("total"),
+                func.max(WorkOrder.scheduled_date).label("last_date"),
             )
+            .where(WorkOrder.customer_id.in_(customer_ids))
+            .group_by(WorkOrder.customer_id)
         )
-        wo_row = wo_stats.first()
-        work_order_count = wo_row.total if wo_row else 0
-        last_service_date = wo_row.last_date if wo_row else None
+        wo_stats_map = {row.customer_id: (row.total, row.last_date) for row in wo_batch_result.all()}
+    else:
+        wo_stats_map = {}
+
+    for customer in customers:
+        # Look up pre-fetched work order stats for this customer
+        wo_total, wo_last_date = wo_stats_map.get(customer.id, (0, None))
+        work_order_count = wo_total
+        last_service_date = wo_last_date
 
         # Get invoice totals
         # Note: Invoice.customer_id is UUID, Customer.id is Integer
@@ -775,7 +814,7 @@ async def get_customer_intelligence(
     avg_ltv = total_ltv / total_customers if total_customers > 0 else 0.0
     avg_engagement = total_engagement / total_customers if total_customers > 0 else 0.0
 
-    return CustomerIntelligenceResponse(
+    result = CustomerIntelligenceResponse(
         total_customers=total_customers,
         high_risk_count=risk_counts["high"],
         medium_risk_count=risk_counts["medium"],
@@ -785,6 +824,8 @@ async def get_customer_intelligence(
         average_engagement=round(avg_engagement, 1),
         customers=customer_list,
     )
+    await cache_service.set(cache_key, result.model_dump(), TTL.MEDIUM)
+    return result
 
 
 @router.get("/dashboard", response_model=DashboardMetricsResponse)
@@ -802,6 +843,11 @@ async def get_dashboard_metrics(
     - Pending work orders
     - Active alerts
     """
+    cache_key = "analytics:dashboard"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     today = date.today()
     month_start = today.replace(day=1)
     now = datetime.now()
@@ -913,7 +959,7 @@ async def get_dashboard_metrics(
             )
         )
 
-    return DashboardMetricsResponse(
+    result = DashboardMetricsResponse(
         jobs_completed_today=jobs_completed_today,
         jobs_scheduled_today=jobs_scheduled_today,
         revenue_today=round(revenue_today, 2),
@@ -927,6 +973,8 @@ async def get_dashboard_metrics(
         active_alerts=alerts,
         timestamp=now.isoformat(),
     )
+    await cache_service.set(cache_key, result.model_dump(), TTL.SHORT)
+    return result
 
 
 @router.get("/performance", response_model=PerformanceMetricsResponse)
@@ -945,66 +993,73 @@ async def get_performance_metrics(
     - Customer satisfaction (if available)
     - Revenue generated
     """
+    cache_key = f"analytics:performance:{period}"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     current_start, current_end, _, _ = get_period_dates(period)
 
-    # Get completed work orders in period
-    wo_query = await db.execute(
-        select(WorkOrder).where(
+    # Batch query: get all technician performance stats in a single GROUP BY query
+    # instead of loading all work order ORM objects and accessing properties in a loop
+    perf_result = await db.execute(
+        select(
+            func.coalesce(WorkOrder.technician_id, "unassigned").label("tech_id"),
+            func.coalesce(WorkOrder.assigned_technician, "Unassigned").label("tech_name"),
+            func.count().label("jobs"),
+            func.sum(WorkOrder.total_amount).label("revenue"),
+            func.sum(WorkOrder.total_labor_minutes).label("total_time"),
+            func.count(WorkOrder.total_labor_minutes).label("jobs_with_time"),
+            func.count(
+                case(
+                    (and_(WorkOrder.travel_end_time.isnot(None), WorkOrder.time_window_start.isnot(None)), 1),
+                )
+            ).label("jobs_with_arrival"),
+        )
+        .where(
             and_(
                 WorkOrder.status == "completed",
                 WorkOrder.scheduled_date >= current_start,
                 WorkOrder.scheduled_date <= current_end,
             )
         )
+        .group_by(WorkOrder.technician_id, WorkOrder.assigned_technician)
     )
-    work_orders = wo_query.scalars().all()
+    perf_rows = perf_result.all()
 
-    total_jobs = len(work_orders)
+    tech_stats = {}
+    total_jobs = 0
     total_revenue = 0.0
     total_completion_time = 0
     jobs_with_time = 0
     on_time_arrivals = 0
     jobs_with_arrival_data = 0
 
-    # Group by technician
-    tech_stats = {}
+    for row in perf_rows:
+        tech_id = str(row.tech_id) if row.tech_id else "unassigned"
+        tech_name = row.tech_name or "Unassigned"
+        row_revenue = float(row.revenue or 0)
+        row_total_time = int(row.total_time or 0)
+        row_jobs_with_time = int(row.jobs_with_time or 0)
+        row_jobs_with_arrival = int(row.jobs_with_arrival or 0)
 
-    for wo in work_orders:
-        tech_id = wo.technician_id or "unassigned"
-        tech_name = wo.assigned_technician or "Unassigned"
+        tech_stats[tech_id] = {
+            "name": tech_name,
+            "jobs": row.jobs,
+            "revenue": row_revenue,
+            "total_time": row_total_time,
+            "jobs_with_time": row_jobs_with_time,
+            "on_time": row_jobs_with_arrival,  # Simplified: all arrivals counted as on-time
+            "jobs_with_arrival": row_jobs_with_arrival,
+        }
 
-        if tech_id not in tech_stats:
-            tech_stats[tech_id] = {
-                "name": tech_name,
-                "jobs": 0,
-                "revenue": 0.0,
-                "total_time": 0,
-                "jobs_with_time": 0,
-                "on_time": 0,
-                "jobs_with_arrival": 0,
-            }
-
-        tech_stats[tech_id]["jobs"] += 1
-
-        if wo.total_amount:
-            amount = float(wo.total_amount)
-            tech_stats[tech_id]["revenue"] += amount
-            total_revenue += amount
-
-        # Calculate completion time
-        if wo.total_labor_minutes:
-            tech_stats[tech_id]["total_time"] += wo.total_labor_minutes
-            tech_stats[tech_id]["jobs_with_time"] += 1
-            total_completion_time += wo.total_labor_minutes
-            jobs_with_time += 1
-
-        # On-time arrival (compare travel_end_time with time_window_start)
-        if wo.travel_end_time and wo.time_window_start:
-            tech_stats[tech_id]["jobs_with_arrival"] += 1
-            jobs_with_arrival_data += 1
-            # Simplified check - would need proper time comparison
-            tech_stats[tech_id]["on_time"] += 1
-            on_time_arrivals += 1
+        total_jobs += row.jobs
+        total_revenue += row_revenue
+        total_completion_time += row_total_time
+        jobs_with_time += row_jobs_with_time
+        # Simplified: all arrivals counted as on-time (matches original logic)
+        on_time_arrivals += row_jobs_with_arrival
+        jobs_with_arrival_data += row_jobs_with_arrival
 
     # Calculate overall metrics
     avg_completion_time = None
@@ -1061,7 +1116,7 @@ async def get_performance_metrics(
     # Sort by jobs completed (descending)
     by_technician.sort(key=lambda x: -x.jobs_completed)
 
-    return PerformanceMetricsResponse(
+    result = PerformanceMetricsResponse(
         period=period,
         period_start=current_start.isoformat(),
         period_end=current_end.isoformat(),
@@ -1073,3 +1128,5 @@ async def get_performance_metrics(
         total_revenue=round(total_revenue, 2),
         by_technician=by_technician,
     )
+    await cache_service.set(cache_key, result.model_dump(), TTL.MEDIUM)
+    return result

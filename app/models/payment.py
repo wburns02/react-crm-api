@@ -12,11 +12,11 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid_module.uuid4, index=True)
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True, index=True)
-    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Invoice reference (UUID to match invoices.id)
-    invoice_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    invoice_id = Column(UUID(as_uuid=True), ForeignKey("invoices.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Payment details
     amount = Column(Numeric(10, 2), nullable=False)

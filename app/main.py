@@ -628,14 +628,20 @@ async def ensure_work_order_audit_columns():
     async with async_session_maker() as session:
         try:
             # Add audit columns to work_orders if missing
+            # FIX (2026-02-26): Replaced f-string interpolation in information_schema
+            # query with bound parameters. Although the values come from a hard-coded
+            # list (not user input), defense-in-depth requires parameterized queries.
+            # The ALTER TABLE DDL still uses f-strings because DDL does not support
+            # bind parameters for column names/types, but the values are hard-coded.
             for col, col_type, default in [
                 ("created_by", "VARCHAR(100)", None),
                 ("updated_by", "VARCHAR(100)", None),
                 ("source", "VARCHAR(50)", "'crm'"),
             ]:
-                result = await session.execute(text(
-                    f"SELECT 1 FROM information_schema.columns WHERE table_name='work_orders' AND column_name='{col}'"
-                ))
+                result = await session.execute(
+                    text("SELECT 1 FROM information_schema.columns WHERE table_name = :table AND column_name = :col"),
+                    {"table": "work_orders", "col": col},
+                )
                 if not result.scalar():
                     default_clause = f" DEFAULT {default}" if default else ""
                     await session.execute(text(f"ALTER TABLE work_orders ADD COLUMN {col} {col_type}{default_clause}"))
@@ -808,11 +814,18 @@ async def ensure_ms365_columns():
 
     async with async_session_maker() as session:
         try:
+            # FIX (2026-02-26): Replaced f-string in information_schema query
+            # with bound parameters. DDL (ALTER TABLE) still uses f-strings
+            # because SQL DDL does not support bind params for identifiers,
+            # but the values come from the hard-coded list above.
             for table, column, col_type, migration in columns:
-                result = await session.execute(text(
-                    "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
-                    f"WHERE table_name='{table}' AND column_name='{column}')"
-                ))
+                result = await session.execute(
+                    text(
+                        "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                        "WHERE table_name = :table AND column_name = :col)"
+                    ),
+                    {"table": table, "col": column},
+                )
                 if not result.scalar():
                     logger.info(f"Adding {table}.{column} (migration {migration})...")
                     await session.execute(text(
@@ -1742,12 +1755,22 @@ async def run_migration_065():
 
 @app.post("/health/db/create-admin")
 async def create_admin_user():
-    """Create or reset admin user for testing."""
+    """Create or reset admin user for development.
+
+    SECURITY: Password is never returned in the response.
+    The default password is 'admin123' -- change it immediately after creation.
+    """
     from sqlalchemy import text
     from app.database import async_session_maker
     import bcrypt
+    import os
 
-    password = "admin123"  # nosec B105 - Test password for development only
+    # Only allow in non-production environments
+    if os.environ.get("ENVIRONMENT", "").lower() == "production":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Endpoint disabled in production")
+
+    password = "admin123"  # nosec B105 - Dev-only password, never returned to client
     hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     try:
@@ -1765,7 +1788,7 @@ async def create_admin_user():
                     {"hashed": hashed},
                 )
                 await session.commit()
-                return {"status": "password_reset", "email": "admin@macseptic.com", "password": password}
+                return {"status": "password_reset", "email": "admin@macseptic.com"}
 
             # Create user
             await session.execute(
@@ -1777,9 +1800,10 @@ async def create_admin_user():
             )
             await session.commit()
 
-            return {"status": "created", "email": "admin@macseptic.com", "password": password}
+            return {"status": "created", "email": "admin@macseptic.com"}
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        logger.error(f"Admin creation error: {type(e).__name__}: {e}")
+        return {"status": "error", "error": "An internal error occurred"}
 
 
 @app.post("/health/db/fix-invoices")
@@ -2033,11 +2057,11 @@ async def fix_table_schema():
                 for col_name, col_type in columns:
                     try:
                         # Check if column exists
+                        # FIX (2026-02-26): Replaced f-string with bound parameters
                         result = await session.execute(
-                            text(f"""
-                            SELECT 1 FROM information_schema.columns
-                            WHERE table_name = '{table_name}' AND column_name = '{col_name}'
-                        """)
+                            text("SELECT 1 FROM information_schema.columns "
+                                 "WHERE table_name = :table AND column_name = :col"),
+                            {"table": table_name, "col": col_name},
                         )
                         if not result.scalar():
                             await session.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"))

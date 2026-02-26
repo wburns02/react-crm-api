@@ -14,6 +14,8 @@ from typing import Optional
 from fastapi import APIRouter
 from sqlalchemy import select, func, and_, or_, cast, String
 
+from app.services.cache_service import cache_service, TTL
+
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
 from app.models.customer import Customer
@@ -81,6 +83,11 @@ async def get_my_summary(
     Returns: technician info, clock status, today's jobs with plain English
     labels, stats, pay summary, and performance metrics.
     """
+    cache_key = f"tech_dashboard:{current_user.email}"
+    cached = await cache_service.get(cache_key)
+    if cached:
+        return cached
+
     # Safe default response — returned if anything goes wrong
     empty_response = {
         "technician": {
@@ -360,6 +367,7 @@ async def get_my_summary(
             "avg_job_duration_minutes": avg_job_duration,
         }
 
+        await cache_service.set(cache_key, response, TTL.SHORT)
         return response
 
     except Exception as e:

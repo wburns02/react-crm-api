@@ -17,8 +17,8 @@ class Booking(Base):
     __tablename__ = "bookings"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
-    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=True)
+    work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id", ondelete="SET NULL"), nullable=True)
 
     # Customer info (for non-registered customers)
     customer_first_name = Column(String(100), nullable=False)

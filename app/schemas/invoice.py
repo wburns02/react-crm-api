@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, date
 from typing import Optional, Literal
 from decimal import Decimal
@@ -43,7 +43,7 @@ class InvoiceBase(BaseModel):
 
     customer_id: UUIDStr
     work_order_id: Optional[UUIDStr] = None  # UUID as string
-    status: Optional[str] = None  # Don't send default - let DB handle
+    status: Optional[INVOICE_STATUSES] = None  # Don't send default - let DB handle
     line_items: Optional[list[LineItem]] = []
     notes: Optional[str] = None
 
@@ -57,13 +57,20 @@ class InvoiceCreate(InvoiceBase):
     amount: Optional[Decimal] = 0
     currency: Optional[str] = "USD"
 
+    @field_validator("amount", mode="after")
+    @classmethod
+    def validate_amount_non_negative(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v < 0:
+            raise ValueError("Amount must be >= 0")
+        return v
+
 
 class InvoiceUpdate(BaseModel):
     """Schema for updating an invoice (all fields optional)."""
 
     customer_id: Optional[str] = None
     work_order_id: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[INVOICE_STATUSES] = None
     line_items: Optional[list[LineItem]] = None
     amount: Optional[Decimal] = None
     paid_amount: Optional[Decimal] = None
@@ -71,6 +78,13 @@ class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
     paid_date: Optional[date] = None
     notes: Optional[str] = None
+
+    @field_validator("amount", "paid_amount", mode="after")
+    @classmethod
+    def validate_amounts_non_negative(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v < 0:
+            raise ValueError("Amount must be >= 0")
+        return v
 
 
 class InvoiceResponse(BaseModel):

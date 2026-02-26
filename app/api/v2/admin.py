@@ -826,10 +826,10 @@ async def seed_customer_success_data(
 
         db.add_all(memberships)
 
-        for sid, count in segment_counts.items():
-            result = await db.execute(select(Segment).where(Segment.id == sid))
-            segment = result.scalar_one()
-            segment.customer_count = count
+        if segment_counts:
+            segments = await db.execute(select(Segment).where(Segment.id.in_(list(segment_counts.keys()))))
+            for segment in segments.scalars().all():
+                segment.customer_count = segment_counts.get(segment.id, 0)
 
         await db.commit()
         stats["segment_memberships"] = len(memberships)
@@ -1957,8 +1957,11 @@ async def fix_pay_rate_schema(
 
     except Exception as e:
         await db.rollback()
-        logger.error(f"Error fixing pay rate schema: {e}")
-        raise HTTPException(status_code=500, detail=f"Error: {type(e).__name__}: {str(e)}")
+        # FIX (2026-02-26): Log the full error server-side but return a generic
+        # message to the client. Previously leaked type(e).__name__ and str(e)
+        # which could expose database table/column names and internal structure.
+        logger.error(f"Error fixing pay rate schema: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred while fixing pay rate schema")
 
 
 @router.post("/data/normalize-names")
@@ -1978,9 +1981,11 @@ async def normalize_names(
     results = {"customers_updated": 0, "work_orders_updated": 0, "technicians_updated": 0}
 
     try:
-        # Normalize customer names/cities
+        # Normalize customer names/cities (batched)
         cust_result = await db.execute(text("SELECT id, first_name, last_name, city, phone FROM customers"))
         customers = cust_result.fetchall()
+        ALLOWED_CUSTOMER_COLS = {"first_name", "last_name", "city", "phone"}
+        cust_batches: dict[tuple, list[dict]] = {}
         for c in customers:
             updates = {}
             if c[1] and c[1] != c[1].strip().title():
@@ -1998,18 +2003,21 @@ async def normalize_names(
                     if formatted != c[4]:
                         updates["phone"] = formatted
             if updates:
-                ALLOWED_CUSTOMER_COLS = {"first_name", "last_name", "city", "phone"}
-                safe_keys = [k for k in updates if k in ALLOWED_CUSTOMER_COLS]
+                safe_keys = tuple(sorted(k for k in updates if k in ALLOWED_CUSTOMER_COLS))
                 if safe_keys:
-                    # Safe: keys are validated against ALLOWED_CUSTOMER_COLS whitelist
-                    set_clause = ", ".join(f"{k} = :{k}" for k in safe_keys)
                     updates["cid"] = str(c[0])
-                    await db.execute(text(f"UPDATE customers SET {set_clause} WHERE id = :cid"), updates)
-                results["customers_updated"] += 1
+                    cust_batches.setdefault(safe_keys, []).append(updates)
+                    results["customers_updated"] += 1
+        for cols, params_list in cust_batches.items():
+            # Safe: keys are validated against ALLOWED_CUSTOMER_COLS whitelist
+            set_clause = ", ".join(f"{k} = :{k}" for k in cols)
+            await db.execute(text(f"UPDATE customers SET {set_clause} WHERE id = :cid"), params_list)
 
-        # Normalize work order assigned_technician and service_city
+        # Normalize work order assigned_technician and service_city (batched)
         wo_result = await db.execute(text("SELECT id, assigned_technician, service_city FROM work_orders"))
         work_orders = wo_result.fetchall()
+        ALLOWED_WO_COLS = {"assigned_technician", "service_city"}
+        wo_batches: dict[tuple, list[dict]] = {}
         for wo in work_orders:
             updates = {}
             if wo[1] and wo[1] != wo[1].strip().title():
@@ -2017,18 +2025,21 @@ async def normalize_names(
             if wo[2] and wo[2] != wo[2].strip().title():
                 updates["service_city"] = wo[2].strip().title()
             if updates:
-                ALLOWED_WO_COLS = {"assigned_technician", "service_city"}
-                safe_keys = [k for k in updates if k in ALLOWED_WO_COLS]
+                safe_keys = tuple(sorted(k for k in updates if k in ALLOWED_WO_COLS))
                 if safe_keys:
-                    # Safe: keys are validated against ALLOWED_WO_COLS whitelist
-                    set_clause = ", ".join(f"{k} = :{k}" for k in safe_keys)
                     updates["wid"] = str(wo[0])
-                    await db.execute(text(f"UPDATE work_orders SET {set_clause} WHERE id = :wid"), updates)
-                results["work_orders_updated"] += 1
+                    wo_batches.setdefault(safe_keys, []).append(updates)
+                    results["work_orders_updated"] += 1
+        for cols, params_list in wo_batches.items():
+            # Safe: keys are validated against ALLOWED_WO_COLS whitelist
+            set_clause = ", ".join(f"{k} = :{k}" for k in cols)
+            await db.execute(text(f"UPDATE work_orders SET {set_clause} WHERE id = :wid"), params_list)
 
-        # Normalize technician names
+        # Normalize technician names (batched)
         tech_result = await db.execute(text("SELECT id, first_name, last_name FROM technicians"))
         techs = tech_result.fetchall()
+        ALLOWED_TECH_COLS = {"first_name", "last_name"}
+        tech_batches: dict[tuple, list[dict]] = {}
         for t in techs:
             updates = {}
             if t[1] and t[1] != t[1].strip().title():
@@ -2036,22 +2047,26 @@ async def normalize_names(
             if t[2] and t[2] != t[2].strip().title():
                 updates["last_name"] = t[2].strip().title()
             if updates:
-                ALLOWED_TECH_COLS = {"first_name", "last_name"}
-                safe_keys = [k for k in updates if k in ALLOWED_TECH_COLS]
+                safe_keys = tuple(sorted(k for k in updates if k in ALLOWED_TECH_COLS))
                 if safe_keys:
-                    # Safe: keys are validated against ALLOWED_TECH_COLS whitelist
-                    set_clause = ", ".join(f"{k} = :{k}" for k in safe_keys)
                     updates["tid"] = str(t[0])
-                    await db.execute(text(f"UPDATE technicians SET {set_clause} WHERE id = :tid"), updates)
-                results["technicians_updated"] += 1
+                    tech_batches.setdefault(safe_keys, []).append(updates)
+                    results["technicians_updated"] += 1
+        for cols, params_list in tech_batches.items():
+            # Safe: keys are validated against ALLOWED_TECH_COLS whitelist
+            set_clause = ", ".join(f"{k} = :{k}" for k in cols)
+            await db.execute(text(f"UPDATE technicians SET {set_clause} WHERE id = :tid"), params_list)
 
         await db.commit()
         return {"success": True, "results": results}
 
     except Exception as e:
         await db.rollback()
-        logger.error(f"Error normalizing data: {e}")
-        raise HTTPException(status_code=500, detail=f"Error: {type(e).__name__}: {str(e)}")
+        # FIX (2026-02-26): Log the full error server-side but return a generic
+        # message to the client. Previously leaked type(e).__name__ and str(e)
+        # which could expose database table/column names and internal structure.
+        logger.error(f"Error normalizing data: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred while normalizing data")
 
 
 @router.post("/data/fix-call-logs-schema")

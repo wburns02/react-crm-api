@@ -26,7 +26,7 @@ class Activity(Base):
     __tablename__ = "activities"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     activity_type = Column(String(20), nullable=False, index=True)  # call, email, sms, note, meeting, task
     description = Column(Text, nullable=False)
     activity_date = Column(DateTime(timezone=True), server_default=func.now())

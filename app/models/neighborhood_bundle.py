@@ -2,6 +2,7 @@
 
 from sqlalchemy import Column, String, DateTime, Text, Integer, Float
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 
@@ -22,6 +23,9 @@ class NeighborhoodBundle(Base):
     created_by = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    contracts = relationship("Contract", back_populates="neighborhood_bundle")
 
     def __repr__(self):
         return f"<NeighborhoodBundle {self.name} ({self.discount_percent}% off)>"
