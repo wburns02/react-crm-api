@@ -393,6 +393,57 @@ async def bookings_appointments(
     }
 
 
+@router.get("/bookings/business")
+async def bookings_business(user: CurrentUser):
+    """Get Microsoft Bookings business details."""
+    from app.services.ms365_bookings_service import MS365BookingsService
+
+    if not MS365BookingsService.is_configured():
+        raise HTTPException(status_code=503, detail="Microsoft Bookings not configured")
+
+    business = await MS365BookingsService.get_business()
+    if not business:
+        raise HTTPException(status_code=404, detail="Bookings business not found")
+
+    return business
+
+
+@router.post("/bookings/configure")
+async def configure_bookings(user: CurrentUser):
+    """Configure MS Bookings: disable staff selection on all services, set business info.
+
+    Customers should NOT pick a technician — assignment is region-based:
+    - Central Texas → Ronnie
+    - SC → Chandler
+    - TN → John Harvey
+    """
+    from app.services.ms365_bookings_service import MS365BookingsService
+
+    if not MS365BookingsService.is_configured():
+        raise HTTPException(status_code=503, detail="Microsoft Bookings not configured")
+
+    results = {"services_updated": [], "errors": []}
+
+    # Get all services and disable staff selection on each
+    services = await MS365BookingsService.list_services()
+    for svc in services:
+        svc_id = svc.get("id")
+        svc_name = svc.get("displayName", "unknown")
+        try:
+            update_data = {
+                # Don't let customer pick staff — region-based assignment
+                "isCustomerAllowedToManageBooking": True,
+                "staffMemberIds": [],  # Empty = any available staff
+                "maximumAttendeesCount": 1,
+            }
+            await MS365BookingsService.update_service(svc_id, update_data)
+            results["services_updated"].append(svc_name)
+        except Exception as e:
+            results["errors"].append(f"{svc_name}: {e}")
+
+    return results
+
+
 @router.post("/bookings/sync-now")
 async def bookings_sync_now(user: CurrentUser):
     """Trigger immediate bookings sync."""

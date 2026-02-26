@@ -1164,6 +1164,21 @@ async def update_work_order(
                     db.add(inv)
                     await db.commit()
                     logger.info(f"Auto-generated invoice {inv.invoice_number} for WO {work_order_id} (via PATCH)")
+                    # Send "Pay Now" SMS with customer portal link
+                    try:
+                        if customer and customer.phone:
+                            from app.services.twilio_service import TwilioService
+                            pay_url = f"https://react.ecbtx.com/portal/pay/{inv.id}"
+                            sms_msg = (
+                                f"Hi {customer.first_name or "there"}, your invoice "
+                                f"#{inv.invoice_number} for ${float(total):.2f} is ready. "
+                                f"Pay online: {pay_url}"
+                            )
+                            twilio = TwilioService()
+                            await twilio.send_sms(customer.phone, sms_msg)
+                            logger.info(f"Sent Pay Now SMS to {customer.phone} for invoice {inv.invoice_number}")
+                    except Exception as sms_err:
+                        logger.warning(f"Pay Now SMS failed for invoice {inv.invoice_number}: {sms_err}")
         except Exception as e:
             await db.rollback()
             logger.warning(f"Auto-invoice generation failed for WO {work_order_id}: {e}")

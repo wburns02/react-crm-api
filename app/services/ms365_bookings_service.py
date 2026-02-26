@@ -120,6 +120,35 @@ class MS365BookingsService(MS365BaseService):
         except Exception:
             return None
 
+    # ── Write Operations (Application Permissions) ──
+
+    @classmethod
+    async def update_business(cls, data: dict) -> dict | None:
+        """Update the Bookings business settings."""
+        try:
+            return await cls.graph_patch(cls._business_path(), data)
+        except Exception as e:
+            logger.error("Failed to update Bookings business: %s", e)
+            return None
+
+    @classmethod
+    async def update_service(cls, service_id: str, data: dict) -> dict | None:
+        """Update a Bookings service configuration."""
+        try:
+            return await cls.graph_patch(f"{cls._business_path()}/services/{service_id}", data)
+        except Exception as e:
+            logger.error("Failed to update Bookings service %s: %s", service_id, e)
+            return None
+
+    @classmethod
+    async def update_staff_member(cls, staff_id: str, data: dict) -> dict | None:
+        """Update a Bookings staff member."""
+        try:
+            return await cls.graph_patch(f"{cls._business_path()}/staffMembers/{staff_id}", data)
+        except Exception as e:
+            logger.error("Failed to update Bookings staff %s: %s", staff_id, e)
+            return None
+
     # ── Appointment Parsing Helpers ──
 
     @classmethod

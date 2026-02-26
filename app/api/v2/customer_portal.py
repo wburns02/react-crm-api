@@ -578,3 +578,41 @@ async def request_service(
         "status": "pending",
         "scheduled_date": preferred.isoformat() if preferred else None,
     }
+
+
+@router.get("/pay/{invoice_id}")
+async def get_invoice_for_payment(
+    invoice_id: str,
+    db: DbSession,
+):
+    """Public endpoint: return invoice details for customer payment page."""
+    from app.models.invoice import Invoice
+    from app.models.customer import Customer
+
+    result = await db.execute(
+        select(Invoice).where(Invoice.id == invoice_id)
+    )
+    invoice = result.scalar_one_or_none()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    # Get customer info
+    cust_name = ""
+    if invoice.customer_id:
+        cust = await db.execute(select(Customer).where(Customer.id == invoice.customer_id))
+        customer = cust.scalar_one_or_none()
+        if customer:
+            cust_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+
+    return {
+        "id": str(invoice.id),
+        "invoice_number": invoice.invoice_number,
+        "customer_name": cust_name,
+        "amount": float(invoice.amount or 0),
+        "paid_amount": float(invoice.paid_amount or 0),
+        "balance_due": float((invoice.amount or 0) - (invoice.paid_amount or 0)),
+        "status": invoice.status,
+        "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
+        "line_items": invoice.line_items or [],
+        "notes": invoice.notes,
+    }

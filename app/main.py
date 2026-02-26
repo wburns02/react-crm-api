@@ -35,6 +35,8 @@ from app.tasks.reminder_scheduler import start_reminder_scheduler, stop_reminder
 from app.tasks.calendar_sync import start_calendar_sync, stop_calendar_sync
 from app.tasks.email_poller import start_email_poller, stop_email_poller
 from app.tasks.bookings_sync import start_bookings_sync, stop_bookings_sync
+from app.tasks.followup_scheduler import start_followup_scheduler, stop_followup_scheduler
+from app.tasks.auto_dispatch import start_auto_dispatch, stop_auto_dispatch
 
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
@@ -1046,6 +1048,20 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Failed to start bookings sync: {e}")
 
     # Background task watchdog — restarts crashed tasks every 5 minutes
+
+    # Start follow-up scheduler for payment reminders
+    try:
+        start_followup_scheduler()
+        logger.info("Follow-up scheduler started")
+    except Exception as e:
+        logger.warning(f"Failed to start follow-up scheduler: {e}")
+
+    # Start auto-dispatch scheduler for job assignments
+    try:
+        start_auto_dispatch()
+        logger.info("Auto-dispatch scheduler started")
+    except Exception as e:
+        logger.warning(f"Failed to start auto-dispatch scheduler: {e}")
     import asyncio
 
     async def _watchdog():
@@ -1118,6 +1134,8 @@ async def lifespan(app: FastAPI):
     stop_calendar_sync()
     stop_email_poller()
     stop_bookings_sync()
+    stop_followup_scheduler()
+    stop_auto_dispatch()
 
 
 # SECURITY: Conditionally enable docs based on settings

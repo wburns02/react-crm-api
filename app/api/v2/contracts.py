@@ -466,6 +466,31 @@ async def activate_contract(
             raise HTTPException(status_code=400, detail="Contract requires signature before activation")
 
         contract.status = "active"
+
+        # Auto-create service schedule entries from contract line items
+        try:
+            from app.models.service_schedule import CustomerServiceSchedule
+            from dateutil.relativedelta import relativedelta
+            if contract.line_items and contract.customer_id:
+                for item in (contract.line_items if isinstance(contract.line_items, list) else []):
+                    svc_type = item.get("service_type") or item.get("description", "Contract Service")
+                    frequency = item.get("frequency", "annual")
+                    interval_months = {"monthly": 1, "quarterly": 3, "semi-annual": 6, "annual": 12}.get(frequency, 12)
+                    next_date = (contract.start_date or date.today()) + relativedelta(months=interval_months)
+                    sched = CustomerServiceSchedule(
+                        customer_id=contract.customer_id,
+                        service_type=svc_type,
+                        frequency=frequency,
+                        next_service_date=next_date,
+                        reminder_days_before=[7, 1],
+                        is_active=True,
+                        notes=f"Auto-created from contract {contract.contract_number or contract_id}",
+                    )
+                    db.add(sched)
+                await db.commit()
+                logger.info(f"Auto-created service schedules for contract {contract_id}")
+        except Exception as sched_err:
+            logger.warning(f"Auto-schedule creation failed for contract {contract_id}: {sched_err}")
         await db.commit()
 
         return {"status": "success", "message": "Contract activated"}

@@ -151,7 +151,7 @@ from app.api.v2.stubs import (
     sms_router as sms_stubs_router,
     templates_router as templates_stubs_router,
     reminders_router as reminders_stubs_router,
-    billing_router as billing_stubs_router,
+    # billing_router as billing_stubs_router,  # replaced by real billing
     analytics_stubs_router,
     tracking_router as tracking_stubs_router,
     predictions_stubs_router,
@@ -357,7 +357,9 @@ api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"]
 api_router.include_router(sms_stubs_router, prefix="/sms", tags=["stubs"])
 api_router.include_router(templates_stubs_router, prefix="/templates", tags=["stubs"])
 api_router.include_router(reminders_stubs_router, prefix="/reminders", tags=["stubs"])
-api_router.include_router(billing_stubs_router, prefix="/billing", tags=["stubs"])
+# Replaced stub with real billing
+from app.api.v2.billing import router as billing_real_router
+api_router.include_router(billing_real_router, prefix="/billing", tags=["billing"])
 api_router.include_router(analytics_stubs_router, prefix="/analytics", tags=["stubs"])
 api_router.include_router(tracking_stubs_router, prefix="/tracking", tags=["stubs"])
 api_router.include_router(predictions_stubs_router, prefix="/predictions", tags=["stubs"])
@@ -368,3 +370,11 @@ api_router.include_router(ai_stubs_router, prefix="/ai", tags=["stubs"])
 from app.api.v2.endpoints.metrics import router as metrics_router
 
 api_router.include_router(metrics_router, prefix="/metrics", tags=["metrics"])
+
+# Customer Timeline
+from app.api.v2.customer_timeline import router as customer_timeline_router
+api_router.include_router(customer_timeline_router, prefix="/customers", tags=["customer-timeline"])
+
+# Revenue Forecast
+from app.api.v2.revenue_forecast import router as revenue_forecast_router
+api_router.include_router(revenue_forecast_router, prefix="/revenue", tags=["revenue-forecast"])
