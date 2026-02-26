@@ -46,18 +46,18 @@ async def login(
     db: DbSession,
 ):
     """Authenticate user and return JWT token (or MFA challenge if enabled)."""
-    # Rate limit: 60 requests/minute per IP to prevent brute force
-    rate_limit_by_ip(request, requests_per_minute=60)
+    # Rate limit: 120 requests/minute per IP to prevent brute force
+    rate_limit_by_ip(request, requests_per_minute=120)
 
-    # Per-email rate limit: 5 attempts per minute to prevent credential stuffing
+    # Per-email rate limit: prevent credential stuffing
     from app.core.rate_limit import get_public_api_rate_limiter
     import hashlib
     email_hash = hashlib.sha256(login_data.email.lower().encode()).hexdigest()[:16]
     email_limiter = get_public_api_rate_limiter()
     email_limiter.check_rate_limit(
         client_id=f"login_email:{email_hash}",
-        rate_limit_per_minute=10,
-        rate_limit_per_hour=100,
+        rate_limit_per_minute=30,
+        rate_limit_per_hour=300,
     )
 
     try:
