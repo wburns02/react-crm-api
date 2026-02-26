@@ -1461,6 +1461,319 @@ async def ga4_realtime(current_user: CurrentUser) -> dict:
         return {"success": False, "error": str(e), "data": None}
 
 
+# ────────────────────────────────────────────
+# Session 1: Search Terms Analysis + Negative Keywords
+# ────────────────────────────────────────────
+
+# Known competitor brand names for septic industry in Texas
+COMPETITOR_BRANDS = [
+    "al's septic", "b&b septic", "ace septic", "roto-rooter", "mr rooter",
+    "blueline", "blue line", "van delden", "t&g septic", "aaa septic",
+    "all american septic", "lone star septic", "texas pride septic",
+    "affordable septic", "budget septic", "economy septic",
+]
+
+# Out-of-area cities (not in MAC Septic service area)
+OUT_OF_AREA_TERMS = [
+    "houston", "dallas", "san antonio", "fort worth", "el paso",
+    "arlington", "corpus christi", "lubbock", "laredo", "amarillo",
+    "brownsville", "mcallen", "midland", "odessa", "beaumont",
+    "pasadena", "mesquite", "garland", "irving", "plano",
+]
+
+
+@router.get("/ads/search-terms/analysis")
+async def get_search_terms_analysis(
+    current_user: CurrentUser,
+    days: int = 7,
+) -> dict:
+    """Classify search terms as competitor, out-of-area, or irrelevant. Returns wasted spend."""
+    ads_service = get_google_ads_service()
+    if not ads_service.is_configured():
+        return {"success": False, "terms": [], "summary": {}, "message": "Google Ads not configured"}
+
+    try:
+        raw_terms = await ads_service.get_search_terms(days)
+        if not raw_terms:
+            return {"success": True, "terms": [], "summary": {"total_waste": 0, "competitor_waste": 0, "out_of_area_waste": 0, "irrelevant_waste": 0}}
+
+        analyzed = []
+        competitor_waste = 0.0
+        out_of_area_waste = 0.0
+        irrelevant_waste = 0.0
+
+        for term in raw_terms:
+            search_text = (term.get("search_term") or "").lower()
+            cost = term.get("cost", 0)
+            conversions = term.get("conversions", 0)
+            flag = None
+            category = None
+
+            # Check competitor brands
+            for brand in COMPETITOR_BRANDS:
+                if brand in search_text:
+                    flag = "competitor"
+                    category = "competitor"
+                    competitor_waste += cost
+                    break
+
+            # Check out-of-area
+            if not flag:
+                for city in OUT_OF_AREA_TERMS:
+                    if city in search_text:
+                        flag = "out_of_area"
+                        category = "out_of_area"
+                        out_of_area_waste += cost
+                        break
+
+            # Check irrelevant (no conversions + high cost, or clearly unrelated)
+            if not flag and conversions == 0 and cost > 5:
+                irrelevant_keywords = ["diy", "how to", "youtube", "reddit", "free", "salary", "job", "career", "training", "school", "class"]
+                for kw in irrelevant_keywords:
+                    if kw in search_text:
+                        flag = "irrelevant"
+                        category = "irrelevant"
+                        irrelevant_waste += cost
+                        break
+
+            analyzed.append({
+                **term,
+                "flag": flag,
+                "category": category,
+            })
+
+        # Sort: flagged items first, then by cost desc
+        analyzed.sort(key=lambda t: (0 if t["flag"] else 1, -(t.get("cost") or 0)))
+
+        total_waste = competitor_waste + out_of_area_waste + irrelevant_waste
+        # Extrapolate to monthly (if days < 30)
+        monthly_multiplier = 30 / max(1, days)
+
+        return {
+            "success": True,
+            "terms": analyzed,
+            "summary": {
+                "total_waste": round(total_waste, 2),
+                "total_waste_monthly": round(total_waste * monthly_multiplier, 2),
+                "competitor_waste": round(competitor_waste, 2),
+                "out_of_area_waste": round(out_of_area_waste, 2),
+                "irrelevant_waste": round(irrelevant_waste, 2),
+                "flagged_count": sum(1 for t in analyzed if t["flag"]),
+                "total_count": len(analyzed),
+            },
+        }
+    except Exception as e:
+        logger.error("Search terms analysis failed: %s", str(e))
+        return {"success": False, "terms": [], "summary": {}, "message": str(e)}
+
+
+@router.post("/ads/negative-keywords")
+async def save_negative_keyword(
+    current_user: CurrentUser,
+    body: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Save a flagged search term to the negative keyword queue."""
+    import uuid as uuid_mod
+
+    keyword = body.get("keyword", "").strip()
+    if not keyword:
+        return {"success": False, "message": "keyword is required"}
+
+    nk = NegativeKeywordQueue(
+        id=uuid_mod.uuid4(),
+        keyword=keyword,
+        match_type=body.get("match_type", "exact"),
+        source=body.get("source", "search_terms"),
+        campaign_id=body.get("campaign_id"),
+        campaign_name=body.get("campaign_name"),
+        category=body.get("category"),
+        estimated_waste=body.get("estimated_waste"),
+        status="pending",
+        created_by=current_user.email,
+    )
+    db.add(nk)
+    await db.commit()
+
+    return {"success": True, "id": str(nk.id), "message": f"'{keyword}' added to negative keyword queue"}
+
+
+@router.get("/ads/negative-keywords")
+async def get_negative_keywords(
+    current_user: CurrentUser,
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get negative keyword queue with optional Google Ads Editor export format."""
+    query = select(NegativeKeywordQueue).order_by(desc(NegativeKeywordQueue.created_at))
+    if status:
+        query = query.where(NegativeKeywordQueue.status == status)
+
+    result = await db.execute(query.limit(200))
+    keywords = result.scalars().all()
+
+    items = []
+    editor_lines = []
+    for nk in keywords:
+        items.append({
+            "id": str(nk.id),
+            "keyword": nk.keyword,
+            "match_type": nk.match_type,
+            "source": nk.source,
+            "campaign_id": nk.campaign_id,
+            "campaign_name": nk.campaign_name,
+            "category": nk.category,
+            "estimated_waste": nk.estimated_waste,
+            "status": nk.status,
+            "created_by": nk.created_by,
+            "created_at": nk.created_at.isoformat() if nk.created_at else None,
+        })
+        # Google Ads Editor format
+        if nk.match_type == "exact":
+            editor_lines.append(f"[{nk.keyword}]")
+        elif nk.match_type == "phrase":
+            editor_lines.append(f'"{nk.keyword}"')
+        else:
+            editor_lines.append(nk.keyword)
+
+    return {
+        "success": True,
+        "keywords": items,
+        "total": len(items),
+        "editor_format": "\n".join(editor_lines),
+    }
+
+
+@router.delete("/ads/negative-keywords/{keyword_id}")
+async def delete_negative_keyword(
+    keyword_id: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Remove a keyword from the negative queue."""
+    import uuid as uuid_mod
+    result = await db.execute(
+        select(NegativeKeywordQueue).where(NegativeKeywordQueue.id == uuid_mod.UUID(keyword_id))
+    )
+    nk = result.scalar_one_or_none()
+    if not nk:
+        return {"success": False, "message": "Keyword not found"}
+    await db.delete(nk)
+    await db.commit()
+    return {"success": True, "message": "Keyword removed"}
+
+
+# ────────────────────────────────────────────
+# Session 2: Ads Comparison (period vs previous period)
+# ────────────────────────────────────────────
+
+@router.get("/ads/comparison")
+async def get_ads_comparison(
+    current_user: CurrentUser,
+    days: int = 1,
+) -> dict:
+    """Compare Google Ads metrics: current period vs previous period.
+    days=1 means today vs yesterday, days=7 means this week vs last week.
+    """
+    ads_service = get_google_ads_service()
+    if not ads_service.is_configured():
+        return {"success": False, "message": "Google Ads not configured", "current": {}, "previous": {}, "changes": {}}
+
+    try:
+        current = await ads_service.get_performance_metrics(days)
+        previous = await ads_service.get_performance_metrics(days * 2)
+
+        if not current:
+            current = {"cost": 0, "clicks": 0, "impressions": 0, "conversions": 0, "ctr": 0, "cpa": 0}
+        if not previous:
+            previous = {"cost": 0, "clicks": 0, "impressions": 0, "conversions": 0, "ctr": 0, "cpa": 0}
+
+        # Previous period = (2x period) - (current period)
+        prev_only = {}
+        for key in ["cost", "clicks", "impressions", "conversions"]:
+            prev_only[key] = max(0, (previous.get(key, 0) or 0) - (current.get(key, 0) or 0))
+
+        # Recalculate derived metrics for previous
+        prev_only["ctr"] = prev_only["clicks"] / max(1, prev_only["impressions"])
+        prev_only["cpa"] = prev_only["cost"] / max(1, prev_only["conversions"]) if prev_only["conversions"] > 0 else 0
+
+        changes = {}
+        for key in ["cost", "clicks", "impressions", "conversions", "ctr", "cpa"]:
+            curr_val = current.get(key, 0) or 0
+            prev_val = prev_only.get(key, 0) or 0
+            if prev_val > 0:
+                pct = round(((curr_val - prev_val) / prev_val) * 100, 1)
+            elif curr_val > 0:
+                pct = 100.0
+            else:
+                pct = 0.0
+            direction = "up" if pct > 0 else "down" if pct < 0 else "flat"
+            changes[key] = {"current": curr_val, "previous": round(prev_val, 2), "change_percent": pct, "direction": direction}
+
+        return {
+            "success": True,
+            "period_days": days,
+            "current": current,
+            "previous": prev_only,
+            "changes": changes,
+        }
+    except Exception as e:
+        logger.error("Ads comparison failed: %s", str(e))
+        return {"success": False, "message": str(e), "current": {}, "previous": {}, "changes": {}}
+
+
+# ────────────────────────────────────────────
+# Session 3: Daily Reports + Alerts
+# ────────────────────────────────────────────
+
+@router.get("/reports/daily/latest")
+async def get_latest_daily_report(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get the most recent daily marketing report."""
+    result = await db.execute(
+        select(MarketingDailyReport).order_by(desc(MarketingDailyReport.report_date)).limit(1)
+    )
+    report = result.scalar_one_or_none()
+
+    if not report:
+        return {"success": True, "report": None, "message": "No reports yet. First report generates at 7 AM."}
+
+    return {
+        "success": True,
+        "report": {
+            "id": str(report.id),
+            "report_date": str(report.report_date),
+            "ads_data": report.ads_data,
+            "ga4_data": report.ga4_data,
+            "deltas": report.deltas,
+            "alerts": report.alerts,
+            "summary": report.summary,
+            "email_sent": report.email_sent,
+            "created_at": report.created_at.isoformat() if report.created_at else None,
+        },
+    }
+
+
+@router.get("/ads/alerts")
+async def get_ads_alerts(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get active anomaly alerts from the most recent daily report."""
+    result = await db.execute(
+        select(MarketingDailyReport).order_by(desc(MarketingDailyReport.report_date)).limit(1)
+    )
+    report = result.scalar_one_or_none()
+
+    alerts = []
+    if report and report.alerts:
+        alerts = report.alerts if isinstance(report.alerts, list) else []
+
+    return {"success": True, "alerts": alerts, "report_date": str(report.report_date) if report else None}
+
+
 @router.get("/ga4/comparison")
 async def ga4_comparison(
     current_user: CurrentUser,

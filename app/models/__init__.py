@@ -33,7 +33,7 @@ from app.models.ai_agent import AIAgent, AgentConversation, AgentMessage, AgentT
 from app.models.prediction import LeadScore, ChurnPrediction, RevenueForecast, DealHealth, PredictionModel
 
 # Phase 7: Marketing Automation
-from app.models.marketing import MarketingCampaign, MarketingWorkflow, WorkflowEnrollment, EmailTemplate, SMSTemplate
+from app.models.marketing import MarketingCampaign, MarketingWorkflow, WorkflowEnrollment, EmailTemplate, SMSTemplate, NegativeKeywordQueue, MarketingDailyReport
 
 # Phase 10: Payroll
 from app.models.payroll import PayrollPeriod, TimeEntry, Commission, TechnicianPayRate
@@ -160,6 +160,8 @@ __all__ = [
     "WorkflowEnrollment",
     "EmailTemplate",
     "SMSTemplate",
+    "NegativeKeywordQueue",
+    "MarketingDailyReport",
     # Phase 10: Payroll
     "PayrollPeriod",
     "TimeEntry",

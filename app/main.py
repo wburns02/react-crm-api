@@ -38,6 +38,7 @@ from app.tasks.bookings_sync import start_bookings_sync, stop_bookings_sync
 # followup_scheduler and auto_dispatch don't have start/stop functions yet
 # from app.tasks.followup_scheduler import start_followup_scheduler, stop_followup_scheduler
 # from app.tasks.auto_dispatch import start_auto_dispatch, stop_auto_dispatch
+from app.tasks.marketing_report import start_marketing_report_scheduler, stop_marketing_report_scheduler
 
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
@@ -1048,6 +1049,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start bookings sync: {e}")
 
+    # Start marketing daily report scheduler (7 AM)
+    try:
+        start_marketing_report_scheduler()
+    except Exception as e:
+        logger.warning(f"Failed to start marketing report scheduler: {e}")
+
     # Background task watchdog — restarts crashed tasks every 5 minutes
 
     # Follow-up scheduler and auto-dispatch — TODO: add start/stop functions
@@ -1131,6 +1138,7 @@ async def lifespan(app: FastAPI):
     stop_calendar_sync()
     stop_email_poller()
     stop_bookings_sync()
+    stop_marketing_report_scheduler()
     # stop_followup_scheduler()
     # stop_auto_dispatch()
 
