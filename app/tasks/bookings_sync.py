@@ -13,8 +13,61 @@ from sqlalchemy import select
 
 from app.services.ms365_bookings_service import MS365BookingsService
 from app.database import async_session_maker
+from app.models.technician import Technician
 
 logger = logging.getLogger(__name__)
+
+# Region-based technician assignment
+# Maps state/region keywords to technician microsoft_email for lookup
+REGION_TECH_MAP = [
+    # Central Texas (default) → Ronnie Ransom
+    {"states": ["TX", "texas"], "keywords": [], "tech_email": "ronnie@macseptic.com", "is_default": True},
+    # South Carolina → Chandler
+    {"states": ["SC", "south carolina"], "keywords": ["charleston", "columbia", "greenville", "spartanburg", "myrtle beach"],
+     "tech_email": "chandler@macseptic.com", "is_default": False},
+    # Tennessee → John Harvey
+    {"states": ["TN", "tennessee"], "keywords": ["nashville", "memphis", "knoxville", "chattanooga", "murfreesboro"],
+     "tech_email": "jharvey@macseptic.com", "is_default": False},
+]
+
+
+async def assign_technician_by_region(db, service_address: str) -> uuid.UUID | None:
+    """Auto-assign a technician based on service address region."""
+    addr = (service_address or "").lower()
+
+    matched_email = None
+    default_email = None
+
+    for region in REGION_TECH_MAP:
+        if region.get("is_default"):
+            default_email = region["tech_email"]
+
+        # Check state abbreviation or name in address
+        for state in region["states"]:
+            if f", {state.lower()}" in addr or f" {state.lower()} " in addr or addr.endswith(f" {state.lower()}"):
+                matched_email = region["tech_email"]
+                break
+
+        # Check city keywords
+        if not matched_email:
+            for kw in region["keywords"]:
+                if kw.lower() in addr:
+                    matched_email = region["tech_email"]
+                    break
+
+        if matched_email:
+            break
+
+    # Use default (Texas/Ronnie) if no match
+    tech_email = matched_email or default_email
+    if not tech_email:
+        return None
+
+    result = await db.execute(
+        select(Technician).where(Technician.microsoft_email == tech_email)
+    )
+    tech = result.scalar_one_or_none()
+    return tech.id if tech else None
 
 _scheduler: AsyncIOScheduler | None = None
 
@@ -149,10 +202,14 @@ async def sync_bookings():
                     except (ValueError, TypeError):
                         pass
 
+                # Auto-assign technician based on service address region
+                tech_id = await assign_technician_by_region(db, data["service_address"])
+
                 # Create work order
                 wo = WorkOrder(
                     id=uuid.uuid4(),
                     customer_id=customer_id,
+                    technician_id=tech_id,
                     job_type=data["job_type"],
                     status="scheduled",
                     priority="normal",
