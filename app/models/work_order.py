@@ -37,6 +37,7 @@ WorkOrderStatusEnum = ENUM(
 WorkOrderJobTypeEnum = ENUM(
     "pumping",
     "inspection",
+    "real_estate_inspection",
     "repair",
     "installation",
     "emergency",

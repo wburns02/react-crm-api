@@ -364,7 +364,7 @@ async def get_work_order(
     **Required Scope:** `work_orders:write` or `work_orders` or `admin`
 
     **Valid job_type values:**
-    - pumping, inspection, repair, installation
+    - pumping, inspection, real_estate_inspection, repair, installation
     - emergency, maintenance, grease_trap, camera_inspection
 
     **Valid priority values:**

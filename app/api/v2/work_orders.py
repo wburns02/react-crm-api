@@ -1143,6 +1143,7 @@ async def update_work_order(
                 if wo_amount > 0 and work_order.customer_id:
                     job_labels = {
                         "pumping": "Septic Tank Pumping", "inspection": "Septic System Inspection",
+                        "real_estate_inspection": "Real Estate Inspection",
                         "repair": "Septic System Repair", "installation": "Septic System Installation",
                         "emergency": "Emergency Service Call", "maintenance": "Septic Maintenance",
                         "grease_trap": "Grease Trap Service", "camera_inspection": "Camera Inspection",

@@ -1734,7 +1734,7 @@ async def create_work_order_enums(
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_job_type_enum') THEN
                     CREATE TYPE work_order_job_type_enum AS ENUM (
-                        'pumping', 'inspection', 'repair', 'installation',
+                        'pumping', 'inspection', 'real_estate_inspection', 'repair', 'installation',
                         'emergency', 'maintenance', 'grease_trap', 'camera_inspection'
                     );
                 END IF;
