@@ -14,6 +14,7 @@ from sqlalchemy import select, func, or_
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
+import httpx
 import logging
 import asyncio
 import uuid as _uuid
@@ -1818,4 +1819,97 @@ async def get_quality_heatmap(
 
     except Exception as e:
         logger.error(f"Error getting quality heatmap: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================
+# WebRTC Softphone — SIP Provisioning
+# =====================================================
+
+
+@router.get("/sip-provision")
+async def sip_provision(
+    current_user: CurrentUser,
+):
+    """Provision SIP credentials for browser WebRTC softphone.
+
+    Returns the SipInfo needed by ringcentral-web-phone SDK:
+    - authorizationId, domain, outboundProxy, username, password, stunServers
+    """
+    if not ringcentral_service.is_configured:
+        raise HTTPException(
+            status_code=503,
+            detail="RingCentral not configured. Set RINGCENTRAL_CLIENT_ID, RINGCENTRAL_CLIENT_SECRET, and RINGCENTRAL_JWT_TOKEN.",
+        )
+
+    token = await ringcentral_service.get_access_token()
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Failed to authenticate with RingCentral. Check JWT token.",
+        )
+
+    try:
+        client = await ringcentral_service.get_client()
+
+        # Call the SIP provision endpoint
+        response = await client.post(
+            "/restapi/v1.0/client-info/sip-provision",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "sipInfo": [{"transport": "WSS"}],
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        # Extract SIP info (RC returns an array, take first WSS entry)
+        sip_info_list = data.get("sipInfo", [])
+        sip_info = None
+        for si in sip_info_list:
+            if si.get("transport") == "WSS":
+                sip_info = si
+                break
+        if not sip_info and sip_info_list:
+            sip_info = sip_info_list[0]
+
+        if not sip_info:
+            raise HTTPException(status_code=500, detail="No SIP info returned from RingCentral")
+
+        # Extract STUN servers from sipFlags or use defaults
+        sip_flags = data.get("sipFlags", {})
+        stun_servers = []
+        if sip_flags.get("outboundProxyAddress"):
+            # RC sometimes includes STUN in flags
+            pass
+        # Default RC STUN servers
+        stun_servers = ["stun:stun.l.google.com:19302", "stun:stun.ringcentral.com:19302"]
+
+        return {
+            "sipInfo": {
+                "authorizationId": sip_info.get("authorizationId", ""),
+                "domain": sip_info.get("domain", ""),
+                "outboundProxy": sip_info.get("outboundProxy", sip_info.get("outboundProxyAddress", "")),
+                "outboundProxyBackup": sip_info.get("outboundProxyBackup", sip_info.get("outboundProxyBackupAddress", "")),
+                "username": sip_info.get("userName", sip_info.get("username", "")),
+                "password": sip_info.get("password", ""),
+                "stunServers": stun_servers,
+            },
+            "sipFlags": sip_flags,
+        }
+
+    except httpx.HTTPStatusError as e:
+        error_body = e.response.text[:500] if e.response else "Unknown"
+        logger.error(f"SIP provision failed: {e.response.status_code} - {error_body}")
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"RingCentral SIP provision failed: {error_body}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SIP provision error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
