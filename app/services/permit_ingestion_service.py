@@ -403,12 +403,12 @@ class PermitIngestionService:
                 return permit_id, "inserted"
 
         except IntegrityError as e:
-            logger.warning(f"Integrity error ingesting permit: {e}")
+            logger.warning(f"Integrity error ingesting permit {getattr(permit_data, 'permit_number', '?')}: {e}")
             await self.db.rollback()
-            return None, "error"
+            return None, f"integrity_error: {str(e)[:200]}"
         except Exception as e:
-            logger.error(f"Error ingesting permit: {e}")
-            return None, "error"
+            logger.error(f"Error ingesting permit {getattr(permit_data, 'permit_number', '?')}: {e}")
+            return None, f"error: {str(e)[:200]}"
 
     async def ingest_batch(self, permits: List[PermitCreate], source_portal_code: str) -> BatchIngestionResponse:
         """
@@ -462,9 +462,9 @@ class PermitIngestionService:
                     stats.updated += 1
                 elif action == "skipped":
                     stats.skipped += 1
-                elif action == "error":
+                else:
                     stats.errors += 1
-                    errors.append({"index": i, "permit_number": permit_data.permit_number, "error": "Failed to ingest"})
+                    errors.append({"index": i, "permit_number": permit_data.permit_number, "error": action})
 
                 # Commit every 100 records
                 if (i + 1) % 100 == 0:
