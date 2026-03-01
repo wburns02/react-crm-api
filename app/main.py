@@ -1560,6 +1560,64 @@ async def run_database_migrations():
     return results
 
 
+@app.post("/health/db/migrate-083")
+async def run_migration_083():
+    """Add customer_id column to septic_permits (migration 083)."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"success": False, "steps": []}
+    try:
+        async with async_session_maker() as session:
+            # Check if column already exists
+            check = await session.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'septic_permits' AND column_name = 'customer_id'"
+            ))
+            if check.scalar_one_or_none():
+                results["steps"].append("customer_id column already exists")
+                results["success"] = True
+                return results
+
+            # Add the column
+            await session.execute(text(
+                "ALTER TABLE septic_permits ADD COLUMN customer_id UUID "
+                "REFERENCES customers(id) ON DELETE SET NULL"
+            ))
+            results["steps"].append("Added customer_id column")
+
+            # Add index
+            await session.execute(text(
+                "CREATE INDEX idx_septic_permits_customer_id ON septic_permits(customer_id)"
+            ))
+            results["steps"].append("Created index")
+
+            # Also widen permit_import_batches.status if needed
+            col_info = await session.execute(text(
+                "SELECT character_maximum_length FROM information_schema.columns "
+                "WHERE table_name = 'permit_import_batches' AND column_name = 'status'"
+            ))
+            max_len = col_info.scalar_one_or_none()
+            if max_len and max_len < 50:
+                await session.execute(text(
+                    "ALTER TABLE permit_import_batches ALTER COLUMN status TYPE VARCHAR(50)"
+                ))
+                results["steps"].append(f"Widened permit_import_batches.status from {max_len} to 50")
+
+            # Stamp alembic at 083
+            await session.execute(text("DELETE FROM alembic_version"))
+            await session.execute(text("INSERT INTO alembic_version (version_num) VALUES ('083')"))
+            results["steps"].append("Stamped alembic at 083")
+
+            await session.commit()
+            results["success"] = True
+
+    except Exception as e:
+        results["error"] = f"{type(e).__name__}: {str(e)}"
+
+    return results
+
+
 @app.post("/health/db/migrate-uuid")
 async def run_uuid_migrations():
     """Stamp alembic at 045 then upgrade to head (runs 046-049 UUID migrations)."""
