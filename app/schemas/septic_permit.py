@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator
 
 DuplicateStatus = Literal["pending", "merged", "rejected", "reviewed"]
 DuplicateDetectionMethod = Literal["address_hash", "fuzzy_match", "semantic", "manual"]
-ImportBatchStatus = Literal["pending", "processing", "completed", "failed"]
+ImportBatchStatus = Literal["pending", "processing", "completed", "completed_with_errors", "failed"]
 ChangeSource = Literal["scraper", "manual", "merge", "api"]
 
 
