@@ -427,19 +427,24 @@ class PermitIngestionService:
         # Create import batch record (graceful if table missing)
         import_batch = None
         try:
-            import_batch = PermitImportBatch(
+            ib = PermitImportBatch(
                 id=batch_id,
                 source_name=source_portal_code,
                 total_records=len(permits),
                 status="processing",
                 started_at=datetime.utcnow(),
             )
-            self.db.add(import_batch)
+            self.db.add(ib)
             await self.db.commit()
+            import_batch = ib
         except Exception as e:
             logger.warning(f"Could not create import batch record (table may not exist): {e}")
             await self.db.rollback()
-            import_batch = None
+            # Expunge the failed object so it doesn't taint the session
+            try:
+                self.db.expunge(ib)
+            except Exception:
+                pass
 
         stats = BatchIngestionStats(
             batch_id=batch_id, source_portal_code=source_portal_code, total_records=len(permits)
