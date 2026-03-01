@@ -1560,6 +1560,230 @@ async def run_database_migrations():
     return results
 
 
+@app.post("/health/db/ensure-permit-tables")
+async def ensure_permit_tables():
+    """Create permit reference tables if they don't exist (migration 023)."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"tables_created": [], "tables_skipped": [], "errors": [], "seed_states": 0}
+
+    async with async_session_maker() as session:
+        try:
+            # Enable pg_trgm
+            await session.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+
+            # States
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS states (
+                    id SERIAL PRIMARY KEY,
+                    code VARCHAR(2) NOT NULL UNIQUE,
+                    name VARCHAR(100) NOT NULL,
+                    fips_code VARCHAR(2),
+                    region VARCHAR(50),
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """))
+            await session.execute(text("CREATE INDEX IF NOT EXISTS idx_states_code ON states(code)"))
+
+            # Counties
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS counties (
+                    id SERIAL PRIMARY KEY,
+                    state_id INTEGER NOT NULL REFERENCES states(id),
+                    name VARCHAR(100) NOT NULL,
+                    normalized_name VARCHAR(100) NOT NULL,
+                    fips_code VARCHAR(5),
+                    population INTEGER,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE(state_id, normalized_name)
+                )
+            """))
+            await session.execute(text("CREATE INDEX IF NOT EXISTS idx_counties_state ON counties(state_id)"))
+            await session.execute(text("CREATE INDEX IF NOT EXISTS idx_counties_normalized_name ON counties(normalized_name)"))
+
+            # Septic system types
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS septic_system_types (
+                    id SERIAL PRIMARY KEY,
+                    code VARCHAR(50) NOT NULL UNIQUE,
+                    name VARCHAR(200) NOT NULL,
+                    category VARCHAR(50),
+                    description TEXT,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """))
+
+            # Source portals
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS source_portals (
+                    id SERIAL PRIMARY KEY,
+                    code VARCHAR(100) NOT NULL UNIQUE,
+                    name VARCHAR(200) NOT NULL,
+                    state_id INTEGER REFERENCES states(id),
+                    platform VARCHAR(50),
+                    base_url TEXT,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    last_scraped_at TIMESTAMPTZ,
+                    total_records_scraped INTEGER DEFAULT 0,
+                    notes TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+
+            # Septic permits (main table)
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS septic_permits (
+                    id UUID PRIMARY KEY,
+                    permit_number VARCHAR(100),
+                    state_id INTEGER NOT NULL REFERENCES states(id),
+                    county_id INTEGER REFERENCES counties(id),
+                    address TEXT,
+                    address_normalized TEXT,
+                    address_hash VARCHAR(64),
+                    city VARCHAR(100),
+                    zip_code VARCHAR(20),
+                    parcel_number VARCHAR(100),
+                    latitude FLOAT,
+                    longitude FLOAT,
+                    owner_name VARCHAR(255),
+                    owner_name_normalized VARCHAR(255),
+                    applicant_name VARCHAR(255),
+                    contractor_name VARCHAR(255),
+                    install_date DATE,
+                    permit_date DATE,
+                    expiration_date DATE,
+                    system_type_id INTEGER REFERENCES septic_system_types(id),
+                    system_type_raw VARCHAR(200),
+                    tank_size_gallons INTEGER,
+                    drainfield_size_sqft INTEGER,
+                    bedrooms SMALLINT,
+                    daily_flow_gpd INTEGER,
+                    pdf_url TEXT,
+                    permit_url TEXT,
+                    source_portal_id INTEGER REFERENCES source_portals(id),
+                    source_portal_code VARCHAR(100),
+                    scraped_at TIMESTAMPTZ NOT NULL,
+                    raw_data JSON,
+                    embedding JSON,
+                    embedding_model VARCHAR(100),
+                    embedding_updated_at TIMESTAMPTZ,
+                    search_vector TEXT,
+                    searchable_text TEXT,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    data_quality_score SMALLINT,
+                    duplicate_of_id UUID,
+                    version INTEGER NOT NULL DEFAULT 1,
+                    record_hash VARCHAR(64),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL
+                )
+            """))
+            # Key indexes
+            for idx_sql in [
+                "CREATE INDEX IF NOT EXISTS idx_septic_permits_state ON septic_permits(state_id)",
+                "CREATE INDEX IF NOT EXISTS idx_septic_permits_county ON septic_permits(county_id)",
+                "CREATE INDEX IF NOT EXISTS idx_septic_permits_address_hash ON septic_permits(address_hash)",
+                "CREATE INDEX IF NOT EXISTS idx_septic_permits_permit_number ON septic_permits(permit_number)",
+                "CREATE INDEX IF NOT EXISTS idx_septic_permits_city ON septic_permits(city)",
+                "CREATE INDEX IF NOT EXISTS idx_septic_permits_zip ON septic_permits(zip_code)",
+                "CREATE INDEX IF NOT EXISTS idx_septic_permits_parcel ON septic_permits(parcel_number)",
+                "CREATE INDEX IF NOT EXISTS idx_septic_permits_permit_date ON septic_permits(permit_date)",
+                "CREATE INDEX IF NOT EXISTS idx_septic_permits_source_portal ON septic_permits(source_portal_code)",
+                "CREATE INDEX IF NOT EXISTS idx_septic_permits_customer_id ON septic_permits(customer_id)",
+            ]:
+                await session.execute(text(idx_sql))
+
+            # Permit versions
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS permit_versions (
+                    id UUID PRIMARY KEY,
+                    permit_id UUID NOT NULL REFERENCES septic_permits(id) ON DELETE CASCADE,
+                    version_number INTEGER NOT NULL,
+                    changed_fields JSON,
+                    previous_data JSON,
+                    change_source VARCHAR(50),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """))
+            await session.execute(text("CREATE INDEX IF NOT EXISTS idx_permit_versions_permit ON permit_versions(permit_id)"))
+
+            # Permit duplicates
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS permit_duplicates (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    permit_id_1 UUID NOT NULL REFERENCES septic_permits(id) ON DELETE CASCADE,
+                    permit_id_2 UUID NOT NULL REFERENCES septic_permits(id) ON DELETE CASCADE,
+                    similarity_score FLOAT,
+                    match_type VARCHAR(50),
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    resolved_by VARCHAR(100),
+                    resolved_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """))
+
+            # Permit import batches
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS permit_import_batches (
+                    id UUID PRIMARY KEY,
+                    source_portal_id INTEGER REFERENCES source_portals(id),
+                    source_name VARCHAR(100) NOT NULL,
+                    total_records INTEGER NOT NULL,
+                    inserted INTEGER DEFAULT 0,
+                    updated INTEGER DEFAULT 0,
+                    skipped INTEGER DEFAULT 0,
+                    errors INTEGER DEFAULT 0,
+                    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                    started_at TIMESTAMPTZ,
+                    completed_at TIMESTAMPTZ,
+                    processing_time_seconds FLOAT,
+                    error_details JSON,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """))
+
+            # Seed US states if empty
+            count = await session.execute(text("SELECT COUNT(*) FROM states"))
+            if count.scalar() == 0:
+                await session.execute(text("""
+                    INSERT INTO states (code, name, fips_code, region) VALUES
+                    ('AL','Alabama','01','South'),('AK','Alaska','02','West'),('AZ','Arizona','04','West'),
+                    ('AR','Arkansas','05','South'),('CA','California','06','West'),('CO','Colorado','08','West'),
+                    ('CT','Connecticut','09','Northeast'),('DE','Delaware','10','South'),('FL','Florida','12','South'),
+                    ('GA','Georgia','13','South'),('HI','Hawaii','15','West'),('ID','Idaho','16','West'),
+                    ('IL','Illinois','17','Midwest'),('IN','Indiana','18','Midwest'),('IA','Iowa','19','Midwest'),
+                    ('KS','Kansas','20','Midwest'),('KY','Kentucky','21','South'),('LA','Louisiana','22','South'),
+                    ('ME','Maine','23','Northeast'),('MD','Maryland','24','South'),('MA','Massachusetts','25','Northeast'),
+                    ('MI','Michigan','26','Midwest'),('MN','Minnesota','27','Midwest'),('MS','Mississippi','28','South'),
+                    ('MO','Missouri','29','Midwest'),('MT','Montana','30','West'),('NE','Nebraska','31','Midwest'),
+                    ('NV','Nevada','32','West'),('NH','New Hampshire','33','Northeast'),('NJ','New Jersey','34','Northeast'),
+                    ('NM','New Mexico','35','West'),('NY','New York','36','Northeast'),('NC','North Carolina','37','South'),
+                    ('ND','North Dakota','38','Midwest'),('OH','Ohio','39','Midwest'),('OK','Oklahoma','40','South'),
+                    ('OR','Oregon','41','West'),('PA','Pennsylvania','42','Northeast'),('RI','Rhode Island','44','Northeast'),
+                    ('SC','South Carolina','45','South'),('SD','South Dakota','46','Midwest'),('TN','Tennessee','47','South'),
+                    ('TX','Texas','48','South'),('UT','Utah','49','West'),('VT','Vermont','50','Northeast'),
+                    ('VA','Virginia','51','South'),('WA','Washington','53','West'),('WV','West Virginia','54','South'),
+                    ('WI','Wisconsin','55','Midwest'),('WY','Wyoming','56','West'),('DC','District of Columbia','11','South')
+                """))
+                results["seed_states"] = 51
+
+            await session.commit()
+            results["tables_created"] = ["states", "counties", "septic_system_types", "source_portals",
+                                         "septic_permits", "permit_versions", "permit_duplicates", "permit_import_batches"]
+
+        except Exception as e:
+            await session.rollback()
+            results["errors"].append(f"{type(e).__name__}: {str(e)}")
+
+    return results
+
+
 @app.post("/health/db/migrate-083")
 async def run_migration_083():
     """Fix permit schema issues: customer_id column, status width, changed_fields type."""
