@@ -424,16 +424,22 @@ class PermitIngestionService:
         start_time = time.time()
         batch_id = uuid.uuid4()
 
-        # Create import batch record
-        import_batch = PermitImportBatch(
-            id=batch_id,
-            source_name=source_portal_code,
-            total_records=len(permits),
-            status="processing",
-            started_at=datetime.utcnow(),
-        )
-        self.db.add(import_batch)
-        await self.db.commit()
+        # Create import batch record (graceful if table missing)
+        import_batch = None
+        try:
+            import_batch = PermitImportBatch(
+                id=batch_id,
+                source_name=source_portal_code,
+                total_records=len(permits),
+                status="processing",
+                started_at=datetime.utcnow(),
+            )
+            self.db.add(import_batch)
+            await self.db.commit()
+        except Exception as e:
+            logger.warning(f"Could not create import batch record (table may not exist): {e}")
+            await self.db.rollback()
+            import_batch = None
 
         stats = BatchIngestionStats(
             batch_id=batch_id, source_portal_code=source_portal_code, total_records=len(permits)
@@ -479,18 +485,24 @@ class PermitIngestionService:
                 portal.last_scraped_at = datetime.utcnow()
                 portal.total_records_scraped += stats.inserted + stats.updated
 
-        # Update import batch
+        # Update import batch (if tracking table exists)
         elapsed = time.time() - start_time
-        import_batch.status = "completed" if stats.errors == 0 else "completed_with_errors"
-        import_batch.completed_at = datetime.utcnow()
-        import_batch.processing_time_seconds = elapsed
-        import_batch.inserted = stats.inserted
-        import_batch.updated = stats.updated
-        import_batch.skipped = stats.skipped
-        import_batch.errors = stats.errors
-        import_batch.error_details = errors if errors else None
-
-        await self.db.commit()
+        if import_batch is not None:
+            try:
+                import_batch.status = "completed" if stats.errors == 0 else "completed_with_errors"
+                import_batch.completed_at = datetime.utcnow()
+                import_batch.processing_time_seconds = elapsed
+                import_batch.inserted = stats.inserted
+                import_batch.updated = stats.updated
+                import_batch.skipped = stats.skipped
+                import_batch.errors = stats.errors
+                import_batch.error_details = errors if errors else None
+                await self.db.commit()
+            except Exception as e:
+                logger.warning(f"Could not update import batch record: {e}")
+                await self.db.rollback()
+        else:
+            await self.db.commit()
 
         stats.processing_time_seconds = elapsed
         stats.error_details = errors if errors else None
