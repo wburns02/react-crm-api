@@ -1562,37 +1562,31 @@ async def run_database_migrations():
 
 @app.post("/health/db/migrate-083")
 async def run_migration_083():
-    """Add customer_id column to septic_permits (migration 083)."""
+    """Fix permit schema issues: customer_id column, status width, changed_fields type."""
     from sqlalchemy import text
     from app.database import async_session_maker
 
     results = {"success": False, "steps": []}
     try:
         async with async_session_maker() as session:
-            # Check if column already exists
+            # 1. Add customer_id if missing
             check = await session.execute(text(
                 "SELECT column_name FROM information_schema.columns "
                 "WHERE table_name = 'septic_permits' AND column_name = 'customer_id'"
             ))
             if check.scalar_one_or_none():
                 results["steps"].append("customer_id column already exists")
-                results["success"] = True
-                return results
+            else:
+                await session.execute(text(
+                    "ALTER TABLE septic_permits ADD COLUMN customer_id UUID "
+                    "REFERENCES customers(id) ON DELETE SET NULL"
+                ))
+                await session.execute(text(
+                    "CREATE INDEX idx_septic_permits_customer_id ON septic_permits(customer_id)"
+                ))
+                results["steps"].append("Added customer_id column + index")
 
-            # Add the column
-            await session.execute(text(
-                "ALTER TABLE septic_permits ADD COLUMN customer_id UUID "
-                "REFERENCES customers(id) ON DELETE SET NULL"
-            ))
-            results["steps"].append("Added customer_id column")
-
-            # Add index
-            await session.execute(text(
-                "CREATE INDEX idx_septic_permits_customer_id ON septic_permits(customer_id)"
-            ))
-            results["steps"].append("Created index")
-
-            # Also widen permit_import_batches.status if needed
+            # 2. Widen permit_import_batches.status if needed
             col_info = await session.execute(text(
                 "SELECT character_maximum_length FROM information_schema.columns "
                 "WHERE table_name = 'permit_import_batches' AND column_name = 'status'"
@@ -1603,8 +1597,26 @@ async def run_migration_083():
                     "ALTER TABLE permit_import_batches ALTER COLUMN status TYPE VARCHAR(50)"
                 ))
                 results["steps"].append(f"Widened permit_import_batches.status from {max_len} to 50")
+            else:
+                results["steps"].append("permit_import_batches.status already wide enough")
 
-            # Stamp alembic at 083
+            # 3. Fix changed_fields column: text[] → json (model expects JSON)
+            cf_type = await session.execute(text(
+                "SELECT data_type FROM information_schema.columns "
+                "WHERE table_name = 'permit_versions' AND column_name = 'changed_fields'"
+            ))
+            cf_dtype = cf_type.scalar_one_or_none()
+            if cf_dtype and cf_dtype == "ARRAY":
+                await session.execute(text(
+                    "ALTER TABLE permit_versions "
+                    "ALTER COLUMN changed_fields TYPE JSON "
+                    "USING to_json(changed_fields)"
+                ))
+                results["steps"].append(f"Converted permit_versions.changed_fields from {cf_dtype} to JSON")
+            else:
+                results["steps"].append(f"permit_versions.changed_fields already {cf_dtype}")
+
+            # 4. Stamp alembic
             await session.execute(text("DELETE FROM alembic_version"))
             await session.execute(text("INSERT INTO alembic_version (version_num) VALUES ('083')"))
             results["steps"].append("Stamped alembic at 083")
