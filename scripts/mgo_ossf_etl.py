@@ -649,8 +649,9 @@ def main():
     cursor = conn.cursor()
 
     # ── Build query ──
+    # Match OSSF project types OR any record with trade='septic' (catches ~24K extra)
     placeholders = ",".join(["?"] * len(OSSF_PROJECT_TYPES))
-    where = f"state = 'TX' AND project_type IN ({placeholders})"
+    where = f"state = 'TX' AND (project_type IN ({placeholders}) OR trade = 'septic')"
     params: list = list(OSSF_PROJECT_TYPES)
 
     if args.county:
@@ -660,7 +661,7 @@ def main():
     # Total count
     cursor.execute(f"SELECT COUNT(*) FROM permits WHERE {where}", params)
     total_records = cursor.fetchone()[0]
-    print(f"TX OSSF records matching filter: {total_records:,}")
+    print(f"TX septic records matching filter: {total_records:,}")
 
     if total_records == 0:
         print("No records found. Check --county filter.")
