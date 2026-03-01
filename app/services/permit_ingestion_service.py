@@ -192,7 +192,7 @@ class PermitIngestionService:
                     SepticPermit.is_active == True,
                 )
             )
-            existing = result.scalar_one_or_none()
+            existing = result.scalars().first()
             if existing:
                 return existing
 
@@ -204,7 +204,7 @@ class PermitIngestionService:
                     SepticPermit.is_active == True,
                 )
             )
-            existing = result.scalar_one_or_none()
+            existing = result.scalars().first()
             if existing:
                 return existing
 
