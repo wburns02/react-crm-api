@@ -43,9 +43,17 @@ from app.schemas.septic_permit import (
     PermitVersionResponse,
     PermitHistoryResponse,
     PermitSummary,
+    PermitLinkResponse,
+    BatchLinkResponse,
+    PermitCustomerSummary,
+    CustomerPermitsResponse,
+    ProspectRecord,
+    ProspectsResponse,
 )
+from app.models.customer import Customer
 from app.services.permit_ingestion_service import get_permit_ingestion_service
 from app.services.permit_search_service import get_permit_search_service
+from app.services.permit_customer_linker import find_customer_for_permit, batch_link_permits, normalize_address
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +147,382 @@ async def search_permits_post(request: PermitSearchRequest, db: DbSession, curre
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Search failed")
 
 
+# ===== PERMIT LOOKUP =====
+
+
+@router.get("/lookup")
+async def lookup_permits(
+    db: DbSession,
+    current_user: CurrentUser,
+    address: Optional[str] = Query(None, description="Address to search"),
+    phone: Optional[str] = Query(None, description="Phone number to search"),
+):
+    """
+    Find permits by address or phone number.
+    Used for auto-fill when creating customers.
+    """
+    try:
+        from app.services.permit_customer_linker import normalize_address, normalize_phone
+
+        results = []
+
+        if address:
+            normalized = normalize_address(address)
+            if normalized:
+                stmt = (
+                    select(SepticPermit, State, County)
+                    .outerjoin(State, SepticPermit.state_id == State.id)
+                    .outerjoin(County, SepticPermit.county_id == County.id)
+                    .where(SepticPermit.is_active == True)
+                    .limit(20)
+                )
+                result = await db.execute(stmt)
+                rows = result.all()
+                for permit, state, county in rows:
+                    permit_addr = normalize_address(permit.address_normalized or permit.address)
+                    if permit_addr and normalized in permit_addr:
+                        results.append({
+                            "id": str(permit.id),
+                            "permit_number": permit.permit_number,
+                            "address": permit.address,
+                            "city": permit.city,
+                            "state_code": state.code if state else None,
+                            "county_name": county.name if county else None,
+                            "owner_name": permit.owner_name,
+                            "contractor_name": permit.contractor_name,
+                            "permit_date": str(permit.permit_date) if permit.permit_date else None,
+                            "install_date": str(permit.install_date) if permit.install_date else None,
+                            "system_type": permit.system_type_raw,
+                            "tank_size_gallons": permit.tank_size_gallons,
+                            "raw_data": permit.raw_data,
+                        })
+
+                # If no results from in-memory filtering, try SQL ILIKE
+                if not results:
+                    like_pattern = f"%{address.strip()}%"
+                    stmt = (
+                        select(SepticPermit, State, County)
+                        .outerjoin(State, SepticPermit.state_id == State.id)
+                        .outerjoin(County, SepticPermit.county_id == County.id)
+                        .where(
+                            SepticPermit.is_active == True,
+                            SepticPermit.address.ilike(like_pattern),
+                        )
+                        .limit(10)
+                    )
+                    result = await db.execute(stmt)
+                    rows = result.all()
+                    for permit, state, county in rows:
+                        results.append({
+                            "id": str(permit.id),
+                            "permit_number": permit.permit_number,
+                            "address": permit.address,
+                            "city": permit.city,
+                            "state_code": state.code if state else None,
+                            "county_name": county.name if county else None,
+                            "owner_name": permit.owner_name,
+                            "contractor_name": permit.contractor_name,
+                            "permit_date": str(permit.permit_date) if permit.permit_date else None,
+                            "install_date": str(permit.install_date) if permit.install_date else None,
+                            "system_type": permit.system_type_raw,
+                            "tank_size_gallons": permit.tank_size_gallons,
+                            "raw_data": permit.raw_data,
+                        })
+
+        if phone:
+            from app.services.permit_customer_linker import normalize_phone
+            norm_phone = normalize_phone(phone)
+            if norm_phone:
+                # Search raw_data for phone matches
+                stmt = (
+                    select(SepticPermit, State, County)
+                    .outerjoin(State, SepticPermit.state_id == State.id)
+                    .outerjoin(County, SepticPermit.county_id == County.id)
+                    .where(
+                        SepticPermit.is_active == True,
+                        SepticPermit.raw_data.isnot(None),
+                    )
+                    .limit(100)
+                )
+                result = await db.execute(stmt)
+                rows = result.all()
+                for permit, state, county in rows:
+                    if permit.raw_data and isinstance(permit.raw_data, dict):
+                        permit_phone = normalize_phone(permit.raw_data.get("owner_phone"))
+                        if permit_phone == norm_phone:
+                            results.append({
+                                "id": str(permit.id),
+                                "permit_number": permit.permit_number,
+                                "address": permit.address,
+                                "city": permit.city,
+                                "state_code": state.code if state else None,
+                                "county_name": county.name if county else None,
+                                "owner_name": permit.owner_name,
+                                "contractor_name": permit.contractor_name,
+                                "permit_date": str(permit.permit_date) if permit.permit_date else None,
+                                "install_date": str(permit.install_date) if permit.install_date else None,
+                                "system_type": permit.system_type_raw,
+                                "tank_size_gallons": permit.tank_size_gallons,
+                                "raw_data": permit.raw_data,
+                            })
+
+        return {"results": results, "total": len(results)}
+
+    except Exception as e:
+        logger.error(f"Permit lookup failed: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Permit lookup failed")
+
+
+@router.get("/customer/{customer_id}", response_model=CustomerPermitsResponse)
+async def get_customer_permits(customer_id: UUID, db: DbSession, current_user: CurrentUser):
+    """Get all permits linked to a customer."""
+    try:
+        # Verify customer exists
+        cust_result = await db.execute(select(Customer).where(Customer.id == customer_id))
+        customer = cust_result.scalar_one_or_none()
+        if not customer:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Customer {customer_id} not found")
+
+        # Get linked permits
+        stmt = (
+            select(SepticPermit, County)
+            .outerjoin(County, SepticPermit.county_id == County.id)
+            .where(
+                SepticPermit.customer_id == customer_id,
+                SepticPermit.is_active == True,
+            )
+            .order_by(desc(SepticPermit.permit_date))
+        )
+        result = await db.execute(stmt)
+        rows = result.all()
+
+        permits = []
+        for permit, county in rows:
+            permits.append(PermitCustomerSummary(
+                id=permit.id,
+                permit_number=permit.permit_number,
+                address=permit.address,
+                city=permit.city,
+                county_name=county.name if county else None,
+                owner_name=permit.owner_name,
+                contractor_name=permit.contractor_name,
+                permit_date=permit.permit_date,
+                install_date=permit.install_date,
+                system_type_raw=permit.system_type_raw,
+                tank_size_gallons=permit.tank_size_gallons,
+                drainfield_size_sqft=permit.drainfield_size_sqft,
+                bedrooms=permit.bedrooms,
+                raw_data=permit.raw_data,
+                data_quality_score=permit.data_quality_score,
+                created_at=permit.created_at,
+            ))
+
+        return CustomerPermitsResponse(
+            customer_id=customer_id,
+            permits=permits,
+            total=len(permits),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get customer permits: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve customer permits")
+
+
+@router.post("/batch-link", response_model=BatchLinkResponse)
+async def run_batch_link(
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = Query(1000, ge=1, le=10000),
+    include_medium: bool = Query(False, description="Also auto-link medium confidence matches"),
+):
+    """Run auto-linking on unlinked permits."""
+    try:
+        stats = await batch_link_permits(db, limit=limit, auto_link_only=not include_medium)
+        return BatchLinkResponse(**stats)
+    except Exception as e:
+        logger.error(f"Batch linking failed: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Batch linking failed")
+
+
+@router.get("/prospects", response_model=ProspectsResponse)
+async def get_prospects(
+    db: DbSession,
+    current_user: CurrentUser,
+    county: Optional[str] = Query(None, description="Filter by county name"),
+    system_type: Optional[str] = Query(None, description="Filter by system type"),
+    min_age: Optional[int] = Query(None, ge=0, description="Minimum system age in years"),
+    max_age: Optional[int] = Query(None, ge=0, description="Maximum system age in years"),
+    has_phone: Optional[bool] = Query(None, description="Only show records with phone numbers"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+):
+    """
+    Get permit holders NOT yet in the CRM as prospects.
+    Used by outbound reps to build targeted call lists.
+    """
+    try:
+        from datetime import date as date_type
+
+        stmt = (
+            select(SepticPermit, County)
+            .outerjoin(County, SepticPermit.county_id == County.id)
+            .where(
+                SepticPermit.customer_id.is_(None),
+                SepticPermit.is_active == True,
+                SepticPermit.owner_name.isnot(None),
+            )
+        )
+
+        # Apply filters
+        if county:
+            stmt = stmt.where(County.name.ilike(f"%{county}%"))
+        if system_type:
+            stmt = stmt.where(SepticPermit.system_type_raw.ilike(f"%{system_type}%"))
+        if min_age is not None:
+            cutoff = date_type(date_type.today().year - min_age, 1, 1)
+            stmt = stmt.where(SepticPermit.permit_date <= cutoff)
+        if max_age is not None:
+            cutoff = date_type(date_type.today().year - max_age, 1, 1)
+            stmt = stmt.where(SepticPermit.permit_date >= cutoff)
+
+        # Count total
+        from sqlalchemy import func as sqlfunc
+        count_stmt = select(sqlfunc.count()).select_from(stmt.subquery())
+        count_result = await db.execute(count_stmt)
+        total = count_result.scalar() or 0
+
+        # Paginate
+        stmt = stmt.order_by(desc(SepticPermit.permit_date))
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+
+        result = await db.execute(stmt)
+        rows = result.all()
+
+        today = date_type.today()
+        prospects = []
+        for permit, county_obj in rows:
+            # Filter by has_phone if requested
+            phone = None
+            if permit.raw_data and isinstance(permit.raw_data, dict):
+                phone = permit.raw_data.get("owner_phone")
+            if has_phone and not phone:
+                continue
+
+            age = None
+            if permit.permit_date:
+                age = today.year - permit.permit_date.year
+
+            prospects.append(ProspectRecord(
+                permit_id=permit.id,
+                owner_name=permit.owner_name,
+                address=permit.address,
+                city=permit.city,
+                county_name=county_obj.name if county_obj else None,
+                phone=phone,
+                system_type=permit.system_type_raw,
+                permit_date=permit.permit_date,
+                system_age_years=age,
+            ))
+
+        return ProspectsResponse(
+            prospects=prospects,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get prospects: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve prospects")
+
+
+@router.post("/prospects/export")
+async def export_prospects(
+    db: DbSession,
+    current_user: CurrentUser,
+    county: Optional[str] = Query(None),
+    system_type: Optional[str] = Query(None),
+    min_age: Optional[int] = Query(None, ge=0),
+    max_age: Optional[int] = Query(None, ge=0),
+    has_phone: Optional[bool] = Query(None),
+    limit: int = Query(5000, ge=1, le=50000),
+):
+    """Export prospects as CSV for campaign import."""
+    try:
+        from datetime import date as date_type
+        import csv
+        import io
+        from fastapi.responses import StreamingResponse
+
+        stmt = (
+            select(SepticPermit, County)
+            .outerjoin(County, SepticPermit.county_id == County.id)
+            .where(
+                SepticPermit.customer_id.is_(None),
+                SepticPermit.is_active == True,
+                SepticPermit.owner_name.isnot(None),
+            )
+        )
+
+        if county:
+            stmt = stmt.where(County.name.ilike(f"%{county}%"))
+        if system_type:
+            stmt = stmt.where(SepticPermit.system_type_raw.ilike(f"%{system_type}%"))
+        if min_age is not None:
+            cutoff = date_type(date_type.today().year - min_age, 1, 1)
+            stmt = stmt.where(SepticPermit.permit_date <= cutoff)
+        if max_age is not None:
+            cutoff = date_type(date_type.today().year - max_age, 1, 1)
+            stmt = stmt.where(SepticPermit.permit_date >= cutoff)
+
+        stmt = stmt.order_by(desc(SepticPermit.permit_date)).limit(limit)
+        result = await db.execute(stmt)
+        rows = result.all()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "owner_name", "address", "city", "county", "phone",
+            "system_type", "permit_date", "system_age_years",
+        ])
+
+        today = date_type.today()
+        for permit, county_obj in rows:
+            phone = None
+            if permit.raw_data and isinstance(permit.raw_data, dict):
+                phone = permit.raw_data.get("owner_phone")
+            if has_phone and not phone:
+                continue
+
+            age = None
+            if permit.permit_date:
+                age = today.year - permit.permit_date.year
+
+            writer.writerow([
+                permit.owner_name,
+                permit.address,
+                permit.city,
+                county_obj.name if county_obj else "",
+                phone or "",
+                permit.system_type_raw or "",
+                str(permit.permit_date) if permit.permit_date else "",
+                age or "",
+            ])
+
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode()),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=permit_prospects.csv"},
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to export prospects: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to export prospects")
+
+
 # ===== SINGLE PERMIT =====
 
 
@@ -159,6 +543,68 @@ async def get_permit(permit_id: UUID, db: DbSession, current_user: CurrentUser):
     except Exception as e:
         logger.error(f"Failed to get permit {permit_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve permit")
+
+
+@router.post("/{permit_id}/link/{customer_id}", response_model=PermitLinkResponse)
+async def link_permit_to_customer(
+    permit_id: UUID, customer_id: UUID, db: DbSession, current_user: CurrentUser
+):
+    """Manually link a permit to a customer."""
+    try:
+        # Verify permit exists
+        result = await db.execute(select(SepticPermit).where(SepticPermit.id == permit_id))
+        permit = result.scalar_one_or_none()
+        if not permit:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Permit {permit_id} not found")
+
+        # Verify customer exists
+        cust_result = await db.execute(select(Customer).where(Customer.id == customer_id))
+        customer = cust_result.scalar_one_or_none()
+        if not customer:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Customer {customer_id} not found")
+
+        permit.customer_id = customer_id
+        await db.commit()
+
+        return PermitLinkResponse(
+            permit_id=permit_id,
+            customer_id=customer_id,
+            message=f"Permit linked to {customer.first_name} {customer.last_name}",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to link permit: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to link permit")
+
+
+@router.delete("/{permit_id}/unlink", response_model=PermitLinkResponse)
+async def unlink_permit(permit_id: UUID, db: DbSession, current_user: CurrentUser):
+    """Remove the link between a permit and a customer."""
+    try:
+        result = await db.execute(select(SepticPermit).where(SepticPermit.id == permit_id))
+        permit = result.scalar_one_or_none()
+        if not permit:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Permit {permit_id} not found")
+
+        old_customer_id = permit.customer_id
+        permit.customer_id = None
+        await db.commit()
+
+        return PermitLinkResponse(
+            permit_id=permit_id,
+            customer_id=old_customer_id or permit_id,  # Return old ID if available
+            message="Permit unlinked from customer",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to unlink permit: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to unlink permit")
 
 
 @router.get("/{permit_id}/property")

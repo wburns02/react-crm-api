@@ -190,6 +190,9 @@ class PermitResponse(BaseModel):
     id: UUID
     permit_number: Optional[str] = None
 
+    # Customer linking
+    customer_id: Optional[UUID] = None
+
     # Location
     state_id: int
     state_code: Optional[str] = None
@@ -498,3 +501,78 @@ class PermitHistoryResponse(BaseModel):
     permit_id: UUID
     current_version: int
     versions: List[PermitVersionResponse] = []
+
+
+# ===== PERMIT-CUSTOMER LINKING SCHEMAS =====
+
+
+class PermitLinkRequest(BaseModel):
+    """Request to manually link a permit to a customer."""
+    customer_id: UUID
+
+
+class PermitLinkResponse(BaseModel):
+    """Response after linking a permit to a customer."""
+    permit_id: UUID
+    customer_id: UUID
+    message: str = ""
+
+
+class BatchLinkResponse(BaseModel):
+    """Response from batch auto-linking."""
+    processed: int = 0
+    linked_high: int = 0
+    linked_medium: int = 0
+    skipped: int = 0
+    errors: int = 0
+
+
+class PermitCustomerSummary(BaseModel):
+    """Permit summary for customer detail views."""
+    id: UUID
+    permit_number: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    county_name: Optional[str] = None
+    owner_name: Optional[str] = None
+    contractor_name: Optional[str] = None
+    permit_date: Optional[date] = None
+    install_date: Optional[date] = None
+    system_type_raw: Optional[str] = None
+    tank_size_gallons: Optional[int] = None
+    drainfield_size_sqft: Optional[int] = None
+    bedrooms: Optional[int] = None
+    raw_data: Optional[Dict[str, Any]] = None
+    data_quality_score: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CustomerPermitsResponse(BaseModel):
+    """All permits linked to a customer."""
+    customer_id: UUID
+    permits: List[PermitCustomerSummary] = []
+    total: int = 0
+
+
+class ProspectRecord(BaseModel):
+    """A permit holder not yet in the CRM - potential prospect."""
+    permit_id: UUID
+    owner_name: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    county_name: Optional[str] = None
+    phone: Optional[str] = None
+    system_type: Optional[str] = None
+    permit_date: Optional[date] = None
+    system_age_years: Optional[int] = None
+
+
+class ProspectsResponse(BaseModel):
+    """Paginated list of prospects from permit data."""
+    prospects: List[ProspectRecord] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 50

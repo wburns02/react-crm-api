@@ -217,12 +217,16 @@ class SepticPermit(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # ===== CUSTOMER LINKING =====
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
+
     # ===== RELATIONSHIPS =====
     state = relationship("State", back_populates="permits")
     county = relationship("County", back_populates="permits")
     system_type = relationship("SepticSystemType")
     source_portal = relationship("SourcePortal")
     versions = relationship("PermitVersion", back_populates="permit", cascade="all, delete-orphan")
+    customer = relationship("Customer", back_populates="permits", foreign_keys=[customer_id])
 
     # ===== INDEXES AND CONSTRAINTS =====
     __table_args__ = (

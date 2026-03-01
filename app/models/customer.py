@@ -89,6 +89,7 @@ class Customer(Base):
     work_orders = relationship("WorkOrder", back_populates="customer", cascade="all, delete-orphan", passive_deletes=True)
     messages = relationship("Message", back_populates="customer", cascade="all, delete-orphan", passive_deletes=True)
     bookings = relationship("Booking", back_populates="customer", foreign_keys="Booking.customer_id", cascade="all, delete-orphan", passive_deletes=True)
+    permits = relationship("SepticPermit", back_populates="customer", foreign_keys="SepticPermit.customer_id")
 
     def __repr__(self):
         return f"<Customer {self.first_name} {self.last_name}>"
