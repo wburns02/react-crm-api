@@ -181,6 +181,7 @@ def main():
     success = 0
     failed = 0
     batch_files = []
+    batch_doc_ids = []
     start_time = time.time()
 
     for i, record in enumerate(to_download):
@@ -194,6 +195,7 @@ def main():
             with open(local_path, "wb") as f:
                 f.write(pdf_data)
             batch_files.append(local_path)
+            batch_doc_ids.append(doc_id)
             success += 1
         else:
             failed += 1
@@ -211,16 +213,15 @@ def main():
                     capture_output=True, timeout=120
                 )
                 if result.returncode == 0:
-                    # Update checkpoint
-                    for bf in batch_files:
-                        bn = os.path.basename(bf)
-                        # Find the doc_id for this file
-                        downloaded.add(doc_id)
+                    # Update checkpoint with all doc_ids in this batch
+                    for did in batch_doc_ids:
+                        downloaded.add(did)
                     save_checkpoint(downloaded)
                     # Clean up local files
                     for bf in batch_files:
                         os.unlink(bf)
                     batch_files = []
+                    batch_doc_ids = []
                 else:
                     print(f"  rsync failed: {result.stderr.decode()[:200]}")
             except Exception as e:

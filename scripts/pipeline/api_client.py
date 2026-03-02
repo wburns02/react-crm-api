@@ -190,7 +190,7 @@ class CRMClient:
         try:
             resp = self.session.post(
                 f"{self.api_url}/permits/batch-geocode",
-                json={"updates": updates},
+                json=updates,
                 timeout=60,
             )
             if resp.status_code == 200:
@@ -207,7 +207,7 @@ class CRMClient:
         try:
             resp = self.session.post(
                 f"{self.api_url}/permits/batch-enrich",
-                json={"updates": updates},
+                json=updates,
                 timeout=60,
             )
             if resp.status_code == 200:

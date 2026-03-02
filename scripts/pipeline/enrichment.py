@@ -206,6 +206,9 @@ class CensusGeocoder:
         }
 
 
+FETCH_PAGE_SIZE = 500  # API caps at 5000; use 500 for safety
+
+
 def run_geocode_backlog(
     client: CRMClient,
     limit: int = 2000,
@@ -213,49 +216,80 @@ def run_geocode_backlog(
 ) -> dict[str, int]:
     """Fetch permits needing geocoding from API and geocode them.
 
-    This is the post-ingestion geocoding step (--step geocode).
+    Paginates through the needs-geocoding endpoint in pages of 500,
+    geocodes each batch, and sends updates. Re-logins on auth failures.
     """
     geocoder = CensusGeocoder()
-    permits = client.fetch_permits_needing_geocoding(limit=limit, source=source)
-
-    if not permits:
-        print("No permits need geocoding.")
-        return {"attempted": 0, "matched": 0, "updated": 0}
-
-    print(f"Geocoding {len(permits)} permits...")
-    updates = []
+    total_processed = 0
     updated = 0
+    start_time = time.time()
 
-    for i, p in enumerate(permits):
-        addr = p.get("address", "")
-        state = p.get("state_code", "TX")
-        result = geocoder.geocode(addr, state)
+    while total_processed < limit:
+        page_size = min(FETCH_PAGE_SIZE, limit - total_processed)
+        permits = client.fetch_permits_needing_geocoding(
+            limit=page_size, source=source
+        )
 
-        if result:
-            update = {
-                "id": p["id"],
-                "latitude": result["latitude"],
-                "longitude": result["longitude"],
-            }
-            if result.get("city"):
-                update["city"] = result["city"]
-            if result.get("zip_code"):
-                update["zip_code"] = result["zip_code"]
-            updates.append(update)
+        if not permits:
+            if total_processed == 0:
+                print("No permits need geocoding.")
+            else:
+                print(f"No more permits to geocode (processed {total_processed}).")
+            break
 
-        # Send in batches of 50
-        if len(updates) >= 50:
+        print(f"\nFetched {len(permits)} permits needing geocoding (batch starting at {total_processed})")
+        updates: list[dict] = []
+
+        for i, p in enumerate(permits):
+            addr = p.get("address", "")
+            state = p.get("state_code", "TX") or "TX"
+            result = geocoder.geocode(addr, state)
+
+            if result:
+                update: dict = {
+                    "id": p["id"],
+                    "latitude": result["latitude"],
+                    "longitude": result["longitude"],
+                }
+                if result.get("city"):
+                    update["city"] = result["city"]
+                if result.get("zip_code"):
+                    update["zip_code"] = result["zip_code"]
+                updates.append(update)
+
+            # Send in batches of 50
+            if len(updates) >= 50:
+                resp = client.batch_geocode(updates)
+                if isinstance(resp, dict):
+                    if resp.get("status") == "failed":
+                        # Re-login and retry
+                        print("  Auth expired, re-logging in...")
+                        client.login()
+                        resp = client.batch_geocode(updates)
+                    updated += resp.get("updated", 0)
+                updates = []
+
+            total_processed += 1
+            if total_processed % 100 == 0:
+                s = geocoder.stats
+                elapsed = time.time() - start_time
+                rate = s["attempted"] / elapsed if elapsed > 0 else 0
+                remaining = limit - total_processed
+                eta = remaining / rate / 60 if rate > 0 else 0
+                print(
+                    f"  Progress: {total_processed}/{limit} "
+                    f"(geocoded={s['matched']}, failed={s['unmatched']}) "
+                    f"rate={rate:.1f}/s ETA={eta:.0f}min"
+                )
+
+        # Final batch for this page
+        if updates:
             resp = client.batch_geocode(updates)
-            updated += resp.get("updated", 0) if isinstance(resp, dict) else 0
-            updates = []
-
-        if (i + 1) % 100 == 0:
-            print(f"  Progress: {i + 1}/{len(permits)} ({geocoder.stats['matched']} matched)")
-
-    # Final batch
-    if updates:
-        resp = client.batch_geocode(updates)
-        updated += resp.get("updated", 0) if isinstance(resp, dict) else 0
+            if isinstance(resp, dict):
+                if resp.get("status") == "failed":
+                    client.login()
+                    resp = client.batch_geocode(updates)
+                updated += resp.get("updated", 0)
 
     stats = geocoder.stats
     stats["updated"] = updated
