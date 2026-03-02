@@ -523,6 +523,185 @@ async def export_prospects(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to export prospects")
 
 
+# ===== GEOCODING & ENRICHMENT =====
+
+
+@router.get("/needs-geocoding")
+async def get_permits_needing_geocoding(
+    db: DbSession,
+    current_user: CurrentUser,
+    source_portal_code: Optional[str] = Query(None, description="Filter by source portal"),
+    county_name: Optional[str] = Query(None, description="Filter by county name"),
+    limit: int = Query(500, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
+):
+    """Get permits that have no latitude/longitude (need geocoding)."""
+    try:
+        stmt = (
+            select(SepticPermit)
+            .where(SepticPermit.is_active == True)
+            .where(SepticPermit.latitude == None)
+            .where(SepticPermit.address != None)
+            .where(SepticPermit.address != "")
+        )
+
+        if source_portal_code:
+            from sqlalchemy import text
+            stmt = stmt.where(
+                SepticPermit.source_portal_id == select(SourcePortal.id).where(
+                    SourcePortal.code == source_portal_code
+                ).correlate(None).scalar_subquery()
+            )
+
+        if county_name:
+            stmt = stmt.where(
+                SepticPermit.county_id == select(County.id).where(
+                    County.name == county_name
+                ).correlate(None).scalar_subquery()
+            )
+
+        stmt = stmt.order_by(SepticPermit.id).offset(offset).limit(limit)
+
+        result = await db.execute(stmt)
+        permits = result.scalars().all()
+
+        return {
+            "count": len(permits),
+            "offset": offset,
+            "permits": [
+                {
+                    "id": str(p.id),
+                    "address": p.address,
+                    "city": p.city,
+                    "state_code": None,  # Would need join
+                    "zip_code": p.zip_code,
+                    "county_name": None,  # Would need join
+                    "permit_number": p.permit_number,
+                }
+                for p in permits
+            ],
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get permits needing geocoding: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/batch-geocode")
+async def batch_geocode_update(
+    db: DbSession,
+    current_user: CurrentUser,
+    updates: List[dict] = [],
+):
+    """
+    Batch update permits with geocoded data.
+
+    Expects a list of dicts with:
+    - id: permit UUID
+    - latitude: float
+    - longitude: float
+    - city: str (optional)
+    - zip_code: str (optional)
+    """
+    try:
+        updated = 0
+        errors = 0
+
+        for item in updates:
+            permit_id = item.get("id")
+            if not permit_id:
+                errors += 1
+                continue
+
+            result = await db.execute(
+                select(SepticPermit).where(SepticPermit.id == permit_id)
+            )
+            permit = result.scalars().first()
+            if not permit:
+                errors += 1
+                continue
+
+            if item.get("latitude") is not None:
+                permit.latitude = item["latitude"]
+            if item.get("longitude") is not None:
+                permit.longitude = item["longitude"]
+            if item.get("city"):
+                permit.city = item["city"]
+            if item.get("zip_code"):
+                permit.zip_code = item["zip_code"]
+
+            updated += 1
+
+        await db.commit()
+
+        return {"updated": updated, "errors": errors}
+
+    except Exception as e:
+        logger.error(f"Batch geocode update failed: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/batch-enrich")
+async def batch_enrich_permits(
+    db: DbSession,
+    current_user: CurrentUser,
+    updates: List[dict] = [],
+):
+    """
+    Batch enrich permits with additional data (owner name, parcel, etc).
+
+    Expects a list of dicts with:
+    - id: permit UUID
+    - owner_name: str (optional)
+    - parcel_number: str (optional)
+    - raw_data: dict of additional fields to merge (optional)
+    """
+    try:
+        updated = 0
+        errors = 0
+
+        for item in updates:
+            permit_id = item.get("id")
+            if not permit_id:
+                errors += 1
+                continue
+
+            result = await db.execute(
+                select(SepticPermit).where(SepticPermit.id == permit_id)
+            )
+            permit = result.scalars().first()
+            if not permit:
+                errors += 1
+                continue
+
+            if item.get("owner_name"):
+                permit.owner_name = item["owner_name"]
+            if item.get("parcel_number"):
+                permit.parcel_number = item["parcel_number"]
+            if item.get("city"):
+                permit.city = item["city"]
+            if item.get("zip_code"):
+                permit.zip_code = item["zip_code"]
+
+            # Merge raw_data
+            if item.get("raw_data"):
+                existing_raw = permit.raw_data or {}
+                existing_raw.update(item["raw_data"])
+                permit.raw_data = existing_raw
+
+            updated += 1
+
+        await db.commit()
+
+        return {"updated": updated, "errors": errors}
+
+    except Exception as e:
+        logger.error(f"Batch enrich failed: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ===== SINGLE PERMIT =====
 
 
