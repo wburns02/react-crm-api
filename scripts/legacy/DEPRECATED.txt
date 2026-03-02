@@ -1,0 +1,17 @@
+These scripts have been replaced by the unified pipeline:
+
+    python scripts/unified_permit_pipeline.py --step ingest --sources all
+
+See scripts/pipeline/ for the modular implementation.
+
+Old script → New equivalent:
+  mgo_ossf_etl.py     → --sources mgo
+  travis_sss_etl.py   → --sources sss
+  travis_tnr_etl.py   → --sources tnr
+  t430_etl_ingest.py  → --sources mgo (same DB, use --county filter)
+  ocr_etl_ingest.py   → --sources ocr --ocr-db PATH --ocr-source-name NAME
+  geocode_permits.py   → --step geocode --limit 2000
+  enrich_permits.py    → --step geocode + --step parcel
+  parcel_enrich.py     → --step parcel
+
+Deprecated: 2026-03-02
