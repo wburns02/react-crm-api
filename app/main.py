@@ -26,6 +26,7 @@ from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.metrics import MetricsMiddleware
 from app.middleware.cache_headers import CacheHeadersMiddleware
 from app.middleware.timing import ServerTimingMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.api.public.router import public_router
 from app.webhooks.twilio import twilio_router
 from app.webhooks.ringcentral import ringcentral_webhook_router
@@ -1269,6 +1270,10 @@ app = FastAPI(
     redoc_url=redoc_url,
     lifespan=lifespan,
 )
+
+# Security headers middleware (PCI-DSS / OWASP compliance)
+# Adds CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+app.add_middleware(SecurityHeadersMiddleware)
 
 # GZip compression middleware - compress responses > 500 bytes
 # This can reduce response sizes by 60-80% for JSON payloads

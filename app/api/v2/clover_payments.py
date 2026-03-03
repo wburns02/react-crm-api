@@ -11,7 +11,7 @@ Handles:
 - Webhook handling for real-time payment updates
 """
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, text
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -26,8 +26,38 @@ from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.clover_oauth import CloverOAuthToken
 from app.services.clover_service import get_clover_service
+from app.services.encryption import encrypt_value, decrypt_value
+from app.core.rate_limit import get_public_api_rate_limiter
 
 logger = logging.getLogger(__name__)
+
+
+def _payment_rate_limit(request: Request, current_user: CurrentUser):
+    """Rate limit sensitive payment operations: 10 requests/min per user.
+
+    Prevents abuse of charge, refund, and collect endpoints.
+    Uses user email hash as client_id for per-user limiting.
+    """
+    import hashlib
+    user_hash = hashlib.sha256(current_user.email.encode()).hexdigest()[:16]
+    limiter = get_public_api_rate_limiter()
+    limiter.check_rate_limit(
+        client_id=f"payment:{user_hash}",
+        rate_limit_per_minute=10,
+        rate_limit_per_hour=100,
+    )
+
+
+def _refund_rate_limit(request: Request, current_user: CurrentUser):
+    """Stricter rate limit for refund operations: 5 requests/min per user."""
+    import hashlib
+    user_hash = hashlib.sha256(current_user.email.encode()).hexdigest()[:16]
+    limiter = get_public_api_rate_limiter()
+    limiter.check_rate_limit(
+        client_id=f"refund:{user_hash}",
+        rate_limit_per_minute=5,
+        rate_limit_per_hour=30,
+    )
 
 
 def _normalize_payment_method(tender_label: str) -> str:
@@ -114,7 +144,11 @@ class PaymentHistoryItem(BaseModel):
 
 
 async def _load_oauth_token(db, clover, entity_id=None) -> bool:
-    """Load active OAuth token from DB into service. Optionally scoped by entity_id."""
+    """Load active OAuth token from DB into service. Optionally scoped by entity_id.
+
+    Tokens are stored encrypted at rest — decrypted here before use.
+    Falls back to plaintext for tokens stored before encryption was added.
+    """
     try:
         query = select(CloverOAuthToken).where(CloverOAuthToken.is_active == True)
         if entity_id:
@@ -122,7 +156,11 @@ async def _load_oauth_token(db, clover, entity_id=None) -> bool:
         result = await db.execute(query.limit(1))
         token_record = result.scalar_one_or_none()
         if token_record:
-            clover.set_oauth_token(token_record.access_token, token_record.merchant_id)
+            # Decrypt token (falls back to raw value for legacy unencrypted tokens)
+            raw_token = token_record.access_token
+            decrypted = decrypt_value(raw_token)
+            token = decrypted if decrypted else raw_token
+            clover.set_oauth_token(token, token_record.merchant_id)
             return True
     except Exception as e:
         logger.warning(f"Failed to load OAuth token from DB: {e}")
@@ -205,7 +243,7 @@ async def oauth_authorize(
     }
 
 
-@router.post("/oauth/callback")
+@router.post("/oauth/callback", dependencies=[Depends(_payment_rate_limit)])
 async def oauth_callback(
     code: str = Query(..., description="Authorization code from Clover"),
     merchant_id: Optional[str] = Query(None, description="Merchant ID from Clover redirect"),
@@ -248,11 +286,12 @@ async def oauth_callback(
             text("UPDATE clover_oauth_tokens SET is_active = false WHERE is_active = true AND entity_id IS NULL")
         )
 
-    # Store new token
+    # Store new token (encrypted at rest)
+    encrypted_token = encrypt_value(access_token)
     token_record = CloverOAuthToken(
         id=uuid.uuid4(),
         merchant_id=oauth_merchant_id or settings.CLOVER_MERCHANT_ID or "unknown",
-        access_token=access_token,
+        access_token=encrypted_token,
         merchant_name=merchant_name,
         is_active=True,
         connected_by=current_user.email,
@@ -725,7 +764,7 @@ async def get_reconciliation(
 # =============================================================================
 
 
-@router.post("/collect")
+@router.post("/collect", dependencies=[Depends(_payment_rate_limit)])
 async def collect_payment(
     request: CollectPaymentRequest,
     db: DbSession,
@@ -905,7 +944,7 @@ async def collect_payment(
 # =============================================================================
 
 
-@router.post("/charge")
+@router.post("/charge", dependencies=[Depends(_payment_rate_limit)])
 async def charge_invoice(
     request: CreatePaymentRequest,
     db: DbSession,
@@ -1054,7 +1093,7 @@ async def get_invoice_payment_history(
 # =============================================================================
 
 
-@router.post("/refund")
+@router.post("/refund", dependencies=[Depends(_refund_rate_limit)])
 async def create_refund(
     payment_id: str = Query(...),
     amount: Optional[int] = Query(None, description="Amount in cents, or null for full refund"),
