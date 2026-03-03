@@ -213,8 +213,27 @@ class RingCentralService:
             "message": "Connected to RingCentral",
         }
 
+    async def _get_sms_sender_number(self) -> str | None:
+        """Find a phone number with SmsSender capability on the current extension."""
+        result = await self._api_request(
+            "GET",
+            "/restapi/v1.0/account/~/extension/~/phone-number",
+            params={"perPage": 100},
+        )
+        if result.get("error"):
+            return None
+
+        for pn in result.get("records", []):
+            features = pn.get("features", [])
+            if "SmsSender" in features:
+                return pn.get("phoneNumber")
+        return None
+
     async def send_sms(self, to: str, body: str) -> SMSResponse:
         """Send an SMS message via RingCentral.
+
+        Uses the standard SMS endpoint with a number that has SmsSender capability.
+        Auto-detects the sending number from the extension's phone numbers.
 
         Args:
             to: Destination phone number
@@ -226,35 +245,48 @@ class RingCentralService:
         if not self.is_configured:
             raise Exception("RingCentral not configured")
 
-        from_number = self.phone_number
-        if not from_number:
-            raise Exception("RINGCENTRAL_SMS_FROM_NUMBER not set")
-
         to_formatted = self._format_phone(to)
 
-        # Use A2P high-volume SMS endpoint (TCR-approved numbers require this)
+        # Use configured from-number first, or auto-detect SmsSender number
+        from_number = self.phone_number
+        if not from_number:
+            from_number = await self._get_sms_sender_number()
+        if not from_number:
+            raise Exception(
+                "No SMS-capable number found. Set RINGCENTRAL_SMS_FROM_NUMBER "
+                "or ensure the extension has a number with SmsSender feature."
+            )
+
+        # Standard SMS endpoint (works with extension numbers that have SmsSender)
         result = await self._api_request(
             "POST",
-            "/restapi/v1.0/account/~/a2p-sms/batches",
+            "/restapi/v1.0/account/~/extension/~/sms",
             data={
-                "from": from_number,
+                "from": {"phoneNumber": from_number},
+                "to": [{"phoneNumber": to_formatted}],
                 "text": body,
-                "messages": [{"to": [to_formatted]}],
             },
         )
 
         if result.get("error"):
-            # Fallback: try standard SMS endpoint
-            logger.warning(f"A2P SMS failed, trying standard endpoint: {result.get('error_body', result.get('error'))}")
-            result = await self._api_request(
-                "POST",
-                "/restapi/v1.0/account/~/extension/~/sms",
-                data={
-                    "from": {"phoneNumber": from_number},
-                    "to": [{"phoneNumber": to_formatted}],
-                    "text": body,
-                },
-            )
+            error_body = result.get("error_body", "")
+
+            # If the configured number can't send, try auto-detecting a SmsSender number
+            if "FeatureNotAvailable" in str(error_body) or "CMN-408" in str(error_body):
+                logger.warning(f"From number {from_number} can't send SMS, auto-detecting SmsSender number...")
+                sender_number = await self._get_sms_sender_number()
+                if sender_number and sender_number != from_number:
+                    logger.info(f"Found SmsSender number: {sender_number}")
+                    from_number = sender_number
+                    result = await self._api_request(
+                        "POST",
+                        "/restapi/v1.0/account/~/extension/~/sms",
+                        data={
+                            "from": {"phoneNumber": from_number},
+                            "to": [{"phoneNumber": to_formatted}],
+                            "text": body,
+                        },
+                    )
 
         if result.get("error"):
             error_msg = result.get("error_body", result.get("error", "Unknown error"))
@@ -268,14 +300,13 @@ class RingCentralService:
                 error=str(error_msg),
             )
 
-        # A2P returns batch info; standard returns message info
         msg_id = str(result.get("id", ""))
-        status = result.get("status", result.get("messageStatus", "Queued"))
-        logger.info(f"RingCentral SMS sent: {msg_id} to {to_formatted} (status={status})")
+        msg_status = result.get("messageStatus", "Queued")
+        logger.info(f"RingCentral SMS sent: {msg_id} to {to_formatted} (status={msg_status})")
 
         return SMSResponse(
             sid=msg_id,
-            status=status,
+            status=msg_status,
             to=to_formatted,
             body=body,
             from_number=from_number,
