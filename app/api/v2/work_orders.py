@@ -1454,7 +1454,6 @@ async def delete_work_order(
         try:
             from app.services.ms365_calendar_service import MS365CalendarService
             if MS365CalendarService.is_configured():
-                # Delete individual technician calendar event
                 if work_order.outlook_event_id and work_order.technician_id:
                     tech_result = await db.execute(
                         select(Technician).where(Technician.id == work_order.technician_id)
@@ -1466,7 +1465,6 @@ async def delete_work_order(
                             await MS365CalendarService.delete_event(ms_email, work_order.outlook_event_id)
                         except Exception:
                             pass
-                # Delete shared calendar event
                 shared_eid = getattr(work_order, "outlook_shared_event_id", None)
                 if shared_eid and MS365CalendarService.shared_calendar_configured():
                     try:
@@ -1475,6 +1473,60 @@ async def delete_work_order(
                         pass
         except Exception as cal_err:
             logging.warning(f"Calendar cleanup failed for WO {work_order_id}: {cal_err}")
+
+        # Nullify FK references in related tables before deletion
+        # (DB constraints may lack ON DELETE SET NULL despite model definitions)
+        from sqlalchemy import text as sql_text
+        wo_id = str(work_order.id)
+        for tbl, col in [
+            ("bookings", "work_order_id"),
+            ("invoices", "work_order_id"),
+            ("payments", "work_order_id"),
+            ("quotes", "converted_to_work_order_id"),
+            ("tickets", "work_order_id"),
+        ]:
+            try:
+                await db.execute(
+                    sql_text(f"UPDATE {tbl} SET {col} = NULL WHERE {col} = :wid"),
+                    {"wid": wo_id},
+                )
+            except Exception:
+                pass  # Table may not exist yet
+
+        # Delete cascade-eligible child rows
+        for tbl in ["work_order_audit_log", "work_order_photos", "job_costs"]:
+            try:
+                await db.execute(
+                    sql_text(f"DELETE FROM {tbl} WHERE work_order_id = :wid"),
+                    {"wid": wo_id},
+                )
+            except Exception:
+                pass
+
+        # Nullify GPS tracking references
+        for tbl, col in [
+            ("gps_locations", "current_work_order_id"),
+            ("gps_breadcrumbs", "work_order_id"),
+            ("gps_geofence_events", "work_order_id"),
+            ("gps_eta_estimates", "work_order_id"),
+        ]:
+            try:
+                await db.execute(
+                    sql_text(f"UPDATE {tbl} SET {col} = NULL WHERE {col} = :wid"),
+                    {"wid": wo_id},
+                )
+            except Exception:
+                pass
+
+        # Delete 1:1 GPS tables
+        for tbl in ["gps_work_order_tracking", "gps_route_history"]:
+            try:
+                await db.execute(
+                    sql_text(f"DELETE FROM {tbl} WHERE work_order_id = :wid"),
+                    {"wid": wo_id},
+                )
+            except Exception:
+                pass
 
         await db.delete(work_order)
         await db.commit()

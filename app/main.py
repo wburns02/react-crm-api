@@ -869,6 +869,54 @@ async def ensure_ms365_columns():
             logger.warning(f"Could not ensure MS365 columns: {type(e).__name__}: {e}")
 
 
+async def ensure_fk_on_delete():
+    """Fix FK constraints that may lack ON DELETE SET NULL/CASCADE.
+
+    Migration 082 was supposed to set these but may have failed silently.
+    This is idempotent — skips constraints that already have the correct behavior.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    fk_fixes = [
+        # (table, constraint_name, column, references_table, on_delete)
+        ("bookings", "bookings_work_order_id_fkey", "work_order_id", "work_orders", "SET NULL"),
+        ("invoices", "invoices_work_order_id_fkey", "work_order_id", "work_orders", "SET NULL"),
+        ("payments", "payments_work_order_id_fkey", "work_order_id", "work_orders", "SET NULL"),
+        ("tickets", "tickets_work_order_id_fkey", "work_order_id", "work_orders", "SET NULL"),
+        ("quotes", "quotes_converted_to_work_order_id_fkey", "converted_to_work_order_id", "work_orders", "SET NULL"),
+    ]
+
+    async with async_session_maker() as session:
+        try:
+            for table, constraint, column, ref_table, on_delete in fk_fixes:
+                # Check if constraint exists and what its delete rule is
+                result = await session.execute(
+                    text(
+                        "SELECT confdeltype FROM pg_constraint "
+                        "WHERE conname = :cname AND conrelid = :tbl::regclass"
+                    ),
+                    {"cname": constraint, "tbl": table},
+                )
+                row = result.first()
+                if row is None:
+                    continue  # Constraint doesn't exist, skip
+                # 'a' = NO ACTION, 'r' = RESTRICT, 'n' = SET NULL, 'c' = CASCADE
+                if row[0] in ('n', 'c'):
+                    continue  # Already correct
+                logger.info(f"Fixing FK {constraint}: current={row[0]}, target={on_delete}")
+                await session.execute(text(f"ALTER TABLE {table} DROP CONSTRAINT {constraint}"))
+                await session.execute(text(
+                    f"ALTER TABLE {table} ADD CONSTRAINT {constraint} "
+                    f"FOREIGN KEY ({column}) REFERENCES {ref_table}(id) ON DELETE {on_delete}"
+                ))
+            await session.commit()
+            logger.info("FK ON DELETE constraints ensured")
+        except Exception as e:
+            await session.rollback()
+            logger.warning(f"Could not fix FK constraints: {type(e).__name__}: {e}")
+
+
 async def ensure_mfa_tables():
     """
     Ensure MFA tables exist for authentication.
@@ -1018,6 +1066,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure MS365 integration columns exist (migrations 072-075)
         await ensure_ms365_columns()
+
+        # Fix FK constraints that may lack ON DELETE behavior (migration 082 may have failed)
+        await ensure_fk_on_delete()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
