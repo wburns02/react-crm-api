@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ENUM as PG_ENUM
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -31,9 +31,8 @@ class MessageStatus(str, enum.Enum):
 class Message(Base):
     """Message model for communications (SMS, email, etc.).
 
-    Note: This model maps to the actual database schema which uses VARCHAR
-    for type/direction/status instead of enums, and has separate columns
-    for phone numbers and emails.
+    Note: DB uses PostgreSQL ENUM types for type/direction/status (migration 036).
+    The 'type' column is accessed as 'message_type' in Python to avoid conflicts.
     """
 
     __tablename__ = "messages"
@@ -42,11 +41,20 @@ class Message(Base):
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), index=True)
     work_order_id = Column(UUID(as_uuid=True), nullable=True)
 
-    # Type, direction, status - stored as VARCHAR in DB
-    # DB column is "type" (migration 036), accessed as "message_type" in Python
-    message_type = Column("type", String(50), nullable=False)  # sms, email, call, note
-    direction = Column(String(20), nullable=False)  # inbound, outbound
-    status = Column(String(20))  # pending, queued, sent, delivered, failed, received
+    # Type, direction, status - PostgreSQL ENUM types (migration 036)
+    # DB column is "type", accessed as "message_type" in Python
+    message_type = Column(
+        "type",
+        PG_ENUM("sms", "email", "call", "note", name="messagetype", create_type=False),
+        nullable=False,
+    )
+    direction = Column(
+        PG_ENUM("inbound", "outbound", name="messagedirection", create_type=False),
+        nullable=False,
+    )
+    status = Column(
+        PG_ENUM("pending", "queued", "sent", "delivered", "failed", "received", name="messagestatus", create_type=False),
+    )
 
     # Phone numbers (for SMS)
     from_number = Column(String(50))
