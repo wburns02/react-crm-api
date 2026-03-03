@@ -870,28 +870,38 @@ async def ensure_ms365_columns():
 
 
 async def ensure_call_logs_nullable():
-    """Make rc_call_id nullable so quick-log calls can insert without a RingCentral ID."""
+    """Make legacy NOT NULL columns nullable so quick-log can insert without RingCentral data."""
     from sqlalchemy import text
     from app.database import async_session_maker
+
+    # Columns that may have NOT NULL in the DB but aren't set by the quick-log endpoint
+    cols_to_fix = [
+        "rc_call_id", "from_number", "to_number", "from_name", "to_name",
+        "start_time", "end_time", "status", "result", "reason",
+    ]
 
     async with async_session_maker() as session:
         try:
             result = await session.execute(text(
-                "SELECT is_nullable FROM information_schema.columns "
-                "WHERE table_name = 'call_logs' AND column_name = 'rc_call_id'"
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'call_logs' AND is_nullable = 'NO' "
+                "AND column_name != 'id' AND column_name != 'user_id'"
             ))
-            row = result.first()
-            if row and row[0] == 'NO':
+            not_null_cols = [r[0] for r in result.fetchall()]
+            fixed = []
+            for col in not_null_cols:
                 await session.execute(text(
-                    "ALTER TABLE call_logs ALTER COLUMN rc_call_id DROP NOT NULL"
+                    f"ALTER TABLE call_logs ALTER COLUMN \"{col}\" DROP NOT NULL"
                 ))
+                fixed.append(col)
+            if fixed:
                 await session.commit()
-                logger.info("Made call_logs.rc_call_id nullable")
+                logger.info(f"Made call_logs columns nullable: {fixed}")
             else:
-                logger.info("call_logs.rc_call_id already nullable or doesn't exist")
+                logger.info("All call_logs columns already nullable")
         except Exception as e:
             await session.rollback()
-            logger.warning(f"Could not fix call_logs.rc_call_id: {type(e).__name__}: {e}")
+            logger.warning(f"Could not fix call_logs nullable: {type(e).__name__}: {e}")
 
 
 async def ensure_fk_on_delete():
