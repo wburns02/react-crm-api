@@ -894,7 +894,7 @@ async def ensure_fk_on_delete():
                 result = await session.execute(
                     text(
                         "SELECT confdeltype FROM pg_constraint "
-                        "WHERE conname = :cname AND conrelid = :tbl::regclass"
+                        "WHERE conname = :cname AND conrelid = cast(:tbl AS regclass)"
                     ),
                     {"cname": constraint, "tbl": table},
                 )
