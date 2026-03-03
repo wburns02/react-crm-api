@@ -1475,45 +1475,39 @@ async def delete_work_order(
             logging.warning(f"Calendar cleanup failed for WO {work_order_id}: {cal_err}")
 
         # Nullify FK references in related tables before deletion
-        # Uses a separate session to avoid aborting the main transaction
+        # Each cleanup runs in its own transaction to avoid cascade abort
         from sqlalchemy import text as sql_text
         from app.database import async_session_maker
         wo_id = str(work_order.id)
-        async with async_session_maker() as cleanup_db:
-            # SET NULL on nullable FKs
-            for tbl, col in [
-                ("bookings", "work_order_id"),
-                ("invoices", "work_order_id"),
-                ("payments", "work_order_id"),
-                ("quotes", "converted_to_work_order_id"),
-                ("tickets", "work_order_id"),
-                ("gps_locations", "current_work_order_id"),
-                ("gps_breadcrumbs", "work_order_id"),
-                ("gps_geofence_events", "work_order_id"),
-                ("gps_eta_estimates", "work_order_id"),
-            ]:
-                try:
-                    await cleanup_db.execute(
-                        sql_text(f"UPDATE {tbl} SET {col} = NULL WHERE {col} = :wid"),
-                        {"wid": wo_id},
-                    )
-                except Exception:
-                    await cleanup_db.rollback()
 
-            # DELETE cascade-eligible child rows
-            for tbl in [
-                "work_order_audit_log", "work_order_photos", "job_costs",
-                "gps_work_order_tracking", "gps_route_history",
-            ]:
+        async def _cleanup_sql(query: str):
+            async with async_session_maker() as s:
                 try:
-                    await cleanup_db.execute(
-                        sql_text(f"DELETE FROM {tbl} WHERE work_order_id = :wid"),
-                        {"wid": wo_id},
-                    )
+                    await s.execute(sql_text(query), {"wid": wo_id})
+                    await s.commit()
                 except Exception:
-                    await cleanup_db.rollback()
+                    await s.rollback()
 
-            await cleanup_db.commit()
+        # SET NULL on nullable FKs
+        for tbl, col in [
+            ("bookings", "work_order_id"),
+            ("invoices", "work_order_id"),
+            ("payments", "work_order_id"),
+            ("quotes", "converted_to_work_order_id"),
+            ("tickets", "work_order_id"),
+            ("gps_locations", "current_work_order_id"),
+            ("gps_breadcrumbs", "work_order_id"),
+            ("gps_geofence_events", "work_order_id"),
+            ("gps_eta_estimates", "work_order_id"),
+        ]:
+            await _cleanup_sql(f"UPDATE {tbl} SET {col} = NULL WHERE {col} = :wid")
+
+        # DELETE cascade-eligible child rows
+        for tbl in [
+            "work_order_audit_log", "work_order_photos", "job_costs",
+            "gps_work_order_tracking", "gps_route_history",
+        ]:
+            await _cleanup_sql(f"DELETE FROM {tbl} WHERE work_order_id = :wid")
 
         await db.delete(work_order)
         await db.commit()
