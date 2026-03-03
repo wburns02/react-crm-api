@@ -314,6 +314,16 @@ async def ensure_messages_columns():
             )
             type_exists = result.scalar()
 
+            # Make legacy message_type VARCHAR column nullable if it exists
+            # (the ENUM 'type' column from migration 036 is the canonical column)
+            try:
+                await session.execute(
+                    text("ALTER TABLE messages ALTER COLUMN message_type DROP NOT NULL")
+                )
+                await session.commit()
+            except Exception:
+                await session.rollback()
+
             if not type_exists:
                 logger.info("Adding missing columns to messages table...")
 
@@ -2716,7 +2726,7 @@ async def create_core_tables():
                 id SERIAL PRIMARY KEY,
                 customer_id INTEGER REFERENCES customers(id),
                 work_order_id VARCHAR(36) REFERENCES work_orders(id),
-                message_type VARCHAR(20) NOT NULL,
+                message_type VARCHAR(20),
                 direction VARCHAR(20) NOT NULL,
                 status VARCHAR(20) DEFAULT 'pending',
                 from_number VARCHAR(20),
