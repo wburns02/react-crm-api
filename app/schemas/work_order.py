@@ -6,6 +6,20 @@ from decimal import Decimal
 from app.schemas.types import UUIDStr
 
 
+class CustomerEmbed(BaseModel):
+    """Embedded customer contact info returned within work order responses."""
+
+    id: str
+    first_name: str = ""
+    last_name: str = ""
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address_line1: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+
+
 class WorkOrderBase(BaseModel):
     """Base work order schema."""
 
@@ -129,6 +143,8 @@ class WorkOrderResponse(WorkOrderBase):
     work_order_number: Optional[str] = None  # Human-readable WO-NNNNNN format
     customer_name: Optional[str] = None  # Populated from Customer JOIN
     customer_phone: Optional[str] = None  # Populated from Customer JOIN
+    customer_email: Optional[str] = None  # Populated from Customer JOIN
+    customer: Optional[CustomerEmbed] = None  # Nested customer contact info
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     created_by: Optional[str] = None

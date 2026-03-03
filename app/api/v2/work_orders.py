@@ -222,11 +222,25 @@ def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -
     """Convert WorkOrder to dict with customer_name populated from Customer JOIN."""
     customer_name = None
     customer_phone = None
+    customer_email = None
+    customer_obj = None
     if customer:
         first = customer.first_name or ""
         last = customer.last_name or ""
         customer_name = f"{first} {last}".strip() or None
         customer_phone = customer.phone or None
+        customer_email = customer.email or None
+        customer_obj = {
+            "id": str(customer.id),
+            "first_name": customer.first_name or "",
+            "last_name": customer.last_name or "",
+            "email": customer.email,
+            "phone": customer.phone,
+            "address_line1": customer.address_line1,
+            "city": customer.city,
+            "state": customer.state,
+            "postal_code": customer.postal_code,
+        }
 
     return {
         "id": wo.id,
@@ -234,6 +248,8 @@ def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -
         "customer_id": wo.customer_id,
         "customer_name": customer_name,
         "customer_phone": customer_phone,
+        "customer_email": customer_email,
+        "customer": customer_obj,
         "technician_id": wo.technician_id,
         "job_type": str(wo.job_type) if wo.job_type else None,
         "status": str(wo.status) if wo.status else "draft",
