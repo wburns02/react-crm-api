@@ -869,6 +869,31 @@ async def ensure_ms365_columns():
             logger.warning(f"Could not ensure MS365 columns: {type(e).__name__}: {e}")
 
 
+async def ensure_call_logs_nullable():
+    """Make rc_call_id nullable so quick-log calls can insert without a RingCentral ID."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    async with async_session_maker() as session:
+        try:
+            result = await session.execute(text(
+                "SELECT is_nullable FROM information_schema.columns "
+                "WHERE table_name = 'call_logs' AND column_name = 'rc_call_id'"
+            ))
+            row = result.first()
+            if row and row[0] == 'NO':
+                await session.execute(text(
+                    "ALTER TABLE call_logs ALTER COLUMN rc_call_id DROP NOT NULL"
+                ))
+                await session.commit()
+                logger.info("Made call_logs.rc_call_id nullable")
+            else:
+                logger.info("call_logs.rc_call_id already nullable or doesn't exist")
+        except Exception as e:
+            await session.rollback()
+            logger.warning(f"Could not fix call_logs.rc_call_id: {type(e).__name__}: {e}")
+
+
 async def ensure_fk_on_delete():
     """Fix FK constraints that may lack ON DELETE SET NULL/CASCADE.
 
@@ -1066,6 +1091,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure MS365 integration columns exist (migrations 072-075)
         await ensure_ms365_columns()
+
+        # Make call_logs.rc_call_id nullable for quick-log
+        await ensure_call_logs_nullable()
 
         # Fix FK constraints that may lack ON DELETE behavior (migration 082 may have failed)
         await ensure_fk_on_delete()
