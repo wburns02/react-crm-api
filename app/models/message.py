@@ -43,7 +43,8 @@ class Message(Base):
     work_order_id = Column(UUID(as_uuid=True), nullable=True)
 
     # Type, direction, status - stored as VARCHAR in DB
-    message_type = Column(String(50), nullable=False)  # sms, email, call, note
+    # DB column is "type" (migration 036), accessed as "message_type" in Python
+    message_type = Column("type", String(50), nullable=False)  # sms, email, call, note
     direction = Column(String(20), nullable=False)  # inbound, outbound
     status = Column(String(20))  # pending, queued, sent, delivered, failed, received
 
