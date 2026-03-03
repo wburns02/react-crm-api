@@ -28,6 +28,7 @@ from app.middleware.cache_headers import CacheHeadersMiddleware
 from app.middleware.timing import ServerTimingMiddleware
 from app.api.public.router import public_router
 from app.webhooks.twilio import twilio_router
+from app.webhooks.ringcentral import ringcentral_webhook_router
 from app.config import settings
 from app.database import init_db
 from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
@@ -1327,6 +1328,7 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v2")
 app.include_router(public_router, prefix="/api/public/v1", tags=["Public API"])
 app.include_router(twilio_router, prefix="/webhooks/twilio", tags=["webhooks"])
+app.include_router(ringcentral_webhook_router, prefix="/webhooks/ringcentral", tags=["webhooks"])
 
 # Serve static assets (logos, etc.) — no auth required
 from starlette.staticfiles import StaticFiles

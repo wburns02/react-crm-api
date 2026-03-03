@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     RINGCENTRAL_CLIENT_SECRET: str | None = None
     RINGCENTRAL_SERVER_URL: str = "https://platform.ringcentral.com"
     RINGCENTRAL_JWT_TOKEN: str | None = None
+    RINGCENTRAL_SMS_FROM_NUMBER: str | None = None  # TCR-approved A2P number
 
     # Samsara Fleet Tracking
     SAMSARA_API_TOKEN: str | None = None

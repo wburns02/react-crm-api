@@ -1356,15 +1356,14 @@ async def update_work_order(
                     # Send "Pay Now" SMS with customer portal link
                     try:
                         if customer and customer.phone:
-                            from app.services.twilio_service import TwilioService
+                            from app.services.sms_service import sms_service as sms_svc
                             pay_url = f"https://react.ecbtx.com/portal/pay/{inv.id}"
                             sms_msg = (
                                 f"Hi {customer.first_name or "there"}, your invoice "
                                 f"#{inv.invoice_number} for ${float(total):.2f} is ready. "
                                 f"Pay online: {pay_url}"
                             )
-                            twilio = TwilioService()
-                            await twilio.send_sms(customer.phone, sms_msg)
+                            await sms_svc.send_sms(customer.phone, sms_msg)
                             logger.info(f"Sent Pay Now SMS to {customer.phone} for invoice {inv.invoice_number}")
                     except Exception as sms_err:
                         logger.warning(f"Pay Now SMS failed for invoice {inv.invoice_number}: {sms_err}")
@@ -1376,7 +1375,7 @@ async def update_work_order(
     notification_sent = False
     if old_status != new_status and new_status == "completed":
         try:
-            from app.services.twilio_service import TwilioService
+            from app.services.sms_service import sms_service as sms_svc
             if work_order.customer_id and customer:
                 phone = customer.phone
                 if phone:
@@ -1386,13 +1385,12 @@ async def update_work_order(
                         f"Hi {customer.first_name}! Your septic service at {addr} is complete. "
                         f"Thank you for choosing MAC Septic. Questions? Call (512) 353-0555."
                     )
-                    sms = TwilioService()
-                    if sms.is_configured:
-                        await sms.send_sms(to=phone, body=msg)
+                    if sms_svc.is_configured:
+                        await sms_svc.send_sms(to=phone, body=msg)
                         notification_sent = True
                         logger.info(f"Completion SMS sent to {phone} for WO {work_order_id}")
                     else:
-                        logger.info("Twilio not configured — completion SMS skipped")
+                        logger.info("SMS service not configured — completion SMS skipped")
         except Exception as e:
             logger.warning(f"Completion SMS failed for WO {work_order_id}: {e}")
 

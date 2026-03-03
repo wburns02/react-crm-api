@@ -79,7 +79,7 @@ async def auto_dispatch_unassigned():
 async def _send_unassigned_alert(count: int, target_date: date):
     """Send SMS alert about unassigned jobs."""
     try:
-        from app.services.twilio_service import send_sms
+        from app.services.sms_service import send_sms
         from app.core.config import settings
         admin_phone = getattr(settings, "ADMIN_PHONE", None)
         if admin_phone:

@@ -427,7 +427,7 @@ async def patch_employee_job(
     notification_sent = False
     if old_status_patch != request.status and request.status == "completed":
         try:
-            from app.services.twilio_service import TwilioService
+            from app.services.sms_service import sms_service as sms_svc
             if work_order.customer_id:
                 cust_result = await db.execute(select(Customer).where(Customer.id == work_order.customer_id))
                 cust = cust_result.scalar_one_or_none()
@@ -438,9 +438,8 @@ async def patch_employee_job(
                         f"Hi {cust.first_name}! Your septic service at {addr} is complete. "
                         f"Thank you for choosing MAC Septic. Questions? Call (512) 353-0555."
                     )
-                    sms = TwilioService()
-                    if sms.is_configured:
-                        await sms.send_sms(to=cust.phone, body=msg)
+                    if sms_svc.is_configured:
+                        await sms_svc.send_sms(to=cust.phone, body=msg)
                         notification_sent = True
                         logger.info(f"Completion SMS sent to {cust.phone} for job {job_id}")
         except Exception as e:
@@ -610,7 +609,7 @@ async def complete_job(
     # Auto-notify customer via SMS on job completion
     notification_sent = False
     try:
-        from app.services.twilio_service import TwilioService
+        from app.services.sms_service import sms_service as sms_svc
         if work_order.customer_id:
             cust_result = await db.execute(select(Customer).where(Customer.id == work_order.customer_id))
             cust = cust_result.scalar_one_or_none()
@@ -621,9 +620,8 @@ async def complete_job(
                     f"Hi {cust.first_name}! Your septic service at {addr} is complete. "
                     f"Thank you for choosing MAC Septic. Questions? Call (512) 353-0555."
                 )
-                sms = TwilioService()
-                if sms.is_configured:
-                    await sms.send_sms(to=cust.phone, body=msg)
+                if sms_svc.is_configured:
+                    await sms_svc.send_sms(to=cust.phone, body=msg)
                     notification_sent = True
                     logger.info(f"Completion SMS sent to {cust.phone} for job {job_id}")
     except Exception as e:
@@ -1026,7 +1024,7 @@ async def update_job_status(
     notification_sent = False
     if old_status_field != request.status and request.status == "completed":
         try:
-            from app.services.twilio_service import TwilioService
+            from app.services.sms_service import sms_service as sms_svc
             if work_order.customer_id:
                 cust_result = await db.execute(select(Customer).where(Customer.id == work_order.customer_id))
                 cust = cust_result.scalar_one_or_none()
@@ -1037,9 +1035,8 @@ async def update_job_status(
                         f"Hi {cust.first_name}! Your septic service at {addr} is complete. "
                         f"Thank you for choosing MAC Septic. Questions? Call (512) 353-0555."
                     )
-                    sms = TwilioService()
-                    if sms.is_configured:
-                        await sms.send_sms(to=cust.phone, body=msg)
+                    if sms_svc.is_configured:
+                        await sms_svc.send_sms(to=cust.phone, body=msg)
                         notification_sent = True
                         logger.info(f"Completion SMS sent to {cust.phone} for WO {work_order_id}")
         except Exception as e:
@@ -1927,8 +1924,7 @@ async def save_inspection_state(
             logger.info(f"[INSPECTION-EMAIL] send_report received: method={method}, to={to}, keys={list(send_report.keys())}, has_pdf_base64={'pdf_base64' in send_report}, has_pdfBase64={'pdfBase64' in send_report}, pdf_base64_len={len(send_report.get('pdf_base64') or send_report.get('pdfBase64') or '')}")
             if method == "sms" and to:
                 try:
-                    from app.services.twilio_service import TwilioService
-                    sms_service = TwilioService()
+                    from app.services.sms_service import sms_service as sms_svc
                     # Build a concise text summary
                     insp = (wo.checklist or {}).get("inspection", {})
                     summary = insp.get("summary", {})
@@ -1945,7 +1941,7 @@ async def save_inspection_state(
                         for rec in recs[:3]:
                             sms_body += f"- {rec[:80]}\n"
                     sms_body += "\nThank you for choosing MAC Septic!"
-                    await sms_service.send_sms(to=to, body=sms_body)
+                    await sms_svc.send_sms(to=to, body=sms_body)
                     report_sent = True
                 except Exception as sms_err:
                     logger.warning(f"Failed to send report via SMS: {sms_err}")
@@ -3137,12 +3133,11 @@ async def notify_arrival(
         # Try Twilio if available
         sent = False
         try:
-            from app.services.twilio_service import TwilioService
-            sms_service = TwilioService()
-            result = await sms_service.send_sms(to=phone, body=message)
+            from app.services.sms_service import sms_service as sms_svc
+            result = await sms_svc.send_sms(to=phone, body=message)
             sent = bool(result)
         except Exception as sms_err:
-            logger.warning(f"Twilio SMS failed: {sms_err}")
+            logger.warning(f"SMS send failed: {sms_err}")
 
         # Update inspection state
         checklist = wo.checklist or {}

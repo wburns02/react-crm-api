@@ -20,7 +20,7 @@ GOOGLE_REVIEW_URL = "https://g.page/r/macseptic/review"
 
 async def send_followup_sms(phone: str, customer_name: str, wo_number: str):
     """Send a post-service follow-up SMS."""
-    from app.services.twilio_service import send_sms
+    from app.services.sms_service import send_sms
     message = (
         f"Hi {customer_name}, thank you for choosing MAC Septic Services! "
         f"We hope your recent service (#{wo_number}) went well. "
@@ -35,7 +35,7 @@ async def send_followup_sms(phone: str, customer_name: str, wo_number: str):
 
 async def send_review_request_sms(phone: str, customer_name: str):
     """Send Google review request SMS."""
-    from app.services.twilio_service import send_sms
+    from app.services.sms_service import send_sms
     message = (
         f"Hi {customer_name}, we'd love your feedback! "
         f"If you were happy with our service, please leave us a Google review: "

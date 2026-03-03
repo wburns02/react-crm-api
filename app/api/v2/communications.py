@@ -23,7 +23,7 @@ from app.schemas.message import (
     MessageResponse,
     MessageListResponse,
 )
-from app.services.twilio_service import TwilioService
+from app.services.sms_service import sms_service
 from app.services.email_service import EmailService
 from app.security.rate_limiter import rate_limit_sms
 from app.security.rbac import require_permission, Permission, has_permission
@@ -152,8 +152,6 @@ async def send_sms(
         )
         raise
 
-    twilio_service = TwilioService()
-
     # Create message record with correct column names
     message = Message(
         customer_id=request.customer_id,
@@ -161,22 +159,22 @@ async def send_sms(
         direction="outbound",
         status="pending",
         to_number=request.to,
-        from_number=twilio_service.phone_number,
+        from_number=sms_service.phone_number,
         content=request.body,
     )
     db.add(message)
     await db.commit()
     await db.refresh(message)
 
-    # Send via Twilio
+    # Send via RingCentral (TCR-approved)
     try:
-        twilio_response = await twilio_service.send_sms(
+        sms_response = await sms_service.send_sms(
             to=request.to,
             body=request.body,
         )
 
-        # Update message with Twilio response
-        message.external_id = twilio_response.sid
+        # Update message with SMS response
+        message.external_id = sms_response.sid
         message.status = "queued"
         message.sent_at = datetime.utcnow()
         await db.commit()

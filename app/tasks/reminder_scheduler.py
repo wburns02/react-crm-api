@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session_maker
 from app.models.service_interval import CustomerServiceSchedule, ServiceInterval, ServiceReminder
 from app.models.customer import Customer
-from app.services.twilio_service import TwilioService
+from app.services.sms_service import sms_service as sms_svc
 from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
@@ -188,9 +188,8 @@ MAC Septic Services Team
     sms_message_id = None
     if customer.phone:
         try:
-            twilio = TwilioService()
-            if twilio.is_configured:
-                sms_response = await twilio.send_sms(to=customer.phone, body=message_body)
+            if sms_svc.is_configured:
+                sms_response = await sms_svc.send_sms(to=customer.phone, body=message_body)
                 sms_sent = True
                 sms_message_id = getattr(sms_response, "sid", None)
                 logger.info(f"SMS reminder sent to {customer.phone[-4:]} for schedule {schedule.id}")

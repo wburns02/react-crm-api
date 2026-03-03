@@ -19,7 +19,7 @@ from app.api.deps import DbSession, CurrentUser
 from app.models.ai_agent import AIAgent, AgentConversation, AgentMessage, AgentTask
 from app.models.customer import Customer
 from app.services.ai_gateway import ai_gateway
-from app.services.twilio_service import TwilioService
+from app.services.sms_service import sms_service as sms_svc
 from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
@@ -389,8 +389,7 @@ async def send_agent_message(
 
             try:
                 if conv.channel == "sms" and customer.phone:
-                    twilio = TwilioService()
-                    await twilio.send_sms(customer.phone, msg.content)
+                    await sms_svc.send_sms(customer.phone, msg.content)
                     msg.delivery_status = "sent"
                 elif conv.channel == "email" and customer.email:
                     email_svc = EmailService()

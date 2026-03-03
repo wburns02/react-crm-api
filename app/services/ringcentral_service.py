@@ -12,12 +12,24 @@ import httpx
 import logging
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 import json
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SMSResponse:
+    """Response from sending an SMS via RingCentral."""
+    sid: str
+    status: str
+    to: str
+    body: str
+    from_number: str = ""
+    error: str | None = None
 
 
 class RingCentralConfig(BaseModel):
@@ -48,6 +60,23 @@ class RingCentralService:
     def is_configured(self) -> bool:
         """Check if RingCentral is configured."""
         return bool(self.config.client_id and self.config.client_secret)
+
+    @property
+    def phone_number(self) -> str | None:
+        """Get the TCR-approved SMS from-number."""
+        return settings.RINGCENTRAL_SMS_FROM_NUMBER
+
+    @staticmethod
+    def _format_phone(phone: str) -> str:
+        """Format phone number to E.164 format."""
+        digits = "".join(c for c in phone if c.isdigit())
+        if len(digits) == 10:
+            return f"+1{digits}"
+        elif len(digits) == 11 and digits.startswith("1"):
+            return f"+{digits}"
+        elif phone.startswith("+"):
+            return phone
+        return f"+{digits}"
 
     async def get_client(self) -> httpx.AsyncClient:
         """Get HTTP client with auth headers."""
@@ -131,6 +160,8 @@ class RingCentralService:
                 response = await client.get(endpoint, headers=headers, params=params)
             elif method == "POST":
                 response = await client.post(endpoint, headers=headers, json=data)
+            elif method == "PUT":
+                response = await client.put(endpoint, headers=headers, json=data)
             elif method == "DELETE":
                 response = await client.delete(endpoint, headers=headers)
             else:
@@ -181,6 +212,59 @@ class RingCentralService:
             "account_name": result.get("name"),
             "message": "Connected to RingCentral",
         }
+
+    async def send_sms(self, to: str, body: str) -> SMSResponse:
+        """Send an SMS message via RingCentral.
+
+        Args:
+            to: Destination phone number
+            body: SMS message body
+
+        Returns:
+            SMSResponse with message details
+        """
+        if not self.is_configured:
+            raise Exception("RingCentral not configured")
+
+        from_number = self.phone_number
+        if not from_number:
+            raise Exception("RINGCENTRAL_SMS_FROM_NUMBER not set")
+
+        to_formatted = self._format_phone(to)
+
+        result = await self._api_request(
+            "POST",
+            "/restapi/v1.0/account/~/extension/~/sms",
+            data={
+                "from": {"phoneNumber": from_number},
+                "to": [{"phoneNumber": to_formatted}],
+                "text": body,
+            },
+        )
+
+        if result.get("error"):
+            error_msg = result.get("error_body", result.get("error", "Unknown error"))
+            logger.error(f"RingCentral SMS failed to {to_formatted}: {error_msg}")
+            return SMSResponse(
+                sid="",
+                status="failed",
+                to=to_formatted,
+                body=body,
+                from_number=from_number,
+                error=str(error_msg),
+            )
+
+        msg_id = str(result.get("id", ""))
+        status = result.get("messageStatus", "Queued")
+        logger.info(f"RingCentral SMS sent: {msg_id} to {to_formatted} (status={status})")
+
+        return SMSResponse(
+            sid=msg_id,
+            status=status,
+            to=to_formatted,
+            body=body,
+            from_number=from_number,
+        )
 
     async def make_call(
         self,

@@ -176,11 +176,10 @@ async def request_code(body: RequestCodeBody, db: DbSession):
 
     if is_phone:
         try:
-            from app.services.twilio_service import TwilioService
+            from app.services.sms_service import sms_service as sms_svc
 
-            twilio = TwilioService()
-            if twilio.is_configured:
-                await twilio.send_sms(
+            if sms_svc.is_configured:
+                await sms_svc.send_sms(
                     to=contact,
                     body=(
                         f"Your MAC Service Platform verification code is: {code}. "
@@ -191,7 +190,7 @@ async def request_code(body: RequestCodeBody, db: DbSession):
                 logger.info("OTP SMS sent to customer %s", customer_id_str)
             else:
                 logger.warning(
-                    "Twilio not configured — OTP for customer %s: %s",
+                    "SMS service not configured — OTP for customer %s: %s",
                     customer_id_str,
                     code,
                 )

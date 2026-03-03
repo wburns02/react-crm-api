@@ -299,7 +299,7 @@ async def quick_create(
     sms_sent = False
     if req.notify_tech and tech.phone:
         try:
-            from app.services.twilio_service import twilio_service
+            from app.services.sms_service import sms_service as sms_svc
             sms_body = (
                 f"New job! {cust_name} at {cust_addr}. "
                 f"{req.job_type.title()} on {req.scheduled_date.strftime('%m/%d/%Y')}."
@@ -307,7 +307,7 @@ async def quick_create(
             if req.notes:
                 sms_body += f" Notes: {req.notes}"
             sms_body += " — Mac Septic CRM"
-            await twilio_service.send_sms(tech.phone, sms_body)
+            await sms_svc.send_sms(tech.phone, sms_body)
             sms_sent = True
         except Exception as e:
             logger.warning(f"Failed to send dispatch SMS to {tech_name}: {e}")
@@ -360,7 +360,7 @@ async def notify_tech(
     cust_addr = (customer.address_line1 if customer else wo.service_address_line1) or "No address"
 
     try:
-        from app.services.twilio_service import twilio_service
+        from app.services.sms_service import sms_service as sms_svc
         sms_body = (
             f"Job reminder: {cust_name} at {cust_addr}. "
             f"{(wo.job_type or 'Service').title()}"
@@ -370,7 +370,7 @@ async def notify_tech(
         if wo.notes:
             sms_body += f". Notes: {wo.notes}"
         sms_body += " — Mac Septic CRM"
-        await twilio_service.send_sms(tech.phone, sms_body)
+        await sms_svc.send_sms(tech.phone, sms_body)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"SMS failed: {str(e)}")
 

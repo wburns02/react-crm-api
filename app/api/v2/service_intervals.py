@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_db, get_current_user
 from app.models import Customer
 from app.models.service_interval import ServiceInterval, CustomerServiceSchedule, ServiceReminder
-from app.services.twilio_service import TwilioService
+from app.services.sms_service import sms_service as sms_svc
 from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
@@ -650,13 +650,12 @@ async def send_service_reminder(
         if not customer.phone:
             raise HTTPException(status_code=400, detail="Customer has no phone number on file")
         try:
-            twilio = TwilioService()
-            if twilio.is_configured:
-                await twilio.send_sms(to=customer.phone, body=sms_body)
+            if sms_svc.is_configured:
+                await sms_svc.send_sms(to=customer.phone, body=sms_body)
                 sent = True
                 logger.info(f"Manual SMS reminder sent to {customer.phone[-4:]} for schedule {schedule.id}")
             else:
-                error_message = "Twilio is not configured"
+                error_message = "SMS service is not configured"
         except Exception as e:
             error_message = str(e)
             logger.error(f"Failed to send manual SMS reminder: {e}")
