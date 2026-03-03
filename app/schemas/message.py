@@ -25,12 +25,33 @@ class MessageCreate(MessageBase):
 
 
 class SendSMSRequest(BaseModel):
-    """Schema for sending SMS."""
+    """Schema for sending SMS.
+
+    Accepts both new field names (to, body) and frontend field names
+    (to_phone, message) for backwards compatibility.
+    """
 
     customer_id: Optional[str] = None
-    to: str = Field(..., description="Phone number to send to")
-    body: str = Field(..., min_length=1, description="Message content")
+    to: Optional[str] = Field(None, description="Phone number to send to")
+    to_phone: Optional[str] = Field(None, description="Phone number (frontend)")
+    body: Optional[str] = Field(None, min_length=1, description="Message content")
+    message: Optional[str] = Field(None, description="Message content (frontend)")
+    work_order_id: Optional[str] = None
+    template_id: Optional[str] = None
     source: str = "react"
+
+    @model_validator(mode="after")
+    def normalize_fields(self):
+        """Normalize frontend field names to canonical ones."""
+        if not self.to and self.to_phone:
+            self.to = self.to_phone
+        if not self.body and self.message:
+            self.body = self.message
+        if not self.to:
+            raise ValueError("Either 'to' or 'to_phone' field is required")
+        if not self.body:
+            raise ValueError("Either 'body' or 'message' field is required")
+        return self
 
 
 class SendEmailRequest(BaseModel):

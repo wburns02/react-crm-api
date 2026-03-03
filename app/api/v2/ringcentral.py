@@ -1913,3 +1913,70 @@ async def sip_provision(
     except Exception as e:
         logger.error(f"SIP provision error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sms-diagnostic")
+async def sms_diagnostic(
+    current_user: CurrentUser,
+):
+    """Diagnostic endpoint to check SMS capabilities of the RC account."""
+    if not ringcentral_service.is_configured:
+        return {"error": "RingCentral not configured"}
+
+    results = {}
+
+    # 1. Full extension info (includes serviceFeatures)
+    ext = await ringcentral_service._api_request(
+        "GET", "/restapi/v1.0/account/~/extension/~"
+    )
+    results["extension"] = {
+        "id": ext.get("id"),
+        "name": ext.get("name"),
+        "extensionNumber": ext.get("extensionNumber"),
+        "status": ext.get("status"),
+        "serviceFeatures": ext.get("serviceFeatures"),
+        "permissions": ext.get("permissions"),
+    }
+
+    # 2. Account phone numbers (which numbers can send SMS)
+    phone_numbers = await ringcentral_service._api_request(
+        "GET",
+        "/restapi/v1.0/account/~/phone-number",
+        params={"perPage": 100},
+    )
+    results["phone_numbers"] = [
+        {
+            "phoneNumber": pn.get("phoneNumber"),
+            "usageType": pn.get("usageType"),
+            "type": pn.get("type"),
+            "features": pn.get("features"),
+            "status": pn.get("status"),
+            "extension": pn.get("extension", {}).get("extensionNumber") if pn.get("extension") else None,
+        }
+        for pn in phone_numbers.get("records", [])
+    ]
+
+    # 3. Extension phone numbers (numbers assigned to this ext)
+    ext_numbers = await ringcentral_service._api_request(
+        "GET",
+        "/restapi/v1.0/account/~/extension/~/phone-number",
+        params={"perPage": 100},
+    )
+    results["extension_phone_numbers"] = [
+        {
+            "phoneNumber": pn.get("phoneNumber"),
+            "usageType": pn.get("usageType"),
+            "type": pn.get("type"),
+            "features": pn.get("features"),
+        }
+        for pn in ext_numbers.get("records", [])
+    ]
+
+    # 4. Check A2P SMS features
+    a2p_check = await ringcentral_service._api_request(
+        "GET",
+        "/restapi/v1.0/account/~/a2p-sms/statuses",
+    )
+    results["a2p_status"] = a2p_check
+
+    return results

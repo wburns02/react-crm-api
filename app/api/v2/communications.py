@@ -129,7 +129,7 @@ async def send_sms(
     current_user: CurrentUser,
 ):
     """
-    Send an SMS message via Twilio.
+    Send an SMS message via RingCentral (TCR-approved).
 
     SECURITY:
     - Rate limited per user (10/min, 100/hour)
@@ -163,6 +163,17 @@ async def send_sms(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to send SMS. Please try again later.",
+        )
+
+    # Check for soft failures (RC returned error in response)
+    if sms_response.error:
+        logger.error(
+            "SMS provider returned error",
+            extra={"error": sms_response.error, "user_id": current_user.id},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"SMS provider error: {sms_response.error[:200]}",
         )
 
     # Record message in DB (best-effort — SMS already sent)
