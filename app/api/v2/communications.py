@@ -8,11 +8,13 @@ SECURITY:
 """
 
 from fastapi import APIRouter, HTTPException, status, Query, Depends
+from pydantic import BaseModel, Field
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 import logging
+import asyncio
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.message import Message, MessageType, MessageDirection, MessageStatus
@@ -211,6 +213,209 @@ async def send_sms(
         "external_id": sms_response.sid,
         "sent_at": sent_at.isoformat(),
         "created_at": sent_at.isoformat(),
+    }
+
+
+class BulkSMSRequest(BaseModel):
+    """Schema for sending bulk SMS to multiple customers."""
+    customer_ids: List[str] = Field(..., min_length=1, max_length=500, description="Customer UUIDs")
+    message: str = Field(..., min_length=1, max_length=1600, description="Message body (supports {{customer_name}}, {{first_name}} variables)")
+
+
+class BulkSMSResponse(BaseModel):
+    """Response from bulk SMS send."""
+    total: int
+    sent: int
+    failed: int
+    skipped: int
+    results: List[dict]
+
+
+@router.post("/sms/send-bulk", response_model=BulkSMSResponse)
+async def send_bulk_sms(
+    request: BulkSMSRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Send SMS to multiple customers.
+
+    Supports template variables:
+    - {{customer_name}} - Full name
+    - {{first_name}} - First name only
+    - {{last_name}} - Last name only
+
+    SECURITY:
+    - Requires SEND_SMS permission
+    - Rate limited per user
+    """
+    if not has_permission(current_user, Permission.SEND_SMS):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to send SMS messages",
+        )
+
+    # Fetch all customers with their phone numbers
+    result = await db.execute(
+        select(Customer).where(Customer.id.in_(request.customer_ids))
+    )
+    customers = result.scalars().all()
+
+    if not customers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid customers found",
+        )
+
+    results = []
+    sent = 0
+    failed = 0
+    skipped = 0
+
+    for customer in customers:
+        phone = customer.phone
+        if not phone:
+            results.append({
+                "customer_id": str(customer.id),
+                "customer_name": f"{customer.first_name or ''} {customer.last_name or ''}".strip(),
+                "status": "skipped",
+                "reason": "No phone number",
+            })
+            skipped += 1
+            continue
+
+        # Personalize message with template variables
+        personalized = request.message
+        full_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+        personalized = personalized.replace("{{customer_name}}", full_name or "Customer")
+        personalized = personalized.replace("{{first_name}}", customer.first_name or "Customer")
+        personalized = personalized.replace("{{last_name}}", customer.last_name or "")
+
+        try:
+            sms_response = await sms_service.send_sms(to=phone, body=personalized)
+
+            if sms_response.error:
+                results.append({
+                    "customer_id": str(customer.id),
+                    "customer_name": full_name,
+                    "phone": phone,
+                    "status": "failed",
+                    "reason": str(sms_response.error)[:100],
+                })
+                failed += 1
+                continue
+
+            # Best-effort DB record
+            try:
+                msg = Message(
+                    customer_id=customer.id,
+                    message_type="sms",
+                    direction="outbound",
+                    status="queued",
+                    to_number=phone,
+                    from_number=sms_service.phone_number,
+                    content=personalized,
+                    external_id=sms_response.sid,
+                    sent_at=datetime.utcnow(),
+                )
+                db.add(msg)
+                await db.commit()
+            except Exception:
+                await db.rollback()
+
+            results.append({
+                "customer_id": str(customer.id),
+                "customer_name": full_name,
+                "phone": phone,
+                "status": "sent",
+                "external_id": sms_response.sid,
+            })
+            sent += 1
+
+        except Exception as e:
+            results.append({
+                "customer_id": str(customer.id),
+                "customer_name": full_name,
+                "phone": phone,
+                "status": "failed",
+                "reason": str(e)[:100],
+            })
+            failed += 1
+
+    logger.info(
+        "Bulk SMS completed",
+        extra={"user_id": current_user.id, "total": len(customers), "sent": sent, "failed": failed, "skipped": skipped},
+    )
+
+    return BulkSMSResponse(
+        total=len(customers),
+        sent=sent,
+        failed=failed,
+        skipped=skipped,
+        results=results,
+    )
+
+
+@router.get("/sms/customers")
+async def search_customers_for_sms(
+    db: DbSession,
+    current_user: CurrentUser,
+    search: str = Query("", description="Search by name, phone, or email"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    active_only: bool = Query(True),
+):
+    """Search customers with phone numbers for SMS sending."""
+    query = select(Customer)
+
+    if active_only:
+        query = query.where(Customer.is_active == True)
+
+    # Only show customers with phone numbers
+    query = query.where(Customer.phone.isnot(None)).where(Customer.phone != "")
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.where(
+            or_(
+                (Customer.first_name + " " + Customer.last_name).ilike(search_term),
+                Customer.phone.ilike(search_term),
+                Customer.email.ilike(search_term),
+                Customer.first_name.ilike(search_term),
+                Customer.last_name.ilike(search_term),
+            )
+        )
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+
+    # Paginate
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size).order_by(Customer.first_name, Customer.last_name)
+
+    result = await db.execute(query)
+    customers = result.scalars().all()
+
+    return {
+        "items": [
+            {
+                "id": str(c.id),
+                "first_name": c.first_name,
+                "last_name": c.last_name,
+                "name": f"{c.first_name or ''} {c.last_name or ''}".strip(),
+                "phone": c.phone,
+                "email": c.email,
+                "city": getattr(c, "city", None),
+                "state": getattr(c, "state", None),
+                "is_active": c.is_active,
+            }
+            for c in customers
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
     }
 
 
