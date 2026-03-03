@@ -232,15 +232,29 @@ class RingCentralService:
 
         to_formatted = self._format_phone(to)
 
+        # Use A2P high-volume SMS endpoint (TCR-approved numbers require this)
         result = await self._api_request(
             "POST",
-            "/restapi/v1.0/account/~/extension/~/sms",
+            "/restapi/v1.0/account/~/a2p-sms/batches",
             data={
-                "from": {"phoneNumber": from_number},
-                "to": [{"phoneNumber": to_formatted}],
+                "from": from_number,
                 "text": body,
+                "messages": [{"to": [to_formatted]}],
             },
         )
+
+        if result.get("error"):
+            # Fallback: try standard SMS endpoint
+            logger.warning(f"A2P SMS failed, trying standard endpoint: {result.get('error_body', result.get('error'))}")
+            result = await self._api_request(
+                "POST",
+                "/restapi/v1.0/account/~/extension/~/sms",
+                data={
+                    "from": {"phoneNumber": from_number},
+                    "to": [{"phoneNumber": to_formatted}],
+                    "text": body,
+                },
+            )
 
         if result.get("error"):
             error_msg = result.get("error_body", result.get("error", "Unknown error"))
@@ -254,8 +268,9 @@ class RingCentralService:
                 error=str(error_msg),
             )
 
+        # A2P returns batch info; standard returns message info
         msg_id = str(result.get("id", ""))
-        status = result.get("messageStatus", "Queued")
+        status = result.get("status", result.get("messageStatus", "Queued"))
         logger.info(f"RingCentral SMS sent: {msg_id} to {to_formatted} (status={status})")
 
         return SMSResponse(
