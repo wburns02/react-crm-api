@@ -184,11 +184,14 @@ async def get_microsoft_status(user: CurrentUser):
     from app.services.ms365_email_service import MS365EmailService
     from app.services.ms365_bookings_service import MS365BookingsService
 
+    from app.services.ms365_calendar_service import MS365CalendarService
+
     return {
         "configured": MS365BaseService.is_configured(),
         "user_linked": bool(user.microsoft_id),
         "microsoft_email": user.microsoft_email,
         "calendar_sync": MS365BaseService.is_configured(),
+        "shared_calendar": MS365CalendarService.shared_calendar_configured(),
         "teams_webhook": TeamsWebhookService.is_configured(),
         "sharepoint": MS365SharePointService.is_configured(),
         "email_monitoring": MS365EmailService.is_configured(),

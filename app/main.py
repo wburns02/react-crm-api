@@ -810,6 +810,7 @@ async def ensure_ms365_columns():
         ("customers", "sharepoint_folder_url", "VARCHAR(500)", "074"),
         ("work_orders", "ms_booking_appointment_id", "VARCHAR(255)", "078"),
         ("work_orders", "booking_source", "VARCHAR(50)", "078"),
+        ("work_orders", "outlook_shared_event_id", "VARCHAR(255)", "084"),
     ]
 
     async with async_session_maker() as session:

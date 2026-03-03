@@ -1162,6 +1162,9 @@ async def update_work_order(
                 wo_notes = work_order.notes or ""
                 existing_event_id = work_order.outlook_event_id
 
+                tech_name_for_shared = tech.first_name + " " + tech.last_name if tech else "Unassigned"
+                existing_shared_event_id = getattr(work_order, "outlook_shared_event_id", None)
+
                 async def _sync_calendar():
                     try:
                         if existing_event_id:
@@ -1184,7 +1187,6 @@ async def update_work_order(
                                 duration_hours=dur,
                             )
                             if new_event_id:
-                                # Save event ID back — need a fresh DB session
                                 from app.database import async_session_maker
                                 async with async_session_maker() as sess:
                                     from sqlalchemy import text as sql_text
@@ -1197,9 +1199,79 @@ async def update_work_order(
                     except Exception as cal_err:
                         logger.warning(f"Outlook calendar sync failed for WO {wo_id}: {cal_err}")
 
+                    # Shared mailbox calendar — independent try/except, never blocks individual sync
+                    try:
+                        if MS365CalendarService.shared_calendar_configured():
+                            shared_subject = MS365CalendarService.build_shared_event_subject(job, cust_name, tech_name_for_shared)
+                            shared_body = f"Work Order: {wo_id}\nTech: {tech_name_for_shared}\nNotes: {wo_notes}"
+                            if existing_shared_event_id:
+                                await MS365CalendarService.update_shared_event(
+                                    event_id=existing_shared_event_id,
+                                    subject=shared_subject,
+                                    location=addr,
+                                    body=shared_body,
+                                    start_dt=start_datetime,
+                                    duration_hours=dur,
+                                )
+                            else:
+                                new_shared_id = await MS365CalendarService.create_shared_event(
+                                    subject=shared_subject,
+                                    location=addr,
+                                    body=shared_body,
+                                    start_dt=start_datetime,
+                                    duration_hours=dur,
+                                )
+                                if new_shared_id:
+                                    from app.database import async_session_maker as asm2
+                                    async with asm2() as sess2:
+                                        from sqlalchemy import text as sql_text2
+                                        await sess2.execute(
+                                            sql_text2("UPDATE work_orders SET outlook_shared_event_id = :eid WHERE id = :wid"),
+                                            {"eid": new_shared_id, "wid": wo_id},
+                                        )
+                                        await sess2.commit()
+                                    logger.info(f"Shared calendar event {new_shared_id} created for WO {wo_id}")
+                    except Exception as shared_err:
+                        logger.warning(f"Shared calendar sync failed for WO {wo_id}: {shared_err}")
+
                 asyncio.create_task(_sync_calendar())
         except Exception as e:
             logger.warning(f"Calendar sync setup error: {e}")
+
+    # When status changes to "canceled", delete both calendar events
+    if old_status != str(work_order.status) and str(work_order.status) == "canceled":
+        try:
+            import asyncio as asyncio2
+            from app.services.ms365_calendar_service import MS365CalendarService as CalSvc
+
+            async def _cancel_calendar_events():
+                try:
+                    # Delete individual technician event
+                    if work_order.outlook_event_id and work_order.technician_id:
+                        tr = await db.execute(select(Technician).where(Technician.id == work_order.technician_id))
+                        t = tr.scalar_one_or_none()
+                        t_email = getattr(t, "microsoft_email", None) if t else None
+                        if t_email:
+                            await CalSvc.delete_event(t_email, work_order.outlook_event_id)
+                    # Delete shared calendar event
+                    shared_eid = getattr(work_order, "outlook_shared_event_id", None)
+                    if shared_eid and CalSvc.shared_calendar_configured():
+                        await CalSvc.delete_shared_event(shared_eid)
+                    # Clear event IDs
+                    from app.database import async_session_maker as asm_cancel
+                    async with asm_cancel() as sess_cancel:
+                        from sqlalchemy import text as sql_cancel
+                        await sess_cancel.execute(
+                            sql_cancel("UPDATE work_orders SET outlook_event_id = NULL, outlook_shared_event_id = NULL WHERE id = :wid"),
+                            {"wid": str(work_order.id)},
+                        )
+                        await sess_cancel.commit()
+                except Exception as cancel_err:
+                    logger.warning(f"Calendar cancel cleanup failed for WO {work_order.id}: {cancel_err}")
+
+            asyncio2.create_task(_cancel_calendar_events())
+        except Exception as e:
+            logger.warning(f"Calendar cancel setup error: {e}")
 
     # Invalidate caches
     await get_cache_service().delete_pattern("workorders:*")
@@ -1377,6 +1449,32 @@ async def delete_work_order(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Work order not found",
             )
+
+        # Fire-and-forget cleanup of calendar events before deletion
+        try:
+            from app.services.ms365_calendar_service import MS365CalendarService
+            if MS365CalendarService.is_configured():
+                # Delete individual technician calendar event
+                if work_order.outlook_event_id and work_order.technician_id:
+                    tech_result = await db.execute(
+                        select(Technician).where(Technician.id == work_order.technician_id)
+                    )
+                    tech = tech_result.scalar_one_or_none()
+                    ms_email = getattr(tech, "microsoft_email", None) if tech else None
+                    if ms_email:
+                        try:
+                            await MS365CalendarService.delete_event(ms_email, work_order.outlook_event_id)
+                        except Exception:
+                            pass
+                # Delete shared calendar event
+                shared_eid = getattr(work_order, "outlook_shared_event_id", None)
+                if shared_eid and MS365CalendarService.shared_calendar_configured():
+                    try:
+                        await MS365CalendarService.delete_shared_event(shared_eid)
+                    except Exception:
+                        pass
+        except Exception as cal_err:
+            logging.warning(f"Calendar cleanup failed for WO {work_order_id}: {cal_err}")
 
         await db.delete(work_order)
         await db.commit()

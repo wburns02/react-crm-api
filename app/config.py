@@ -131,6 +131,7 @@ class Settings(BaseSettings):
     MS365_SHAREPOINT_DRIVE_ID: str | None = None
     MS365_MONITORED_MAILBOX: str | None = None
     MS365_BOOKING_BUSINESS_ID: str | None = None
+    MS365_SHARED_CALENDAR_EMAIL: str | None = None
 
     # AI Services
     OPENAI_API_KEY: str | None = None

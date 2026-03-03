@@ -152,6 +152,11 @@ class MS365CalendarService(MS365BaseService):
         return f"{job_type.replace('_', ' ').title()} - {customer_name}"
 
     @classmethod
+    def build_shared_event_subject(cls, job_type: str, customer_name: str, technician_name: str) -> str:
+        """Build subject for shared mailbox calendar — includes tech name for dispatchers."""
+        return f"{job_type.replace('_', ' ').title()} - {customer_name} [{technician_name}]"
+
+    @classmethod
     def build_event_body(cls, work_order_id: str, notes: str | None = None) -> str:
         frontend_url = settings.FRONTEND_URL.rstrip("/")
         body = f'<p><a href="{frontend_url}/work-orders/{work_order_id}">View in CRM</a></p>'
@@ -163,3 +168,64 @@ class MS365CalendarService(MS365BaseService):
     def build_event_location(cls, address: str | None, city: str | None, state: str | None) -> str:
         parts = [p for p in [address, city, state] if p]
         return ", ".join(parts) or "No address"
+
+    # ── Shared Mailbox Calendar ──
+
+    @classmethod
+    def shared_calendar_configured(cls) -> bool:
+        """Check if shared calendar sync is enabled."""
+        return cls.is_configured() and bool(settings.MS365_SHARED_CALENDAR_EMAIL)
+
+    @classmethod
+    async def create_shared_event(
+        cls,
+        subject: str,
+        location: str,
+        body: str,
+        start_dt: datetime,
+        duration_hours: float = 2.0,
+    ) -> str | None:
+        """Create event on shared mailbox calendar. Returns event ID."""
+        if not cls.shared_calendar_configured():
+            return None
+        return await cls.create_event(
+            technician_microsoft_email=settings.MS365_SHARED_CALENDAR_EMAIL,
+            subject=subject,
+            location=location,
+            body=body,
+            start_dt=start_dt,
+            duration_hours=duration_hours,
+        )
+
+    @classmethod
+    async def update_shared_event(
+        cls,
+        event_id: str,
+        subject: str | None = None,
+        location: str | None = None,
+        body: str | None = None,
+        start_dt: datetime | None = None,
+        duration_hours: float | None = None,
+    ) -> bool:
+        """Update event on shared mailbox calendar."""
+        if not cls.shared_calendar_configured() or not event_id:
+            return False
+        return await cls.update_event(
+            technician_microsoft_email=settings.MS365_SHARED_CALENDAR_EMAIL,
+            event_id=event_id,
+            subject=subject,
+            location=location,
+            body=body,
+            start_dt=start_dt,
+            duration_hours=duration_hours,
+        )
+
+    @classmethod
+    async def delete_shared_event(cls, event_id: str) -> bool:
+        """Delete event from shared mailbox calendar."""
+        if not cls.shared_calendar_configured() or not event_id:
+            return False
+        return await cls.delete_event(
+            technician_microsoft_email=settings.MS365_SHARED_CALENDAR_EMAIL,
+            event_id=event_id,
+        )
