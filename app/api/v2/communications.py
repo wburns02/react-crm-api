@@ -152,60 +152,54 @@ async def send_sms(
         )
         raise
 
-    # Create message record with correct column names
-    message = Message(
-        customer_id=request.customer_id,
-        message_type="sms",
-        direction="outbound",
-        status="pending",
-        to_number=request.to,
-        from_number=sms_service.phone_number,
-        content=request.body,
-    )
-    db.add(message)
-    await db.commit()
-    await db.refresh(message)
-
-    # Send via RingCentral (TCR-approved)
+    # Send via RingCentral (TCR-approved) first, then record in DB
     try:
         sms_response = await sms_service.send_sms(
             to=request.to,
             body=request.body,
         )
-
-        # Update message with SMS response
-        message.external_id = sms_response.sid
-        message.status = "queued"
-        message.sent_at = datetime.utcnow()
-        await db.commit()
-        await db.refresh(message)
-
-        logger.info("SMS sent successfully", extra={"message_id": message.id, "user_id": current_user.id})
-
     except Exception as e:
-        message.status = "failed"
-        message.error_message = str(e)
-        await db.commit()
-        await db.refresh(message)
-
-        logger.error("SMS send failed", extra={"message_id": message.id, "error_type": type(e).__name__})
-
+        logger.error("SMS send failed", extra={"error_type": type(e).__name__, "user_id": current_user.id})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to send SMS. Please try again later.",
         )
 
+    # Record message in DB (best-effort — SMS already sent)
+    message_id = None
+    sent_at = datetime.utcnow()
+    try:
+        message = Message(
+            customer_id=request.customer_id,
+            message_type="sms",
+            direction="outbound",
+            status="queued",
+            to_number=request.to,
+            from_number=sms_service.phone_number,
+            content=request.body,
+            external_id=sms_response.sid,
+            sent_at=sent_at,
+        )
+        db.add(message)
+        await db.commit()
+        await db.refresh(message)
+        message_id = message.id
+        logger.info("SMS sent successfully", extra={"message_id": message_id, "user_id": current_user.id})
+    except Exception as db_err:
+        await db.rollback()
+        logger.warning("SMS sent but DB record failed: %s", db_err)
+
     return {
-        "id": message.id,
-        "type": message.message_type,
-        "direction": message.direction,
-        "status": message.status,
-        "to_address": message.to_number,
-        "from_address": message.from_number,
-        "content": message.content,
-        "external_id": message.external_id,
-        "sent_at": message.sent_at.isoformat() if message.sent_at else None,
-        "created_at": message.created_at.isoformat() if message.created_at else None,
+        "id": str(message_id) if message_id else None,
+        "type": "sms",
+        "direction": "outbound",
+        "status": "queued",
+        "to_address": request.to,
+        "from_address": sms_service.phone_number,
+        "content": request.body,
+        "external_id": sms_response.sid,
+        "sent_at": sent_at.isoformat(),
+        "created_at": sent_at.isoformat(),
     }
 
 
