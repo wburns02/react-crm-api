@@ -74,6 +74,18 @@ class SetDispositionRequest(BaseModel):
     notes: Optional[str] = Field(None, description="Optional notes about the call")
 
 
+class QuickCallLogRequest(BaseModel):
+    """Quick call log entry — for manual call notes from the office."""
+    customer_id: Optional[str] = None
+    caller_number: Optional[str] = None
+    direction: str = "inbound"
+    notes: str = Field(..., min_length=1, description="What the call was about")
+    disposition: Optional[str] = "answered"
+    create_work_order: bool = False
+    work_order_job_type: Optional[str] = "pumping"
+    work_order_notes: Optional[str] = None
+
+
 class CallAnalyticsResponse(BaseModel):
     call_volume_by_hour: dict
     missed_calls: int
@@ -342,6 +354,111 @@ async def get_disposition_analytics(
     except Exception as e:
         logger.error(f"Error getting disposition analytics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/quick-log")
+async def quick_log_call(
+    request: QuickCallLogRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Quick-log a phone call with notes. Optionally creates a work order."""
+    import uuid
+    from app.models.work_order import WorkOrder
+
+    try:
+        now = datetime.now()
+
+        # Create the call log
+        call = CallLog(
+            id=uuid.uuid4(),
+            user_id=str(current_user.id),
+            customer_id=request.customer_id,
+            caller_number=request.caller_number or "",
+            called_number="office",
+            direction=request.direction,
+            call_type="voice",
+            call_disposition=request.disposition or "answered",
+            call_date=now.date(),
+            call_time=now.time(),
+            duration_seconds=0,
+            notes=request.notes,
+            answered_by=current_user.email,
+        )
+        db.add(call)
+        await db.flush()
+
+        work_order_id = None
+        work_order_number = None
+
+        if request.create_work_order and request.customer_id:
+            # Generate WO number
+            count_result = await db.execute(select(func.count()).select_from(WorkOrder))
+            count = count_result.scalar() or 0
+            wo_number = f"WO-{str(count + 1).zfill(6)}"
+
+            wo = WorkOrder(
+                id=uuid.uuid4(),
+                work_order_number=wo_number,
+                customer_id=request.customer_id,
+                job_type=request.work_order_job_type or "pumping",
+                status="draft",
+                priority="normal",
+                notes=request.work_order_notes or request.notes,
+                source="quick_call",
+                created_by=current_user.email,
+            )
+            db.add(wo)
+            await db.flush()
+            work_order_id = str(wo.id)
+            work_order_number = wo_number
+
+        await db.commit()
+
+        return {
+            "call_id": str(call.id),
+            "work_order_id": work_order_id,
+            "work_order_number": work_order_number,
+            "message": "Call logged" + (f" — Work order {work_order_number} created" if work_order_id else ""),
+        }
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Quick call log error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to log call: {str(e)}")
+
+
+@router.get("/recent-quick-logs")
+async def recent_quick_logs(
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Get recent quick-logged calls for the current user."""
+    try:
+        result = await db.execute(
+            select(CallLog)
+            .options(selectinload(CallLog.customer))
+            .where(CallLog.answered_by == current_user.email)
+            .order_by(CallLog.created_at.desc())
+            .limit(limit)
+        )
+        calls = result.scalars().all()
+
+        items = []
+        for c in calls:
+            item = call_to_response(c)
+            if c.customer:
+                item["customer_name"] = f"{c.customer.first_name or ''} {c.customer.last_name or ''}".strip()
+                item["customer_phone"] = c.customer.phone
+            else:
+                item["customer_name"] = None
+                item["customer_phone"] = None
+            items.append(item)
+
+        return {"items": items, "total": len(items)}
+    except Exception as e:
+        logger.warning(f"Error getting recent quick logs: {e}")
+        return {"items": [], "total": 0}
 
 
 @router.get("/{call_id}", response_model=CallResponse)
