@@ -77,6 +77,14 @@ def compute_quality_score(permit: dict[str, Any]) -> int:
     if permit.get("parcel_number"):
         score += 5
 
+    # Owner phone (5 pts) — high value for prospect outreach
+    if permit.get("owner_phone"):
+        score += 5
+
+    # Owner email (3 pts)
+    if permit.get("owner_email"):
+        score += 3
+
     # Bonus: tank size (OCR-only, 3 pts)
     if permit.get("tank_size_gallons"):
         score += 3

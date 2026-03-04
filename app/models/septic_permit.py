@@ -166,6 +166,8 @@ class SepticPermit(Base):
     owner_name_normalized = Column(String(255), nullable=True)
     applicant_name = Column(String(255), nullable=True)
     contractor_name = Column(String(255), nullable=True)
+    owner_phone = Column(String(50), nullable=True)
+    owner_email = Column(String(255), nullable=True)
 
     # ===== DATES =====
     install_date = Column(Date, nullable=True, index=True)

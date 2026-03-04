@@ -128,6 +128,8 @@ class PermitBase(BaseModel):
     owner_name: Optional[str] = Field(None, max_length=255)
     applicant_name: Optional[str] = Field(None, max_length=255)
     contractor_name: Optional[str] = Field(None, max_length=255)
+    owner_phone: Optional[str] = Field(None, max_length=50)
+    owner_email: Optional[str] = Field(None, max_length=255)
 
     # Dates
     install_date: Optional[date] = None
@@ -215,6 +217,8 @@ class PermitResponse(BaseModel):
     owner_name: Optional[str] = None
     applicant_name: Optional[str] = None
     contractor_name: Optional[str] = None
+    owner_phone: Optional[str] = None
+    owner_email: Optional[str] = None
 
     # Dates
     install_date: Optional[date] = None
@@ -565,6 +569,7 @@ class ProspectRecord(BaseModel):
     city: Optional[str] = None
     county_name: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
     system_type: Optional[str] = None
     permit_date: Optional[date] = None
     system_age_years: Optional[int] = None

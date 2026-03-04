@@ -28,6 +28,8 @@ class NormalizedPermit(TypedDict, total=False):
 
     # ── People ────────────────────────────────────────────────────────
     owner_name: str | None
+    owner_phone: str | None
+    owner_email: str | None
     applicant_name: str | None
     contractor_name: str | None
 
@@ -71,6 +73,8 @@ FIELD_PRIORITY: dict[str, list[str]] = {
     "parcel_number": [SOURCE_SSS],
     "tank_size_gallons": [SOURCE_OCR],
     "owner_name": [SOURCE_OCR, SOURCE_MGO],  # Parcel enrichment overrides later
+    "owner_phone": [SOURCE_OCR],  # Only OCR extracts phone from PDFs
+    "owner_email": [SOURCE_OCR],  # Only OCR extracts email from PDFs
     "contractor_name": [SOURCE_OCR, SOURCE_MGO],
     "latitude": [SOURCE_MGO, SOURCE_SSS, SOURCE_TNR, SOURCE_OCR],
     "longitude": [SOURCE_MGO, SOURCE_SSS, SOURCE_TNR, SOURCE_OCR],

@@ -653,7 +653,7 @@ class OCRAdapter(BaseAdapter):
         # Raw data with OCR-specific fields
         raw_data: dict[str, Any] = {"system_type_source": "ocr"}
         for f in (
-            "owner_phone", "drainfield_type", "soil_type", "gate_code",
+            "drainfield_type", "soil_type", "gate_code",
             "lot_size", "bedrooms", "bathrooms", "daily_flow",
             "notes", "conditions", "inspector_name", "approval_date",
             "ocr_confidence", "source_pdf", "page_number",
@@ -694,6 +694,8 @@ class OCRAdapter(BaseAdapter):
             "city": (row.get("city") or "").strip() or None,
             "zip_code": (row.get("zip_code") or "").strip() or None,
             "owner_name": (row.get("owner_name") or "").strip() or None,
+            "owner_phone": (row.get("owner_phone") or "").strip() or None,
+            "owner_email": (row.get("owner_email") or "").strip() or None,
             "contractor_name": (row.get("installer_company") or "").strip() or None,
             "permit_date": parse_date(row.get("permit_date")),
             "install_date": parse_date(row.get("install_date")),
