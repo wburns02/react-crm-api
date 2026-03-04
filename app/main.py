@@ -1961,6 +1961,40 @@ async def run_migration_083():
     return results
 
 
+@app.post("/health/db/migrate-085")
+async def run_migration_085():
+    """Add owner_phone and owner_email columns to septic_permits."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"success": False, "steps": []}
+    try:
+        async with async_session_maker() as session:
+            for col, col_type in [("owner_phone", "VARCHAR(50)"), ("owner_email", "VARCHAR(255)")]:
+                check = await session.execute(text(
+                    f"SELECT column_name FROM information_schema.columns "
+                    f"WHERE table_name = 'septic_permits' AND column_name = '{col}'"
+                ))
+                if check.scalar_one_or_none():
+                    results["steps"].append(f"{col} already exists")
+                else:
+                    await session.execute(text(
+                        f"ALTER TABLE septic_permits ADD COLUMN {col} {col_type}"
+                    ))
+                    await session.execute(text(
+                        f"CREATE INDEX idx_septic_permits_{col} ON septic_permits({col}) WHERE {col} IS NOT NULL"
+                    ))
+                    results["steps"].append(f"Added {col} column + partial index")
+
+            await session.commit()
+            results["success"] = True
+
+    except Exception as e:
+        results["error"] = f"{type(e).__name__}: {str(e)}"
+
+    return results
+
+
 @app.post("/health/db/migrate-uuid")
 async def run_uuid_migrations():
     """Stamp alembic at 045 then upgrade to head (runs 046-049 UUID migrations)."""
