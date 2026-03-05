@@ -1068,6 +1068,25 @@ async def ensure_mfa_tables():
             logger.warning(f"Could not ensure MFA tables: {type(e).__name__}: {e}")
 
 
+async def ensure_chat_message_type():
+    """Ensure 'chat' value exists in messagetype PostgreSQL ENUM (migration 089)."""
+    try:
+        async with async_session_maker() as session:
+            from sqlalchemy import text
+            result = await session.execute(
+                text("SELECT unnest(enum_range(NULL::messagetype))::text AS val")
+            )
+            values = [row[0] for row in result.all()]
+            if "chat" not in values:
+                await session.execute(text("ALTER TYPE messagetype ADD VALUE IF NOT EXISTS 'chat'"))
+                await session.commit()
+                logger.info("Added 'chat' to messagetype enum")
+            else:
+                logger.debug("messagetype enum already has 'chat'")
+    except Exception as e:
+        logger.warning(f"Could not ensure chat message type: {type(e).__name__}: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
@@ -1117,6 +1136,9 @@ async def lifespan(app: FastAPI):
 
         # Make call_logs.rc_call_id nullable for quick-log
         await ensure_call_logs_nullable()
+
+        # Ensure 'chat' exists in messagetype enum (migration 089)
+        await ensure_chat_message_type()
 
         # Fix FK constraints that may lack ON DELETE behavior (migration 082 may have failed)
         await ensure_fk_on_delete()
