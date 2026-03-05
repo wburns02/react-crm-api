@@ -3172,6 +3172,59 @@ async def health_ensure_live_chat_tables():
     return results
 
 
+@app.post("/health/db/ensure-documents-table")
+async def health_ensure_documents_table():
+    """Create documents table if it doesn't exist (migration 088)."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"tables_created": [], "tables_skipped": [], "errors": []}
+
+    async with async_session_maker() as session:
+        try:
+            r = await session.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'documents')"
+            ))
+            if not r.scalar():
+                await session.execute(text("""
+                    CREATE TABLE documents (
+                        id UUID PRIMARY KEY,
+                        entity_id UUID NOT NULL,
+                        document_type VARCHAR(50) NOT NULL,
+                        reference_id UUID,
+                        reference_number VARCHAR(100),
+                        customer_id UUID REFERENCES customers(id),
+                        file_name VARCHAR(255),
+                        file_size INTEGER,
+                        pdf_data BYTEA,
+                        status VARCHAR(30) DEFAULT 'draft',
+                        sent_at TIMESTAMPTZ,
+                        sent_to VARCHAR(255),
+                        viewed_at TIMESTAMPTZ,
+                        created_by UUID,
+                        created_at TIMESTAMPTZ DEFAULT now()
+                    )
+                """))
+                await session.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_documents_entity_type ON documents (entity_id, document_type)"
+                ))
+                await session.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_documents_customer ON documents (customer_id)"
+                ))
+                await session.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_documents_reference ON documents (reference_id)"
+                ))
+                results["tables_created"].append("documents")
+            else:
+                results["tables_skipped"].append("documents")
+
+            await session.commit()
+        except Exception as e:
+            results["errors"].append(f"{type(e).__name__}: {str(e)}")
+
+    return results
+
+
 # RFC 7807 Exception Handlers
 # Create handlers with CORS support
 _exception_handlers = create_exception_handlers(allowed_origins)
