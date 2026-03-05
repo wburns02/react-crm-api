@@ -21,7 +21,7 @@ class ChatConversation(Base):
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
     status = Column(String(20), default="active")  # active, closed, archived
     assigned_user_id = Column(Integer, ForeignKey("api_users.id"), nullable=True)
-    metadata_json = Column("metadata", JSON, nullable=True)  # browser info, page URL, etc.
+    metadata_json = Column("meta", JSON, nullable=True)  # browser info, page URL, etc.
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     closed_at = Column(DateTime(timezone=True), nullable=True)

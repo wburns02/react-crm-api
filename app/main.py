@@ -1110,7 +1110,7 @@ async def ensure_live_chat_tables():
                     customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
                     status VARCHAR(20) DEFAULT 'active',
                     assigned_user_id INTEGER REFERENCES api_users(id),
-                    metadata JSON,
+                    meta JSON,
                     created_at TIMESTAMPTZ DEFAULT now(),
                     updated_at TIMESTAMPTZ,
                     closed_at TIMESTAMPTZ
@@ -3044,6 +3044,72 @@ if __name__ == "__main__":
         port=5001,
         reload=settings.DEBUG,
     )
+
+
+@app.post("/health/db/ensure-live-chat-tables")
+async def health_ensure_live_chat_tables():
+    """Create live chat tables if they don't exist (migration 090)."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"tables_created": [], "tables_skipped": [], "errors": []}
+
+    async with async_session_maker() as session:
+        try:
+            # Check and create chat_conversations
+            r = await session.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'chat_conversations')"
+            ))
+            if not r.scalar():
+                await session.execute(text("""
+                    CREATE TABLE chat_conversations (
+                        id UUID PRIMARY KEY,
+                        visitor_name VARCHAR(255),
+                        visitor_email VARCHAR(255),
+                        visitor_phone VARCHAR(50),
+                        customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+                        status VARCHAR(20) DEFAULT 'active',
+                        assigned_user_id INTEGER REFERENCES api_users(id),
+                        meta JSON,
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        updated_at TIMESTAMPTZ,
+                        closed_at TIMESTAMPTZ
+                    )
+                """))
+                await session.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_chat_conversations_status ON chat_conversations (status)"
+                ))
+                results["tables_created"].append("chat_conversations")
+            else:
+                results["tables_skipped"].append("chat_conversations")
+
+            # Check and create chat_messages
+            r = await session.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'chat_messages')"
+            ))
+            if not r.scalar():
+                await session.execute(text("""
+                    CREATE TABLE chat_messages (
+                        id UUID PRIMARY KEY,
+                        conversation_id UUID NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+                        sender_type VARCHAR(20) NOT NULL,
+                        sender_name VARCHAR(255),
+                        content TEXT NOT NULL,
+                        created_at TIMESTAMPTZ DEFAULT now()
+                    )
+                """))
+                await session.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_chat_messages_conversation_id ON chat_messages (conversation_id)"
+                ))
+                results["tables_created"].append("chat_messages")
+            else:
+                results["tables_skipped"].append("chat_messages")
+
+            await session.commit()
+        except Exception as e:
+            results["errors"].append(f"{type(e).__name__}: {str(e)}")
+
+    return results
 
 
 # RFC 7807 Exception Handlers

@@ -34,7 +34,7 @@ def upgrade():
             sa.ForeignKey("api_users.id"),
             nullable=True,
         ),
-        sa.Column("metadata", sa.JSON, nullable=True),
+        sa.Column("meta", sa.JSON, nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
