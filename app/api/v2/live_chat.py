@@ -8,7 +8,7 @@ TODO: Add rate limiting to public endpoints to prevent abuse.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func, case, desc
+from sqlalchemy import select, func, case, desc, text
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone
 from typing import Optional
@@ -295,18 +295,21 @@ async def list_conversations(
 ):
     """List all chat conversations (staff only)."""
     async with async_session_maker() as db:
+        # Ensure last_read_at column exists (safe idempotent migration)
+        try:
+            await db.execute(text(
+                "ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ"
+            ))
+            await db.commit()
+        except Exception:
+            await db.rollback()
+
         # Subquery for last message + counts
         last_msg_sq = (
             select(
                 ChatMessage.conversation_id,
                 func.max(ChatMessage.created_at).label("last_message_at"),
                 func.count(ChatMessage.id).label("message_count"),
-                func.sum(
-                    case(
-                        (ChatMessage.sender_type == "visitor", 1),
-                        else_=0,
-                    )
-                ).label("unread_count"),
             )
             .group_by(ChatMessage.conversation_id)
             .subquery()
@@ -317,7 +320,6 @@ async def list_conversations(
                 ChatConversation,
                 last_msg_sq.c.last_message_at,
                 last_msg_sq.c.message_count,
-                last_msg_sq.c.unread_count,
             )
             .outerjoin(
                 last_msg_sq,
@@ -333,7 +335,18 @@ async def list_conversations(
         rows = result.all()
 
         items = []
-        for conv, last_msg_at, msg_count, unread in rows:
+        for conv, last_msg_at, msg_count in rows:
+            # Compute unread: visitor messages after last_read_at
+            unread_query = select(func.count(ChatMessage.id)).where(
+                ChatMessage.conversation_id == conv.id,
+                ChatMessage.sender_type == "visitor",
+            )
+            if conv.last_read_at:
+                unread_query = unread_query.where(
+                    ChatMessage.created_at > conv.last_read_at
+                )
+            unread_result = await db.execute(unread_query)
+            unread = unread_result.scalar() or 0
             # Fetch last message content
             last_content = None
             if msg_count and msg_count > 0:
@@ -519,3 +532,63 @@ async def update_conversation(
         "assigned_user_id": conversation.assigned_user_id,
         "updated": True,
     }
+
+
+@router.post("/conversations/{conversation_id}/mark-read")
+async def mark_conversation_read(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Mark all messages in a conversation as read (staff only)."""
+    try:
+        conv_uuid = uuid.UUID(conversation_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid conversation ID")
+
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(ChatConversation).where(ChatConversation.id == conv_uuid)
+        )
+        conversation = result.scalar_one_or_none()
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+        conversation.last_read_at = datetime.now(timezone.utc)
+        await db.commit()
+
+    return {"id": str(conv_uuid), "marked_read": True}
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a conversation and all its messages (staff only)."""
+    try:
+        conv_uuid = uuid.UUID(conversation_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid conversation ID")
+
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(ChatConversation).where(ChatConversation.id == conv_uuid)
+        )
+        conversation = result.scalar_one_or_none()
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+        # Delete messages first (CASCADE should handle this but be explicit)
+        await db.execute(
+            select(ChatMessage).where(ChatMessage.conversation_id == conv_uuid)
+        )
+        from sqlalchemy import delete as sa_delete
+        await db.execute(
+            sa_delete(ChatMessage).where(ChatMessage.conversation_id == conv_uuid)
+        )
+        await db.execute(
+            sa_delete(ChatConversation).where(ChatConversation.id == conv_uuid)
+        )
+        await db.commit()
+
+    return {"id": str(conv_uuid), "deleted": True}

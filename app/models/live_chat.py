@@ -25,6 +25,7 @@ class ChatConversation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     closed_at = Column(DateTime(timezone=True), nullable=True)
+    last_read_at = Column(DateTime(timezone=True), nullable=True)
 
     messages = relationship("ChatMessage", back_populates="conversation", order_by="ChatMessage.created_at")
 
