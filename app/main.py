@@ -1140,6 +1140,53 @@ async def ensure_live_chat_tables():
             logger.warning(f"Could not ensure live chat tables: {type(e).__name__}: {e}")
 
 
+async def ensure_documents_table():
+    """Ensure documents table exists (migration 088).
+
+    Creates the table if it doesn't exist. Safety net for deployments that skip migrations.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker as _asm
+
+    async with _asm() as session:
+        try:
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS documents (
+                    id UUID PRIMARY KEY,
+                    entity_id UUID NOT NULL,
+                    document_type VARCHAR(50) NOT NULL,
+                    reference_id UUID,
+                    reference_number VARCHAR(100),
+                    customer_id UUID REFERENCES customers(id),
+                    file_name VARCHAR(255),
+                    file_size INTEGER,
+                    pdf_data BYTEA,
+                    status VARCHAR(30) DEFAULT 'draft',
+                    sent_at TIMESTAMPTZ,
+                    sent_to VARCHAR(255),
+                    viewed_at TIMESTAMPTZ,
+                    created_by UUID,
+                    created_at TIMESTAMPTZ DEFAULT now()
+                )
+            """))
+            await session.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_documents_entity_type
+                ON documents (entity_id, document_type)
+            """))
+            await session.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_documents_customer
+                ON documents (customer_id)
+            """))
+            await session.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_documents_reference
+                ON documents (reference_id)
+            """))
+            await session.commit()
+            logger.info("Documents table ensured")
+        except Exception as e:
+            logger.warning(f"Could not ensure documents table: {type(e).__name__}: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
@@ -1195,6 +1242,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure live chat tables exist (migration 090)
         await ensure_live_chat_tables()
+
+        # Ensure documents table exists (migration 088)
+        await ensure_documents_table()
 
         # Fix FK constraints that may lack ON DELETE behavior (migration 082 may have failed)
         await ensure_fk_on_delete()
