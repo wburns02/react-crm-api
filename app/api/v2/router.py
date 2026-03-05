@@ -134,6 +134,8 @@ from app.api.v2 import (
     custom_reports,
     # Document Center
     documents,
+    # Live Chat Widget
+    live_chat,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -398,3 +400,6 @@ api_router.include_router(customer_timeline_router, prefix="/customers", tags=["
 # Revenue Forecast
 from app.api.v2.revenue_forecast import router as revenue_forecast_router
 api_router.include_router(revenue_forecast_router, prefix="/revenue", tags=["revenue-forecast"])
+
+# Live Chat Widget (public endpoints for website widget + staff management)
+api_router.include_router(live_chat.router, prefix="/chat", tags=["live-chat"])
