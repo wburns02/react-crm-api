@@ -397,6 +397,107 @@ async def list_documents(
     )
 
 
+@router.get("/stats", response_model=DocumentStats)
+async def get_document_stats(
+    db: DbSession,
+    user: CurrentUser,
+    entity: EntityCtx,
+):
+    """Return document statistics for dashboard."""
+
+    # Total documents
+    total_result = await db.execute(
+        select(func.count(Document.id)).where(Document.entity_id == entity.id)
+    )
+    total_documents = total_result.scalar() or 0
+
+    # Sent this month
+    current_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    sent_this_month_result = await db.execute(
+        select(func.count(Document.id)).where(
+            Document.entity_id == entity.id,
+            Document.sent_at >= current_month_start,
+            Document.status.in_(["sent", "viewed"])
+        )
+    )
+    sent_this_month = sent_this_month_result.scalar() or 0
+
+    # Viewed count
+    viewed_result = await db.execute(
+        select(func.count(Document.id)).where(
+            Document.entity_id == entity.id,
+            Document.viewed_at.isnot(None)
+        )
+    )
+    viewed_count = viewed_result.scalar() or 0
+
+    # Pending drafts
+    drafts_result = await db.execute(
+        select(func.count(Document.id)).where(
+            Document.entity_id == entity.id,
+            Document.status == "draft"
+        )
+    )
+    pending_drafts = drafts_result.scalar() or 0
+
+    # Monthly counts for chart (last 12 months)
+    monthly_counts = []
+    for i in range(12):
+        # Calculate the start and end of each month going backwards
+        if i == 0:
+            month_start = current_month_start
+            month_end = datetime.now()
+        else:
+            # Go back i months
+            year = current_month_start.year
+            month = current_month_start.month - i
+            if month <= 0:
+                month += 12
+                year -= 1
+
+            month_start = datetime(year, month, 1)
+            # End of month
+            if month == 12:
+                month_end = datetime(year + 1, 1, 1)
+            else:
+                month_end = datetime(year, month + 1, 1)
+
+        month_result = await db.execute(
+            select(
+                func.count(Document.id),
+                func.sum(func.case((Document.document_type == "invoice", 1), else_=0)),
+                func.sum(func.case((Document.document_type == "quote", 1), else_=0)),
+                func.sum(func.case((Document.document_type == "work_order", 1), else_=0)),
+                func.sum(func.case((Document.document_type == "inspection_report", 1), else_=0)),
+            ).where(
+                Document.entity_id == entity.id,
+                Document.created_at >= month_start,
+                Document.created_at < month_end
+            )
+        )
+        counts = month_result.first()
+
+        monthly_counts.append({
+            "month": month_start.strftime("%Y-%m"),
+            "total": counts[0] or 0,
+            "invoices": counts[1] or 0,
+            "quotes": counts[2] or 0,
+            "work_orders": counts[3] or 0,
+            "inspections": counts[4] or 0,
+        })
+
+    # Reverse to get chronological order
+    monthly_counts.reverse()
+
+    return DocumentStats(
+        total_documents=total_documents,
+        sent_this_month=sent_this_month,
+        viewed_count=viewed_count,
+        pending_drafts=pending_drafts,
+        monthly_counts=monthly_counts,
+    )
+
+
 @router.get("/{document_id}", response_model=DocumentResponse)
 async def get_document(
     document_id: UUID,
@@ -714,104 +815,3 @@ async def delete_document(
     await db.commit()
 
     return {"message": "Document deleted successfully"}
-
-
-@router.get("/stats", response_model=DocumentStats)
-async def get_document_stats(
-    db: DbSession,
-    user: CurrentUser,
-    entity: EntityCtx,
-):
-    """Return document statistics for dashboard."""
-
-    # Total documents
-    total_result = await db.execute(
-        select(func.count(Document.id)).where(Document.entity_id == entity.id)
-    )
-    total_documents = total_result.scalar() or 0
-
-    # Sent this month
-    current_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    sent_this_month_result = await db.execute(
-        select(func.count(Document.id)).where(
-            Document.entity_id == entity.id,
-            Document.sent_at >= current_month_start,
-            Document.status.in_(["sent", "viewed"])
-        )
-    )
-    sent_this_month = sent_this_month_result.scalar() or 0
-
-    # Viewed count
-    viewed_result = await db.execute(
-        select(func.count(Document.id)).where(
-            Document.entity_id == entity.id,
-            Document.viewed_at.isnot(None)
-        )
-    )
-    viewed_count = viewed_result.scalar() or 0
-
-    # Pending drafts
-    drafts_result = await db.execute(
-        select(func.count(Document.id)).where(
-            Document.entity_id == entity.id,
-            Document.status == "draft"
-        )
-    )
-    pending_drafts = drafts_result.scalar() or 0
-
-    # Monthly counts for chart (last 12 months)
-    monthly_counts = []
-    for i in range(12):
-        # Calculate the start and end of each month going backwards
-        if i == 0:
-            month_start = current_month_start
-            month_end = datetime.now()
-        else:
-            # Go back i months
-            year = current_month_start.year
-            month = current_month_start.month - i
-            if month <= 0:
-                month += 12
-                year -= 1
-
-            month_start = datetime(year, month, 1)
-            # End of month
-            if month == 12:
-                month_end = datetime(year + 1, 1, 1)
-            else:
-                month_end = datetime(year, month + 1, 1)
-
-        month_result = await db.execute(
-            select(
-                func.count(Document.id),
-                func.sum(func.case((Document.document_type == "invoice", 1), else_=0)),
-                func.sum(func.case((Document.document_type == "quote", 1), else_=0)),
-                func.sum(func.case((Document.document_type == "work_order", 1), else_=0)),
-                func.sum(func.case((Document.document_type == "inspection_report", 1), else_=0)),
-            ).where(
-                Document.entity_id == entity.id,
-                Document.created_at >= month_start,
-                Document.created_at < month_end
-            )
-        )
-        counts = month_result.first()
-
-        monthly_counts.append({
-            "month": month_start.strftime("%Y-%m"),
-            "total": counts[0] or 0,
-            "invoices": counts[1] or 0,
-            "quotes": counts[2] or 0,
-            "work_orders": counts[3] or 0,
-            "inspections": counts[4] or 0,
-        })
-
-    # Reverse to get chronological order
-    monthly_counts.reverse()
-
-    return DocumentStats(
-        total_documents=total_documents,
-        sent_this_month=sent_this_month,
-        viewed_count=viewed_count,
-        pending_drafts=pending_drafts,
-        monthly_counts=monthly_counts,
-    )
