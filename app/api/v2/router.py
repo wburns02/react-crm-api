@@ -126,6 +126,8 @@ from app.api.v2 import (
     predictive_service,
     # Live Operations Center
     ops_center,
+    # Executive Intelligence Dashboard
+    executive_dashboard,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -345,6 +347,9 @@ api_router.include_router(ops_center.router, prefix="/ops-center", tags=["ops-ce
 
 # Predictive Service Engine — "Know Before They Call"
 api_router.include_router(predictive_service.router, prefix="/predictive-service", tags=["predictive-service"])
+
+# Executive Intelligence Dashboard
+api_router.include_router(executive_dashboard.router, prefix="/executive", tags=["executive-dashboard"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
