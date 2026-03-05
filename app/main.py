@@ -1750,6 +1750,16 @@ async def run_database_migrations():
     return results
 
 
+@app.post("/health/db/ensure-chat-tables")
+async def ensure_chat_tables_endpoint():
+    """Create live chat tables if they don't exist (migration 090)."""
+    try:
+        await ensure_live_chat_tables()
+        return {"status": "ok", "message": "Live chat tables ensured"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @app.post("/health/db/ensure-permit-tables")
 async def ensure_permit_tables():
     """Create permit reference tables if they don't exist (migration 023)."""
