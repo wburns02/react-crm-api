@@ -31,6 +31,7 @@ from app.api.public.router import public_router
 from app.webhooks.twilio import twilio_router
 from app.webhooks.ringcentral import ringcentral_webhook_router
 from app.webhooks.brevo import brevo_webhook_router
+from app.api.v2.live_chat import router as live_chat_router
 from app.config import settings
 from app.database import init_db
 from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
@@ -136,6 +137,9 @@ from app.models import (
     PermitDuplicate,
     PermitImportBatch,
 )
+
+# Live Chat
+from app.models.live_chat import ChatConversation, ChatMessage
 
 # OAuth models for public API
 from app.models.oauth import APIClient, APIToken
@@ -1087,6 +1091,55 @@ async def ensure_chat_message_type():
         logger.warning(f"Could not ensure chat message type: {type(e).__name__}: {e}")
 
 
+async def ensure_live_chat_tables():
+    """Ensure chat_conversations and chat_messages tables exist (migration 090).
+
+    Creates the tables if they don't exist. Safety net for deployments that skip migrations.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker as _asm
+
+    async with _asm() as session:
+        try:
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS chat_conversations (
+                    id UUID PRIMARY KEY,
+                    visitor_name VARCHAR(255),
+                    visitor_email VARCHAR(255),
+                    visitor_phone VARCHAR(50),
+                    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+                    status VARCHAR(20) DEFAULT 'active',
+                    assigned_user_id INTEGER REFERENCES api_users(id),
+                    metadata JSON,
+                    created_at TIMESTAMPTZ DEFAULT now(),
+                    updated_at TIMESTAMPTZ,
+                    closed_at TIMESTAMPTZ
+                )
+            """))
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id UUID PRIMARY KEY,
+                    conversation_id UUID NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+                    sender_type VARCHAR(20) NOT NULL,
+                    sender_name VARCHAR(255),
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT now()
+                )
+            """))
+            await session.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_chat_messages_conversation_id
+                ON chat_messages (conversation_id)
+            """))
+            await session.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_chat_conversations_status
+                ON chat_conversations (status)
+            """))
+            await session.commit()
+            logger.info("Live chat tables ensured")
+        except Exception as e:
+            logger.warning(f"Could not ensure live chat tables: {type(e).__name__}: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
@@ -1139,6 +1192,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure 'chat' exists in messagetype enum (migration 089)
         await ensure_chat_message_type()
+
+        # Ensure live chat tables exist (migration 090)
+        await ensure_live_chat_tables()
 
         # Fix FK constraints that may lack ON DELETE behavior (migration 082 may have failed)
         await ensure_fk_on_delete()
@@ -1331,6 +1387,8 @@ app.add_middleware(MetricsMiddleware)
 allowed_origins = [
     settings.FRONTEND_URL,
     "https://react.ecbtx.com",  # Production ReactCRM frontend
+    "https://macseptic.com",  # WordPress site (live chat widget)
+    "https://www.macseptic.com",  # WordPress site (live chat widget)
 ]
 
 # Allow localhost origins for development/testing
@@ -1368,6 +1426,7 @@ app.include_router(public_router, prefix="/api/public/v1", tags=["Public API"])
 app.include_router(twilio_router, prefix="/webhooks/twilio", tags=["webhooks"])
 app.include_router(ringcentral_webhook_router, prefix="/webhooks/ringcentral", tags=["webhooks"])
 app.include_router(brevo_webhook_router, prefix="/webhooks/brevo", tags=["webhooks"])
+app.include_router(live_chat_router, prefix="/api/v2/chat", tags=["live-chat"])
 
 # Serve static assets (logos, etc.) — no auth required
 from starlette.staticfiles import StaticFiles

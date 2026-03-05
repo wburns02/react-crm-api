@@ -148,6 +148,9 @@ from app.models.workflow_automation import WorkflowAutomation, WorkflowExecution
 # Custom Report Builder
 from app.models.custom_report import CustomReport, ReportSnapshot
 
+# Live Chat
+from app.models.live_chat import ChatConversation, ChatMessage
+
 __all__ = [
     # Core models
     "Customer",
@@ -295,4 +298,7 @@ __all__ = [
     # Custom Report Builder
     "CustomReport",
     "ReportSnapshot",
+    # Live Chat
+    "ChatConversation",
+    "ChatMessage",
 ]
