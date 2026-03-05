@@ -440,54 +440,38 @@ async def get_document_stats(
     )
     pending_drafts = drafts_result.scalar() or 0
 
-    # Monthly counts for chart (last 12 months)
+    # Monthly counts for chart (last 12 months) — simple count per month
     monthly_counts = []
-    for i in range(12):
-        # Calculate the start and end of each month going backwards
-        if i == 0:
-            month_start = current_month_start
-            month_end = datetime.now()
-        else:
-            # Go back i months
-            year = current_month_start.year
-            month = current_month_start.month - i
-            if month <= 0:
-                month += 12
-                year -= 1
+    for i in range(11, -1, -1):
+        year = current_month_start.year
+        month = current_month_start.month - i
+        if month <= 0:
+            month += 12
+            year -= 1
 
-            month_start = datetime(year, month, 1)
-            # End of month
-            if month == 12:
-                month_end = datetime(year + 1, 1, 1)
-            else:
-                month_end = datetime(year, month + 1, 1)
+        month_start = datetime(year, month, 1)
+        if month == 12:
+            month_end = datetime(year + 1, 1, 1)
+        else:
+            month_end = datetime(year, month + 1, 1)
 
         month_result = await db.execute(
-            select(
-                func.count(Document.id),
-                func.sum(func.case((Document.document_type == "invoice", 1), else_=0)),
-                func.sum(func.case((Document.document_type == "quote", 1), else_=0)),
-                func.sum(func.case((Document.document_type == "work_order", 1), else_=0)),
-                func.sum(func.case((Document.document_type == "inspection_report", 1), else_=0)),
-            ).where(
+            select(func.count(Document.id)).where(
                 Document.entity_id == entity.id,
                 Document.created_at >= month_start,
                 Document.created_at < month_end
             )
         )
-        counts = month_result.first()
+        total = month_result.scalar() or 0
 
         monthly_counts.append({
             "month": month_start.strftime("%Y-%m"),
-            "total": counts[0] or 0,
-            "invoices": counts[1] or 0,
-            "quotes": counts[2] or 0,
-            "work_orders": counts[3] or 0,
-            "inspections": counts[4] or 0,
+            "total": total,
+            "invoices": 0,
+            "quotes": 0,
+            "work_orders": 0,
+            "inspections": 0,
         })
-
-    # Reverse to get chronological order
-    monthly_counts.reverse()
 
     return DocumentStats(
         total_documents=total_documents,
