@@ -130,6 +130,8 @@ from app.api.v2 import (
     executive_dashboard,
     # Workflow Automation Engine
     workflow_automations,
+    # Custom Report Builder
+    custom_reports,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -355,6 +357,9 @@ api_router.include_router(executive_dashboard.router, prefix="/executive", tags=
 
 # Workflow Automation Engine
 api_router.include_router(workflow_automations.router, prefix="/automations", tags=["automations"])
+
+# Custom Report Builder
+api_router.include_router(custom_reports.router, prefix="/reports", tags=["reports"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
