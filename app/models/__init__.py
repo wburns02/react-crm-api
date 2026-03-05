@@ -140,6 +140,8 @@ from app.models.social_integrations import SocialIntegration, SocialReview
 
 # Work Order Audit Log
 from app.models.work_order_audit import WorkOrderAuditLog
+# Workflow Automation Engine
+from app.models.workflow_automation import WorkflowAutomation, WorkflowExecution
 
 __all__ = [
     # Core models
@@ -280,4 +282,7 @@ __all__ = [
     "SocialReview",
     # Work Order Audit Log
     "WorkOrderAuditLog",
+    # Workflow Automation Engine
+    "WorkflowAutomation",
+    "WorkflowExecution",
 ]

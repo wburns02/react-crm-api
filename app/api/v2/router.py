@@ -128,6 +128,8 @@ from app.api.v2 import (
     ops_center,
     # Executive Intelligence Dashboard
     executive_dashboard,
+    # Workflow Automation Engine
+    workflow_automations,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -350,6 +352,9 @@ api_router.include_router(predictive_service.router, prefix="/predictive-service
 
 # Executive Intelligence Dashboard
 api_router.include_router(executive_dashboard.router, prefix="/executive", tags=["executive-dashboard"])
+
+# Workflow Automation Engine
+api_router.include_router(workflow_automations.router, prefix="/automations", tags=["automations"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
