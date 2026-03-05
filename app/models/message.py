@@ -12,6 +12,7 @@ class MessageType(str, enum.Enum):
     email = "email"
     call = "call"
     note = "note"
+    chat = "chat"
 
 
 class MessageDirection(str, enum.Enum):
@@ -45,7 +46,7 @@ class Message(Base):
     # DB column is "type", accessed as "message_type" in Python
     message_type = Column(
         "type",
-        PG_ENUM("sms", "email", "call", "note", name="messagetype", create_type=False),
+        PG_ENUM("sms", "email", "call", "note", "chat", name="messagetype", create_type=False),
         nullable=False,
     )
     direction = Column(
