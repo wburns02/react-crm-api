@@ -10,8 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func, case, desc, text
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 import logging
 import uuid
 
@@ -80,6 +81,7 @@ class ConversationListItem(BaseModel):
     last_message_at: Optional[str] = None
     message_count: int = 0
     unread_count: int = 0
+    callback_requested: bool = False
 
 
 class ConversationDetail(BaseModel):
@@ -139,7 +141,122 @@ async def _create_chat_notifications(
         db.add(notif)
 
 
+# ─── Business Hours ──────────────────────────────────────────────────
+
+CST = ZoneInfo("America/Chicago")
+BUSINESS_HOURS_START = 8   # 8:00 AM CST
+BUSINESS_HOURS_END = 17    # 5:00 PM CST
+BUSINESS_DAYS = {0, 1, 2, 3, 4}  # Monday=0 through Friday=4
+
+
+def _is_within_business_hours() -> bool:
+    """Check if current time is within business hours (8 AM - 5 PM CST, Mon-Fri)."""
+    now_cst = datetime.now(CST)
+    return (
+        now_cst.weekday() in BUSINESS_DAYS
+        and BUSINESS_HOURS_START <= now_cst.hour < BUSINESS_HOURS_END
+    )
+
+
+class ChatStatusResponse(BaseModel):
+    online: bool
+    hours: str = "8:00 AM – 5:00 PM CST"
+    days: str = "Monday – Friday"
+    message: str = ""
+    current_time_cst: str = ""
+
+
+class OfflineMessageRequest(BaseModel):
+    visitor_name: str = Field(..., min_length=1, max_length=255)
+    visitor_phone: str = Field(..., min_length=7, max_length=50)
+    visitor_email: Optional[str] = None
+    message: str = Field(..., min_length=1, max_length=5000)
+    page_url: Optional[str] = None
+
+
+class OfflineMessageResponse(BaseModel):
+    conversation_id: str
+    status: str
+    message: str
+
+
 # ─── Public Endpoints (no auth — for the widget on macseptic.com) ───
+
+
+@router.get("/status", response_model=ChatStatusResponse)
+async def get_chat_status():
+    """Check if live chat is currently online (within business hours)."""
+    online = _is_within_business_hours()
+    now_cst = datetime.now(CST)
+    return ChatStatusResponse(
+        online=online,
+        hours="8:00 AM – 5:00 PM CST",
+        days="Monday – Friday",
+        message=(
+            "We're online! Start a chat and we'll respond right away."
+            if online
+            else "We're currently offline. Leave a message with your phone number and we'll call you back as soon as we can!"
+        ),
+        current_time_cst=now_cst.strftime("%I:%M %p %Z"),
+    )
+
+
+@router.post("/offline-message", response_model=OfflineMessageResponse)
+async def leave_offline_message(req: OfflineMessageRequest):
+    """Leave a message when staff is offline. Creates a conversation flagged for callback."""
+    async with async_session_maker() as db:
+        conversation = ChatConversation(
+            id=uuid.uuid4(),
+            visitor_name=req.visitor_name,
+            visitor_email=req.visitor_email,
+            visitor_phone=req.visitor_phone,
+            status="active",
+            metadata_json={
+                "page_url": req.page_url,
+                "offline_message": True,
+                "callback_requested": True,
+            },
+        )
+        db.add(conversation)
+
+        msg = ChatMessage(
+            id=uuid.uuid4(),
+            conversation_id=conversation.id,
+            sender_type="visitor",
+            sender_name=req.visitor_name,
+            content=req.message,
+        )
+        db.add(msg)
+
+        # Notify admins
+        admin_ids = await _get_admin_user_ids(db)
+        await _create_chat_notifications(
+            db,
+            title="📞 Callback Requested",
+            message=f"{req.visitor_name} left an offline message — call back at {req.visitor_phone}",
+            conversation_id=str(conversation.id),
+            admin_ids=admin_ids,
+        )
+
+        await db.commit()
+
+        # Broadcast for real-time CRM updates
+        await manager.broadcast_event(
+            "chat_message_received",
+            {
+                "event": "offline_message",
+                "conversation_id": str(conversation.id),
+                "visitor_name": req.visitor_name,
+                "visitor_phone": req.visitor_phone,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+    return OfflineMessageResponse(
+        conversation_id=str(conversation.id),
+        status="active",
+        message="Thank you! We'll call you back as soon as we can.",
+    )
 
 
 @router.post("/conversations", response_model=StartConversationResponse)
@@ -358,6 +475,7 @@ async def list_conversations(
                 )
                 last_content = lm_result.scalar_one_or_none()
 
+            meta = conv.metadata_json or {}
             items.append(
                 ConversationListItem(
                     id=str(conv.id),
@@ -373,6 +491,7 @@ async def list_conversations(
                     last_message_at=last_msg_at.isoformat() if last_msg_at else None,
                     message_count=msg_count or 0,
                     unread_count=unread or 0,
+                    callback_requested=bool(meta.get("callback_requested")),
                 )
             )
 
