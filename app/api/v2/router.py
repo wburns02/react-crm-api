@@ -132,6 +132,8 @@ from app.api.v2 import (
     workflow_automations,
     # Custom Report Builder
     custom_reports,
+    # Document Center
+    documents,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -360,6 +362,9 @@ api_router.include_router(workflow_automations.router, prefix="/automations", ta
 
 # Custom Report Builder
 api_router.include_router(custom_reports.router, prefix="/reports", tags=["reports"])
+
+# Document Center
+api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])

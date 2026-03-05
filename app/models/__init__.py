@@ -13,6 +13,9 @@ from app.models.ticket import Ticket
 from app.models.equipment import Equipment
 from app.models.inventory import InventoryItem
 
+# Document Center
+from app.models.document import Document
+
 # Phase 1: AI Infrastructure
 from app.models.ai_embedding import AIEmbedding, AIConversation, AIMessage
 
@@ -161,6 +164,8 @@ __all__ = [
     "Ticket",
     "Equipment",
     "InventoryItem",
+    # Document Center
+    "Document",
     # Phase 1: AI
     "AIEmbedding",
     "AIConversation",
