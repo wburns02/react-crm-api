@@ -556,7 +556,10 @@ async def get_pipeline_funnel(
                     func.count().label("count"),
                     func.coalesce(func.sum(Customer.estimated_value), 0).label("value"),
                 ).where(
-                    Customer.prospect_stage.in_(stage_values)
+                    and_(
+                        Customer.prospect_stage.in_(stage_values),
+                        or_(Customer.is_archived == False, Customer.is_archived == None),
+                    )
                 )
             )
             row = r.one()
@@ -566,12 +569,11 @@ async def get_pipeline_funnel(
                 value=float(row[1] or 0),
             ))
 
-        # Conversion rates between stages
+        # Conversion rates between stages (% that moved from current to next)
         for i in range(len(stages) - 1):
             if stages[i].count > 0:
-                conversion_rates.append(
-                    round((stages[i + 1].count / stages[i].count) * 100, 1)
-                )
+                rate = round((stages[i + 1].count / stages[i].count) * 100, 1)
+                conversion_rates.append(min(rate, 100.0))
             else:
                 conversion_rates.append(0)
     except Exception:
