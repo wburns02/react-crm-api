@@ -151,6 +151,9 @@ from app.models.custom_report import CustomReport, ReportSnapshot
 # Live Chat
 from app.models.live_chat import ChatConversation, ChatMessage
 
+# Property Lookup (Tank Size Estimation)
+from app.models.property_lookup import PropertyLookup
+
 __all__ = [
     # Core models
     "Customer",
@@ -301,4 +304,6 @@ __all__ = [
     # Live Chat
     "ChatConversation",
     "ChatMessage",
+    # Property Lookup (Tank Size Estimation)
+    "PropertyLookup",
 ]

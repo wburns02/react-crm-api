@@ -136,6 +136,8 @@ from app.api.v2 import (
     chat,
     # Document Center
     documents,
+    # Tank Size Estimation (Nashville)
+    tank_estimation,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -376,6 +378,9 @@ api_router.include_router(availability.router, prefix="/availability", tags=["av
 
 # Public Bookings API (Book & Pay - Supports Test Mode)
 api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"])
+
+# Public Tank Size Estimation (Nashville - No Auth Required)
+api_router.include_router(tank_estimation.router, prefix="/properties", tags=["properties"])
 
 # Stub endpoints: empty responses for routes the frontend calls but aren't implemented yet.
 # Each stub returns X-Stub: true header. Replace with real implementations as needed.
