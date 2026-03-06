@@ -1,13 +1,18 @@
 from fastapi import APIRouter, Query
 from sqlalchemy import select, func, and_, or_
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel
+import uuid
+import logging
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.work_order import WorkOrder
 from app.models.customer import Customer
 from app.models.technician import Technician
+from app.models.contract import Contract
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -258,3 +263,173 @@ async def get_week_view(
         "days": by_date,
         "total": len(rows),
     }
+
+
+# ---------------------------------------------------------------------------
+# Schedule Ahead — auto-generate maintenance inspections from contracts
+# ---------------------------------------------------------------------------
+
+class ScheduleAheadRequest(BaseModel):
+    months_ahead: int = 12  # How many months to schedule ahead
+    contract_ids: Optional[List[str]] = None  # Specific contracts, or all active
+
+
+class ScheduleAheadResponse(BaseModel):
+    created_count: int
+    skipped_existing: int
+    contracts_processed: int
+    work_orders: list[dict]
+
+
+@router.post("/schedule-ahead", response_model=ScheduleAheadResponse)
+async def schedule_ahead(
+    body: ScheduleAheadRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Auto-generate recurring maintenance work orders from active contracts.
+
+    For each active maintenance contract, creates evenly-spaced inspection
+    work orders (3 per year = every ~4 months) for the next N months.
+    Skips dates that already have a work order for the same customer+job_type.
+    """
+    months_ahead = min(body.months_ahead, 24)  # Cap at 24 months
+    today = date.today()
+    horizon = today + timedelta(days=months_ahead * 30)
+
+    # Fetch active maintenance contracts
+    contract_query = select(Contract).where(
+        and_(
+            Contract.status == "active",
+            Contract.contract_type.in_(["maintenance", "service", "annual"]),
+        )
+    )
+    if body.contract_ids:
+        contract_query = contract_query.where(
+            Contract.id.in_([uuid.UUID(cid) for cid in body.contract_ids])
+        )
+
+    result = await db.execute(contract_query)
+    contracts = result.scalars().all()
+
+    if not contracts:
+        return ScheduleAheadResponse(
+            created_count=0, skipped_existing=0,
+            contracts_processed=0, work_orders=[],
+        )
+
+    created_orders = []
+    skipped = 0
+
+    for contract in contracts:
+        # Determine inspections per year from services_included, default 3
+        inspections_per_year = 3
+        if contract.services_included:
+            for svc in contract.services_included:
+                if isinstance(svc, dict) and svc.get("frequency") in ("tri_annual", "every_4_months"):
+                    inspections_per_year = svc.get("quantity", 3)
+                    break
+
+        interval_days = 365 // inspections_per_year  # ~121 days for 3/yr
+
+        # Get customer info for service address
+        cust_result = await db.execute(
+            select(Customer).where(Customer.id == contract.customer_id)
+        )
+        customer = cust_result.scalars().first()
+        if not customer:
+            continue
+
+        # Find existing scheduled inspections for this customer in the horizon
+        existing_result = await db.execute(
+            select(WorkOrder.scheduled_date).where(
+                and_(
+                    WorkOrder.customer_id == contract.customer_id,
+                    WorkOrder.job_type.in_(["inspection", "aerobic_inspection", "maintenance"]),
+                    WorkOrder.scheduled_date >= today,
+                    WorkOrder.scheduled_date <= horizon,
+                    WorkOrder.status != "canceled",
+                )
+            )
+        )
+        existing_dates = {row[0] for row in existing_result.all()}
+
+        # Generate inspection dates: start from next month, space evenly
+        # Find the last existing inspection date, or use today as anchor
+        if existing_dates:
+            anchor = max(existing_dates)
+        else:
+            anchor = today
+
+        schedule_date = anchor + timedelta(days=interval_days)
+        while schedule_date <= horizon:
+            # Skip weekends
+            while schedule_date.weekday() >= 5:
+                schedule_date += timedelta(days=1)
+
+            # Check if a work order already exists within 14 days of this target
+            too_close = any(
+                abs((schedule_date - ed).days) < 14
+                for ed in existing_dates
+            )
+            if too_close:
+                skipped += 1
+                schedule_date += timedelta(days=interval_days)
+                continue
+
+            # Determine job type based on customer system
+            job_type = "maintenance"
+            if customer.system_type and "aerobic" in customer.system_type.lower():
+                job_type = "aerobic_inspection"
+
+            # Generate next work order number
+            wo_num_result = await db.execute(
+                select(func.count()).select_from(WorkOrder)
+            )
+            wo_count = (wo_num_result.scalar() or 0) + 1 + len(created_orders)
+            wo_number = f"WO-{wo_count:06d}"
+
+            wo = WorkOrder(
+                id=uuid.uuid4(),
+                work_order_number=wo_number,
+                customer_id=contract.customer_id,
+                job_type=job_type,
+                priority="normal",
+                status="scheduled",
+                scheduled_date=schedule_date,
+                service_address_line1=customer.address_line1,
+                service_city=customer.city,
+                service_state=customer.state,
+                service_postal_code=customer.postal_code,
+                is_recurring=True,
+                recurrence_frequency=f"every_{interval_days}_days",
+                notes=f"Auto-generated from contract {contract.contract_number}",
+                source="schedule_ahead",
+                created_by=current_user.email if hasattr(current_user, 'email') else "system",
+            )
+            db.add(wo)
+            existing_dates.add(schedule_date)
+            created_orders.append({
+                "id": str(wo.id),
+                "customer_id": str(contract.customer_id),
+                "customer_name": contract.customer_name or f"{customer.first_name} {customer.last_name}".strip(),
+                "job_type": job_type,
+                "scheduled_date": schedule_date.isoformat(),
+                "contract_number": contract.contract_number,
+            })
+
+            schedule_date += timedelta(days=interval_days)
+
+    await db.commit()
+
+    logger.info(
+        f"Schedule Ahead: created {len(created_orders)} work orders from "
+        f"{len(contracts)} contracts, skipped {skipped} existing"
+    )
+
+    return ScheduleAheadResponse(
+        created_count=len(created_orders),
+        skipped_existing=skipped,
+        contracts_processed=len(contracts),
+        work_orders=created_orders,
+    )
