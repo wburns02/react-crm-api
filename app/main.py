@@ -1481,6 +1481,11 @@ app.include_router(ringcentral_webhook_router, prefix="/webhooks/ringcentral", t
 app.include_router(brevo_webhook_router, prefix="/webhooks/brevo", tags=["webhooks"])
 app.include_router(live_chat_router, prefix="/api/v2/chat", tags=["live-chat"])
 
+# Google STT Media Stream WebSocket routes (outside /api/v2 — Twilio connects directly)
+from app.api.v2.media_stream import ws_media_stream, ws_call_transcript
+app.add_api_websocket_route("/ws/media-stream/{call_sid}", ws_media_stream)
+app.add_api_websocket_route("/ws/call-transcript/{call_sid}", ws_call_transcript)
+
 # Serve static assets (logos, etc.) — no auth required
 from starlette.staticfiles import StaticFiles
 import pathlib

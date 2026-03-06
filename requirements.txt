@@ -71,6 +71,9 @@ python-dotenv>=1.0.0
 weasyprint>=60.0
 Jinja2>=3.1.0
 
+# Google Cloud Speech-to-Text (live call transcription)
+google-cloud-speech>=2.25.0
+
 # Web scraping for TDEC permit lookup
 beautifulsoup4>=4.12.0
 lxml>=5.0.0

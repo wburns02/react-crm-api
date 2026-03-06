@@ -131,9 +131,11 @@ async def twilio_voice_webhook(request: Request):
 
     No auth required (Twilio calls this directly).
     Reads 'To' from form data, returns TwiML XML.
+    Optionally injects <Start><Stream> for Google STT live transcription.
     """
     form = await request.form()
     to_number = form.get("To", "")
+    call_sid = form.get("CallSid", "")
 
     if not to_number:
         logger.warning("Twilio voice webhook called without To number")
@@ -144,6 +146,17 @@ async def twilio_voice_webhook(request: Request):
 
     logger.info(f"Twilio browser voice webhook: dialing {to_number}")
     response = VoiceResponse()
+
+    # Inject media stream for live STT when enabled
+    if settings.GOOGLE_STT_ENABLED and call_sid:
+        proto = request.headers.get("x-forwarded-proto", "https")
+        host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
+        ws_proto = "wss" if proto == "https" else "ws"
+        stream_url = f"{ws_proto}://{host}/ws/media-stream/{call_sid}"
+        start = response.start()
+        start.stream(url=stream_url)
+        logger.info("Injected media stream: %s", stream_url)
+
     dial = response.dial(caller_id=settings.TWILIO_PHONE_NUMBER)
     dial.number(str(to_number))
     return Response(content=str(response), media_type="application/xml")

@@ -321,8 +321,19 @@ async def handle_incoming_voice(
     host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
     public_base = f"{proto}://{host}" if host else base_url
 
+    # Inject media stream for live STT when enabled
+    stream_element = ""
+    if settings.GOOGLE_STT_ENABLED and call_sid:
+        ws_proto = "wss" if proto == "https" else "ws"
+        stream_url = f"{ws_proto}://{host}/ws/media-stream/{call_sid}"
+        stream_element = f"""
+  <Start>
+    <Stream url="{stream_url}" />
+  </Start>"""
+        logger.info("Injected inbound media stream: %s", stream_url)
+
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
+<Response>{stream_element}
   <Dial record="record-from-answer-dual"
         recordingStatusCallback="{public_base}/webhooks/twilio/recording-status"
         recordingStatusCallbackMethod="POST"
