@@ -3228,6 +3228,75 @@ async def health_ensure_documents_table():
     return results
 
 
+@app.post("/health/db/ensure-custom-reports")
+async def health_ensure_custom_reports():
+    """Create custom_reports and report_snapshots tables if missing."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"tables_created": [], "tables_skipped": [], "errors": []}
+
+    async with async_session_maker() as session:
+        try:
+            for tbl, ddl in [
+                ("custom_reports", """
+                    CREATE TABLE IF NOT EXISTS custom_reports (
+                        id UUID PRIMARY KEY,
+                        entity_id UUID REFERENCES company_entities(id),
+                        name VARCHAR(200) NOT NULL,
+                        description TEXT,
+                        report_type VARCHAR(30) DEFAULT 'table',
+                        data_source VARCHAR(50) NOT NULL,
+                        columns JSONB DEFAULT '[]',
+                        filters JSONB DEFAULT '[]',
+                        group_by JSONB DEFAULT '[]',
+                        sort_by JSONB,
+                        date_range JSONB,
+                        chart_config JSONB,
+                        layout JSONB,
+                        is_favorite BOOLEAN DEFAULT FALSE,
+                        is_shared BOOLEAN DEFAULT FALSE,
+                        schedule JSONB,
+                        last_generated_at TIMESTAMPTZ,
+                        created_by UUID REFERENCES api_users(id),
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        updated_at TIMESTAMPTZ
+                    )
+                """),
+                ("report_snapshots", """
+                    CREATE TABLE IF NOT EXISTS report_snapshots (
+                        id UUID PRIMARY KEY,
+                        report_id UUID NOT NULL REFERENCES custom_reports(id) ON DELETE CASCADE,
+                        data JSONB DEFAULT '[]',
+                        row_count INTEGER DEFAULT 0,
+                        generated_at TIMESTAMPTZ DEFAULT now()
+                    )
+                """),
+            ]:
+                r = await session.execute(text(
+                    f"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '{tbl}')"
+                ))
+                if not r.scalar():
+                    await session.execute(text(ddl))
+                    results["tables_created"].append(tbl)
+                else:
+                    results["tables_skipped"].append(tbl)
+
+            # Indexes
+            for idx in [
+                "CREATE INDEX IF NOT EXISTS ix_custom_reports_data_source ON custom_reports(data_source)",
+                "CREATE INDEX IF NOT EXISTS ix_custom_reports_created_by ON custom_reports(created_by)",
+                "CREATE INDEX IF NOT EXISTS ix_report_snapshots_report_id ON report_snapshots(report_id)",
+            ]:
+                await session.execute(text(idx))
+
+            await session.commit()
+        except Exception as e:
+            results["errors"].append(f"{type(e).__name__}: {str(e)}")
+
+    return results
+
+
 # RFC 7807 Exception Handlers
 # Create handlers with CORS support
 _exception_handlers = create_exception_handlers(allowed_origins)
