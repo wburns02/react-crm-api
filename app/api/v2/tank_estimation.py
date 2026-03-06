@@ -6,17 +6,81 @@ Estimates septic tank size from a Nashville-area address using property records.
 
 import logging
 import re
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy import select, text, func
 
-from app.api.deps import DbSession
+from app.api.deps import DbSession, CurrentUser
 from app.models.property_lookup import PropertyLookup
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Track if table has been verified this session
+_table_verified = False
+
+
+async def _ensure_table(db: DbSession) -> None:
+    """Create property_lookups table if it doesn't exist."""
+    global _table_verified
+    if _table_verified:
+        return
+    try:
+        result = await db.execute(text(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'property_lookups')"
+        ))
+        if not result.scalar():
+            logger.info("Creating property_lookups table at runtime")
+            await db.execute(text("""
+                CREATE TABLE IF NOT EXISTS property_lookups (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    address_normalized VARCHAR(500) NOT NULL,
+                    address_raw VARCHAR(500),
+                    city VARCHAR(100),
+                    state VARCHAR(2) DEFAULT 'TN',
+                    zip_code VARCHAR(10),
+                    county VARCHAR(100) NOT NULL,
+                    sqft INTEGER,
+                    acres FLOAT,
+                    improvement_value INTEGER,
+                    total_value INTEGER,
+                    year_built INTEGER,
+                    land_use VARCHAR(100),
+                    bedrooms INTEGER,
+                    system_type VARCHAR(200),
+                    designation VARCHAR(100),
+                    estimated_tank_gallons INTEGER NOT NULL DEFAULT 1000,
+                    estimation_confidence VARCHAR(20) DEFAULT 'medium',
+                    estimation_source VARCHAR(50),
+                    data_source VARCHAR(100) NOT NULL,
+                    source_id VARCHAR(100),
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+            await db.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_property_lookup_addr_city ON property_lookups (address_normalized, city)"
+            ))
+            await db.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_property_lookup_county ON property_lookups (county)"
+            ))
+            await db.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_property_lookup_zip ON property_lookups (zip_code)"
+            ))
+            try:
+                await db.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+                await db.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_property_lookup_addr_trgm ON property_lookups USING gin (address_normalized gin_trgm_ops)"
+                ))
+            except Exception:
+                logger.warning("pg_trgm extension not available — fuzzy matching disabled")
+            await db.commit()
+        _table_verified = True
+    except Exception as e:
+        logger.error(f"Failed to ensure property_lookups table: {e}")
+        await db.rollback()
+        _table_verified = True  # Don't retry every request
 
 
 class TankEstimateResponse(BaseModel):
@@ -108,6 +172,7 @@ async def estimate_tank_size(
     Uses property records (sqft, acres, improvement value, system type) to estimate
     the likely tank size. Returns estimated cost including any overage.
     """
+    await _ensure_table(db)
     street = _extract_street_for_matching(address)
     normalized = _normalize_address(address)
 
@@ -198,6 +263,7 @@ async def estimate_tank_size(
 @router.get("/estimate-tank/stats", response_model=TankEstimateStats)
 async def tank_estimate_stats(db: DbSession) -> TankEstimateStats:
     """Get stats about the property lookup database. Public endpoint."""
+    await _ensure_table(db)
     count_result = await db.execute(
         select(func.count()).select_from(PropertyLookup)
     )
@@ -225,3 +291,89 @@ def _default_estimate() -> TankEstimateResponse:
         estimated_overage_cost=0.0,
         estimated_total=BASE_PRICE,
     )
+
+
+# ── Admin bulk load endpoint ────────────────────────────────────────────
+
+class BulkLoadRequest(BaseModel):
+    records: list[dict]
+    clear_existing: bool = False
+
+
+class BulkLoadResponse(BaseModel):
+    inserted: int
+    total: int
+
+
+@router.post("/estimate-tank/bulk-load", response_model=BulkLoadResponse)
+async def bulk_load_properties(
+    db: DbSession,
+    user: CurrentUser,
+    payload: BulkLoadRequest,
+) -> BulkLoadResponse:
+    """
+    Bulk load property records. Admin only.
+    Accepts batches of property records for tank size estimation.
+    """
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    await _ensure_table(db)
+
+    if payload.clear_existing:
+        await db.execute(text("DELETE FROM property_lookups"))
+        await db.commit()
+
+    inserted = 0
+    for rec in payload.records:
+        addr_norm = rec.get("address_normalized", "")
+        if not addr_norm or len(addr_norm) < 3:
+            continue
+        try:
+            await db.execute(
+                text("""
+                    INSERT INTO property_lookups (
+                        id, address_normalized, address_raw, city, state, zip_code, county,
+                        sqft, acres, improvement_value, total_value, year_built, land_use,
+                        bedrooms, system_type, designation,
+                        estimated_tank_gallons, estimation_confidence, estimation_source,
+                        data_source, source_id, created_at
+                    ) VALUES (
+                        gen_random_uuid(), :addr_norm, :addr_raw, :city, :state, :zip,
+                        :county, :sqft, :acres, :impr, :total, :yr, :lu,
+                        :beds, :sys, :desg, :gal, :conf, :src, :dsrc, :sid, NOW()
+                    )
+                """),
+                {
+                    "addr_norm": addr_norm,
+                    "addr_raw": rec.get("address_raw"),
+                    "city": rec.get("city"),
+                    "state": rec.get("state", "TN"),
+                    "zip": rec.get("zip_code"),
+                    "county": rec.get("county", "Unknown"),
+                    "sqft": rec.get("sqft"),
+                    "acres": rec.get("acres"),
+                    "impr": rec.get("improvement_value"),
+                    "total": rec.get("total_value"),
+                    "yr": rec.get("year_built"),
+                    "lu": rec.get("land_use"),
+                    "beds": rec.get("bedrooms"),
+                    "sys": rec.get("system_type"),
+                    "desg": rec.get("designation"),
+                    "gal": rec.get("estimated_tank_gallons", 1000),
+                    "conf": rec.get("estimation_confidence", "medium"),
+                    "src": rec.get("estimation_source", "default"),
+                    "dsrc": rec.get("data_source", "bulk_load"),
+                    "sid": rec.get("source_id"),
+                },
+            )
+            inserted += 1
+        except Exception as e:
+            logger.warning(f"Failed to insert record: {e}")
+
+    await db.commit()
+
+    count_result = await db.execute(text("SELECT COUNT(*) FROM property_lookups"))
+    total = count_result.scalar() or 0
+
+    return BulkLoadResponse(inserted=inserted, total=total)
