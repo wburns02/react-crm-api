@@ -1438,7 +1438,11 @@ async def get_contract(
 ):
     """Get a specific contract."""
     try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        cid = uuid.UUID(contract_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == cid))
         contract = result.scalar_one_or_none()
 
         if not contract:
@@ -1461,7 +1465,11 @@ async def update_contract(
 ):
     """Update a contract."""
     try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        cid = uuid.UUID(contract_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == cid))
         contract = result.scalar_one_or_none()
 
         if not contract:
@@ -1490,7 +1498,11 @@ async def delete_contract(
 ):
     """Delete a contract."""
     try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        cid = uuid.UUID(contract_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == cid))
         contract = result.scalar_one_or_none()
 
         if not contract:
@@ -1513,7 +1525,11 @@ async def activate_contract(
 ):
     """Activate a contract."""
     try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        cid = uuid.UUID(contract_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == cid))
         contract = result.scalar_one_or_none()
 
         if not contract:
@@ -1574,7 +1590,11 @@ async def renew_contract(
 ):
     """Renew a contract — creates a new contract and marks the old one as renewed."""
     try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        cid = uuid.UUID(contract_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == cid))
         old_contract = result.scalar_one_or_none()
 
         if not old_contract:
@@ -1646,7 +1666,11 @@ async def get_contract_document(
 ):
     """Get the generated contract document with customer-specific variables substituted."""
     try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        cid = uuid.UUID(contract_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == cid))
         contract = result.scalar_one_or_none()
 
         if not contract:
