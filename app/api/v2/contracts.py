@@ -373,132 +373,6 @@ async def create_contract(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{contract_id}", response_model=ContractResponse)
-async def get_contract(
-    contract_id: str,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Get a specific contract."""
-    try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
-        contract = result.scalar_one_or_none()
-
-        if not contract:
-            raise HTTPException(status_code=404, detail="Contract not found")
-
-        return contract_to_response(contract)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting contract {contract_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.patch("/{contract_id}", response_model=ContractResponse)
-async def update_contract(
-    contract_id: str,
-    update_data: ContractUpdate,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Update a contract."""
-    try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
-        contract = result.scalar_one_or_none()
-
-        if not contract:
-            raise HTTPException(status_code=404, detail="Contract not found")
-
-        update_dict = update_data.model_dump(exclude_unset=True)
-        for key, value in update_dict.items():
-            setattr(contract, key, value)
-
-        await db.commit()
-        await db.refresh(contract)
-
-        return contract_to_response(contract)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating contract {contract_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/{contract_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_contract(
-    contract_id: str,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Delete a contract."""
-    try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
-        contract = result.scalar_one_or_none()
-
-        if not contract:
-            raise HTTPException(status_code=404, detail="Contract not found")
-
-        await db.delete(contract)
-        await db.commit()
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting contract {contract_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/{contract_id}/activate")
-async def activate_contract(
-    contract_id: str,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Activate a contract."""
-    try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
-        contract = result.scalar_one_or_none()
-
-        if not contract:
-            raise HTTPException(status_code=404, detail="Contract not found")
-
-        if contract.requires_signature and not contract.is_fully_signed:
-            raise HTTPException(status_code=400, detail="Contract requires signature before activation")
-
-        contract.status = "active"
-
-        # Auto-create service schedule entries from contract line items
-        try:
-            from app.models.service_schedule import CustomerServiceSchedule
-            from dateutil.relativedelta import relativedelta
-            if contract.line_items and contract.customer_id:
-                for item in (contract.line_items if isinstance(contract.line_items, list) else []):
-                    svc_type = item.get("service_type") or item.get("description", "Contract Service")
-                    frequency = item.get("frequency", "annual")
-                    interval_months = {"monthly": 1, "quarterly": 3, "semi-annual": 6, "annual": 12}.get(frequency, 12)
-                    next_date = (contract.start_date or date.today()) + relativedelta(months=interval_months)
-                    sched = CustomerServiceSchedule(
-                        customer_id=contract.customer_id,
-                        service_type=svc_type,
-                        frequency=frequency,
-                        next_service_date=next_date,
-                        reminder_days_before=[7, 1],
-                        is_active=True,
-                        notes=f"Auto-created from contract {contract.contract_number or contract_id}",
-                    )
-                    db.add(sched)
-                await db.commit()
-                logger.info(f"Auto-created service schedules for contract {contract_id}")
-        except Exception as sched_err:
-            logger.warning(f"Auto-schedule creation failed for contract {contract_id}: {sched_err}")
-        await db.commit()
-
-        return {"status": "success", "message": "Contract activated"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error activating contract {contract_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ========================
@@ -1087,87 +961,6 @@ async def get_contract_reports(
 
 # ========================
 # Renew Endpoint
-# ========================
-
-
-class RenewContractRequest(BaseModel):
-    new_end_date: Optional[date] = None
-    new_total_value: Optional[float] = None
-    notes: Optional[str] = None
-
-
-@router.post("/{contract_id}/renew", response_model=ContractResponse)
-async def renew_contract(
-    contract_id: str,
-    renew_data: RenewContractRequest,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Renew a contract — creates a new contract and marks the old one as renewed."""
-    try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
-        old_contract = result.scalar_one_or_none()
-
-        if not old_contract:
-            raise HTTPException(status_code=404, detail="Contract not found")
-
-        if old_contract.status not in ("active", "expired"):
-            raise HTTPException(status_code=400, detail="Only active or expired contracts can be renewed")
-
-        # Calculate new dates
-        old_duration = (old_contract.end_date - old_contract.start_date).days
-        new_start = old_contract.end_date + timedelta(days=1)
-        new_end = renew_data.new_end_date or (new_start + timedelta(days=old_duration))
-
-        # Create renewed contract
-        new_contract = Contract(
-            contract_number=generate_contract_number(),
-            name=old_contract.name,
-            contract_type=old_contract.contract_type,
-            customer_id=old_contract.customer_id,
-            customer_name=old_contract.customer_name,
-            template_id=old_contract.template_id,
-            start_date=new_start,
-            end_date=new_end,
-            auto_renew=old_contract.auto_renew,
-            total_value=renew_data.new_total_value or old_contract.total_value,
-            billing_frequency=old_contract.billing_frequency,
-            payment_terms=old_contract.payment_terms,
-            services_included=old_contract.services_included,
-            covered_properties=old_contract.covered_properties,
-            coverage_details=old_contract.coverage_details,
-            terms_and_conditions=old_contract.terms_and_conditions,
-            special_terms=old_contract.special_terms,
-            notes=renew_data.notes or f"Renewed from {old_contract.contract_number}",
-            status="active",
-            created_by=current_user.email,
-        )
-
-        # Mark old contract as renewed
-        old_contract.status = "renewed"
-        old_contract.internal_notes = (old_contract.internal_notes or "") + f"\nRenewed on {date.today()} by {current_user.email}"
-
-        # Copy new fields to renewed contract
-        new_contract.tier = old_contract.tier
-        new_contract.system_size = old_contract.system_size
-        new_contract.daily_flow_gallons = old_contract.daily_flow_gallons
-        new_contract.add_ons = old_contract.add_ons
-        new_contract.bundle_id = old_contract.bundle_id
-        new_contract.neighborhood_group_name = old_contract.neighborhood_group_name
-        new_contract.discount_percent = old_contract.discount_percent
-        new_contract.referral_code = old_contract.referral_code
-        new_contract.annual_increase_percent = old_contract.annual_increase_percent
-
-        db.add(new_contract)
-        await db.commit()
-        await db.refresh(new_contract)
-
-        return contract_to_response(new_contract)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error renewing contract {contract_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ========================
@@ -1523,73 +1316,6 @@ async def get_template_document(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{contract_id}/document")
-async def get_contract_document(
-    contract_id: str,
-    db: DbSession,
-    current_user: CurrentUser,
-):
-    """Get the generated contract document with customer-specific variables substituted."""
-    try:
-        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
-        contract = result.scalar_one_or_none()
-
-        if not contract:
-            raise HTTPException(status_code=404, detail="Contract not found")
-
-        # Get the template to access the full document content
-        if not contract.template_id:
-            return {
-                "contract_id": str(contract.id),
-                "contract_number": contract.contract_number,
-                "document": None,
-                "terms_and_conditions": contract.terms_and_conditions,
-                "message": "This contract was not generated from a template",
-            }
-
-        template_result = await db.execute(
-            select(ContractTemplate).where(ContractTemplate.id == contract.template_id)
-        )
-        template = template_result.scalar_one_or_none()
-
-        if not template or not template.content:
-            return {
-                "contract_id": str(contract.id),
-                "contract_number": contract.contract_number,
-                "document": None,
-                "terms_and_conditions": contract.terms_and_conditions,
-                "message": "Template document content not available",
-            }
-
-        # Substitute variables with actual contract data
-        document = template.content
-        substitutions = {
-            "contract_number": contract.contract_number,
-            "start_date": contract.start_date.isoformat() if contract.start_date else "",
-            "customer_name": contract.customer_name or "",
-            "service_address": ", ".join(contract.covered_properties) if contract.covered_properties else "",
-            "system_type": contract.coverage_details or "",
-            "contact_person": "",
-            "system_capacity": "",
-            "plan_tier": "",
-            "commercial_tier": "",
-        }
-
-        for key, value in substitutions.items():
-            document = document.replace(f"{{{{{key}}}}}", value)
-
-        return {
-            "contract_id": str(contract.id),
-            "contract_number": contract.contract_number,
-            "customer_name": contract.customer_name,
-            "document": document,
-            "terms_and_conditions": contract.terms_and_conditions or template.terms_and_conditions,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting contract document: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ========================
@@ -1698,4 +1424,284 @@ async def get_renewals_dashboard(
         }
     except Exception as e:
         logger.error(f"Error getting renewals dashboard: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ========================
+# Parameterized Routes (MUST be last — catch-all)
+# ========================
+
+@router.get("/{contract_id}", response_model=ContractResponse)
+async def get_contract(
+    contract_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get a specific contract."""
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        contract = result.scalar_one_or_none()
+
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+        return contract_to_response(contract)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting contract {contract_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{contract_id}", response_model=ContractResponse)
+async def update_contract(
+    contract_id: str,
+    update_data: ContractUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update a contract."""
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        contract = result.scalar_one_or_none()
+
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+        update_dict = update_data.model_dump(exclude_unset=True)
+        for key, value in update_dict.items():
+            setattr(contract, key, value)
+
+        await db.commit()
+        await db.refresh(contract)
+
+        return contract_to_response(contract)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating contract {contract_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{contract_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_contract(
+    contract_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Delete a contract."""
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        contract = result.scalar_one_or_none()
+
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+        await db.delete(contract)
+        await db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting contract {contract_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{contract_id}/activate")
+async def activate_contract(
+    contract_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Activate a contract."""
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        contract = result.scalar_one_or_none()
+
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+        if contract.requires_signature and not contract.is_fully_signed:
+            raise HTTPException(status_code=400, detail="Contract requires signature before activation")
+
+        contract.status = "active"
+
+        # Auto-create service schedule entries from contract line items
+        try:
+            from app.models.service_schedule import CustomerServiceSchedule
+            from dateutil.relativedelta import relativedelta
+            if contract.line_items and contract.customer_id:
+                for item in (contract.line_items if isinstance(contract.line_items, list) else []):
+                    svc_type = item.get("service_type") or item.get("description", "Contract Service")
+                    frequency = item.get("frequency", "annual")
+                    interval_months = {"monthly": 1, "quarterly": 3, "semi-annual": 6, "annual": 12}.get(frequency, 12)
+                    next_date = (contract.start_date or date.today()) + relativedelta(months=interval_months)
+                    sched = CustomerServiceSchedule(
+                        customer_id=contract.customer_id,
+                        service_type=svc_type,
+                        frequency=frequency,
+                        next_service_date=next_date,
+                        reminder_days_before=[7, 1],
+                        is_active=True,
+                        notes=f"Auto-created from contract {contract.contract_number or contract_id}",
+                    )
+                    db.add(sched)
+                await db.commit()
+                logger.info(f"Auto-created service schedules for contract {contract_id}")
+        except Exception as sched_err:
+            logger.warning(f"Auto-schedule creation failed for contract {contract_id}: {sched_err}")
+        await db.commit()
+
+        return {"status": "success", "message": "Contract activated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error activating contract {contract_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+# ========================
+
+
+class RenewContractRequest(BaseModel):
+    new_end_date: Optional[date] = None
+    new_total_value: Optional[float] = None
+    notes: Optional[str] = None
+
+
+@router.post("/{contract_id}/renew", response_model=ContractResponse)
+async def renew_contract(
+    contract_id: str,
+    renew_data: RenewContractRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Renew a contract — creates a new contract and marks the old one as renewed."""
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        old_contract = result.scalar_one_or_none()
+
+        if not old_contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+        if old_contract.status not in ("active", "expired"):
+            raise HTTPException(status_code=400, detail="Only active or expired contracts can be renewed")
+
+        # Calculate new dates
+        old_duration = (old_contract.end_date - old_contract.start_date).days
+        new_start = old_contract.end_date + timedelta(days=1)
+        new_end = renew_data.new_end_date or (new_start + timedelta(days=old_duration))
+
+        # Create renewed contract
+        new_contract = Contract(
+            contract_number=generate_contract_number(),
+            name=old_contract.name,
+            contract_type=old_contract.contract_type,
+            customer_id=old_contract.customer_id,
+            customer_name=old_contract.customer_name,
+            template_id=old_contract.template_id,
+            start_date=new_start,
+            end_date=new_end,
+            auto_renew=old_contract.auto_renew,
+            total_value=renew_data.new_total_value or old_contract.total_value,
+            billing_frequency=old_contract.billing_frequency,
+            payment_terms=old_contract.payment_terms,
+            services_included=old_contract.services_included,
+            covered_properties=old_contract.covered_properties,
+            coverage_details=old_contract.coverage_details,
+            terms_and_conditions=old_contract.terms_and_conditions,
+            special_terms=old_contract.special_terms,
+            notes=renew_data.notes or f"Renewed from {old_contract.contract_number}",
+            status="active",
+            created_by=current_user.email,
+        )
+
+        # Mark old contract as renewed
+        old_contract.status = "renewed"
+        old_contract.internal_notes = (old_contract.internal_notes or "") + f"\nRenewed on {date.today()} by {current_user.email}"
+
+        # Copy new fields to renewed contract
+        new_contract.tier = old_contract.tier
+        new_contract.system_size = old_contract.system_size
+        new_contract.daily_flow_gallons = old_contract.daily_flow_gallons
+        new_contract.add_ons = old_contract.add_ons
+        new_contract.bundle_id = old_contract.bundle_id
+        new_contract.neighborhood_group_name = old_contract.neighborhood_group_name
+        new_contract.discount_percent = old_contract.discount_percent
+        new_contract.referral_code = old_contract.referral_code
+        new_contract.annual_increase_percent = old_contract.annual_increase_percent
+
+        db.add(new_contract)
+        await db.commit()
+        await db.refresh(new_contract)
+
+        return contract_to_response(new_contract)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error renewing contract {contract_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{contract_id}/document")
+async def get_contract_document(
+    contract_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Get the generated contract document with customer-specific variables substituted."""
+    try:
+        result = await db.execute(select(Contract).where(Contract.id == uuid.UUID(contract_id)))
+        contract = result.scalar_one_or_none()
+
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+        # Get the template to access the full document content
+        if not contract.template_id:
+            return {
+                "contract_id": str(contract.id),
+                "contract_number": contract.contract_number,
+                "document": None,
+                "terms_and_conditions": contract.terms_and_conditions,
+                "message": "This contract was not generated from a template",
+            }
+
+        template_result = await db.execute(
+            select(ContractTemplate).where(ContractTemplate.id == contract.template_id)
+        )
+        template = template_result.scalar_one_or_none()
+
+        if not template or not template.content:
+            return {
+                "contract_id": str(contract.id),
+                "contract_number": contract.contract_number,
+                "document": None,
+                "terms_and_conditions": contract.terms_and_conditions,
+                "message": "Template document content not available",
+            }
+
+        # Substitute variables with actual contract data
+        document = template.content
+        substitutions = {
+            "contract_number": contract.contract_number,
+            "start_date": contract.start_date.isoformat() if contract.start_date else "",
+            "customer_name": contract.customer_name or "",
+            "service_address": ", ".join(contract.covered_properties) if contract.covered_properties else "",
+            "system_type": contract.coverage_details or "",
+            "contact_person": "",
+            "system_capacity": "",
+            "plan_tier": "",
+            "commercial_tier": "",
+        }
+
+        for key, value in substitutions.items():
+            document = document.replace(f"{{{{{key}}}}}", value)
+
+        return {
+            "contract_id": str(contract.id),
+            "contract_number": contract.contract_number,
+            "customer_name": contract.customer_name,
+            "document": document,
+            "terms_and_conditions": contract.terms_and_conditions or template.terms_and_conditions,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting contract document: {e}")
         raise HTTPException(status_code=500, detail=str(e))
