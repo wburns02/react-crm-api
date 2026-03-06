@@ -25,7 +25,7 @@ class CustomReport(Base):
     is_shared = Column(Boolean, default=False)
     schedule = Column(JSON, nullable=True)
     last_generated_at = Column(DateTime, nullable=True)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("api_users.id"), nullable=True)
+    created_by = Column(UUID(as_uuid=True), nullable=True)  # no FK — api_users.id is INTEGER
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
 

@@ -3258,7 +3258,7 @@ async def health_ensure_custom_reports():
                         is_shared BOOLEAN DEFAULT FALSE,
                         schedule JSONB,
                         last_generated_at TIMESTAMPTZ,
-                        created_by UUID REFERENCES api_users(id),
+                        created_by UUID,
                         created_at TIMESTAMPTZ DEFAULT now(),
                         updated_at TIMESTAMPTZ
                     )
