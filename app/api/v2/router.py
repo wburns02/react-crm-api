@@ -132,6 +132,8 @@ from app.api.v2 import (
     workflow_automations,
     # Custom Report Builder
     custom_reports,
+    # Live Chat
+    chat,
     # Document Center
     documents,
 )
@@ -361,10 +363,13 @@ api_router.include_router(executive_dashboard.router, prefix="/executive", tags=
 api_router.include_router(workflow_automations.router, prefix="/automations", tags=["automations"])
 
 # Custom Report Builder
-api_router.include_router(custom_reports.router, prefix="/reports", tags=["reports"])
+api_router.include_router(custom_reports.router, prefix="/reports/custom", tags=["custom-reports"])
 
 # Document Center
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
+
+# Live Chat (stub — returns empty data until real implementation)
+api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])

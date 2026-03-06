@@ -136,6 +136,9 @@ from app.models import (
     PermitVersion,
     PermitDuplicate,
     PermitImportBatch,
+    # Custom Reports
+    CustomReport,
+    ReportSnapshot,
 )
 
 # Live Chat
