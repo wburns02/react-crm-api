@@ -552,6 +552,166 @@ class GoogleAdsService:
             "recommendations": recommendations or [],
         }
 
+    async def get_daily_breakdown(self, days: int = 14, campaign_filter: str | None = None) -> Optional[list]:
+        """Get daily performance breakdown by campaign. Essential for diagnosing trends."""
+        cache_key = f"daily_breakdown_{days}_{campaign_filter}"
+        cached = self._get_cached(cache_key, CACHE_TTL_METRICS)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        where_clauses = [f"segments.date {date_range}", "campaign.status != 'REMOVED'"]
+        if campaign_filter:
+            where_clauses.append(f"campaign.name LIKE '%{campaign_filter}%'")
+
+        query = f"""
+            SELECT
+                segments.date,
+                campaign.name,
+                campaign.advertising_channel_type,
+                metrics.cost_micros,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions,
+                metrics.phone_calls,
+                metrics.phone_impressions
+            FROM campaign
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY segments.date DESC, metrics.cost_micros DESC
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        rows = []
+        for row in results:
+            seg = row.get("segments", {})
+            c = row.get("campaign", {})
+            m = row.get("metrics", {})
+            cost_micros = int(m.get("costMicros", 0))
+            cost = cost_micros / 1_000_000
+            conversions = float(m.get("conversions", 0))
+            rows.append({
+                "date": seg.get("date", ""),
+                "campaign": c.get("name", "Unknown"),
+                "channel_type": c.get("advertisingChannelType", "UNKNOWN"),
+                "cost": round(cost, 2),
+                "clicks": int(m.get("clicks", 0)),
+                "impressions": int(m.get("impressions", 0)),
+                "conversions": round(conversions, 1),
+                "phone_calls": int(m.get("phoneCalls", 0)),
+                "phone_impressions": int(m.get("phoneImpressions", 0)),
+                "cpa": round(cost / conversions, 2) if conversions > 0 else None,
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
+    async def get_impression_share(self, days: int = 7) -> Optional[list]:
+        """Get Search impression share metrics by campaign. Diagnoses visibility issues."""
+        cache_key = f"impression_share_{days}"
+        cached = self._get_cached(cache_key, CACHE_TTL_METRICS)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        query = f"""
+            SELECT
+                campaign.name,
+                campaign.advertising_channel_type,
+                metrics.search_impression_share,
+                metrics.search_budget_lost_impression_share,
+                metrics.search_rank_lost_impression_share,
+                metrics.search_exact_match_impression_share,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions,
+                metrics.cost_micros,
+                metrics.average_cpc
+            FROM campaign
+            WHERE segments.date {date_range}
+                AND campaign.status != 'REMOVED'
+                AND metrics.impressions > 0
+            ORDER BY metrics.impressions DESC
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        rows = []
+        for row in results:
+            c = row.get("campaign", {})
+            m = row.get("metrics", {})
+            cost_micros = int(m.get("costMicros", 0))
+            rows.append({
+                "campaign": c.get("name", "Unknown"),
+                "channel_type": c.get("advertisingChannelType", "UNKNOWN"),
+                "search_impression_share": m.get("searchImpressionShare"),
+                "search_budget_lost_is": m.get("searchBudgetLostImpressionShare"),
+                "search_rank_lost_is": m.get("searchRankLostImpressionShare"),
+                "search_exact_match_is": m.get("searchExactMatchImpressionShare"),
+                "clicks": int(m.get("clicks", 0)),
+                "impressions": int(m.get("impressions", 0)),
+                "conversions": round(float(m.get("conversions", 0)), 1),
+                "cost": round(cost_micros / 1_000_000, 2),
+                "avg_cpc": round(int(m.get("averageCpc", 0)) / 1_000_000, 2),
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
+    async def get_call_metrics(self, days: int = 14) -> Optional[list]:
+        """Get phone call metrics from campaigns and ad groups."""
+        cache_key = f"call_metrics_{days}"
+        cached = self._get_cached(cache_key, CACHE_TTL_METRICS)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        query = f"""
+            SELECT
+                segments.date,
+                campaign.name,
+                ad_group.name,
+                metrics.phone_calls,
+                metrics.phone_impressions,
+                metrics.phone_through_rate,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions,
+                metrics.cost_micros
+            FROM ad_group
+            WHERE segments.date {date_range}
+                AND campaign.status = 'ENABLED'
+                AND metrics.impressions > 0
+            ORDER BY segments.date DESC, metrics.phone_calls DESC
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        rows = []
+        for row in results:
+            seg = row.get("segments", {})
+            c = row.get("campaign", {})
+            ag = row.get("adGroup", {})
+            m = row.get("metrics", {})
+            rows.append({
+                "date": seg.get("date", ""),
+                "campaign": c.get("name", "Unknown"),
+                "ad_group": ag.get("name", "Unknown"),
+                "phone_calls": int(m.get("phoneCalls", 0)),
+                "phone_impressions": int(m.get("phoneImpressions", 0)),
+                "phone_through_rate": float(m.get("phoneThroughRate", 0)),
+                "clicks": int(m.get("clicks", 0)),
+                "impressions": int(m.get("impressions", 0)),
+                "conversions": round(float(m.get("conversions", 0)), 1),
+                "cost": round(int(m.get("costMicros", 0)) / 1_000_000, 2),
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
     async def get_connection_status(self) -> dict:
         """Check if Google Ads is connected and return account info."""
         if not self.is_configured():

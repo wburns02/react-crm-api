@@ -1787,6 +1787,58 @@ async def get_ads_alerts(
     return {"success": True, "alerts": alerts, "report_date": str(report.report_date) if report else None}
 
 
+@router.get("/ads/daily-breakdown")
+async def get_ads_daily_breakdown(
+    current_user: CurrentUser,
+    days: int = 14,
+    campaign: str | None = None,
+) -> dict:
+    """Get daily performance breakdown by campaign. Use campaign param to filter (e.g. 'Nashville')."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured", "data": []}
+    try:
+        data = await ads.get_daily_breakdown(days, campaign)
+        return {"success": True, "data": data or [], "days": days, "campaign_filter": campaign}
+    except Exception as e:
+        logger.error("Ads daily breakdown failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": []}
+
+
+@router.get("/ads/impression-share")
+async def get_ads_impression_share(
+    current_user: CurrentUser,
+    days: int = 7,
+) -> dict:
+    """Get Search impression share metrics — diagnose visibility/budget issues."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured", "data": []}
+    try:
+        data = await ads.get_impression_share(days)
+        return {"success": True, "data": data or [], "days": days}
+    except Exception as e:
+        logger.error("Ads impression share failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": []}
+
+
+@router.get("/ads/call-metrics")
+async def get_ads_call_metrics(
+    current_user: CurrentUser,
+    days: int = 14,
+) -> dict:
+    """Get phone call metrics from Google Ads campaigns/ad groups."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured", "data": []}
+    try:
+        data = await ads.get_call_metrics(days)
+        return {"success": True, "data": data or [], "days": days}
+    except Exception as e:
+        logger.error("Ads call metrics failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": []}
+
+
 @router.get("/ga4/comparison")
 async def ga4_comparison(
     current_user: CurrentUser,
