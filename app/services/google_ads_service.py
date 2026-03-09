@@ -712,6 +712,179 @@ class GoogleAdsService:
         self._set_cache(cache_key, rows)
         return rows
 
+    async def get_ad_position_metrics(self, days: int = 7) -> Optional[list]:
+        """Get ad position metrics — absolute top %, top %, and competitive positioning."""
+        cache_key = f"ad_position_{days}"
+        cached = self._get_cached(cache_key, CACHE_TTL_METRICS)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        query = f"""
+            SELECT
+                campaign.name,
+                campaign.advertising_channel_type,
+                metrics.absolute_top_impression_percentage,
+                metrics.top_impression_percentage,
+                metrics.search_impression_share,
+                metrics.search_budget_lost_impression_share,
+                metrics.search_rank_lost_impression_share,
+                metrics.average_cpc,
+                metrics.average_cost,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions,
+                metrics.cost_micros
+            FROM campaign
+            WHERE segments.date {date_range}
+                AND campaign.status = 'ENABLED'
+                AND metrics.impressions > 0
+            ORDER BY metrics.cost_micros DESC
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        rows = []
+        for row in results:
+            c = row.get("campaign", {})
+            m = row.get("metrics", {})
+            rows.append({
+                "campaign": c.get("name", "Unknown"),
+                "channel_type": c.get("advertisingChannelType", "UNKNOWN"),
+                "absolute_top_pct": m.get("absoluteTopImpressionPercentage"),
+                "top_pct": m.get("topImpressionPercentage"),
+                "search_impression_share": m.get("searchImpressionShare"),
+                "budget_lost_is": m.get("searchBudgetLostImpressionShare"),
+                "rank_lost_is": m.get("searchRankLostImpressionShare"),
+                "avg_cpc": round(int(m.get("averageCpc", 0)) / 1_000_000, 2),
+                "avg_cost": round(int(m.get("averageCost", 0)) / 1_000_000, 2),
+                "clicks": int(m.get("clicks", 0)),
+                "impressions": int(m.get("impressions", 0)),
+                "conversions": round(float(m.get("conversions", 0)), 1),
+                "cost": round(int(m.get("costMicros", 0)) / 1_000_000, 2),
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
+    async def get_auction_insights(self, days: int = 7, campaign_id: str | None = None) -> Optional[list]:
+        """Get auction insights — competitor overlap, position above, outranking share."""
+        cache_key = f"auction_insights_{days}_{campaign_id}"
+        cached = self._get_cached(cache_key, CACHE_TTL_METRICS)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        # Auction insights require campaign-level or ad-group-level filtering
+        campaign_filter = ""
+        if campaign_id:
+            campaign_filter = f"AND campaign.id = {campaign_id}"
+
+        # Try the standard auction_insight resource
+        query = f"""
+            SELECT
+                auction_insight.display_domain
+            FROM auction_insight
+            WHERE segments.date {date_range}
+                {campaign_filter}
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            # Auction insights might not be available via GAQL search endpoint
+            # Fall back to campaign-level competitive metrics
+            return await self._get_competitive_fallback(days)
+
+        rows = []
+        for row in results:
+            ai = row.get("auctionInsight", {})
+            m = row.get("metrics", {})
+            rows.append({
+                "display_domain": ai.get("displayDomain", ""),
+                "impression_share": m.get("auctionInsightSearchImpressionShare"),
+                "overlap_rate": m.get("auctionInsightSearchOverlapRate"),
+                "position_above_rate": m.get("auctionInsightSearchPositionAboveRate"),
+                "top_of_page_rate": m.get("auctionInsightSearchTopImpressionPercentage"),
+                "abs_top_of_page_rate": m.get("auctionInsightSearchAbsoluteTopImpressionPercentage"),
+                "outranking_share": m.get("auctionInsightSearchOutrankingShare"),
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
+    async def _get_competitive_fallback(self, days: int = 7) -> list:
+        """Fallback competitive analysis using available metrics."""
+        return [{"error": "Auction insights not available via GAQL. Check Google Ads UI for competitor data."}]
+
+    async def get_keyword_performance(self, days: int = 7, campaign_filter: str | None = None) -> Optional[list]:
+        """Get keyword-level performance with CPC and position data."""
+        cache_key = f"keyword_perf_{days}_{campaign_filter}"
+        cached = self._get_cached(cache_key, CACHE_TTL_METRICS)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        where_clauses = [
+            f"segments.date {date_range}",
+            "campaign.status = 'ENABLED'",
+            "ad_group.status = 'ENABLED'",
+            "ad_group_criterion.status = 'ENABLED'",
+            "metrics.impressions > 0",
+        ]
+        if campaign_filter:
+            where_clauses.append(f"campaign.name LIKE '%{campaign_filter}%'")
+
+        query = f"""
+            SELECT
+                ad_group_criterion.keyword.text,
+                ad_group_criterion.keyword.match_type,
+                campaign.name,
+                ad_group.name,
+                metrics.average_cpc,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions,
+                metrics.cost_micros,
+                metrics.absolute_top_impression_percentage,
+                metrics.top_impression_percentage,
+                metrics.search_impression_share
+            FROM keyword_view
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY metrics.cost_micros DESC
+            LIMIT 50
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        rows = []
+        for row in results:
+            agc = row.get("adGroupCriterion", {})
+            kw = agc.get("keyword", {})
+            c = row.get("campaign", {})
+            ag = row.get("adGroup", {})
+            m = row.get("metrics", {})
+            cost_micros = int(m.get("costMicros", 0))
+            conversions = float(m.get("conversions", 0))
+            rows.append({
+                "keyword": kw.get("text", ""),
+                "match_type": kw.get("matchType", ""),
+                "campaign": c.get("name", "Unknown"),
+                "ad_group": ag.get("name", "Unknown"),
+                "avg_cpc": round(int(m.get("averageCpc", 0)) / 1_000_000, 2),
+                "clicks": int(m.get("clicks", 0)),
+                "impressions": int(m.get("impressions", 0)),
+                "conversions": round(conversions, 1),
+                "cost": round(cost_micros / 1_000_000, 2),
+                "abs_top_pct": m.get("absoluteTopImpressionPercentage"),
+                "top_pct": m.get("topImpressionPercentage"),
+                "search_is": m.get("searchImpressionShare"),
+                "cpa": round(cost_micros / 1_000_000 / conversions, 2) if conversions > 0 else None,
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
     async def get_change_history(self, days: int = 14) -> Optional[list]:
         """Get account change history — shows all edits to campaigns, ads, assets, etc."""
         cache_key = f"change_history_{days}"

@@ -1839,6 +1839,59 @@ async def get_ads_call_metrics(
         return {"success": False, "error": str(e), "data": []}
 
 
+@router.get("/ads/position-metrics")
+async def get_ads_position_metrics(
+    current_user: CurrentUser,
+    days: int = 7,
+) -> dict:
+    """Get ad position metrics — absolute top %, top %, competitive positioning."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured", "data": []}
+    try:
+        data = await ads.get_ad_position_metrics(days)
+        return {"success": True, "data": data or [], "days": days}
+    except Exception as e:
+        logger.error("Ads position metrics failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": []}
+
+
+@router.get("/ads/auction-insights")
+async def get_ads_auction_insights(
+    current_user: CurrentUser,
+    days: int = 7,
+    campaign_id: str | None = None,
+) -> dict:
+    """Get auction insights — competitor overlap, outranking share."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured", "data": []}
+    try:
+        data = await ads.get_auction_insights(days, campaign_id)
+        return {"success": True, "data": data or [], "days": days}
+    except Exception as e:
+        logger.error("Ads auction insights failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": []}
+
+
+@router.get("/ads/keyword-performance")
+async def get_ads_keyword_performance(
+    current_user: CurrentUser,
+    days: int = 7,
+    campaign: str | None = None,
+) -> dict:
+    """Get keyword-level performance with CPC and position data."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured", "data": []}
+    try:
+        data = await ads.get_keyword_performance(days, campaign)
+        return {"success": True, "data": data or [], "days": days}
+    except Exception as e:
+        logger.error("Ads keyword performance failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": []}
+
+
 @router.get("/ads/change-history")
 async def get_ads_change_history(
     current_user: CurrentUser,
