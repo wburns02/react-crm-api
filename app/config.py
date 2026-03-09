@@ -134,11 +134,6 @@ class Settings(BaseSettings):
     MS365_BOOKING_BUSINESS_ID: str | None = None
     MS365_SHARED_CALENDAR_EMAIL: str | None = None
 
-    # Google Cloud Speech-to-Text (live call transcription)
-    GOOGLE_STT_ENABLED: bool = False
-    GOOGLE_STT_CREDENTIALS_JSON: str = ""  # base64-encoded service account JSON
-    GOOGLE_STT_LANGUAGE: str = "en-US"
-
     # AI Services
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
@@ -161,6 +156,11 @@ class Settings(BaseSettings):
     # Voice AI
     TWILIO_FORWARD_NUMBER: str = "+19792361958"
     VOICE_AI_ENABLED: bool = True
+
+    # Google Speech-to-Text (Real-time call transcription)
+    GOOGLE_STT_ENABLED: bool = False
+    GOOGLE_STT_CREDENTIALS_JSON: str | None = None  # Base64-encoded or raw JSON service account
+    GOOGLE_STT_LANGUAGE_CODE: str = "en-US"
 
     # Legacy backend (for webhook routing)
     LEGACY_BACKEND_URL: str = "http://localhost:5000"

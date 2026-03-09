@@ -313,7 +313,7 @@ async def handle_incoming_voice(
     }
     background_tasks.add_background_task(manager.broadcast_event, "incoming_call", ws_payload)
 
-    # Return TwiML — dial forward number with recording
+    # Return TwiML — dial forward number with recording + live transcription stream
     forward = settings.TWILIO_FORWARD_NUMBER
     base_url = str(request.base_url).rstrip("/")
     # Use forwarded headers for public URL
@@ -321,14 +321,14 @@ async def handle_incoming_voice(
     host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
     public_base = f"{proto}://{host}" if host else base_url
 
-    # Inject media stream for live STT when enabled
+    # Inject Twilio Media Stream for live STT when enabled
     stream_element = ""
-    if settings.GOOGLE_STT_ENABLED and call_sid:
+    if settings.GOOGLE_STT_ENABLED and settings.GOOGLE_STT_CREDENTIALS_JSON and call_sid:
         ws_proto = "wss" if proto == "https" else "ws"
-        stream_url = f"{ws_proto}://{host}/ws/media-stream/{call_sid}"
+        stream_url = f"{ws_proto}://{host}/ws/twilio-media/{call_sid}"
         stream_element = f"""
   <Start>
-    <Stream url="{stream_url}" />
+    <Stream url="{stream_url}" track="inbound_track" />
   </Start>"""
         logger.info("Injected inbound media stream: %s", stream_url)
 

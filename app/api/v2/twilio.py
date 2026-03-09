@@ -148,13 +148,13 @@ async def twilio_voice_webhook(request: Request):
     response = VoiceResponse()
 
     # Inject media stream for live STT when enabled
-    if settings.GOOGLE_STT_ENABLED and call_sid:
+    if settings.GOOGLE_STT_ENABLED and settings.GOOGLE_STT_CREDENTIALS_JSON and call_sid:
         proto = request.headers.get("x-forwarded-proto", "https")
         host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
         ws_proto = "wss" if proto == "https" else "ws"
-        stream_url = f"{ws_proto}://{host}/ws/media-stream/{call_sid}"
+        stream_url = f"{ws_proto}://{host}/ws/twilio-media/{call_sid}"
         start = response.start()
-        start.stream(url=stream_url)
+        start.stream(url=stream_url, track="inbound_track")
         logger.info("Injected media stream: %s", stream_url)
 
     dial = response.dial(caller_id=settings.TWILIO_PHONE_NUMBER)

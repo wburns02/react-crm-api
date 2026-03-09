@@ -32,6 +32,7 @@ from app.webhooks.twilio import twilio_router
 from app.webhooks.ringcentral import ringcentral_webhook_router
 from app.webhooks.brevo import brevo_webhook_router
 from app.api.v2.live_chat import router as live_chat_router
+from app.api.v2.call_transcript_ws import router as call_transcript_ws_router
 from app.config import settings
 from app.database import init_db
 from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
@@ -1481,10 +1482,9 @@ app.include_router(ringcentral_webhook_router, prefix="/webhooks/ringcentral", t
 app.include_router(brevo_webhook_router, prefix="/webhooks/brevo", tags=["webhooks"])
 app.include_router(live_chat_router, prefix="/api/v2/chat", tags=["live-chat"])
 
-# Google STT Media Stream WebSocket routes (outside /api/v2 — Twilio connects directly)
-from app.api.v2.media_stream import ws_media_stream, ws_call_transcript
-app.add_api_websocket_route("/ws/media-stream/{call_sid}", ws_media_stream)
-app.add_api_websocket_route("/ws/call-transcript/{call_sid}", ws_call_transcript)
+# WebSocket routes for real-time call transcription (mounted at root, not /api/v2)
+# Replaces the older media_stream.py -- uses GoogleSTTStreamer + TranscriptWSManager
+app.include_router(call_transcript_ws_router)
 
 # Serve static assets (logos, etc.) — no auth required
 from starlette.staticfiles import StaticFiles
@@ -1555,6 +1555,7 @@ async def health_check():
             "status": db_status,
             "latency_ms": db_latency_ms,
         },
+        "google_stt_configured": settings.GOOGLE_STT_ENABLED and bool(settings.GOOGLE_STT_CREDENTIALS_JSON),
         "features": [
             "public_api",
             "oauth2",
@@ -1565,6 +1566,7 @@ async def health_check():
             "call_intelligence",
             "email_crm",
             "rbac_admin_role",
+            "realtime_call_transcription",
         ],
         "warnings": warnings,
     }
