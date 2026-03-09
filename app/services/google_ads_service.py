@@ -719,7 +719,9 @@ class GoogleAdsService:
         if cached is not None:
             return cached
 
-        date_range = self._date_range_clause(days)
+        # change_event uses timestamp comparison, not DURING clause
+        start_date = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+        end_date = datetime.utcnow().strftime("%Y-%m-%d")
         query = f"""
             SELECT
                 change_event.change_date_time,
@@ -732,7 +734,8 @@ class GoogleAdsService:
                 change_event.old_resource,
                 change_event.new_resource
             FROM change_event
-            WHERE change_event.change_date_time {date_range}
+            WHERE change_event.change_date_time >= '{start_date}'
+                AND change_event.change_date_time <= '{end_date}'
             ORDER BY change_event.change_date_time DESC
             LIMIT 200
         """
