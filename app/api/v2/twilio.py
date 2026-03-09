@@ -154,7 +154,7 @@ async def twilio_voice_webhook(request: Request):
         ws_proto = "wss" if proto == "https" else "ws"
         stream_url = f"{ws_proto}://{host}/ws/twilio-media/{call_sid}"
         start = response.start()
-        start.stream(url=stream_url, track="inbound_track")
+        start.stream(url=stream_url, track="outbound_track")
         logger.info("Injected media stream: %s", stream_url)
 
     dial = response.dial(caller_id=settings.TWILIO_PHONE_NUMBER)
