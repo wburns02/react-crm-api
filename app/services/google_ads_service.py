@@ -712,6 +712,158 @@ class GoogleAdsService:
         self._set_cache(cache_key, rows)
         return rows
 
+    async def get_change_history(self, days: int = 14) -> Optional[list]:
+        """Get account change history — shows all edits to campaigns, ads, assets, etc."""
+        cache_key = f"change_history_{days}"
+        cached = self._get_cached(cache_key, CACHE_TTL_METRICS)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        query = f"""
+            SELECT
+                change_event.change_date_time,
+                change_event.change_resource_type,
+                change_event.change_resource_name,
+                change_event.client_type,
+                change_event.user_email,
+                change_event.resource_change_operation,
+                change_event.changed_fields,
+                change_event.old_resource,
+                change_event.new_resource
+            FROM change_event
+            WHERE change_event.change_date_time {date_range}
+            ORDER BY change_event.change_date_time DESC
+            LIMIT 200
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        rows = []
+        for row in results:
+            ce = row.get("changeEvent", {})
+            rows.append({
+                "change_date_time": ce.get("changeDateTime", ""),
+                "resource_type": ce.get("changeResourceType", "UNKNOWN"),
+                "resource_name": ce.get("changeResourceName", ""),
+                "client_type": ce.get("clientType", "UNKNOWN"),
+                "user_email": ce.get("userEmail", ""),
+                "operation": ce.get("resourceChangeOperation", "UNKNOWN"),
+                "changed_fields": ce.get("changedFields", ""),
+                "old_resource": ce.get("oldResource", {}),
+                "new_resource": ce.get("newResource", {}),
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
+    async def get_ad_copy(self, campaign_filter: str | None = None) -> Optional[list]:
+        """Get current ad copy (RSA headlines/descriptions) by campaign."""
+        cache_key = f"ad_copy_{campaign_filter}"
+        cached = self._get_cached(cache_key, CACHE_TTL_CAMPAIGNS)
+        if cached is not None:
+            return cached
+
+        where_clauses = ["ad_group_ad.status != 'REMOVED'", "campaign.status != 'REMOVED'"]
+        if campaign_filter:
+            where_clauses.append(f"campaign.name LIKE '%{campaign_filter}%'")
+
+        query = f"""
+            SELECT
+                ad_group_ad.ad.id,
+                ad_group_ad.ad.type,
+                ad_group_ad.ad.responsive_search_ad.headlines,
+                ad_group_ad.ad.responsive_search_ad.descriptions,
+                ad_group_ad.ad.final_urls,
+                ad_group_ad.status,
+                ad_group_ad.ad.name,
+                campaign.name,
+                ad_group.name
+            FROM ad_group_ad
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY campaign.name, ad_group.name
+            LIMIT 50
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        rows = []
+        for row in results:
+            aga = row.get("adGroupAd", {})
+            ad = aga.get("ad", {})
+            c = row.get("campaign", {})
+            ag = row.get("adGroup", {})
+            rsa = ad.get("responsiveSearchAd", {})
+
+            headlines = []
+            for h in rsa.get("headlines", []):
+                headlines.append({"text": h.get("text", ""), "pinned_field": h.get("pinnedField")})
+
+            descriptions = []
+            for d in rsa.get("descriptions", []):
+                descriptions.append({"text": d.get("text", ""), "pinned_field": d.get("pinnedField")})
+
+            rows.append({
+                "ad_id": str(ad.get("id", "")),
+                "ad_type": ad.get("type", "UNKNOWN"),
+                "status": aga.get("status", "UNKNOWN"),
+                "campaign": c.get("name", "Unknown"),
+                "ad_group": ag.get("name", "Unknown"),
+                "headlines": headlines,
+                "descriptions": descriptions,
+                "final_urls": ad.get("finalUrls", []),
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
+    async def get_call_assets(self) -> Optional[list]:
+        """Get call extension/asset details across campaigns."""
+        cache_key = "call_assets"
+        cached = self._get_cached(cache_key, CACHE_TTL_CAMPAIGNS)
+        if cached is not None:
+            return cached
+
+        query = """
+            SELECT
+                asset.id,
+                asset.name,
+                asset.type,
+                asset.call_asset.country_code,
+                asset.call_asset.phone_number,
+                asset.call_asset.call_conversion_reporting_state,
+                campaign_asset.campaign,
+                campaign_asset.status,
+                campaign_asset.field_type
+            FROM campaign_asset
+            WHERE asset.type = 'CALL'
+                AND campaign_asset.status != 'REMOVED'
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        rows = []
+        for row in results:
+            asset = row.get("asset", {})
+            ca = row.get("campaignAsset", {})
+            call_asset = asset.get("callAsset", {})
+            rows.append({
+                "asset_id": str(asset.get("id", "")),
+                "asset_name": asset.get("name", ""),
+                "phone_number": call_asset.get("phoneNumber", ""),
+                "country_code": call_asset.get("countryCode", ""),
+                "conversion_reporting": call_asset.get("callConversionReportingState", ""),
+                "campaign": ca.get("campaign", ""),
+                "status": ca.get("status", "UNKNOWN"),
+                "field_type": ca.get("fieldType", ""),
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
     async def get_connection_status(self) -> dict:
         """Check if Google Ads is connected and return account info."""
         if not self.is_configured():

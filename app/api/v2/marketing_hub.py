@@ -1839,6 +1839,56 @@ async def get_ads_call_metrics(
         return {"success": False, "error": str(e), "data": []}
 
 
+@router.get("/ads/change-history")
+async def get_ads_change_history(
+    current_user: CurrentUser,
+    days: int = 14,
+) -> dict:
+    """Get account change history — all edits to campaigns, ads, assets in the last N days."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured", "data": []}
+    try:
+        data = await ads.get_change_history(days)
+        return {"success": True, "data": data or [], "days": days}
+    except Exception as e:
+        logger.error("Ads change history failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": []}
+
+
+@router.get("/ads/ad-copy")
+async def get_ads_ad_copy(
+    current_user: CurrentUser,
+    campaign: str | None = None,
+) -> dict:
+    """Get current RSA ad copy (headlines, descriptions) by campaign."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured", "data": []}
+    try:
+        data = await ads.get_ad_copy(campaign)
+        return {"success": True, "data": data or [], "campaign_filter": campaign}
+    except Exception as e:
+        logger.error("Ads ad copy failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": []}
+
+
+@router.get("/ads/call-assets")
+async def get_ads_call_assets(
+    current_user: CurrentUser,
+) -> dict:
+    """Get call extension/asset details across campaigns."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured", "data": []}
+    try:
+        data = await ads.get_call_assets()
+        return {"success": True, "data": data or []}
+    except Exception as e:
+        logger.error("Ads call assets failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": []}
+
+
 @router.get("/ga4/comparison")
 async def ga4_comparison(
     current_user: CurrentUser,
