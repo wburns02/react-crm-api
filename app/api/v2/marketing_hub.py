@@ -2355,18 +2355,37 @@ async def get_nashville_automation_status(
                 "enabled": bool(ads.conversion_action_id),
                 "action_id": ads.conversion_action_id,
                 "description": "Auto-uploads completed CRM jobs to Google Ads",
+                "endpoint": "/marketing-hub/ads/upload-conversions-batch",
             },
             "auto_negative_keywords": {
                 "enabled": True,
-                "description": "Flags competitor/irrelevant search terms for negative list",
+                "description": "Analyzes search terms, flags competitors/irrelevant, one-click apply",
+                "endpoint": "/marketing-hub/nashville/negative-keyword-candidates",
+                "apply_endpoint": "/marketing-hub/nashville/apply-negative-keywords",
+            },
+            "time_of_day_bidding": {
+                "enabled": True,
+                "description": "Hourly performance analysis with bid modifier recommendations",
+                "endpoint": "/marketing-hub/nashville/hourly-bid-analysis",
+            },
+            "day_of_week_bidding": {
+                "enabled": True,
+                "description": "Day-of-week performance analysis with bid modifier recommendations",
+                "endpoint": "/marketing-hub/nashville/daily-bid-analysis",
+            },
+            "keyword_pausing": {
+                "enabled": True,
+                "description": "Identifies underperforming keywords ($50+ spend, 0 conversions)",
+                "endpoint": "/marketing-hub/nashville/pause-candidates",
+            },
+            "budget_pacing": {
+                "enabled": True,
+                "description": "Real-time budget pacing with projected end-of-day spend",
+                "endpoint": "/marketing-hub/nashville/budget-pacing",
             },
             "waste_alerts": {
                 "enabled": True,
                 "description": "Real-time alerts for high-cost no-conversion terms",
-            },
-            "budget_pacing": {
-                "enabled": True,
-                "description": "Monitors daily budget spend rate vs expected pacing",
             },
             "impression_share_monitoring": {
                 "enabled": True,
@@ -2374,12 +2393,124 @@ async def get_nashville_automation_status(
             },
             "daily_report": {
                 "enabled": True,
-                "description": "Automated daily performance reports with alerts",
+                "description": "Comprehensive daily performance report with alerts",
+                "endpoint": "/marketing-hub/nashville/daily-report",
             },
         },
         "estimated_monthly_savings": "$150-400",
-        "description": "Nashville-only automation suite monitoring spend, waste, and performance in real-time",
+        "description": "Nashville-only automation suite — 9 active automations monitoring spend, waste, bids, and performance",
     }
+
+
+# ─── Nashville Automation Execution Endpoints ────────────────────────────
+
+def _get_nashville_automations():
+    """Get Nashville automation service instance."""
+    from app.services.nashville_automations import NashvilleAutomationService
+    return NashvilleAutomationService(get_google_ads_service())
+
+
+@router.get("/nashville/negative-keyword-candidates")
+async def get_negative_keyword_candidates(
+    current_user: CurrentUser,
+    days: int = 7,
+) -> dict:
+    """Analyze search terms for negative keyword candidates."""
+    svc = _get_nashville_automations()
+    try:
+        return {"success": True, **(await svc.analyze_negative_candidates(days))}
+    except Exception as e:
+        logger.error("Negative keyword analysis failed: %s", str(e))
+        return {"success": False, "error": str(e), "candidates": []}
+
+
+@router.post("/nashville/apply-negative-keywords")
+async def apply_negative_keywords(
+    current_user: CurrentUser,
+    body: dict,
+) -> dict:
+    """Apply negative keywords to Nashville campaigns.
+
+    Body: { "keywords": [{"keyword_text": "...", "match_type": "EXACT|PHRASE"}] }
+    """
+    svc = _get_nashville_automations()
+    keywords = body.get("keywords", [])
+    if not keywords:
+        return {"success": False, "error": "No keywords provided"}
+    try:
+        return await svc.apply_negative_keywords(keywords)
+    except Exception as e:
+        logger.error("Apply negative keywords failed: %s", str(e))
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/nashville/hourly-bid-analysis")
+async def get_hourly_bid_analysis(
+    current_user: CurrentUser,
+    days: int = 30,
+) -> dict:
+    """Analyze hourly performance for bid adjustment recommendations."""
+    svc = _get_nashville_automations()
+    try:
+        return {"success": True, **(await svc.get_hourly_performance(days))}
+    except Exception as e:
+        logger.error("Hourly bid analysis failed: %s", str(e))
+        return {"success": False, "error": str(e), "hours": [], "recommendations": []}
+
+
+@router.get("/nashville/daily-bid-analysis")
+async def get_daily_bid_analysis(
+    current_user: CurrentUser,
+    days: int = 90,
+) -> dict:
+    """Analyze day-of-week performance for bid adjustment recommendations."""
+    svc = _get_nashville_automations()
+    try:
+        return {"success": True, **(await svc.get_daily_performance(days))}
+    except Exception as e:
+        logger.error("Daily bid analysis failed: %s", str(e))
+        return {"success": False, "error": str(e), "days": [], "recommendations": []}
+
+
+@router.get("/nashville/pause-candidates")
+async def get_pause_candidates(
+    current_user: CurrentUser,
+    days: int = 30,
+) -> dict:
+    """Identify keywords that should be paused due to poor performance."""
+    svc = _get_nashville_automations()
+    try:
+        return {"success": True, **(await svc.get_pause_candidates(days))}
+    except Exception as e:
+        logger.error("Pause candidates analysis failed: %s", str(e))
+        return {"success": False, "error": str(e), "candidates": []}
+
+
+@router.get("/nashville/budget-pacing")
+async def get_budget_pacing(
+    current_user: CurrentUser,
+) -> dict:
+    """Real-time budget pacing analysis for Nashville campaigns."""
+    svc = _get_nashville_automations()
+    try:
+        return {"success": True, **(await svc.get_budget_pacing())}
+    except Exception as e:
+        logger.error("Budget pacing failed: %s", str(e))
+        return {"success": False, "error": str(e), "campaigns": []}
+
+
+@router.get("/nashville/daily-report")
+async def get_daily_report(
+    current_user: CurrentUser,
+) -> dict:
+    """Generate comprehensive daily performance report for Nashville."""
+    svc = _get_nashville_automations()
+    try:
+        report = await svc.generate_daily_report()
+        return {"success": True, **report}
+    except Exception as e:
+        logger.error("Daily report generation failed: %s", str(e))
+        return {"success": False, "error": str(e)}
 
 
 @router.get("/ga4/comparison")
