@@ -1802,28 +1802,31 @@ def _format_subscriber(sub: EmailSubscriber) -> dict:
 
 
 @router.get("/lists")
-async def get_email_lists(db: DbSession, current_user: CurrentUser) -> List[dict]:
+async def get_email_lists(db: DbSession, current_user: CurrentUser) -> dict:
     """Get all email lists with subscriber counts."""
-    # Query lists with subscriber counts via subquery
-    count_subq = (
-        select(
-            EmailSubscriber.list_id,
-            sa_func.count(EmailSubscriber.id).label("sub_count"),
+    try:
+        count_subq = (
+            select(
+                EmailSubscriber.list_id,
+                sa_func.count(EmailSubscriber.id).label("sub_count"),
+            )
+            .where(EmailSubscriber.status == "active")
+            .group_by(EmailSubscriber.list_id)
+            .subquery()
         )
-        .where(EmailSubscriber.status == "active")
-        .group_by(EmailSubscriber.list_id)
-        .subquery()
-    )
 
-    result = await db.execute(
-        select(EmailList, sa_func.coalesce(count_subq.c.sub_count, 0))
-        .outerjoin(count_subq, EmailList.id == count_subq.c.list_id)
-        .where(EmailList.is_active == True)
-        .order_by(EmailList.created_at.desc())
-    )
-    rows = result.all()
+        result = await db.execute(
+            select(EmailList, sa_func.coalesce(count_subq.c.sub_count, 0))
+            .outerjoin(count_subq, EmailList.id == count_subq.c.list_id)
+            .where(EmailList.is_active == True)
+            .order_by(EmailList.created_at.desc())
+        )
+        rows = result.all()
 
-    return [_format_list(el, count) for el, count in rows]
+        return {"success": True, "lists": [_format_list(el, count) for el, count in rows]}
+    except Exception as e:
+        logger.error("get_email_lists error: %s", str(e))
+        return {"success": False, "error": str(e), "lists": []}
 
 
 @router.post("/lists")

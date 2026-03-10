@@ -40,7 +40,7 @@ class EmailList(Base):
         "EmailSubscriber",
         back_populates="email_list",
         cascade="all, delete-orphan",
-        lazy="dynamic",
+        lazy="noload",
     )
 
     def __repr__(self):
