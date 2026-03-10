@@ -553,6 +553,33 @@ async def fix_email_marketing_tables(db: DbSession, current_user: CurrentUser) -
         # Message campaign_id
         "ALTER TABLE messages ADD COLUMN IF NOT EXISTS campaign_id UUID",
         "CREATE INDEX IF NOT EXISTS ix_messages_campaign_id ON messages (campaign_id)",
+        # Create email_lists table
+        """CREATE TABLE IF NOT EXISTS email_lists (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            source VARCHAR(50) DEFAULT 'manual',
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )""",
+        # Create email_subscribers table
+        """CREATE TABLE IF NOT EXISTS email_subscribers (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            list_id UUID NOT NULL REFERENCES email_lists(id) ON DELETE CASCADE,
+            email VARCHAR(255) NOT NULL,
+            first_name VARCHAR(255),
+            last_name VARCHAR(255),
+            source VARCHAR(50) DEFAULT 'manual',
+            status VARCHAR(20) DEFAULT 'active',
+            subscribed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            unsubscribed_at TIMESTAMP WITH TIME ZONE,
+            metadata JSONB DEFAULT '{}'
+        )""",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_subscriber_list_email ON email_subscribers (list_id, email)",
+        "CREATE INDEX IF NOT EXISTS ix_email_subscribers_list_id ON email_subscribers (list_id)",
+        "CREATE INDEX IF NOT EXISTS ix_email_subscribers_email ON email_subscribers (email)",
+        "CREATE INDEX IF NOT EXISTS ix_email_subscribers_status ON email_subscribers (status)",
         # Create ai_suggestions table
         """CREATE TABLE IF NOT EXISTS ai_suggestions (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
