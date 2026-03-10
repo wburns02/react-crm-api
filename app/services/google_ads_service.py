@@ -1249,7 +1249,8 @@ class GoogleAdsService:
         if not conversion_time:
             conversion_time = datetime.utcnow()
         # Google expects: yyyy-mm-dd hh:mm:ss+|-hh:mm
-        conv_time_str = conversion_time.strftime("%Y-%m-%d %H:%M:%S-05:00")
+        # Google expects account timezone; use +00:00 for UTC timestamps
+        conv_time_str = conversion_time.strftime("%Y-%m-%d %H:%M:%S+00:00")
 
         conversion = {
             "conversionAction": conversion_action,
@@ -1357,7 +1358,7 @@ class GoogleAdsService:
             conv_time = c.get("conversion_time", datetime.utcnow())
             if isinstance(conv_time, str):
                 conv_time = datetime.fromisoformat(conv_time)
-            conv_time_str = conv_time.strftime("%Y-%m-%d %H:%M:%S-05:00")
+            conv_time_str = conv_time.strftime("%Y-%m-%d %H:%M:%S+00:00")
 
             obj = {
                 "conversionAction": conversion_action,
