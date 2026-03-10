@@ -102,6 +102,7 @@ class Settings(BaseSettings):
     GOOGLE_ADS_REFRESH_TOKEN: str | None = None
     GOOGLE_ADS_CUSTOMER_ID: str | None = None
     GOOGLE_ADS_LOGIN_CUSTOMER_ID: str | None = None  # Manager account ID
+    GOOGLE_ADS_CONVERSION_ACTION_ID: str | None = None  # Offline conversion action ID
 
     # Google Analytics 4
     GA4_PROPERTY_ID: str | None = None

@@ -1398,6 +1398,30 @@ async def update_work_order(
     if old_status != new_status and new_status == "completed":
         await _send_real_estate_inspection_report(work_order, db)
 
+    # Auto-upload offline conversion to Google Ads (fire-and-forget)
+    if old_status != new_status and new_status == "completed":
+        try:
+            from app.services.google_ads_service import get_google_ads_service
+            ads_svc = get_google_ads_service()
+            if ads_svc.is_configured() and ads_svc.conversion_action_id:
+                wo_amount = float(work_order.total_amount) if work_order.total_amount else 700.0
+                cust_phone = customer.phone if customer else None
+                cust_email = customer.email if customer else None
+                if cust_phone or cust_email:
+                    upload_result = await ads_svc.upload_offline_conversion(
+                        phone=cust_phone,
+                        email=cust_email,
+                        conversion_value=wo_amount,
+                        conversion_time=datetime.utcnow(),
+                        order_id=str(work_order_id),
+                    )
+                    if upload_result.get("success"):
+                        logger.info(f"Google Ads offline conversion uploaded for WO {work_order_id}: ${wo_amount}")
+                    else:
+                        logger.warning(f"Google Ads conversion upload failed for WO {work_order_id}: {upload_result.get('error')}")
+        except Exception as e:
+            logger.warning(f"Google Ads conversion upload error for WO {work_order_id}: {e}")
+
     # Status change event
     if old_status != new_status:
         await manager.broadcast_event(

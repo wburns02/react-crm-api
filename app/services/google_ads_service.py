@@ -1,12 +1,15 @@
 """
 Google Ads API Service
 
-Integrates with Google Ads REST API v20 for campaign performance data.
+Integrates with Google Ads REST API v20 for campaign performance data
+and offline conversion uploads (Enhanced Conversions for Leads).
 Uses httpx for async HTTP, OAuth2 token refresh, and in-memory caching.
 
 Basic Access: 15,000 operations/day limit.
 """
 
+import hashlib
+import re
 import time
 import logging
 from datetime import datetime, timedelta
@@ -43,6 +46,7 @@ class GoogleAdsService:
         self.refresh_token = getattr(settings, "GOOGLE_ADS_REFRESH_TOKEN", None)
         self.customer_id = getattr(settings, "GOOGLE_ADS_CUSTOMER_ID", None)
         self.login_customer_id = getattr(settings, "GOOGLE_ADS_LOGIN_CUSTOMER_ID", None)
+        self.conversion_action_id = getattr(settings, "GOOGLE_ADS_CONVERSION_ACTION_ID", None)
 
         # OAuth2 access token
         self._access_token: Optional[str] = None
@@ -1060,6 +1064,357 @@ class GoogleAdsService:
             "account_name": account_info.get("name") if account_info else None,
             "daily_operations": self._daily_ops,
             "daily_limit": MAX_DAILY_OPERATIONS,
+        }
+
+    # ─── Offline Conversion Upload (Enhanced Conversions for Leads) ────
+
+    @staticmethod
+    def _normalize_phone(phone: str) -> str:
+        """Normalize phone to E.164 format for hashing."""
+        digits = re.sub(r"[^\d]", "", phone)
+        if len(digits) == 10:
+            digits = "1" + digits
+        return f"+{digits}"
+
+    @staticmethod
+    def _normalize_email(email: str) -> str:
+        """Normalize email: lowercase, strip whitespace."""
+        return email.strip().lower()
+
+    @staticmethod
+    def _sha256_hash(value: str) -> str:
+        """SHA-256 hash a string (for PII hashing per Google's spec)."""
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+    def _get_conversion_action_resource(self) -> Optional[str]:
+        """Build the conversion action resource name."""
+        if not self.conversion_action_id:
+            return None
+        customer_id = self._get_clean_customer_id()
+        return f"customers/{customer_id}/conversionActions/{self.conversion_action_id}"
+
+    async def create_offline_conversion_action(self, name: str = "CRM Job Completion") -> Optional[dict]:
+        """Create an offline conversion action in Google Ads.
+
+        This only needs to be called once. Save the returned ID as
+        GOOGLE_ADS_CONVERSION_ACTION_ID env var.
+        """
+        if not self.is_configured():
+            return None
+
+        if not self._check_daily_limit():
+            return None
+
+        access_token = await self._refresh_access_token()
+        if not access_token:
+            return None
+
+        customer_id = self._get_clean_customer_id()
+        url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}/conversionActions:mutate"
+
+        payload = {
+            "operations": [
+                {
+                    "create": {
+                        "name": name,
+                        "type": "UPLOAD_CLICKS",
+                        "category": "PURCHASE",
+                        "status": "ENABLED",
+                        "valueSettings": {
+                            "defaultValue": 700.0,
+                            "defaultCurrencyCode": "USD",
+                            "alwaysUseDefaultValue": False,
+                        },
+                    }
+                }
+            ]
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    headers=self._get_headers(access_token),
+                    json=payload,
+                )
+                self._increment_ops()
+
+                if response.status_code not in (200, 201):
+                    logger.error(
+                        "Failed to create conversion action: %s %s",
+                        response.status_code,
+                        response.text[:1000],
+                    )
+                    return {"error": response.text[:500], "status_code": response.status_code}
+
+                data = response.json()
+                results = data.get("results", [])
+                if results:
+                    resource_name = results[0].get("resourceName", "")
+                    # Extract the ID from the resource name
+                    action_id = resource_name.split("/")[-1] if resource_name else None
+                    logger.info("Created offline conversion action: %s (ID: %s)", resource_name, action_id)
+                    return {
+                        "resource_name": resource_name,
+                        "conversion_action_id": action_id,
+                        "name": name,
+                        "message": f"Set GOOGLE_ADS_CONVERSION_ACTION_ID={action_id} in Railway env vars",
+                    }
+                return {"error": "No results returned", "data": data}
+
+        except Exception as e:
+            logger.error("Error creating conversion action: %s", str(e))
+            return {"error": str(e)}
+
+    async def list_conversion_actions(self) -> Optional[list]:
+        """List all conversion actions in the account."""
+        query = """
+            SELECT
+                conversion_action.id,
+                conversion_action.name,
+                conversion_action.type,
+                conversion_action.status,
+                conversion_action.category
+            FROM conversion_action
+            WHERE conversion_action.status = 'ENABLED'
+            ORDER BY conversion_action.name
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        actions = []
+        for row in results:
+            ca = row.get("conversionAction", {})
+            actions.append({
+                "id": ca.get("id"),
+                "name": ca.get("name"),
+                "type": ca.get("type"),
+                "status": ca.get("status"),
+                "category": ca.get("category"),
+            })
+        return actions
+
+    async def upload_offline_conversion(
+        self,
+        phone: Optional[str] = None,
+        email: Optional[str] = None,
+        conversion_value: float = 700.0,
+        conversion_time: Optional[datetime] = None,
+        order_id: Optional[str] = None,
+    ) -> dict:
+        """Upload a single offline conversion using Enhanced Conversions for Leads.
+
+        Google matches the hashed phone/email to the original ad click.
+        At least one of phone or email is required.
+
+        Args:
+            phone: Customer phone number (will be normalized to E.164 and hashed)
+            email: Customer email (will be normalized and hashed)
+            conversion_value: Dollar value of the conversion (default $700)
+            conversion_time: When the conversion happened (default: now)
+            order_id: Unique order ID to prevent duplicates (e.g., work_order_id)
+        """
+        if not self.is_configured():
+            return {"success": False, "error": "Google Ads not configured"}
+
+        conversion_action = self._get_conversion_action_resource()
+        if not conversion_action:
+            return {"success": False, "error": "GOOGLE_ADS_CONVERSION_ACTION_ID not set. Create a conversion action first via POST /marketing-hub/ads/conversion-action"}
+
+        if not phone and not email:
+            return {"success": False, "error": "At least one of phone or email is required"}
+
+        if not self._check_daily_limit():
+            return {"success": False, "error": "Daily API operation limit reached"}
+
+        access_token = await self._refresh_access_token()
+        if not access_token:
+            return {"success": False, "error": "Failed to refresh OAuth token"}
+
+        # Build user identifiers (hashed PII)
+        user_identifiers = []
+        if phone:
+            normalized = self._normalize_phone(phone)
+            user_identifiers.append({
+                "hashedPhoneNumber": self._sha256_hash(normalized)
+            })
+        if email:
+            normalized = self._normalize_email(email)
+            user_identifiers.append({
+                "hashedEmail": self._sha256_hash(normalized)
+            })
+
+        # Format conversion time
+        if not conversion_time:
+            conversion_time = datetime.utcnow()
+        # Google expects: yyyy-mm-dd hh:mm:ss+|-hh:mm
+        conv_time_str = conversion_time.strftime("%Y-%m-%d %H:%M:%S-05:00")
+
+        conversion = {
+            "conversionAction": conversion_action,
+            "conversionDateTime": conv_time_str,
+            "conversionValue": conversion_value,
+            "currencyCode": "USD",
+            "userIdentifiers": user_identifiers,
+        }
+
+        if order_id:
+            conversion["orderId"] = str(order_id)
+
+        customer_id = self._get_clean_customer_id()
+        url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}:uploadClickConversions"
+
+        payload = {
+            "conversions": [conversion],
+            "partialFailure": True,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    headers=self._get_headers(access_token),
+                    json=payload,
+                )
+                self._increment_ops()
+
+                if response.status_code not in (200, 201):
+                    error_text = response.text[:1000]
+                    logger.error("Offline conversion upload failed: %s %s", response.status_code, error_text)
+                    return {"success": False, "error": error_text, "status_code": response.status_code}
+
+                data = response.json()
+                partial_errors = data.get("partialFailureError")
+                if partial_errors:
+                    logger.warning("Partial failure in conversion upload: %s", partial_errors)
+                    return {
+                        "success": False,
+                        "error": "Partial failure",
+                        "details": partial_errors,
+                        "results": data.get("results", []),
+                    }
+
+                results = data.get("results", [])
+                logger.info(
+                    "Offline conversion uploaded: value=$%.2f, order_id=%s, identifiers=%d",
+                    conversion_value,
+                    order_id,
+                    len(user_identifiers),
+                )
+                return {
+                    "success": True,
+                    "results": results,
+                    "conversion_value": conversion_value,
+                    "order_id": order_id,
+                }
+
+        except Exception as e:
+            logger.error("Offline conversion upload error: %s", str(e))
+            return {"success": False, "error": str(e)}
+
+    async def upload_offline_conversions_batch(
+        self,
+        conversions: list[dict],
+    ) -> dict:
+        """Upload multiple offline conversions in a single API call.
+
+        Each dict in conversions should have:
+            phone, email, conversion_value, conversion_time, order_id
+        """
+        if not self.is_configured():
+            return {"success": False, "error": "Google Ads not configured"}
+
+        conversion_action = self._get_conversion_action_resource()
+        if not conversion_action:
+            return {"success": False, "error": "GOOGLE_ADS_CONVERSION_ACTION_ID not set"}
+
+        if not conversions:
+            return {"success": False, "error": "No conversions provided"}
+
+        access_token = await self._refresh_access_token()
+        if not access_token:
+            return {"success": False, "error": "Failed to refresh OAuth token"}
+
+        # Build conversion objects
+        conv_objects = []
+        skipped = []
+        for i, c in enumerate(conversions):
+            phone = c.get("phone")
+            email = c.get("email")
+            if not phone and not email:
+                skipped.append({"index": i, "reason": "no phone or email"})
+                continue
+
+            user_identifiers = []
+            if phone:
+                normalized = self._normalize_phone(phone)
+                user_identifiers.append({"hashedPhoneNumber": self._sha256_hash(normalized)})
+            if email:
+                normalized = self._normalize_email(email)
+                user_identifiers.append({"hashedEmail": self._sha256_hash(normalized)})
+
+            conv_time = c.get("conversion_time", datetime.utcnow())
+            if isinstance(conv_time, str):
+                conv_time = datetime.fromisoformat(conv_time)
+            conv_time_str = conv_time.strftime("%Y-%m-%d %H:%M:%S-05:00")
+
+            obj = {
+                "conversionAction": conversion_action,
+                "conversionDateTime": conv_time_str,
+                "conversionValue": c.get("conversion_value", 700.0),
+                "currencyCode": "USD",
+                "userIdentifiers": user_identifiers,
+            }
+            order_id = c.get("order_id")
+            if order_id:
+                obj["orderId"] = str(order_id)
+
+            conv_objects.append(obj)
+
+        if not conv_objects:
+            return {"success": False, "error": "No valid conversions after filtering", "skipped": skipped}
+
+        customer_id = self._get_clean_customer_id()
+        url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}:uploadClickConversions"
+
+        # Google allows up to 2000 per request; batch in chunks of 200
+        uploaded = 0
+        errors = []
+        for chunk_start in range(0, len(conv_objects), 200):
+            chunk = conv_objects[chunk_start : chunk_start + 200]
+            payload = {"conversions": chunk, "partialFailure": True}
+
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        url,
+                        headers=self._get_headers(access_token),
+                        json=payload,
+                    )
+                    self._increment_ops()
+
+                    if response.status_code not in (200, 201):
+                        errors.append({"chunk": chunk_start, "error": response.text[:500]})
+                        continue
+
+                    data = response.json()
+                    partial_errors = data.get("partialFailureError")
+                    if partial_errors:
+                        errors.append({"chunk": chunk_start, "partial_errors": partial_errors})
+
+                    uploaded += len(chunk)
+
+            except Exception as e:
+                errors.append({"chunk": chunk_start, "error": str(e)})
+
+        logger.info("Batch offline conversion upload: %d/%d uploaded, %d skipped", uploaded, len(conv_objects), len(skipped))
+        return {
+            "success": uploaded > 0,
+            "uploaded": uploaded,
+            "total": len(conv_objects),
+            "skipped": skipped,
+            "errors": errors if errors else None,
         }
 
 

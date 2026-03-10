@@ -1942,6 +1942,137 @@ async def get_ads_call_assets(
         return {"success": False, "error": str(e), "data": []}
 
 
+# ────────────────────────────────────────────
+# Offline Conversion Upload (Phase 0)
+# ────────────────────────────────────────────
+
+@router.get("/ads/conversion-actions")
+async def list_conversion_actions(
+    current_user: CurrentUser,
+) -> dict:
+    """List all conversion actions in the Google Ads account."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured", "data": []}
+    try:
+        data = await ads.list_conversion_actions()
+        return {"success": True, "data": data or []}
+    except Exception as e:
+        logger.error("List conversion actions failed: %s", str(e))
+        return {"success": False, "error": str(e), "data": []}
+
+
+@router.post("/ads/conversion-action")
+async def create_conversion_action(
+    current_user: CurrentUser,
+    body: dict = Body(default={}),
+) -> dict:
+    """Create an offline conversion action in Google Ads.
+
+    Call this once, then set GOOGLE_ADS_CONVERSION_ACTION_ID with the returned ID.
+    """
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+    try:
+        name = body.get("name", "CRM Job Completion")
+        result = await ads.create_offline_conversion_action(name=name)
+        return {"success": bool(result and not result.get("error")), **result}
+    except Exception as e:
+        logger.error("Create conversion action failed: %s", str(e))
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/ads/upload-conversion")
+async def upload_offline_conversion(
+    current_user: CurrentUser,
+    body: dict = Body(...),
+) -> dict:
+    """Upload a single offline conversion to Google Ads.
+
+    Body: {phone, email, conversion_value, conversion_time, order_id}
+    At least one of phone or email is required.
+    """
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+
+    conversion_time = body.get("conversion_time")
+    if conversion_time and isinstance(conversion_time, str):
+        conversion_time = datetime.fromisoformat(conversion_time)
+
+    try:
+        result = await ads.upload_offline_conversion(
+            phone=body.get("phone"),
+            email=body.get("email"),
+            conversion_value=body.get("conversion_value", 700.0),
+            conversion_time=conversion_time,
+            order_id=body.get("order_id"),
+        )
+        return result
+    except Exception as e:
+        logger.error("Upload conversion failed: %s", str(e))
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/ads/upload-conversions-batch")
+async def upload_conversions_from_crm(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    body: dict = Body(default={}),
+) -> dict:
+    """Batch upload completed work orders as offline conversions.
+
+    Pulls completed work orders from CRM and uploads them to Google Ads.
+    Optional body: {days: 30} to control lookback window.
+    """
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+
+    days = body.get("days", 30)
+    cutoff = datetime.utcnow() - timedelta(days=days)
+
+    # Get completed work orders with customer data
+    from app.models.payment import Payment
+
+    result = await db.execute(
+        select(WorkOrder, Customer)
+        .join(Customer, WorkOrder.customer_id == Customer.id)
+        .where(
+            and_(
+                WorkOrder.status == "completed",
+                WorkOrder.updated_at >= cutoff,
+                or_(Customer.phone != None, Customer.email != None),
+            )
+        )
+        .order_by(WorkOrder.updated_at.desc())
+    )
+    rows = result.all()
+
+    if not rows:
+        return {"success": True, "message": "No completed work orders found in the last {} days".format(days), "uploaded": 0}
+
+    # Build conversion list
+    conversions = []
+    for wo, cust in rows:
+        amount = float(wo.total_amount) if wo.total_amount else 700.0
+        conversions.append({
+            "phone": cust.phone,
+            "email": cust.email,
+            "conversion_value": amount,
+            "conversion_time": wo.updated_at,
+            "order_id": str(wo.id),
+        })
+
+    try:
+        result = await ads.upload_offline_conversions_batch(conversions)
+        return result
+    except Exception as e:
+        logger.error("Batch conversion upload failed: %s", str(e))
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/ga4/comparison")
 async def ga4_comparison(
     current_user: CurrentUser,
