@@ -5,14 +5,16 @@ Provides email marketing status, subscription, profiles, templates, segments,
 campaigns, AI features, analytics, and onboarding.
 """
 
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Request, Query
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, timedelta
 from sqlalchemy import select, func as sa_func, text, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 import json
+import hmac
+import hashlib
 import logging
 import asyncio
 
@@ -20,10 +22,13 @@ from app.api.deps import CurrentUser, DbSession
 from app.models.marketing import MarketingCampaign, EmailTemplate, AISuggestion
 from app.models.message import Message
 from app.models.customer import Customer
+from app.models.email_list import EmailList, EmailSubscriber
+from app.models.septic_permit import SepticPermit
 from app.models.system_settings import SystemSettingStore
 from app.services.email_service import EmailService
 from app.services.ai_gateway import AIGateway
 from app.services import sendgrid_service
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +145,68 @@ class OnboardingAnswersRequest(BaseModel):
 
 class MarketingPlanRequest(BaseModel):
     answers: Optional[dict] = None
+
+
+# ============================================================================
+# Email List Request/Response Models
+# ============================================================================
+
+
+class EmailListCreateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    source: Optional[str] = "manual"
+
+
+class SubscriberAddRequest(BaseModel):
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    source: Optional[str] = "manual"
+    metadata: Optional[dict] = None
+
+
+class BulkSubscriberAddRequest(BaseModel):
+    subscribers: List[SubscriberAddRequest]
+
+
+class ImportPermitsRequest(BaseModel):
+    county: Optional[str] = None
+    state_code: Optional[str] = None
+    has_email_only: bool = True
+    limit: Optional[int] = None
+
+
+class ImportCustomersRequest(BaseModel):
+    segment: Optional[str] = None
+    has_email_only: bool = True
+
+
+class UnsubscribeRequest(BaseModel):
+    email: str
+    list_id: str
+    token: str
+
+
+# ============================================================================
+# Helper: Unsubscribe token generation/verification
+# ============================================================================
+
+
+def _generate_unsubscribe_token(email: str, list_id: str) -> str:
+    """Generate HMAC-SHA256 token for unsubscribe link verification."""
+    message = f"{email}:{list_id}"
+    return hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        message.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _verify_unsubscribe_token(email: str, list_id: str, token: str) -> bool:
+    """Verify an unsubscribe token."""
+    expected = _generate_unsubscribe_token(email, list_id)
+    return hmac.compare_digest(expected, token)
 
 
 # ============================================================================
@@ -1669,3 +1736,640 @@ Start directly with the HTML content (no markdown, no code blocks)."""
             "html_content": f"<p>Failed to generate marketing plan: {str(e)}</p>",
             "error": str(e),
         }
+
+
+# ============================================================================
+# Email List Management Endpoints
+# ============================================================================
+
+
+def _format_list(el: EmailList, subscriber_count: int = 0) -> dict:
+    """Format an EmailList for API response."""
+    return {
+        "id": str(el.id),
+        "name": el.name,
+        "description": el.description,
+        "source": el.source,
+        "is_active": el.is_active,
+        "subscriber_count": subscriber_count,
+        "created_at": el.created_at.isoformat() if el.created_at else None,
+        "updated_at": el.updated_at.isoformat() if el.updated_at else None,
+    }
+
+
+def _format_subscriber(sub: EmailSubscriber) -> dict:
+    """Format an EmailSubscriber for API response."""
+    return {
+        "id": str(sub.id),
+        "list_id": str(sub.list_id),
+        "email": sub.email,
+        "first_name": sub.first_name,
+        "last_name": sub.last_name,
+        "source": sub.source,
+        "status": sub.status,
+        "subscribed_at": sub.subscribed_at.isoformat() if sub.subscribed_at else None,
+        "unsubscribed_at": sub.unsubscribed_at.isoformat() if sub.unsubscribed_at else None,
+        "metadata": sub.metadata_,
+        "unsubscribe_token": _generate_unsubscribe_token(sub.email, str(sub.list_id)),
+    }
+
+
+@router.get("/lists")
+async def get_email_lists(db: DbSession, current_user: CurrentUser) -> List[dict]:
+    """Get all email lists with subscriber counts."""
+    # Query lists with subscriber counts via subquery
+    count_subq = (
+        select(
+            EmailSubscriber.list_id,
+            sa_func.count(EmailSubscriber.id).label("sub_count"),
+        )
+        .where(EmailSubscriber.status == "active")
+        .group_by(EmailSubscriber.list_id)
+        .subquery()
+    )
+
+    result = await db.execute(
+        select(EmailList, sa_func.coalesce(count_subq.c.sub_count, 0))
+        .outerjoin(count_subq, EmailList.id == count_subq.c.list_id)
+        .where(EmailList.is_active == True)
+        .order_by(EmailList.created_at.desc())
+    )
+    rows = result.all()
+
+    return [_format_list(el, count) for el, count in rows]
+
+
+@router.post("/lists")
+async def create_email_list(
+    body: EmailListCreateRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Create a new email list."""
+    el = EmailList(
+        id=uuid.uuid4(),
+        name=body.name,
+        description=body.description,
+        source=body.source or "manual",
+        is_active=True,
+    )
+    db.add(el)
+    await db.commit()
+    await db.refresh(el)
+
+    return {"success": True, "list": _format_list(el, 0)}
+
+
+@router.get("/lists/{list_id}")
+async def get_email_list_detail(
+    list_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    status_filter: Optional[str] = Query(None, alias="status"),
+) -> dict:
+    """Get email list detail with paginated subscribers."""
+    try:
+        lid = uuid.UUID(list_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid list ID")
+
+    result = await db.execute(select(EmailList).where(EmailList.id == lid))
+    el = result.scalar_one_or_none()
+    if not el:
+        raise HTTPException(status_code=404, detail="List not found")
+
+    # Subscriber count
+    count_q = select(sa_func.count(EmailSubscriber.id)).where(EmailSubscriber.list_id == lid)
+    if status_filter:
+        count_q = count_q.where(EmailSubscriber.status == status_filter)
+    total_result = await db.execute(count_q)
+    total = total_result.scalar() or 0
+
+    # Active count for list summary
+    active_count_result = await db.execute(
+        select(sa_func.count(EmailSubscriber.id)).where(
+            EmailSubscriber.list_id == lid,
+            EmailSubscriber.status == "active",
+        )
+    )
+    active_count = active_count_result.scalar() or 0
+
+    # Paginated subscribers
+    offset = (page - 1) * page_size
+    sub_q = (
+        select(EmailSubscriber)
+        .where(EmailSubscriber.list_id == lid)
+        .order_by(EmailSubscriber.subscribed_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    )
+    if status_filter:
+        sub_q = sub_q.where(EmailSubscriber.status == status_filter)
+
+    sub_result = await db.execute(sub_q)
+    subscribers = sub_result.scalars().all()
+
+    return {
+        "list": _format_list(el, active_count),
+        "subscribers": [_format_subscriber(s) for s in subscribers],
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": (total + page_size - 1) // page_size if page_size > 0 else 0,
+        },
+    }
+
+
+@router.delete("/lists/{list_id}")
+async def delete_email_list(
+    list_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Soft delete an email list (set is_active=False)."""
+    try:
+        lid = uuid.UUID(list_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid list ID")
+
+    result = await db.execute(select(EmailList).where(EmailList.id == lid))
+    el = result.scalar_one_or_none()
+    if not el:
+        raise HTTPException(status_code=404, detail="List not found")
+
+    el.is_active = False
+    await db.commit()
+    return {"success": True}
+
+
+# ============================================================================
+# Subscriber Management Endpoints
+# ============================================================================
+
+
+@router.post("/lists/{list_id}/subscribers")
+async def add_subscribers(
+    list_id: str,
+    body: BulkSubscriberAddRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Add subscribers to a list (single or bulk). Skips duplicates."""
+    try:
+        lid = uuid.UUID(list_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid list ID")
+
+    # Verify list exists
+    result = await db.execute(select(EmailList).where(EmailList.id == lid, EmailList.is_active == True))
+    el = result.scalar_one_or_none()
+    if not el:
+        raise HTTPException(status_code=404, detail="List not found")
+
+    added = 0
+    skipped = 0
+    errors = []
+
+    for sub_data in body.subscribers:
+        email = sub_data.email.strip().lower()
+        if not email or "@" not in email:
+            errors.append(f"Invalid email: {sub_data.email}")
+            continue
+
+        # Check if already exists in this list
+        existing = await db.execute(
+            select(EmailSubscriber).where(
+                EmailSubscriber.list_id == lid,
+                sa_func.lower(EmailSubscriber.email) == email,
+            )
+        )
+        if existing.scalar_one_or_none():
+            skipped += 1
+            continue
+
+        sub = EmailSubscriber(
+            id=uuid.uuid4(),
+            list_id=lid,
+            email=email,
+            first_name=sub_data.first_name,
+            last_name=sub_data.last_name,
+            source=sub_data.source or "manual",
+            status="active",
+            metadata_=sub_data.metadata,
+        )
+        db.add(sub)
+        added += 1
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "added": added,
+        "skipped": skipped,
+        "errors": errors,
+    }
+
+
+@router.delete("/lists/{list_id}/subscribers/{subscriber_id}")
+async def remove_subscriber(
+    list_id: str,
+    subscriber_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Remove a subscriber from a list."""
+    try:
+        lid = uuid.UUID(list_id)
+        sid = uuid.UUID(subscriber_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    result = await db.execute(
+        select(EmailSubscriber).where(
+            EmailSubscriber.id == sid,
+            EmailSubscriber.list_id == lid,
+        )
+    )
+    sub = result.scalar_one_or_none()
+    if not sub:
+        raise HTTPException(status_code=404, detail="Subscriber not found")
+
+    await db.delete(sub)
+    await db.commit()
+    return {"success": True}
+
+
+# ============================================================================
+# Import Endpoints
+# ============================================================================
+
+
+@router.post("/lists/{list_id}/import-permits")
+async def import_permits_to_list(
+    list_id: str,
+    body: ImportPermitsRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Import emails from septic_permits table into an email list.
+
+    Filters:
+    - county: filter by county name (case-insensitive partial match)
+    - state_code: filter by state code
+    - has_email_only: only import permits with owner_email set (default True)
+    - limit: max number to import
+    """
+    try:
+        lid = uuid.UUID(list_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid list ID")
+
+    # Verify list exists
+    result = await db.execute(select(EmailList).where(EmailList.id == lid, EmailList.is_active == True))
+    el = result.scalar_one_or_none()
+    if not el:
+        raise HTTPException(status_code=404, detail="List not found")
+
+    # Build permit query
+    conditions = [
+        SepticPermit.is_active == True,
+        SepticPermit.owner_email.isnot(None),
+        SepticPermit.owner_email != "",
+    ]
+
+    if body.county:
+        conditions.append(
+            sa_func.lower(SepticPermit.city).like(f"%{body.county.lower()}%")
+            | text(f"EXISTS (SELECT 1 FROM counties c WHERE c.id = septic_permits.county_id AND LOWER(c.name) LIKE '%{body.county.lower()}%')")
+        )
+
+    if body.state_code:
+        conditions.append(
+            text(f"EXISTS (SELECT 1 FROM states s WHERE s.id = septic_permits.state_id AND LOWER(s.code) = '{body.state_code.lower()}')")
+        )
+
+    # Get permits with email, deduplicated by email
+    permit_q = (
+        select(
+            sa_func.lower(SepticPermit.owner_email).label("email"),
+            SepticPermit.owner_name,
+            SepticPermit.city,
+            SepticPermit.zip_code,
+        )
+        .where(*conditions)
+        .group_by(
+            sa_func.lower(SepticPermit.owner_email),
+            SepticPermit.owner_name,
+            SepticPermit.city,
+            SepticPermit.zip_code,
+        )
+    )
+
+    if body.limit:
+        permit_q = permit_q.limit(body.limit)
+
+    permit_result = await db.execute(permit_q)
+    permits = permit_result.all()
+
+    # Get existing emails in this list
+    existing_result = await db.execute(
+        select(sa_func.lower(EmailSubscriber.email)).where(EmailSubscriber.list_id == lid)
+    )
+    existing_emails = {row[0] for row in existing_result.all()}
+
+    added = 0
+    skipped = 0
+
+    for row in permits:
+        email = row[0].strip().lower() if row[0] else None
+        if not email or "@" not in email:
+            continue
+        if email in existing_emails:
+            skipped += 1
+            continue
+
+        # Parse name
+        owner_name = row[1] or ""
+        parts = owner_name.strip().split(None, 1)
+        first_name = parts[0] if parts else None
+        last_name = parts[1] if len(parts) > 1 else None
+
+        sub = EmailSubscriber(
+            id=uuid.uuid4(),
+            list_id=lid,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            source="permit",
+            status="active",
+            metadata_={
+                "city": row[2],
+                "zip_code": row[3],
+                "import_source": "septic_permits",
+            },
+        )
+        db.add(sub)
+        existing_emails.add(email)
+        added += 1
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "added": added,
+        "skipped": skipped,
+        "total_permits_found": len(permits),
+    }
+
+
+@router.post("/lists/{list_id}/import-customers")
+async def import_customers_to_list(
+    list_id: str,
+    body: ImportCustomersRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Import emails from customers table into an email list."""
+    try:
+        lid = uuid.UUID(list_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid list ID")
+
+    # Verify list exists
+    result = await db.execute(select(EmailList).where(EmailList.id == lid, EmailList.is_active == True))
+    el = result.scalar_one_or_none()
+    if not el:
+        raise HTTPException(status_code=404, detail="List not found")
+
+    # Build customer query
+    conditions = [
+        Customer.email.isnot(None),
+        Customer.email != "",
+        Customer.is_active == True,
+    ]
+
+    if body.segment and body.segment != "all":
+        segment_conditions = await _get_segment_query(db, body.segment)
+        conditions.extend(segment_conditions)
+
+    cust_q = select(Customer).where(*conditions)
+    cust_result = await db.execute(cust_q)
+    customers = cust_result.scalars().all()
+
+    # Get existing emails in this list
+    existing_result = await db.execute(
+        select(sa_func.lower(EmailSubscriber.email)).where(EmailSubscriber.list_id == lid)
+    )
+    existing_emails = {row[0] for row in existing_result.all()}
+
+    added = 0
+    skipped = 0
+
+    for cust in customers:
+        email = cust.email.strip().lower()
+        if not email or "@" not in email:
+            continue
+        if email in existing_emails:
+            skipped += 1
+            continue
+
+        sub = EmailSubscriber(
+            id=uuid.uuid4(),
+            list_id=lid,
+            email=email,
+            first_name=cust.first_name,
+            last_name=cust.last_name,
+            source="customer",
+            status="active",
+            metadata_={
+                "customer_id": str(cust.id),
+                "city": cust.city,
+                "state": cust.state,
+                "import_source": "customers",
+            },
+        )
+        db.add(sub)
+        existing_emails.add(email)
+        added += 1
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "added": added,
+        "skipped": skipped,
+        "total_customers_found": len(customers),
+    }
+
+
+# ============================================================================
+# Import Preview (count estimation)
+# ============================================================================
+
+
+@router.get("/lists/{list_id}/import-permits/preview")
+async def preview_permit_import(
+    list_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+    county: Optional[str] = None,
+    state_code: Optional[str] = None,
+) -> dict:
+    """Preview how many permit emails would be imported (not already in list)."""
+    try:
+        lid = uuid.UUID(list_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid list ID")
+
+    # Count permits with emails
+    conditions = [
+        SepticPermit.is_active == True,
+        SepticPermit.owner_email.isnot(None),
+        SepticPermit.owner_email != "",
+    ]
+
+    if county:
+        conditions.append(
+            text(f"EXISTS (SELECT 1 FROM counties c WHERE c.id = septic_permits.county_id AND LOWER(c.name) LIKE '%{county.lower()}%')")
+        )
+    if state_code:
+        conditions.append(
+            text(f"EXISTS (SELECT 1 FROM states s WHERE s.id = septic_permits.state_id AND LOWER(s.code) = '{state_code.lower()}')")
+        )
+
+    # Count unique emails in permits
+    total_result = await db.execute(
+        select(sa_func.count(sa_func.distinct(sa_func.lower(SepticPermit.owner_email)))).where(*conditions)
+    )
+    total_available = total_result.scalar() or 0
+
+    # Count already in list
+    already_in_list_result = await db.execute(
+        select(sa_func.count(EmailSubscriber.id)).where(EmailSubscriber.list_id == lid)
+    )
+    already_in_list = already_in_list_result.scalar() or 0
+
+    return {
+        "total_permits_with_email": total_available,
+        "already_in_list": already_in_list,
+        "estimated_new": max(0, total_available - already_in_list),
+    }
+
+
+@router.get("/lists/{list_id}/import-customers/preview")
+async def preview_customer_import(
+    list_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+    segment: Optional[str] = None,
+) -> dict:
+    """Preview how many customer emails would be imported (not already in list)."""
+    try:
+        lid = uuid.UUID(list_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid list ID")
+
+    conditions = [
+        Customer.email.isnot(None),
+        Customer.email != "",
+        Customer.is_active == True,
+    ]
+
+    if segment and segment != "all":
+        segment_conditions = await _get_segment_query(db, segment)
+        conditions.extend(segment_conditions)
+
+    total_result = await db.execute(
+        select(sa_func.count(Customer.id)).where(*conditions)
+    )
+    total_available = total_result.scalar() or 0
+
+    already_in_list_result = await db.execute(
+        select(sa_func.count(EmailSubscriber.id)).where(EmailSubscriber.list_id == lid)
+    )
+    already_in_list = already_in_list_result.scalar() or 0
+
+    return {
+        "total_customers_with_email": total_available,
+        "already_in_list": already_in_list,
+        "estimated_new": max(0, total_available - already_in_list),
+    }
+
+
+# ============================================================================
+# Unsubscribe Endpoints (Public — no auth required)
+# ============================================================================
+
+
+@router.get("/unsubscribe")
+async def get_unsubscribe_info(
+    request: Request,
+    email: str = Query(...),
+    list_id: str = Query(...),
+    token: str = Query(...),
+) -> dict:
+    """Public endpoint: validate unsubscribe link and return confirmation data."""
+    if not _verify_unsubscribe_token(email, list_id, token):
+        raise HTTPException(status_code=400, detail="Invalid or expired unsubscribe link")
+
+    from app.database import async_session_maker
+
+    async with async_session_maker() as db:
+        try:
+            lid = uuid.UUID(list_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid list ID")
+
+        # Get list name
+        list_result = await db.execute(select(EmailList).where(EmailList.id == lid))
+        el = list_result.scalar_one_or_none()
+        list_name = el.name if el else "Unknown List"
+
+        # Check subscriber status
+        sub_result = await db.execute(
+            select(EmailSubscriber).where(
+                EmailSubscriber.list_id == lid,
+                sa_func.lower(EmailSubscriber.email) == email.lower(),
+            )
+        )
+        sub = sub_result.scalar_one_or_none()
+
+        return {
+            "email": email,
+            "list_name": list_name,
+            "already_unsubscribed": sub.status == "unsubscribed" if sub else True,
+            "valid": True,
+        }
+
+
+@router.post("/unsubscribe")
+async def process_unsubscribe(body: UnsubscribeRequest) -> dict:
+    """Public endpoint: process an unsubscribe request."""
+    if not _verify_unsubscribe_token(body.email, body.list_id, body.token):
+        raise HTTPException(status_code=400, detail="Invalid or expired unsubscribe link")
+
+    from app.database import async_session_maker
+
+    async with async_session_maker() as db:
+        try:
+            lid = uuid.UUID(body.list_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid list ID")
+
+        result = await db.execute(
+            select(EmailSubscriber).where(
+                EmailSubscriber.list_id == lid,
+                sa_func.lower(EmailSubscriber.email) == body.email.lower(),
+            )
+        )
+        sub = result.scalar_one_or_none()
+
+        if sub:
+            sub.status = "unsubscribed"
+            sub.unsubscribed_at = datetime.utcnow()
+            await db.commit()
+
+        return {"success": True, "message": "You have been unsubscribed successfully."}

@@ -2410,6 +2410,35 @@ def _get_nashville_automations():
     return NashvilleAutomationService(get_google_ads_service())
 
 
+@router.post("/nashville/update-budget")
+async def update_nashville_budget(
+    current_user: CurrentUser,
+    body: dict,
+) -> dict:
+    """Update daily budget for a Nashville campaign.
+
+    Body: { "campaign_name": "Nashville", "new_daily_budget": 150.00 }
+    """
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+
+    campaign_name = body.get("campaign_name", "")
+    new_budget = body.get("new_daily_budget", 0)
+
+    if not campaign_name or new_budget <= 0:
+        return {"success": False, "error": "campaign_name and new_daily_budget (>0) required"}
+
+    if new_budget > 500:
+        return {"success": False, "error": "Budget cap: max $500/day for safety"}
+
+    try:
+        return await ads.update_campaign_budget(campaign_name, new_budget)
+    except Exception as e:
+        logger.error("Nashville budget update failed: %s", str(e))
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/nashville/negative-keyword-candidates")
 async def get_negative_keyword_candidates(
     current_user: CurrentUser,

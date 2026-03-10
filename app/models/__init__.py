@@ -154,6 +154,9 @@ from app.models.live_chat import ChatConversation, ChatMessage
 # Property Lookup (Tank Size Estimation)
 from app.models.property_lookup import PropertyLookup
 
+# Email Marketing Lists
+from app.models.email_list import EmailList, EmailSubscriber
+
 __all__ = [
     # Core models
     "Customer",
@@ -306,4 +309,7 @@ __all__ = [
     "ChatMessage",
     # Property Lookup (Tank Size Estimation)
     "PropertyLookup",
+    # Email Marketing Lists
+    "EmailList",
+    "EmailSubscriber",
 ]

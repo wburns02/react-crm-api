@@ -1328,6 +1328,98 @@ class GoogleAdsService:
         self._set_cache(cache_key, rows)
         return rows
 
+    async def update_campaign_budget(self, campaign_name: str, new_daily_budget: float) -> dict:
+        """Update daily budget for a campaign by name.
+
+        Args:
+            campaign_name: Campaign name (exact match or LIKE pattern)
+            new_daily_budget: New daily budget in dollars (e.g. 150.00)
+
+        Returns:
+            dict with success status and details
+        """
+        if not self.is_configured():
+            return {"success": False, "error": "Google Ads not configured"}
+
+        # First, find the campaign budget resource name
+        query = f"""
+            SELECT
+                campaign.name,
+                campaign.resource_name,
+                campaign_budget.resource_name,
+                campaign_budget.amount_micros
+            FROM campaign
+            WHERE campaign.status = 'ENABLED'
+                AND campaign.name = '{campaign_name}'
+        """
+        results = await self._execute_query(query)
+        if not results:
+            return {"success": False, "error": f"Campaign '{campaign_name}' not found"}
+
+        row = results[0]
+        budget_rn = row.get("campaignBudget", {}).get("resourceName")
+        old_micros = int(row.get("campaignBudget", {}).get("amountMicros", 0))
+        old_budget = old_micros / 1_000_000
+
+        if not budget_rn:
+            return {"success": False, "error": "Budget resource name not found"}
+
+        new_micros = int(new_daily_budget * 1_000_000)
+
+        access_token = await self._refresh_access_token()
+        if not access_token:
+            return {"success": False, "error": "Failed to refresh token"}
+
+        customer_id = self._get_clean_customer_id()
+        url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}/campaignBudgets/{budget_rn.split('/')[-1]}:mutate"
+
+        # Use the googleAds:mutate endpoint for budget updates
+        mutate_url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}/googleAds:mutate"
+        payload = {
+            "mutateOperations": [
+                {
+                    "campaignBudgetOperation": {
+                        "update": {
+                            "resourceName": budget_rn,
+                            "amountMicros": str(new_micros),
+                        },
+                        "updateMask": "amount_micros",
+                    }
+                }
+            ]
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    mutate_url,
+                    headers=self._get_headers(access_token),
+                    json=payload,
+                )
+                self._increment_ops()
+
+                if response.status_code in (200, 201):
+                    # Clear budget cache so next query shows new value
+                    if "nashville_budgets" in self._cache:
+                        del self._cache["nashville_budgets"]
+
+                    return {
+                        "success": True,
+                        "campaign": campaign_name,
+                        "old_budget": round(old_budget, 2),
+                        "new_budget": round(new_daily_budget, 2),
+                        "change": round(new_daily_budget - old_budget, 2),
+                        "change_pct": round(((new_daily_budget - old_budget) / old_budget) * 100, 1) if old_budget > 0 else 0,
+                    }
+                else:
+                    error_text = response.text[:500]
+                    logger.error("Budget update failed: %s %s", response.status_code, error_text)
+                    return {"success": False, "error": error_text, "status_code": response.status_code}
+
+        except Exception as e:
+            logger.error("Budget update error: %s", str(e))
+            return {"success": False, "error": str(e)}
+
     async def get_connection_status(self) -> dict:
         """Check if Google Ads is connected and return account info."""
         if not self.is_configured():
