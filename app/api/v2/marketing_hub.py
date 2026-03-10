@@ -1946,6 +1946,35 @@ async def get_ads_call_assets(
 # Offline Conversion Upload (Phase 0)
 # ────────────────────────────────────────────
 
+@router.get("/ads/enhanced-conversions-status")
+async def check_enhanced_conversions(
+    current_user: CurrentUser,
+) -> dict:
+    """Check if enhanced conversions for leads is enabled."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+    try:
+        result = await ads.check_enhanced_conversions_setting()
+        return {"success": True, **result}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/ads/enable-enhanced-conversions")
+async def enable_enhanced_conversions(
+    current_user: CurrentUser,
+) -> dict:
+    """Try to enable enhanced conversions for leads via the API."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+    try:
+        return await ads.enable_enhanced_conversions_for_leads()
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/ads/conversion-actions")
 async def list_conversion_actions(
     current_user: CurrentUser,

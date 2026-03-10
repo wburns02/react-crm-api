@@ -1093,6 +1093,68 @@ class GoogleAdsService:
         customer_id = self._get_clean_customer_id()
         return f"customers/{customer_id}/conversionActions/{self.conversion_action_id}"
 
+    async def check_enhanced_conversions_setting(self) -> Optional[dict]:
+        """Check if enhanced conversions for leads is enabled at the account level."""
+        query = """
+            SELECT
+                customer.conversion_tracking_setting.enhanced_conversions_for_leads_enabled,
+                customer.conversion_tracking_setting.google_ads_conversion_customer
+            FROM customer
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        if results:
+            cts = results[0].get("customer", {}).get("conversionTrackingSetting", {})
+            return {
+                "enhanced_conversions_for_leads_enabled": cts.get("enhancedConversionsForLeadsEnabled", False),
+                "conversion_customer": cts.get("googleAdsConversionCustomer"),
+            }
+        return {"enhanced_conversions_for_leads_enabled": False}
+
+    async def enable_enhanced_conversions_for_leads(self) -> dict:
+        """Try to enable enhanced conversions for leads via the API."""
+        if not self.is_configured():
+            return {"success": False, "error": "Not configured"}
+
+        access_token = await self._refresh_access_token()
+        if not access_token:
+            return {"success": False, "error": "Failed to refresh token"}
+
+        customer_id = self._get_clean_customer_id()
+        url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}:mutate"
+
+        payload = {
+            "mutateOperations": [
+                {
+                    "customerOperation": {
+                        "update": {
+                            "resourceName": f"customers/{customer_id}",
+                        },
+                        "updateMask": "conversion_tracking_setting.enhanced_conversions_for_leads_enabled",
+                    }
+                }
+            ]
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    headers=self._get_headers(access_token),
+                    json=payload,
+                )
+                self._increment_ops()
+
+                if response.status_code not in (200, 201):
+                    return {"success": False, "error": response.text[:500], "status_code": response.status_code}
+
+                return {"success": True, "data": response.json()}
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     async def create_offline_conversion_action(self, name: str = "CRM Job Completion") -> Optional[dict]:
         """Create an offline conversion action in Google Ads.
 
