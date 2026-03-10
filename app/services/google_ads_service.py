@@ -1044,6 +1044,290 @@ class GoogleAdsService:
         self._set_cache(cache_key, rows)
         return rows
 
+    # ─── Nashville-Specific Methods ──────────────────────────────────────
+
+    async def get_nashville_today(self) -> Optional[dict]:
+        """Get today's real-time metrics for Nashville campaigns only."""
+        cache_key = "nashville_today"
+        cached = self._get_cached(cache_key, 300)  # 5 min cache for real-time
+        if cached is not None:
+            return cached
+
+        query = """
+            SELECT
+                campaign.name,
+                campaign.advertising_channel_type,
+                metrics.cost_micros,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions,
+                metrics.phone_calls,
+                metrics.ctr,
+                metrics.average_cpc
+            FROM campaign
+            WHERE segments.date DURING TODAY
+                AND campaign.status != 'REMOVED'
+                AND campaign.name LIKE '%Nashville%'
+            ORDER BY metrics.cost_micros DESC
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        total_cost = 0
+        total_clicks = 0
+        total_impressions = 0
+        total_conversions = 0.0
+        total_calls = 0
+        campaigns = []
+
+        for row in results:
+            c = row.get("campaign", {})
+            m = row.get("metrics", {})
+            cost_micros = int(m.get("costMicros", 0))
+            cost = cost_micros / 1_000_000
+            conversions = float(m.get("conversions", 0))
+            clicks = int(m.get("clicks", 0))
+            impressions = int(m.get("impressions", 0))
+            calls = int(m.get("phoneCalls", 0))
+
+            total_cost += cost
+            total_clicks += clicks
+            total_impressions += impressions
+            total_conversions += conversions
+            total_calls += calls
+
+            campaigns.append({
+                "name": c.get("name", "Unknown"),
+                "channel_type": c.get("advertisingChannelType", "UNKNOWN"),
+                "cost": round(cost, 2),
+                "clicks": clicks,
+                "impressions": impressions,
+                "conversions": round(conversions, 1),
+                "calls": calls,
+                "ctr": round(float(m.get("ctr", 0)), 4),
+                "avg_cpc": round(int(m.get("averageCpc", 0)) / 1_000_000, 2),
+            })
+
+        result = {
+            "totals": {
+                "cost": round(total_cost, 2),
+                "clicks": total_clicks,
+                "impressions": total_impressions,
+                "conversions": round(total_conversions, 1),
+                "calls": total_calls,
+                "ctr": round(total_clicks / max(1, total_impressions), 4),
+                "cpa": round(total_cost / total_conversions, 2) if total_conversions > 0 else 0,
+                "avg_cpc": round(total_cost / max(1, total_clicks), 2),
+            },
+            "campaigns": campaigns,
+        }
+        self._set_cache(cache_key, result)
+        return result
+
+    async def get_nashville_hourly(self) -> Optional[list]:
+        """Get hourly spend/performance breakdown for Nashville campaigns today."""
+        cache_key = "nashville_hourly"
+        cached = self._get_cached(cache_key, 300)  # 5 min cache
+        if cached is not None:
+            return cached
+
+        query = """
+            SELECT
+                segments.hour,
+                metrics.cost_micros,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions
+            FROM campaign
+            WHERE segments.date DURING TODAY
+                AND campaign.status != 'REMOVED'
+                AND campaign.name LIKE '%Nashville%'
+            ORDER BY segments.hour ASC
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        # Aggregate by hour
+        hourly = {}
+        for row in results:
+            hour = int(row.get("segments", {}).get("hour", 0))
+            m = row.get("metrics", {})
+            if hour not in hourly:
+                hourly[hour] = {"hour": hour, "cost": 0, "clicks": 0, "impressions": 0, "conversions": 0}
+            hourly[hour]["cost"] += int(m.get("costMicros", 0)) / 1_000_000
+            hourly[hour]["clicks"] += int(m.get("clicks", 0))
+            hourly[hour]["impressions"] += int(m.get("impressions", 0))
+            hourly[hour]["conversions"] += float(m.get("conversions", 0))
+
+        # Fill all 24 hours
+        rows = []
+        for h in range(24):
+            entry = hourly.get(h, {"hour": h, "cost": 0, "clicks": 0, "impressions": 0, "conversions": 0})
+            entry["cost"] = round(entry["cost"], 2)
+            entry["conversions"] = round(entry["conversions"], 1)
+            rows.append(entry)
+
+        self._set_cache(cache_key, rows)
+        return rows
+
+    async def get_nashville_budgets(self) -> Optional[list]:
+        """Get Nashville campaign budget information."""
+        cache_key = "nashville_budgets"
+        cached = self._get_cached(cache_key, 600)  # 10 min cache
+        if cached is not None:
+            return cached
+
+        query = """
+            SELECT
+                campaign.name,
+                campaign.advertising_channel_type,
+                campaign_budget.amount_micros,
+                campaign.bidding_strategy_type,
+                metrics.cost_micros,
+                metrics.clicks,
+                metrics.conversions
+            FROM campaign
+            WHERE segments.date DURING TODAY
+                AND campaign.status = 'ENABLED'
+                AND campaign.name LIKE '%Nashville%'
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        rows = []
+        for row in results:
+            c = row.get("campaign", {})
+            cb = row.get("campaignBudget", {})
+            m = row.get("metrics", {})
+            budget_micros = int(cb.get("amountMicros", 0))
+            cost_micros = int(m.get("costMicros", 0))
+            daily_budget = budget_micros / 1_000_000
+            today_spend = cost_micros / 1_000_000
+            rows.append({
+                "campaign": c.get("name", "Unknown"),
+                "channel_type": c.get("advertisingChannelType", "UNKNOWN"),
+                "daily_budget": round(daily_budget, 2),
+                "today_spend": round(today_spend, 2),
+                "remaining": round(max(0, daily_budget - today_spend), 2),
+                "pacing_pct": round((today_spend / max(0.01, daily_budget)) * 100, 1),
+                "bidding_strategy": c.get("biddingStrategyType", "UNKNOWN"),
+                "clicks": int(m.get("clicks", 0)),
+                "conversions": round(float(m.get("conversions", 0)), 1),
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
+    async def get_nashville_search_terms(self, days: int = 1) -> Optional[list]:
+        """Get search terms for Nashville campaigns only."""
+        cache_key = f"nashville_search_terms_{days}"
+        cached = self._get_cached(cache_key, 300)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        query = f"""
+            SELECT
+                search_term_view.search_term,
+                campaign.name,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions,
+                metrics.cost_micros
+            FROM search_term_view
+            WHERE segments.date {date_range}
+                AND campaign.name LIKE '%Nashville%'
+                AND metrics.clicks > 0
+            ORDER BY metrics.cost_micros DESC
+            LIMIT 100
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        terms = []
+        for row in results:
+            stv = row.get("searchTermView", {})
+            c = row.get("campaign", {})
+            m = row.get("metrics", {})
+            cost = int(m.get("costMicros", 0)) / 1_000_000
+            conversions = float(m.get("conversions", 0))
+            terms.append({
+                "search_term": stv.get("searchTerm", ""),
+                "campaign": c.get("name", "Unknown"),
+                "clicks": int(m.get("clicks", 0)),
+                "impressions": int(m.get("impressions", 0)),
+                "conversions": round(conversions, 1),
+                "cost": round(cost, 2),
+                "cpa": round(cost / conversions, 2) if conversions > 0 else None,
+            })
+
+        self._set_cache(cache_key, terms)
+        return terms
+
+    async def get_nashville_keywords(self, days: int = 7) -> Optional[list]:
+        """Get keyword-level performance for Nashville campaigns."""
+        cache_key = f"nashville_keywords_{days}"
+        cached = self._get_cached(cache_key, CACHE_TTL_METRICS)
+        if cached is not None:
+            return cached
+
+        date_range = self._date_range_clause(days)
+        query = f"""
+            SELECT
+                ad_group_criterion.keyword.text,
+                ad_group_criterion.keyword.match_type,
+                campaign.name,
+                ad_group.name,
+                metrics.average_cpc,
+                metrics.clicks,
+                metrics.impressions,
+                metrics.conversions,
+                metrics.cost_micros,
+                metrics.search_impression_share
+            FROM keyword_view
+            WHERE segments.date {date_range}
+                AND campaign.name LIKE '%Nashville%'
+                AND campaign.status = 'ENABLED'
+                AND ad_group.status = 'ENABLED'
+                AND ad_group_criterion.status = 'ENABLED'
+                AND metrics.impressions > 0
+            ORDER BY metrics.cost_micros DESC
+            LIMIT 50
+        """
+        results = await self._execute_query(query)
+        if results is None:
+            return None
+
+        rows = []
+        for row in results:
+            agc = row.get("adGroupCriterion", {})
+            kw = agc.get("keyword", {})
+            c = row.get("campaign", {})
+            ag = row.get("adGroup", {})
+            m = row.get("metrics", {})
+            cost_micros = int(m.get("costMicros", 0))
+            conversions = float(m.get("conversions", 0))
+            rows.append({
+                "keyword": kw.get("text", ""),
+                "match_type": kw.get("matchType", ""),
+                "campaign": c.get("name", "Unknown"),
+                "ad_group": ag.get("name", "Unknown"),
+                "avg_cpc": round(int(m.get("averageCpc", 0)) / 1_000_000, 2),
+                "clicks": int(m.get("clicks", 0)),
+                "impressions": int(m.get("impressions", 0)),
+                "conversions": round(conversions, 1),
+                "cost": round(cost_micros / 1_000_000, 2),
+                "search_is": m.get("searchImpressionShare"),
+                "cpa": round(cost_micros / 1_000_000 / conversions, 2) if conversions > 0 else None,
+            })
+
+        self._set_cache(cache_key, rows)
+        return rows
+
     async def get_connection_status(self) -> dict:
         """Check if Google Ads is connected and return account info."""
         if not self.is_configured():
