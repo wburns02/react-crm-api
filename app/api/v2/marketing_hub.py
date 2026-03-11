@@ -2103,6 +2103,71 @@ async def upload_conversions_from_crm(
 
 
 # ────────────────────────────────────────────
+# Generic Google Ads Mutations (any campaign)
+# ────────────────────────────────────────────
+
+
+class ApplyNegativeKeywordsRequest(BaseModel):
+    keywords: list[dict]  # [{keyword_text: str, match_type: "EXACT"|"PHRASE"|"BROAD"}]
+    campaign_filter: str  # e.g. "South Carolina"
+
+
+@router.post("/ads/apply-negative-keywords")
+async def apply_negative_keywords(
+    current_user: CurrentUser,
+    body: ApplyNegativeKeywordsRequest,
+) -> dict:
+    """Apply negative keywords to all campaigns matching a name filter via Google Ads API.
+
+    Body: {keywords: [{keyword_text, match_type}], campaign_filter: "South Carolina"}
+    """
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+
+    try:
+        result = await ads.apply_negative_keywords_to_campaigns(
+            keywords=body.keywords,
+            campaign_filter=body.campaign_filter,
+        )
+        return result
+    except Exception as e:
+        logger.error("Apply negative keywords failed: %s", str(e))
+        return {"success": False, "error": str(e)}
+
+
+class CreateAdGroupRequest(BaseModel):
+    campaign_id: str
+    ad_group_name: str
+    keywords: list[dict] = []  # [{text: str, match_type: "BROAD"|"PHRASE"|"EXACT"}]
+
+
+@router.post("/ads/ad-groups")
+async def create_ad_group(
+    current_user: CurrentUser,
+    body: CreateAdGroupRequest,
+) -> dict:
+    """Create an ad group with keywords in a campaign via Google Ads API.
+
+    Body: {campaign_id: "123456", ad_group_name: "Septic Spring Hill TN", keywords: [{text, match_type}]}
+    """
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+
+    try:
+        result = await ads.create_ad_group(
+            campaign_id=body.campaign_id,
+            ad_group_name=body.ad_group_name,
+            keywords=body.keywords,
+        )
+        return result
+    except Exception as e:
+        logger.error("Create ad group failed: %s", str(e))
+        return {"success": False, "error": str(e)}
+
+
+# ────────────────────────────────────────────
 # Nashville Real-Time Dashboard
 # ────────────────────────────────────────────
 

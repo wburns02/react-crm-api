@@ -1857,6 +1857,204 @@ class GoogleAdsService:
         }
 
 
+    # ─── GENERIC NEGATIVE KEYWORDS ─────────────────────────────────────
+
+    async def apply_negative_keywords_to_campaigns(
+        self, keywords: list[dict], campaign_filter: str
+    ) -> dict:
+        """Apply negative keywords to campaigns matching a name filter.
+
+        Args:
+            keywords: List of {keyword_text, match_type} dicts.
+            campaign_filter: Substring to match campaign names (e.g. "South Carolina").
+
+        Returns dict with success, applied_count, campaigns_affected.
+        """
+        if not self.is_configured():
+            return {"success": False, "error": "Google Ads not configured"}
+
+        if not keywords:
+            return {"success": False, "error": "No keywords provided"}
+
+        if not campaign_filter or not campaign_filter.strip():
+            return {"success": False, "error": "campaign_filter is required"}
+
+        # Query matching campaigns
+        query = f"""
+            SELECT campaign.resource_name, campaign.name
+            FROM campaign
+            WHERE campaign.status = 'ENABLED'
+                AND campaign.name LIKE '%{campaign_filter.strip()}%'
+        """
+        results = await self._execute_query(query)
+        if not results:
+            return {"success": False, "error": f"No campaigns found matching '{campaign_filter}'"}
+
+        campaigns = [
+            r.get("campaign", {}).get("resourceName", "")
+            for r in results
+            if r.get("campaign", {}).get("resourceName")
+        ]
+        if not campaigns:
+            return {"success": False, "error": f"No campaigns found matching '{campaign_filter}'"}
+
+        access_token = await self._refresh_access_token()
+        if not access_token:
+            return {"success": False, "error": "Failed to refresh token"}
+
+        customer_id = self._get_clean_customer_id()
+        url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}/googleAds:mutate"
+
+        operations = []
+        for kw in keywords:
+            text = kw.get("keyword_text", "").strip()
+            match = kw.get("match_type", "EXACT").upper()
+            if not text:
+                continue
+
+            for campaign_rn in campaigns:
+                operations.append({
+                    "campaignCriterionOperation": {
+                        "create": {
+                            "campaign": campaign_rn,
+                            "negative": True,
+                            "keyword": {
+                                "text": text,
+                                "matchType": match,
+                            },
+                        }
+                    }
+                })
+
+        if not operations:
+            return {"success": False, "error": "No valid operations built"}
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    headers=self._get_headers(access_token),
+                    json={"mutateOperations": operations},
+                )
+                self._increment_ops()
+
+                if response.status_code in (200, 201):
+                    result = response.json()
+                    results_list = result.get("mutateOperationResponses", [])
+                    return {
+                        "success": True,
+                        "applied_count": len(results_list),
+                        "keywords": [kw.get("keyword_text") for kw in keywords if kw.get("keyword_text", "").strip()],
+                        "campaigns_affected": len(campaigns),
+                        "campaign_filter": campaign_filter,
+                    }
+                else:
+                    error_text = response.text[:500]
+                    logger.error("Failed to apply negative keywords: %s %s", response.status_code, error_text)
+                    return {"success": False, "error": error_text, "status_code": response.status_code}
+
+        except Exception as e:
+            logger.error("Negative keyword application error: %s", str(e))
+            return {"success": False, "error": str(e)}
+
+    # ─── CREATE AD GROUP ───────────────────────────────────────────────
+
+    async def create_ad_group(
+        self, campaign_id: str, ad_group_name: str, keywords: list[dict]
+    ) -> dict:
+        """Create an ad group with keywords in a single batch mutation.
+
+        Args:
+            campaign_id: The campaign ID (numeric string, no prefix).
+            ad_group_name: Name for the new ad group.
+            keywords: List of {text, match_type} dicts.
+
+        Returns dict with success, ad_group_resource_name.
+        """
+        if not self.is_configured():
+            return {"success": False, "error": "Google Ads not configured"}
+
+        if not campaign_id or not ad_group_name:
+            return {"success": False, "error": "campaign_id and ad_group_name are required"}
+
+        access_token = await self._refresh_access_token()
+        if not access_token:
+            return {"success": False, "error": "Failed to refresh token"}
+
+        customer_id = self._get_clean_customer_id()
+        url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}/googleAds:mutate"
+
+        # Use temporary resource name -1 to link ad group creation with keyword additions
+        temp_resource = f"customers/{customer_id}/adGroups/-1"
+
+        operations = [
+            {
+                "adGroupOperation": {
+                    "create": {
+                        "resourceName": temp_resource,
+                        "name": ad_group_name,
+                        "campaign": f"customers/{customer_id}/campaigns/{campaign_id}",
+                        "status": "ENABLED",
+                        "type": "SEARCH_STANDARD",
+                    }
+                }
+            }
+        ]
+
+        # Add keyword criteria
+        for kw in (keywords or []):
+            text = kw.get("text", "").strip()
+            match_type = kw.get("match_type", "BROAD").upper()
+            if not text:
+                continue
+            operations.append({
+                "adGroupCriterionOperation": {
+                    "create": {
+                        "adGroup": temp_resource,
+                        "status": "ENABLED",
+                        "keyword": {
+                            "text": text,
+                            "matchType": match_type,
+                        },
+                    }
+                }
+            })
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    headers=self._get_headers(access_token),
+                    json={"mutateOperations": operations},
+                )
+                self._increment_ops()
+
+                if response.status_code in (200, 201):
+                    result = response.json()
+                    responses = result.get("mutateOperationResponses", [])
+                    # First response is the ad group creation
+                    ad_group_rn = None
+                    if responses:
+                        ag_result = responses[0].get("adGroupResult", {})
+                        ad_group_rn = ag_result.get("resourceName")
+
+                    return {
+                        "success": True,
+                        "ad_group_resource_name": ad_group_rn,
+                        "ad_group_name": ad_group_name,
+                        "campaign_id": campaign_id,
+                        "keywords_added": len(operations) - 1,
+                    }
+                else:
+                    error_text = response.text[:500]
+                    logger.error("Failed to create ad group: %s %s", response.status_code, error_text)
+                    return {"success": False, "error": error_text, "status_code": response.status_code}
+
+        except Exception as e:
+            logger.error("Ad group creation error: %s", str(e))
+            return {"success": False, "error": str(e)}
+
+
 # Singleton instance
 google_ads_service = GoogleAdsService()
 
