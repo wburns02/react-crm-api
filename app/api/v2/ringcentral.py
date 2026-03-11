@@ -13,10 +13,11 @@ from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy import select, func, or_
 from typing import Optional, List
 from pydantic import BaseModel, Field
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 import httpx
 import logging
 import asyncio
+import re as _re
 import uuid as _uuid
 
 from app.api.deps import DbSession, CurrentUser
@@ -29,6 +30,36 @@ from app.database import async_session_maker
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# MAC Septic company RingCentral numbers — skip customer creation for these
+COMPANY_NUMBERS = {"+16153452544", "+16152362672", "6153452544", "6152362672"}
+
+# Dispositions that indicate the caller never connected (inbound)
+NO_CONNECT_DISPOSITIONS = {"busy", "no_answer", "voicemail", "rejected", "cancelled", "missed"}
+
+
+def _normalize_phone_for_db(raw: str) -> str:
+    """Normalize any phone format to (XXX) XXX-XXXX for DB storage."""
+    digits = "".join(c for c in (raw or "") if c.isdigit())
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) == 10:
+        return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+    return raw or ""
+
+
+def _normalize_to_10_digits(raw: str) -> str:
+    """Extract exactly 10 digits from a phone number."""
+    digits = "".join(c for c in (raw or "") if c.isdigit())
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    return digits if len(digits) == 10 else ""
+
+
+def _is_company_number(phone: str) -> bool:
+    """Check if a phone number belongs to MAC Septic."""
+    digits = _normalize_to_10_digits(phone)
+    return digits in COMPANY_NUMBERS or phone in COMPANY_NUMBERS
 
 
 def _rc_account_uuid(account_id: str) -> _uuid.UUID:
@@ -43,14 +74,97 @@ _last_sync_status: Optional[dict] = None
 AUTO_SYNC_INTERVAL_SECONDS = 15 * 60  # 15 minutes
 
 
+async def _match_or_create_customer(
+    db,
+    call_log: CallLog,
+    phone_cache: dict,
+) -> Optional[Customer]:
+    """Match a call to an existing customer or auto-create one.
+
+    Args:
+        db: Database session
+        call_log: The call log record to match
+        phone_cache: Dict mapping normalized_phone -> customer_id for batch dedup
+
+    Returns:
+        Customer if matched/created, None if skipped
+    """
+    # Determine which number is the customer's
+    search_number = (
+        call_log.called_number if call_log.direction == "outbound"
+        else call_log.caller_number
+    )
+
+    if not search_number:
+        return None
+
+    # Skip company-owned numbers
+    if _is_company_number(search_number):
+        return None
+
+    normalized = _normalize_to_10_digits(search_number)
+    if not normalized:
+        return None
+
+    # Check batch cache first (same phone seen earlier in this sync)
+    if normalized in phone_cache:
+        customer_id = phone_cache[normalized]
+        result = await db.execute(select(Customer).where(Customer.id == customer_id).limit(1))
+        customer = result.scalar_one_or_none()
+        if customer:
+            call_log.customer_id = customer.id
+            call_log.answered_by = f"{customer.first_name} {customer.last_name}".strip()
+            return customer
+
+    # Try to find existing customer
+    customer = await find_customer_by_phone(db, search_number)
+    if customer:
+        call_log.customer_id = customer.id
+        call_log.answered_by = f"{customer.first_name} {customer.last_name}".strip()
+        phone_cache[normalized] = customer.id
+        return customer
+
+    # Only auto-create for inbound calls that actually connected and lasted >= 10s
+    if call_log.direction != "inbound":
+        return None
+    if (call_log.duration_seconds or 0) < 10:
+        return None
+    if (call_log.call_disposition or "").lower() in NO_CONNECT_DISPOSITIONS:
+        return None
+
+    # Create new customer profile from unknown caller
+    formatted_phone = _normalize_phone_for_db(search_number)
+    customer = Customer(
+        first_name="Caller",
+        last_name=formatted_phone,
+        phone=formatted_phone,
+        lead_source="inbound_call",
+        customer_type="prospect",
+        prospect_stage="new_lead",
+        is_active=True,
+        lead_notes=f"Auto-created from inbound RingCentral call on {call_log.call_date}",
+        tags="auto-created,needs-review",
+        next_follow_up_date=call_log.call_date,
+    )
+    db.add(customer)
+    await db.flush()  # Get the ID
+
+    call_log.customer_id = customer.id
+    call_log.answered_by = f"Caller {formatted_phone}"
+    phone_cache[normalized] = customer.id
+
+    logger.info(f"Auto-created customer '{formatted_phone}' (id={customer.id}) from inbound call")
+    return customer
+
+
 async def _perform_sync(hours_back: int = 2) -> dict:
-    """Perform a sync of RingCentral calls.
+    """Perform a sync of RingCentral calls with auto customer matching/creation.
 
     Args:
         hours_back: How many hours of call history to sync (default 2)
 
     Returns:
-        dict with synced, skipped, total_records counts
+        dict with synced, skipped, customers_matched, customers_created counts
     """
     global _last_sync_time, _last_sync_status
 
@@ -73,8 +187,14 @@ async def _perform_sync(hours_back: int = 2) -> dict:
         records = rc_logs.get("records", [])
         synced = 0
         skipped = 0
+        customers_matched = 0
+        customers_created = 0
+        calls_to_analyze = []
 
         async with async_session_maker() as db:
+            # Track phone -> customer_id within this batch to prevent duplicates
+            phone_cache: dict[str, _uuid.UUID] = {}
+
             for record in records:
                 rc_call_id = record.get("id")
 
@@ -115,13 +235,42 @@ async def _perform_sync(hours_back: int = 2) -> dict:
                     call_log.recording_url = recording.get("contentUri")
 
                 db.add(call_log)
+                await db.flush()  # Get call_log.id for analysis queue
+
+                # Match or create customer
+                prev_cache_size = len(phone_cache)
+                customer = await _match_or_create_customer(db, call_log, phone_cache)
+                if customer:
+                    if len(phone_cache) > prev_cache_size:
+                        # New entry in cache = either matched for first time or created
+                        if customer.lead_source == "inbound_call" and customer.first_name == "Caller":
+                            customers_created += 1
+                        else:
+                            customers_matched += 1
+                    else:
+                        customers_matched += 1
+
+                    # Create activity record for this call
+                    await create_activity_from_call(db, call_log, "system@auto-sync")
+
+                # Queue calls with recordings for background transcription
+                if call_log.recording_url and call_log.customer_id:
+                    calls_to_analyze.append(call_log.id)
+
                 synced += 1
 
             await db.commit()
 
+        # Trigger background transcription + analysis for new calls with recordings
+        for call_id in calls_to_analyze:
+            asyncio.create_task(_analyze_and_link(call_id))
+
         result = {
             "synced": synced,
             "skipped": skipped,
+            "customers_matched": customers_matched,
+            "customers_created": customers_created,
+            "transcription_queued": len(calls_to_analyze),
             "total_records": len(records),
             "timestamp": datetime.utcnow().isoformat(),
         }
@@ -130,7 +279,11 @@ async def _perform_sync(hours_back: int = 2) -> dict:
         _last_sync_status = result
 
         if synced > 0:
-            logger.info(f"Auto-sync completed: {synced} new calls synced, {skipped} skipped")
+            logger.info(
+                f"Auto-sync completed: {synced} new calls synced, {skipped} skipped, "
+                f"{customers_matched} matched, {customers_created} created, "
+                f"{len(calls_to_analyze)} queued for transcription"
+            )
 
         return result
 
@@ -263,19 +416,36 @@ def call_log_to_response(call: CallLog) -> dict:
     }
 
 
-async def find_customer_by_phone(db: DbSession, phone: str) -> Optional[Customer]:
-    """Look up customer by phone number."""
+async def find_customer_by_phone(db, phone: str) -> Optional[Customer]:
+    """Look up customer by phone number with multi-format matching."""
     try:
-        # Normalize phone number (remove non-digits)
-        normalized = "".join(c for c in phone if c.isdigit())
-        if len(normalized) == 11 and normalized.startswith("1"):
-            normalized = normalized[1:]  # Remove leading 1
+        normalized = _normalize_to_10_digits(phone)
+        if not normalized:
+            return None
 
-        if len(normalized) < 7:
-            return None  # Phone number too short
+        # Format variants to try exact match on
+        formatted = _normalize_phone_for_db(phone)  # (XXX) XXX-XXXX
 
-        # Search customers by phone (just use main phone column)
-        result = await db.execute(select(Customer).where(Customer.phone.contains(normalized[-10:])).limit(1))
+        # Exact match first (most reliable)
+        result = await db.execute(
+            select(Customer).where(
+                or_(
+                    Customer.phone == formatted,
+                    Customer.phone == f"+1{normalized}",
+                    Customer.phone == normalized,
+                )
+            ).limit(1)
+        )
+        customer = result.scalar_one_or_none()
+        if customer:
+            return customer
+
+        # Fallback: contains last 10 digits (for legacy data with odd formats)
+        result = await db.execute(
+            select(Customer).where(
+                Customer.phone.contains(normalized)
+            ).limit(1)
+        )
         return result.scalar_one_or_none()
     except Exception as e:
         logger.warning(f"Error finding customer by phone {phone}: {e}")
@@ -422,8 +592,45 @@ async def analyze_single_call(call_id: int):
             call.empathy_score = analysis.get("empathy_score", 50)
             call.clarity_score = analysis.get("clarity_score", 50)
             call.resolution_score = analysis.get("resolution_score", 50)
-            call.topics = analysis.get("topics", [])
+
+            # Save topics with intent prefix if available
+            topics = analysis.get("topics", [])
+            caller_intent = analysis.get("caller_intent", "other")
+            if caller_intent and caller_intent != "other":
+                topics.insert(0, f"intent:{caller_intent}")
+            call.topics = topics
+
+            # Append key details to summary if present
+            key_details = analysis.get("key_details", {})
+            details_str = ", ".join(f"{k}: {v}" for k, v in key_details.items() if v)
+            if details_str:
+                call.ai_summary = f"{analysis.get('summary', '')}\n\nKey Details: {details_str}"
+
             call.analyzed_at = datetime.utcnow()
+
+            # Auto-update customer name if discovered from transcription
+            if call.customer_id:
+                try:
+                    cust_result = await db.execute(
+                        select(Customer).where(Customer.id == call.customer_id)
+                    )
+                    customer = cust_result.scalar_one_or_none()
+                    if customer and customer.first_name == "Caller":
+                        caller_name = key_details.get("caller_name")
+                        if caller_name:
+                            parts = caller_name.strip().split(None, 1)
+                            customer.first_name = parts[0]
+                            customer.last_name = parts[1] if len(parts) > 1 else ""
+                            customer.lead_notes = (
+                                (customer.lead_notes or "")
+                                + f"\nName updated from call transcription on {date.today()}"
+                            )
+                            logger.info(f"Updated customer {customer.id} name to '{caller_name}'")
+                        # Update address if provided and customer has none
+                        if not customer.address_line1 and key_details.get("service_address"):
+                            customer.address_line1 = key_details["service_address"]
+                except Exception as name_err:
+                    logger.warning(f"Failed to update customer name from analysis: {name_err}")
 
             await db.commit()
             logger.info(
@@ -441,6 +648,91 @@ async def analyze_single_call(call_id: int):
                 await db.commit()
             except Exception:
                 pass
+
+
+async def _analyze_and_link(call_id):
+    """Background: transcribe, analyze, and create follow-up task if needed.
+
+    Wraps analyze_single_call() with additional post-analysis steps:
+    - Auto-create CS follow-up tasks based on caller intent
+    - Create activity records if not already done
+    """
+    try:
+        # Step 1: Transcribe + analyze (updates call_log in-place)
+        await analyze_single_call(call_id)
+
+        # Step 2: Check if follow-up task is needed
+        async with async_session_maker() as db:
+            result = await db.execute(select(CallLog).where(CallLog.id == call_id))
+            call = result.scalar_one_or_none()
+            if not call or not call.customer_id or not call.ai_summary:
+                return
+
+            # Determine intent from topics
+            intent = "other"
+            for topic in (call.topics or []):
+                if isinstance(topic, str) and topic.startswith("intent:"):
+                    intent = topic.split(":", 1)[1]
+                    break
+
+            needs_followup = (
+                intent in ("scheduling", "pricing_inquiry", "emergency", "complaint")
+                or call.escalation_risk in ("high", "critical")
+                or call.sentiment == "negative"
+            )
+
+            if needs_followup:
+                await _create_followup_from_analysis(db, call, intent)
+
+            await db.commit()
+    except Exception as e:
+        logger.error(f"Error in _analyze_and_link for call {call_id}: {e}")
+
+
+async def _create_followup_from_analysis(
+    db, call: CallLog, intent: str
+) -> Optional[int]:
+    """Create a CS follow-up task when AI analysis indicates action needed."""
+    try:
+        from app.models.customer_success.task import CSTask
+
+        priority_map = {
+            "emergency": "critical",
+            "complaint": "high",
+            "scheduling": "medium",
+            "pricing_inquiry": "medium",
+        }
+        priority = priority_map.get(intent, "low")
+
+        task = CSTask(
+            customer_id=call.customer_id,
+            title=f"Follow up: {intent.replace('_', ' ').title()} call",
+            description=(
+                f"Auto-generated from {call.direction} call on {call.call_date}\n"
+                f"AI Summary: {call.ai_summary or 'N/A'}\n"
+                f"Sentiment: {call.sentiment or 'unknown'} | "
+                f"Quality: {call.quality_score or 'N/A'}"
+            ),
+            task_type="follow_up",
+            category="relationship",
+            priority=priority,
+            status="pending",
+            due_date=date.today() + timedelta(days=1),
+            source="integration",
+            tags=["auto-created", "ringcentral", intent],
+            recording_url=call.recording_url,
+            contact_phone=(
+                call.caller_number if call.direction == "inbound"
+                else call.called_number
+            ),
+        )
+        db.add(task)
+        await db.flush()
+        logger.info(f"Created follow-up task {task.id} for call {call.id} (intent={intent})")
+        return task.id
+    except Exception as e:
+        logger.error(f"Failed to create follow-up task for call {call.id}: {e}")
+        return None
 
 
 # Endpoints
@@ -1087,6 +1379,129 @@ async def analyze_single_call_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/calls/backfill-customers")
+async def backfill_customer_links(
+    background_tasks: BackgroundTasks,
+    db: DbSession,
+    current_user: CurrentUser,
+    dry_run: bool = Query(False, description="Preview without making changes"),
+):
+    """Backfill customer links for orphaned calls (customer_id IS NULL).
+
+    Matches existing customers by phone or auto-creates new ones for inbound calls.
+    Also queues calls with recordings for transcription.
+    """
+    try:
+        # Find all orphaned calls
+        result = await db.execute(
+            select(CallLog).where(CallLog.customer_id.is_(None)).order_by(CallLog.call_date.desc())
+        )
+        orphaned_calls = result.scalars().all()
+
+        if not orphaned_calls:
+            return {
+                "status": "complete",
+                "message": "No orphaned calls found",
+                "total": 0,
+                "matched": 0,
+                "created": 0,
+                "skipped": 0,
+                "transcription_queued": 0,
+            }
+
+        matched = 0
+        created = 0
+        skipped = 0
+        transcription_queued = 0
+        phone_cache: dict[str, _uuid.UUID] = {}
+        details = []
+
+        for call in orphaned_calls:
+            search_number = (
+                call.called_number if call.direction == "outbound"
+                else call.caller_number
+            )
+            normalized = _normalize_to_10_digits(search_number or "")
+
+            if not normalized or _is_company_number(search_number or ""):
+                skipped += 1
+                details.append({
+                    "call_id": str(call.id),
+                    "phone": search_number,
+                    "action": "skipped",
+                    "reason": "company number or invalid",
+                })
+                continue
+
+            if dry_run:
+                # Just check what would happen
+                customer = await find_customer_by_phone(db, search_number)
+                if customer:
+                    matched += 1
+                    details.append({
+                        "call_id": str(call.id),
+                        "phone": search_number,
+                        "action": "would_match",
+                        "customer": f"{customer.first_name} {customer.last_name}",
+                    })
+                elif call.direction == "inbound" and (call.duration_seconds or 0) >= 10:
+                    created += 1
+                    details.append({
+                        "call_id": str(call.id),
+                        "phone": search_number,
+                        "action": "would_create",
+                    })
+                else:
+                    skipped += 1
+                    details.append({
+                        "call_id": str(call.id),
+                        "phone": search_number,
+                        "action": "would_skip",
+                        "reason": "outbound or too short",
+                    })
+                continue
+
+            # Actually match or create
+            customer = await _match_or_create_customer(db, call, phone_cache)
+            if customer:
+                if customer.lead_source == "inbound_call" and customer.first_name == "Caller":
+                    created += 1
+                else:
+                    matched += 1
+
+                # Create activity
+                await create_activity_from_call(db, call, "system@backfill")
+            else:
+                skipped += 1
+
+            # Queue transcription for calls with recordings but no transcription
+            if (
+                not dry_run
+                and call.recording_url
+                and not call.transcription
+                and call.customer_id
+            ):
+                background_tasks.add_task(_analyze_and_link, call.id)
+                transcription_queued += 1
+
+        if not dry_run:
+            await db.commit()
+
+        return {
+            "status": "dry_run" if dry_run else "complete",
+            "total": len(orphaned_calls),
+            "matched": matched,
+            "created": created,
+            "skipped": skipped,
+            "transcription_queued": transcription_queued,
+            "details": details[:20] if dry_run else [],
+        }
+
+    except Exception as e:
+        logger.error(f"Backfill error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/calls/{call_id}")
 async def get_call(
     call_id: str,
@@ -1225,6 +1640,9 @@ async def sync_call_logs(
     records = rc_logs.get("records", [])
     synced = 0
     skipped = 0
+    customers_matched = 0
+    customers_created = 0
+    phone_cache: dict[str, _uuid.UUID] = {}
 
     for record in records:
         rc_call_id = record.get("id")
@@ -1263,14 +1681,18 @@ async def sync_call_logs(
         if recording:
             call_log.recording_url = recording.get("contentUri")
 
-        # Try to match customer
-        search_number = call_log.called_number if call_log.direction == "outbound" else call_log.caller_number
-        customer = await find_customer_by_phone(db, search_number)
-        if customer:
-            call_log.customer_id = customer.id
-            call_log.answered_by = f"{customer.first_name} {customer.last_name}".strip()
-
         db.add(call_log)
+        await db.flush()
+
+        # Match or create customer (same logic as auto-sync)
+        customer = await _match_or_create_customer(db, call_log, phone_cache)
+        if customer:
+            if customer.lead_source == "inbound_call" and customer.first_name == "Caller":
+                customers_created += 1
+            else:
+                customers_matched += 1
+            await create_activity_from_call(db, call_log, current_user.email or "manual-sync")
+
         synced += 1
 
     await db.commit()
@@ -1278,6 +1700,8 @@ async def sync_call_logs(
     return {
         "synced": synced,
         "skipped": skipped,
+        "customers_matched": customers_matched,
+        "customers_created": customers_created,
         "total_records": len(records),
     }
 

@@ -732,7 +732,18 @@ Respond with ONLY valid JSON (no markdown, no explanation):
     "clarity_score": number 0-100,
     "resolution_score": number 0-100,
     "topics": ["topic1", "topic2", "topic3"],
-    "summary": "2-3 sentence call summary"
+    "summary": "2-3 sentence call summary",
+    "caller_intent": "scheduling" or "pricing_inquiry" or "emergency" or "complaint" or "general_inquiry" or "existing_service" or "other",
+    "key_details": {{
+        "caller_name": "Name if mentioned, or null",
+        "service_address": "Address if mentioned, or null",
+        "service_type": "pumping" or "inspection" or "repair" or "grease_trap" or "emergency" or "other" or null,
+        "quoted_price": number or null,
+        "symptoms": "Problems described, or null",
+        "preferred_date": "Requested date/time if mentioned, or null"
+    }},
+    "needs_follow_up": true or false,
+    "follow_up_reason": "Brief reason if needs_follow_up is true, or empty string"
 }}
 
 Scoring guidelines:
@@ -743,11 +754,14 @@ Scoring guidelines:
 - professionalism_score: Agent's professional demeanor and language
 - empathy_score: How well agent acknowledged customer feelings/concerns
 - clarity_score: How clearly agent explained information/solutions
-- resolution_score: How effectively the issue was resolved"""
+- resolution_score: How effectively the issue was resolved
+- caller_intent: The primary reason for the call
+- key_details: Extract any specific information mentioned (names, addresses, service types, prices)
+- needs_follow_up: true if the caller's issue was not resolved or they need a callback"""
 
         result = await self.chat_completion(
             messages=[{"role": "user", "content": analysis_prompt}],
-            max_tokens=500,
+            max_tokens=800,
             temperature=0.2,
             use_heavy_model=True,
             feature="call_analysis",
@@ -783,6 +797,10 @@ Scoring guidelines:
                 "resolution_score": max(0, min(100, float(analysis.get("resolution_score", 50)))),
                 "topics": analysis.get("topics", [])[:10],  # Limit to 10 topics
                 "summary": analysis.get("summary", ""),
+                "caller_intent": analysis.get("caller_intent", "other"),
+                "key_details": analysis.get("key_details", {}),
+                "needs_follow_up": bool(analysis.get("needs_follow_up", False)),
+                "follow_up_reason": analysis.get("follow_up_reason", ""),
             }
         except (json.JSONDecodeError, ValueError, TypeError) as e:
             logger.error(f"Failed to parse call analysis: {e}")
@@ -798,6 +816,10 @@ Scoring guidelines:
                 "resolution_score": 50,
                 "topics": [],
                 "summary": "",
+                "caller_intent": "other",
+                "key_details": {},
+                "needs_follow_up": False,
+                "follow_up_reason": "",
                 "error": "analysis_parse_failed",
             }
 
