@@ -1933,3 +1933,115 @@ async def get_work_order_audit_log(
     )
     entries = result.scalars().all()
     return entries
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FOLLOW-UP SMS ("Book Today $25 Off")
+# ──────────────────────────────────────────────────────────────────────────────
+
+class SendFollowUpRequest(BaseModel):
+    custom_message: Optional[str] = None  # Override the default template
+
+
+class SendFollowUpResponse(BaseModel):
+    success: bool
+    message: str
+    phone: Optional[str] = None
+
+
+@router.post("/{work_order_id}/send-follow-up", response_model=SendFollowUpResponse)
+async def send_follow_up_sms(
+    work_order_id: str,
+    request: SendFollowUpRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Send a '$25 Off — Book Today' follow-up SMS to the customer on a draft/pending work order."""
+    from app.services.sms_service import sms_service
+    from app.models.message import Message
+
+    # Load work order with customer
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(WorkOrder)
+        .options(selectinload(WorkOrder.customer))
+        .where(WorkOrder.id == work_order_id)
+    )
+    wo = result.scalars().first()
+    if not wo:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    # Get customer phone
+    customer = wo.customer
+    phone = None
+    if customer:
+        phone = customer.phone or customer.mobile_phone
+    if not phone:
+        phone = wo.customer_phone
+    if not phone:
+        raise HTTPException(
+            status_code=400,
+            detail="No phone number on file for this customer. Cannot send follow-up.",
+        )
+
+    # Build the message
+    customer_name = ""
+    if customer:
+        customer_name = customer.first_name or customer.last_name or ""
+    if not customer_name and wo.customer_name:
+        customer_name = wo.customer_name.split()[0] if wo.customer_name else ""
+
+    total = wo.total_amount
+    price_line = ""
+    if total and float(total) > 0:
+        price_line = f" Your quote: ${float(total):.2f}."
+
+    if request.custom_message:
+        body = request.custom_message
+    else:
+        body = (
+            f"Hi {customer_name or 'there'}! Thanks for calling MAC Septic."
+            f"{price_line}"
+            f" Book today and save $25 — call us back or reply YES to schedule."
+            f" Offer valid this week only."
+        )
+
+    # Send via RingCentral
+    try:
+        sms_response = await sms_service.send_sms(to=phone, body=body)
+    except Exception as e:
+        logger.error("Follow-up SMS failed", extra={"wo_id": work_order_id, "error": str(e)})
+        raise HTTPException(status_code=500, detail="Failed to send follow-up SMS.")
+
+    if sms_response.error:
+        raise HTTPException(status_code=502, detail=f"SMS provider error: {sms_response.error[:200]}")
+
+    # Record in messages table
+    try:
+        msg = Message(
+            customer_id=wo.customer_id,
+            work_order_id=wo.id,
+            message_type="sms",
+            direction="outbound",
+            to_number=phone,
+            content=body,
+            status="sent",
+            sent_at=datetime.utcnow(),
+        )
+        db.add(msg)
+
+        # Mark WO as follow-up sent in checklist JSON
+        checklist = wo.checklist or {}
+        checklist["follow_up_sent"] = True
+        checklist["follow_up_sent_at"] = datetime.utcnow().isoformat()
+        wo.checklist = checklist
+
+        await db.commit()
+    except Exception:
+        logger.warning("Failed to record follow-up message in DB", exc_info=True)
+
+    return SendFollowUpResponse(
+        success=True,
+        message=f"Follow-up sent to {phone[-4:]}",
+        phone=phone,
+    )
