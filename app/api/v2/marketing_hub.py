@@ -2136,6 +2136,30 @@ async def apply_negative_keywords(
         return {"success": False, "error": str(e)}
 
 
+@router.post("/ads/remove-negative-keywords")
+async def remove_negative_keywords(
+    current_user: CurrentUser,
+    body: ApplyNegativeKeywordsRequest,
+) -> dict:
+    """Remove negative keywords from campaigns matching a name filter.
+
+    Body: {keywords: [{keyword_text, match_type}], campaign_filter: "Nashville"}
+    """
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+
+    try:
+        result = await ads.remove_negative_keywords_from_campaigns(
+            keywords=body.keywords,
+            campaign_filter=body.campaign_filter,
+        )
+        return result
+    except Exception as e:
+        logger.error("Remove negative keywords failed: %s", str(e))
+        return {"success": False, "error": str(e)}
+
+
 class CreateAdGroupRequest(BaseModel):
     campaign_id: str
     ad_group_name: str

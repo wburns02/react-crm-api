@@ -1957,6 +1957,97 @@ class GoogleAdsService:
             logger.error("Negative keyword application error: %s", str(e))
             return {"success": False, "error": str(e)}
 
+    async def remove_negative_keywords_from_campaigns(
+        self, keywords: list[dict], campaign_filter: str
+    ) -> dict:
+        """Remove negative keywords from campaigns matching a name filter.
+
+        Args:
+            keywords: List of {keyword_text, match_type} dicts.
+            campaign_filter: Substring to match campaign names.
+
+        Returns dict with success, removed_count.
+        """
+        if not self.is_configured():
+            return {"success": False, "error": "Google Ads not configured"}
+
+        if not keywords or not campaign_filter or not campaign_filter.strip():
+            return {"success": False, "error": "keywords and campaign_filter required"}
+
+        customer_id = self._get_clean_customer_id()
+
+        # Find existing negative keyword criteria on matching campaigns
+        criteria_to_remove = []
+        for kw in keywords:
+            text = kw.get("keyword_text", "").strip().lower()
+            match_type = kw.get("match_type", "PHRASE").upper()
+            if not text:
+                continue
+
+            query = f"""
+                SELECT campaign_criterion.resource_name,
+                       campaign_criterion.keyword.text,
+                       campaign_criterion.keyword.match_type,
+                       campaign.name
+                FROM campaign_criterion
+                WHERE campaign_criterion.negative = TRUE
+                    AND campaign_criterion.type = 'KEYWORD'
+                    AND campaign.name LIKE '%{campaign_filter.strip()}%'
+                    AND campaign.status != 'REMOVED'
+            """
+            results = await self._execute_query(query)
+            if not results:
+                continue
+
+            for r in results:
+                criterion = r.get("campaignCriterion", {})
+                kw_data = criterion.get("keyword", {})
+                if (kw_data.get("text", "").lower() == text
+                        and kw_data.get("matchType", "").upper() == match_type):
+                    rn = criterion.get("resourceName")
+                    if rn:
+                        criteria_to_remove.append(rn)
+
+        if not criteria_to_remove:
+            return {"success": False, "error": "No matching negative keywords found to remove"}
+
+        access_token = await self._refresh_access_token()
+        if not access_token:
+            return {"success": False, "error": "Failed to refresh token"}
+
+        url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}/googleAds:mutate"
+        operations = [
+            {"campaignCriterionOperation": {"remove": rn}}
+            for rn in criteria_to_remove
+        ]
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    headers=self._get_headers(access_token),
+                    json={"mutateOperations": operations},
+                )
+                self._increment_ops()
+
+                if response.status_code in (200, 201):
+                    result = response.json()
+                    removed = len(result.get("mutateOperationResponses", []))
+                    return {
+                        "success": True,
+                        "removed_count": removed,
+                        "keywords": [kw.get("keyword_text") for kw in keywords],
+                        "campaign_filter": campaign_filter,
+                    }
+                else:
+                    error_text = response.text[:500]
+                    logger.error("Failed to remove negative keywords: %s %s", response.status_code, error_text)
+                    return {"success": False, "error": error_text}
+
+        except Exception as e:
+            logger.error("Remove negative keywords error: %s", str(e))
+            return {"success": False, "error": str(e)}
+
     # ─── CREATE AD GROUP ───────────────────────────────────────────────
 
     async def create_ad_group(
