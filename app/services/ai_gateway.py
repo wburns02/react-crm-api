@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 class AIGatewayConfig(BaseModel):
     """Configuration for AI gateway connection."""
 
-    base_url: str = "https://localhost-0.tailad2d5f.ts.net/ollama"  # ML workstation via Tailscale
-    whisper_url: str = "https://localhost-0.tailad2d5f.ts.net/whisper"  # Whisper API via Tailscale
+    base_url: str = "https://soc-api.tailad2d5f.ts.net/ollama"  # R730 via Tailscale Funnel
+    whisper_url: str = "https://soc-api.tailad2d5f.ts.net/whisper"  # Whisper API via Tailscale Funnel
     api_key: Optional[str] = None  # API key for authentication (not needed for Ollama)
     timeout: float = 300.0  # 70B models need more time
     max_retries: int = 3
