@@ -1762,6 +1762,46 @@ async def list_extensions(
     }
 
 
+@router.get("/phone-numbers")
+async def list_phone_numbers(
+    current_user: CurrentUser,
+):
+    """List all RingCentral phone numbers on the account with usage labels."""
+    if not ringcentral_service.is_configured:
+        return {"items": [], "configured": False}
+
+    try:
+        result = await ringcentral_service._api_request(
+            "GET",
+            "/restapi/v1.0/account/~/phone-number",
+            params={"perPage": 100},
+        )
+        if result.get("error"):
+            return {"items": [], "error": result["error"]}
+
+        numbers = []
+        for pn in result.get("records", []):
+            features = pn.get("features", [])
+            usage_type = pn.get("usageType", "")
+            label = pn.get("label", "")
+            phone = pn.get("phoneNumber", "")
+
+            numbers.append({
+                "id": pn.get("id"),
+                "phone_number": phone,
+                "label": label or usage_type,
+                "usage_type": usage_type,
+                "features": features,
+                "status": pn.get("status"),
+                "can_call": "CallerId" in features or "SmsSender" in features,
+            })
+
+        return {"items": numbers}
+    except Exception as e:
+        logger.error(f"Error listing phone numbers: {e}")
+        return {"items": [], "error": str(e)}
+
+
 @router.get("/presence/{extension_id}")
 async def get_presence(
     extension_id: str,

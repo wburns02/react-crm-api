@@ -27,6 +27,7 @@ router = APIRouter()
 BASE_INTERVALS = {
     "conventional": 36,  # 3 years
     "aerobic": 6,        # 6 months (requires regular maintenance)
+    "lift_station": 12,  # 12 months (annual maintenance)
 }
 
 # Manufacturer-specific overrides (months)

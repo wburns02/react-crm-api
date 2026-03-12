@@ -460,16 +460,28 @@ async def delete_technician(
                 detail="Technician not found",
             )
 
+        if not technician.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Technician is already inactive",
+            )
+
         # Soft delete - set is_active to False
         technician.is_active = False
         await db.commit()
-        await get_cache_service().delete_pattern("technicians:*")
-        await get_cache_service().delete_pattern("dashboard:*")
+
+        # Cache clearing is non-critical — don't let it block deletion
+        try:
+            await get_cache_service().delete_pattern("technicians:*")
+            await get_cache_service().delete_pattern("dashboard:*")
+        except Exception as cache_err:
+            logger.warning(f"Cache clear failed after technician delete (non-blocking): {cache_err}")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting technician {technician_id}: {e}")
+        logger.error(f"Error deleting technician {technician_id}: {e}", exc_info=True)
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete technician",
+            detail=f"Failed to delete technician: {str(e)[:200]}",
         )

@@ -41,7 +41,7 @@ DATA_SOURCE_META = {
         "fields": [
             {"name": "status", "type": "string", "label": "Status", "options": ["scheduled", "in_progress", "completed", "cancelled"]},
             {"name": "job_type", "type": "string", "label": "Job Type", "options": ["pumping", "inspection", "repair", "maintenance", "grease_trap", "aerobic", "emergency"]},
-            {"name": "system_type", "type": "string", "label": "System Type", "options": ["conventional", "aerobic"]},
+            {"name": "system_type", "type": "string", "label": "System Type", "options": ["conventional", "aerobic", "lift_station"]},
             {"name": "priority", "type": "string", "label": "Priority", "options": ["low", "medium", "high", "urgent"]},
             {"name": "scheduled_date", "type": "date", "label": "Scheduled Date"},
             {"name": "service_city", "type": "string", "label": "City"},
