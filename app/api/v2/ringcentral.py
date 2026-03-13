@@ -1786,6 +1786,9 @@ async def list_phone_numbers(
             label = pn.get("label", "")
             phone = pn.get("phoneNumber", "")
 
+            # All direct numbers and main company numbers can make/receive calls
+            # Features list from RC API is often empty for ported numbers
+            callable_types = {"DirectNumber", "MainCompanyNumber", "CompanyNumber"}
             numbers.append({
                 "id": pn.get("id"),
                 "phone_number": phone,
@@ -1793,7 +1796,7 @@ async def list_phone_numbers(
                 "usage_type": usage_type,
                 "features": features,
                 "status": pn.get("status"),
-                "can_call": "CallerId" in features or "SmsSender" in features,
+                "can_call": usage_type in callable_types or "CallerId" in features or "SmsSender" in features,
             })
 
         return {"items": numbers}
