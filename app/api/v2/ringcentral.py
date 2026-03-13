@@ -2353,7 +2353,9 @@ async def sip_provision(
             # RC sometimes includes STUN in flags
             pass
         # Default RC STUN servers
-        stun_servers = ["stun:stun.l.google.com:19302", "stun:stun.ringcentral.com:19302"]
+        # NOTE: ringcentral-web-phone SDK v2.x prepends "stun:" automatically,
+        # so we must NOT include the "stun:" prefix here or it becomes "stun:stun:..."
+        stun_servers = ["stun.l.google.com:19302", "stun.ringcentral.com:19302"]
 
         return {
             "sipInfo": {
