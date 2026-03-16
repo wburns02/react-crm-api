@@ -97,7 +97,8 @@ class CloverConfig(BaseModel):
 class CreatePaymentRequest(BaseModel):
     """Request to create a payment."""
 
-    invoice_id: str
+    invoice_id: Optional[str] = None
+    work_order_id: Optional[str] = None
     amount: int  # in cents
     token: str  # Clover card token from frontend
     customer_email: Optional[str] = None
@@ -122,7 +123,8 @@ class PaymentResultSchema(BaseModel):
 
     success: bool
     payment_id: Optional[str] = None
-    invoice_id: str
+    charge_id: Optional[str] = None
+    invoice_id: Optional[str] = None
     amount: int
     status: str  # succeeded, processing, failed
     error_message: Optional[str] = None
@@ -951,7 +953,13 @@ async def charge_invoice(
     current_user: CurrentUser,
     entity: EntityCtx = None,
 ) -> PaymentResultSchema:
-    """Charge a payment for an invoice using Clover."""
+    """Charge a payment for an invoice using Clover.
+
+    Accepts either invoice_id or work_order_id. If work_order_id is provided
+    without invoice_id, auto-creates an invoice from the work order.
+    """
+    from app.models.work_order import WorkOrder
+
     clover = get_clover_service()
     await _load_oauth_token(db, clover, entity_id=entity.id if entity else None)
 
@@ -959,14 +967,60 @@ async def charge_invoice(
         raise HTTPException(status_code=503, detail="Clover is not configured")
 
     try:
-        # Verify invoice exists
-        result = await db.execute(
-            select(Invoice).where(Invoice.id == uuid.UUID(request.invoice_id))
-        )
-        invoice = result.scalar_one_or_none()
+        invoice = None
 
-        if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+        # Resolve invoice: by invoice_id directly, or auto-create from work_order_id
+        if request.invoice_id:
+            result = await db.execute(
+                select(Invoice).where(Invoice.id == uuid.UUID(request.invoice_id))
+            )
+            invoice = result.scalar_one_or_none()
+            if not invoice:
+                raise HTTPException(status_code=404, detail="Invoice not found")
+        elif request.work_order_id:
+            # Check for existing invoice on this work order
+            inv_result = await db.execute(
+                select(Invoice).where(Invoice.work_order_id == request.work_order_id).limit(1)
+            )
+            invoice = inv_result.scalar_one_or_none()
+
+            if not invoice:
+                # Auto-create invoice from work order
+                wo_result = await db.execute(
+                    select(WorkOrder).where(WorkOrder.id == request.work_order_id)
+                )
+                work_order = wo_result.scalar_one_or_none()
+                if not work_order:
+                    raise HTTPException(status_code=404, detail="Work order not found")
+
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
+                amount_dollars = request.amount / 100
+                invoice_id_val = uuid.uuid4()
+                invoice_number = f"INV-{now.strftime('%Y%m%d')}-{str(invoice_id_val)[:8].upper()}"
+                job_type_label = (work_order.job_type or "service").replace("_", " ").title()
+
+                invoice = Invoice(
+                    id=invoice_id_val,
+                    customer_id=work_order.customer_id,
+                    work_order_id=uuid.UUID(request.work_order_id),
+                    invoice_number=invoice_number,
+                    status="draft",
+                    amount=amount_dollars,
+                    issue_date=now.date(),
+                    due_date=now.date(),
+                    line_items=[{
+                        "description": f"{job_type_label} - WO #{work_order.work_order_number or str(work_order.id)[:8]}",
+                        "quantity": 1,
+                        "unit_price": amount_dollars,
+                        "total": amount_dollars,
+                    }],
+                    notes="Auto-generated from Clover card payment.",
+                )
+                db.add(invoice)
+                await db.flush()
+                logger.info(f"Auto-created invoice {invoice_number} for Clover charge on WO {request.work_order_id}")
+        else:
+            raise HTTPException(status_code=400, detail="Either invoice_id or work_order_id is required")
 
         # Use invoice total if amount not provided, otherwise use requested amount
         amount_cents = request.amount
@@ -988,7 +1042,7 @@ async def charge_invoice(
         if not payment_result.success:
             return PaymentResultSchema(
                 success=False,
-                invoice_id=request.invoice_id,
+                invoice_id=str(invoice.id),
                 amount=amount_cents,
                 status="failed",
                 error_message=payment_result.error_message,
@@ -1004,7 +1058,7 @@ async def charge_invoice(
         if not capture_result.success:
             return PaymentResultSchema(
                 success=False,
-                invoice_id=request.invoice_id,
+                invoice_id=str(invoice.id),
                 amount=amount_cents,
                 status="failed",
                 error_message=capture_result.error_message,
@@ -1019,7 +1073,7 @@ async def charge_invoice(
         # Create payment record
         payment = Payment(
             invoice_id=invoice.id,
-            customer_id=None,
+            customer_id=invoice.customer_id,
             amount=amount_dollars,
             payment_method="card",
             status="completed",
@@ -1039,6 +1093,7 @@ async def charge_invoice(
         return PaymentResultSchema(
             success=True,
             payment_id=str(payment.id),
+            charge_id=capture_result.charge_id,
             invoice_id=str(invoice.id),
             amount=amount_cents,
             status="succeeded",
