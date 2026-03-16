@@ -2384,3 +2384,84 @@ async def sip_provision(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/extensions/{ext_id}/call-handling")
+async def get_call_handling(
+    ext_id: str,
+    current_user: CurrentUser,
+):
+    """Get call handling rules for an extension (answering rules)."""
+    if not ringcentral_service.is_configured:
+        raise HTTPException(status_code=503, detail="RingCentral not configured")
+
+    result = await ringcentral_service._api_request(
+        "GET",
+        f"/restapi/v1.0/account/~/extension/{ext_id}/answering-rule",
+        params={"perPage": 20},
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    return result
+
+
+@router.get("/extensions/{ext_id}/call-handling/{rule_id}")
+async def get_call_handling_rule(
+    ext_id: str,
+    rule_id: str,
+    current_user: CurrentUser,
+):
+    """Get a specific call handling rule for an extension."""
+    if not ringcentral_service.is_configured:
+        raise HTTPException(status_code=503, detail="RingCentral not configured")
+
+    result = await ringcentral_service._api_request(
+        "GET",
+        f"/restapi/v1.0/account/~/extension/{ext_id}/answering-rule/{rule_id}",
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    return result
+
+
+@router.put("/extensions/{ext_id}/call-handling/{rule_id}")
+async def update_call_handling_rule(
+    ext_id: str,
+    rule_id: str,
+    body: dict,
+    current_user: CurrentUser,
+):
+    """Update a call handling rule for an extension."""
+    if not ringcentral_service.is_configured:
+        raise HTTPException(status_code=503, detail="RingCentral not configured")
+
+    result = await ringcentral_service._api_request(
+        "PUT",
+        f"/restapi/v1.0/account/~/extension/{ext_id}/answering-rule/{rule_id}",
+        data=body,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    return result
+
+
+@router.get("/extensions/{ext_id}/phone-number")
+async def get_extension_phone_numbers(
+    ext_id: str,
+    current_user: CurrentUser,
+):
+    """Get phone numbers assigned to a specific extension."""
+    if not ringcentral_service.is_configured:
+        raise HTTPException(status_code=503, detail="RingCentral not configured")
+
+    result = await ringcentral_service._api_request(
+        "GET",
+        f"/restapi/v1.0/account/~/extension/{ext_id}/phone-number",
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    return result
+
+
