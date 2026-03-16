@@ -138,6 +138,8 @@ from app.api.v2 import (
     documents,
     # Tank Size Estimation (Nashville)
     tank_estimation,
+    # InvoiceHome Import (one-time migration)
+    invoicehome_import,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -381,6 +383,9 @@ api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"]
 
 # Public Tank Size Estimation (Nashville - No Auth Required)
 api_router.include_router(tank_estimation.router, prefix="/properties", tags=["properties"])
+
+# InvoiceHome Import (one-time migration)
+api_router.include_router(invoicehome_import.router, prefix="/admin", tags=["admin"])
 
 # Stub endpoints: empty responses for routes the frontend calls but aren't implemented yet.
 # Each stub returns X-Stub: true header. Replace with real implementations as needed.
