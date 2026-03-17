@@ -2590,6 +2590,34 @@ async def get_daily_bid_analysis(
         return {"success": False, "error": str(e), "days": [], "recommendations": []}
 
 
+@router.get("/ads/final-urls")
+async def get_ad_final_urls(current_user: CurrentUser) -> dict:
+    """Get final URLs for all enabled ads to audit landing page targets."""
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+    query = """
+        SELECT ad_group_ad.ad.final_urls, ad_group_ad.ad.type,
+               campaign.name, ad_group.name
+        FROM ad_group_ad
+        WHERE campaign.status = 'ENABLED' AND ad_group_ad.status = 'ENABLED'
+    """
+    results = await ads._execute_query(query)
+    if not results:
+        return {"success": False, "error": "No results"}
+    ads_list = []
+    for r in results:
+        ad = r.get("adGroupAd", {}).get("ad", {})
+        urls = ad.get("finalUrls", [])
+        ads_list.append({
+            "campaign": r.get("campaign", {}).get("name"),
+            "ad_group": r.get("adGroup", {}).get("name"),
+            "ad_type": ad.get("type"),
+            "final_urls": urls,
+        })
+    return {"success": True, "ads": ads_list}
+
+
 @router.post("/nashville/apply-bid-schedule")
 async def apply_bid_schedule(
     current_user: CurrentUser,
