@@ -62,6 +62,7 @@ class WorkOrder(Base):
     # Human-readable work order number (WO-000001 format)
     work_order_number = Column(String(20), unique=True, index=True)
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
+    billing_customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
     technician_id = Column(UUID(as_uuid=True), ForeignKey("technicians.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Job details - use String to avoid asyncpg ENUM type mismatch errors
@@ -143,7 +144,8 @@ class WorkOrder(Base):
     booking_source = Column(String(50), nullable=True)  # "web" or "microsoft_bookings"
 
     # Relationships
-    customer = relationship("Customer", back_populates="work_orders")
+    customer = relationship("Customer", back_populates="work_orders", foreign_keys=[customer_id])
+    billing_customer = relationship("Customer", foreign_keys=[billing_customer_id])
 
     def __repr__(self):
         return f"<WorkOrder {self.id} - {self.job_type}>"

@@ -925,6 +925,28 @@ async def ensure_call_logs_nullable():
             logger.warning(f"Could not fix call_logs nullable: {type(e).__name__}: {e}")
 
 
+async def ensure_billing_customer_id():
+    """Ensure work_orders table has billing_customer_id column (migration 093)."""
+    from app.database import async_session_maker
+    async with async_session_maker() as session:
+        try:
+            result = await session.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'work_orders' AND column_name = 'billing_customer_id'"
+            ))
+            if not result.fetchone():
+                await session.execute(text(
+                    "ALTER TABLE work_orders ADD COLUMN billing_customer_id UUID REFERENCES customers(id) ON DELETE SET NULL"
+                ))
+                await session.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_work_orders_billing_customer_id ON work_orders(billing_customer_id)"
+                ))
+                await session.commit()
+                logger.info("Added billing_customer_id column to work_orders")
+        except Exception as e:
+            logger.warning(f"Could not ensure billing_customer_id column: {type(e).__name__}: {e}")
+
+
 async def ensure_fk_on_delete():
     """Fix FK constraints that may lack ON DELETE SET NULL/CASCADE.
 
@@ -1252,6 +1274,9 @@ async def lifespan(app: FastAPI):
 
         # Fix FK constraints that may lack ON DELETE behavior (migration 082 may have failed)
         await ensure_fk_on_delete()
+
+        # Ensure billing_customer_id column exists on work_orders (migration 093)
+        await ensure_billing_customer_id()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")

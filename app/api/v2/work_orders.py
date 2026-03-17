@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Query, Request
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select, func, cast, String, text, and_, or_, desc
+from sqlalchemy.orm import aliased
 from typing import Optional, List
 from datetime import datetime, date as date_type
 from pydantic import BaseModel, Field
@@ -29,6 +30,9 @@ from app.services.websocket_manager import manager
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Alias for billing customer JOIN (same table, different FK)
+BillingCustomer = aliased(Customer, name="billing_customer")
 
 # PostgreSQL ENUM fields that need explicit type casting
 ENUM_FIELDS = {"status", "job_type", "priority"}
@@ -218,7 +222,22 @@ async def fix_work_orders_table(db: DbSession, current_user: CurrentUser):
         return {"status": "error", "message": str(e)}
 
 
-def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -> dict:
+def _customer_embed(c: Customer) -> dict:
+    """Build a CustomerEmbed dict from a Customer model."""
+    return {
+        "id": str(c.id),
+        "first_name": c.first_name or "",
+        "last_name": c.last_name or "",
+        "email": c.email,
+        "phone": c.phone,
+        "address_line1": c.address_line1,
+        "city": c.city,
+        "state": c.state,
+        "postal_code": c.postal_code,
+    }
+
+
+def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer], billing_customer: Optional[Customer] = None) -> dict:
     """Convert WorkOrder to dict with customer_name populated from Customer JOIN."""
     customer_name = None
     customer_phone = None
@@ -230,26 +249,23 @@ def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer]) -
         customer_name = f"{first} {last}".strip() or None
         customer_phone = customer.phone or None
         customer_email = customer.email or None
-        customer_obj = {
-            "id": str(customer.id),
-            "first_name": customer.first_name or "",
-            "last_name": customer.last_name or "",
-            "email": customer.email,
-            "phone": customer.phone,
-            "address_line1": customer.address_line1,
-            "city": customer.city,
-            "state": customer.state,
-            "postal_code": customer.postal_code,
-        }
+        customer_obj = _customer_embed(customer)
+
+    # Build billing customer embed
+    billing_customer_obj = None
+    if billing_customer:
+        billing_customer_obj = _customer_embed(billing_customer)
 
     return {
         "id": wo.id,
         "work_order_number": wo.work_order_number,
         "customer_id": wo.customer_id,
+        "billing_customer_id": wo.billing_customer_id,
         "customer_name": customer_name,
         "customer_phone": customer_phone,
         "customer_email": customer_email,
         "customer": customer_obj,
+        "billing_customer": billing_customer_obj,
         "technician_id": wo.technician_id,
         "job_type": str(wo.job_type) if wo.job_type else None,
         "status": str(wo.status) if wo.status else "draft",
@@ -322,8 +338,12 @@ async def list_work_orders(
         return cached
 
     try:
-        # Base query with LEFT JOIN to Customer for real customer names
-        query = select(WorkOrder, Customer).outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        # Base query with LEFT JOIN to Customer + BillingCustomer
+        query = (
+            select(WorkOrder, Customer, BillingCustomer)
+            .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+            .outerjoin(BillingCustomer, WorkOrder.billing_customer_id == BillingCustomer.id)
+        )
 
         # Apply filters
         if customer_id:
@@ -400,7 +420,7 @@ async def list_work_orders(
         rows = result.all()
 
         # Convert to dicts with customer_name populated
-        items = [work_order_with_customer_name(wo, customer) for wo, customer in rows]
+        items = [work_order_with_customer_name(wo, customer, billing_cust) for wo, customer, billing_cust in rows]
 
         response = WorkOrderListResponse(
             items=items,
@@ -438,8 +458,12 @@ async def list_work_orders_cursor(
     when paginating through large result sets.
     """
     try:
-        # Base query with LEFT JOIN to Customer for real customer names
-        query = select(WorkOrder, Customer).outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        # Base query with LEFT JOIN to Customer + BillingCustomer
+        query = (
+            select(WorkOrder, Customer, BillingCustomer)
+            .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+            .outerjoin(BillingCustomer, WorkOrder.billing_customer_id == BillingCustomer.id)
+        )
 
         # Apply filters
         if customer_id:
@@ -495,12 +519,12 @@ async def list_work_orders_cursor(
         rows = rows[:page_size]  # Trim to requested page size
 
         # Convert to dicts with customer_name populated
-        items = [work_order_with_customer_name(wo, customer) for wo, customer in rows]
+        items = [work_order_with_customer_name(wo, customer, billing_cust) for wo, customer, billing_cust in rows]
 
         # Build next cursor from last item
         next_cursor = None
         if has_more and rows:
-            last_wo, _ = rows[-1]
+            last_wo, _, _ = rows[-1]
             next_cursor = encode_cursor(last_wo.id, last_wo.created_at)
 
         return WorkOrderCursorResponse(
@@ -873,10 +897,11 @@ async def get_work_order(
     current_user: CurrentUser,
 ):
     """Get a single work order by ID with customer name."""
-    # JOIN with Customer to get real customer name
+    # JOIN with Customer + BillingCustomer
     query = (
-        select(WorkOrder, Customer)
+        select(WorkOrder, Customer, BillingCustomer)
         .outerjoin(Customer, WorkOrder.customer_id == Customer.id)
+        .outerjoin(BillingCustomer, WorkOrder.billing_customer_id == BillingCustomer.id)
         .where(WorkOrder.id == work_order_id)
     )
     result = await db.execute(query)
@@ -888,8 +913,8 @@ async def get_work_order(
             detail="Work order not found",
         )
 
-    work_order, customer = row
-    return work_order_with_customer_name(work_order, customer)
+    work_order, customer, billing_cust = row
+    return work_order_with_customer_name(work_order, customer, billing_cust)
 
 
 async def generate_work_order_number(db: DbSession) -> str:
@@ -1046,12 +1071,18 @@ async def update_work_order(
     if not update_data:
         # Still need customer name for response
         customer = None
+        billing_cust = None
         if work_order.customer_id:
             cust_result = await db.execute(
                 select(Customer).where(Customer.id == work_order.customer_id)
             )
             customer = cust_result.scalar_one_or_none()
-        return work_order_with_customer_name(work_order, customer)
+        if work_order.billing_customer_id:
+            bc_result = await db.execute(
+                select(Customer).where(Customer.id == work_order.billing_customer_id)
+            )
+            billing_cust = bc_result.scalar_one_or_none()
+        return work_order_with_customer_name(work_order, customer, billing_cust)
 
     # Track status change for WebSocket event
     old_status = str(work_order.status) if work_order.status else None
@@ -1293,13 +1324,19 @@ async def update_work_order(
     await get_cache_service().delete_pattern("workorders:*")
     await get_cache_service().delete_pattern("dashboard:*")
 
-    # Fetch customer for name population in response
+    # Fetch customer + billing customer for name population in response
     customer = None
+    billing_cust = None
     if work_order.customer_id:
         cust_result = await db.execute(
             select(Customer).where(Customer.id == work_order.customer_id)
         )
         customer = cust_result.scalar_one_or_none()
+    if work_order.billing_customer_id:
+        bc_result = await db.execute(
+            select(Customer).where(Customer.id == work_order.billing_customer_id)
+        )
+        billing_cust = bc_result.scalar_one_or_none()
 
     # Determine the type of update for WebSocket event
     new_status = str(work_order.status) if work_order.status else None
@@ -1342,8 +1379,9 @@ async def update_work_order(
                     desc = job_label + (f" at {addr}" if addr else "")
                     tax_rate, tax = 8.25, round(wo_amount * 0.0825, 2)
                     total = round(wo_amount + tax, 2)
+                    inv_customer_id = work_order.billing_customer_id or work_order.customer_id
                     inv = Invoice(
-                        id=uuid.uuid4(), customer_id=work_order.customer_id, work_order_id=work_order.id,
+                        id=uuid.uuid4(), customer_id=inv_customer_id, work_order_id=work_order.id,
                         invoice_number=f"INV-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}",
                         issue_date=datetime.now().date(), due_date=datetime.now().date() + td(days=30),
                         amount=total, paid_amount=0, status="draft",
@@ -1466,7 +1504,7 @@ async def update_work_order(
             },
         )
 
-    response_data = work_order_with_customer_name(work_order, customer)
+    response_data = work_order_with_customer_name(work_order, customer, billing_cust)
     response_data["notification_sent"] = notification_sent
     return response_data
 
@@ -1870,11 +1908,12 @@ async def generate_invoice_from_work_order(
     random_part = uuid.uuid4().hex[:4].upper()
     invoice_number = f"INV-{date_part}-{random_part}"
 
-    # Create invoice
+    # Create invoice — bill to billing_customer if set, otherwise service customer
     today = datetime.now().date()
+    invoice_customer_id = work_order.billing_customer_id or work_order.customer_id
     invoice = Invoice(
         id=uuid.uuid4(),
-        customer_id=work_order.customer_id,
+        customer_id=invoice_customer_id,
         work_order_id=work_order.id,
         invoice_number=invoice_number,
         issue_date=today,

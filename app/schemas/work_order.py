@@ -24,6 +24,7 @@ class WorkOrderBase(BaseModel):
     """Base work order schema."""
 
     customer_id: UUIDStr
+    billing_customer_id: Optional[UUIDStr] = None
     technician_id: Optional[UUIDStr] = None
     job_type: str
     status: Optional[str] = "draft"
@@ -92,6 +93,7 @@ class WorkOrderUpdate(BaseModel):
     """Schema for updating a work order (all fields optional)."""
 
     customer_id: Optional[str] = None
+    billing_customer_id: Optional[str] = None
     technician_id: Optional[str] = None
     job_type: Optional[str] = None
     status: Optional[str] = None
@@ -145,6 +147,7 @@ class WorkOrderResponse(WorkOrderBase):
     customer_phone: Optional[str] = None  # Populated from Customer JOIN
     customer_email: Optional[str] = None  # Populated from Customer JOIN
     customer: Optional[CustomerEmbed] = None  # Nested customer contact info
+    billing_customer: Optional[CustomerEmbed] = None  # Nested billing customer info (when different from service customer)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     created_by: Optional[str] = None

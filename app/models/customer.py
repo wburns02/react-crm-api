@@ -86,7 +86,7 @@ class Customer(Base):
     sharepoint_folder_url = Column(String(500), nullable=True)
 
     # Relationships
-    work_orders = relationship("WorkOrder", back_populates="customer", cascade="all, delete-orphan", passive_deletes=True)
+    work_orders = relationship("WorkOrder", back_populates="customer", cascade="all, delete-orphan", passive_deletes=True, foreign_keys="WorkOrder.customer_id")
     messages = relationship("Message", back_populates="customer", cascade="all, delete-orphan", passive_deletes=True)
     bookings = relationship("Booking", back_populates="customer", foreign_keys="Booking.customer_id", cascade="all, delete-orphan", passive_deletes=True)
     permits = relationship("SepticPermit", back_populates="customer", foreign_keys="SepticPermit.customer_id")
