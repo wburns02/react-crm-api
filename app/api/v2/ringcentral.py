@@ -2465,3 +2465,56 @@ async def get_extension_phone_numbers(
     return result
 
 
+@router.get("/extensions/{ext_id}/forwarding-number")
+async def get_forwarding_numbers(
+    ext_id: str,
+    current_user: CurrentUser,
+):
+    """Get forwarding numbers for an extension."""
+    if not ringcentral_service.is_configured:
+        raise HTTPException(status_code=503, detail="RingCentral not configured")
+
+    result = await ringcentral_service._api_request(
+        "GET",
+        f"/restapi/v1.0/account/~/extension/{ext_id}/forwarding-number",
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    return result
+
+
+@router.get("/extensions/{ext_id}/device")
+async def get_extension_devices(
+    ext_id: str,
+    current_user: CurrentUser,
+):
+    """Get devices registered to an extension."""
+    if not ringcentral_service.is_configured:
+        raise HTTPException(status_code=503, detail="RingCentral not configured")
+
+    result = await ringcentral_service._api_request(
+        "GET",
+        f"/restapi/v1.0/account/~/extension/{ext_id}/device",
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    return result
+
+
+@router.get("/rc-passthrough")
+async def rc_passthrough(
+    path: str,
+    current_user: CurrentUser,
+):
+    """Generic RC API passthrough for debugging. Pass ?path=/restapi/v1.0/..."""
+    if not ringcentral_service.is_configured:
+        raise HTTPException(status_code=503, detail="RingCentral not configured")
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    result = await ringcentral_service._api_request("GET", path)
+    return result
+
+
