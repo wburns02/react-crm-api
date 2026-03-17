@@ -2319,16 +2319,33 @@ async def sip_provision(
     try:
         client = await ringcentral_service.get_client()
 
-        # Call the SIP provision endpoint
+        # First, find the WebRTC device that has a phone line assigned
+        # (the SIP provision creates a NEW empty device if we don't specify one)
+        devices_resp = await client.get(
+            "/restapi/v1.0/account/~/extension/~/device",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"perPage": 20},
+        )
+        device_id = None
+        if devices_resp.status_code == 200:
+            for dev in devices_resp.json().get("records", []):
+                if dev.get("type") in ("WebRTC", "WebPhone") and dev.get("phoneLines"):
+                    device_id = dev["id"]
+                    logger.info(f"SIP provision: using existing device {device_id} with phone lines")
+                    break
+
+        # Call the SIP provision endpoint, optionally with existing device
+        provision_body = {"sipInfo": [{"transport": "WSS"}]}
+        if device_id:
+            provision_body["device"] = {"id": device_id}
+
         response = await client.post(
             "/restapi/v1.0/client-info/sip-provision",
             headers={
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
             },
-            json={
-                "sipInfo": [{"transport": "WSS"}],
-            },
+            json=provision_body,
         )
         response.raise_for_status()
         data = response.json()
