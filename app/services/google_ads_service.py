@@ -2145,6 +2145,155 @@ class GoogleAdsService:
             logger.error("Ad group creation error: %s", str(e))
             return {"success": False, "error": str(e)}
 
+    async def set_ad_schedule_bid_modifiers(
+        self, campaign_filter: str, schedule: list[dict]
+    ) -> dict:
+        """Set ad schedule bid modifiers on campaigns matching a name filter.
+
+        First removes existing ad schedule criteria, then creates new ones.
+
+        Args:
+            campaign_filter: Substring to match campaign names (e.g. "Nashville").
+            schedule: List of dicts with:
+                - day_of_week: MONDAY, TUESDAY, ... SUNDAY
+                - start_hour: 0-23
+                - end_hour: 1-24 (exclusive)
+                - bid_modifier: float (1.0 = no change, 0.7 = -30%, 1.5 = +50%)
+
+        Returns dict with success, applied_count.
+        """
+        if not self.is_configured():
+            return {"success": False, "error": "Google Ads not configured"}
+
+        if not schedule:
+            return {"success": False, "error": "No schedule entries provided"}
+
+        # Get matching campaigns
+        query = f"""
+            SELECT campaign.resource_name, campaign.name
+            FROM campaign
+            WHERE campaign.status = 'ENABLED'
+                AND campaign.name LIKE '%{campaign_filter.strip()}%'
+        """
+        results = await self._execute_query(query)
+        if not results:
+            return {"success": False, "error": f"No campaigns found matching '{campaign_filter}'"}
+
+        campaigns = [
+            r.get("campaign", {}).get("resourceName", "")
+            for r in results
+            if r.get("campaign", {}).get("resourceName")
+        ]
+
+        # Remove existing ad schedule criteria first
+        customer_id = self._get_clean_customer_id()
+        remove_query = f"""
+            SELECT campaign_criterion.resource_name,
+                   campaign_criterion.ad_schedule.day_of_week
+            FROM campaign_criterion
+            WHERE campaign_criterion.type = 'AD_SCHEDULE'
+                AND campaign.name LIKE '%{campaign_filter.strip()}%'
+                AND campaign.status != 'REMOVED'
+        """
+        existing = await self._execute_query(remove_query)
+        remove_operations = []
+        if existing:
+            for r in existing:
+                rn = r.get("campaignCriterion", {}).get("resourceName")
+                if rn:
+                    remove_operations.append(
+                        {"campaignCriterionOperation": {"remove": rn}}
+                    )
+
+        access_token = await self._refresh_access_token()
+        if not access_token:
+            return {"success": False, "error": "Failed to refresh token"}
+
+        url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}/googleAds:mutate"
+        removed_count = 0
+
+        # Execute removals if any
+        if remove_operations:
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(
+                        url,
+                        headers=self._get_headers(access_token),
+                        json={"mutateOperations": remove_operations},
+                    )
+                    self._increment_ops()
+                    if response.status_code in (200, 201):
+                        removed_count = len(response.json().get("mutateOperationResponses", []))
+                        logger.info("Removed %d existing ad schedule criteria", removed_count)
+                    else:
+                        logger.warning("Remove ad schedule failed: %s", response.text[:300])
+            except Exception as e:
+                logger.warning("Remove ad schedule error (continuing): %s", str(e))
+
+        # Build create operations for new schedule
+        create_operations = []
+        for entry in schedule:
+            day = entry.get("day_of_week", "").upper()
+            start_h = entry.get("start_hour", 0)
+            end_h = entry.get("end_hour", 24)
+            modifier = entry.get("bid_modifier", 1.0)
+
+            if not day or modifier == 1.0:
+                continue  # Skip no-change entries
+
+            for campaign_rn in campaigns:
+                create_operations.append({
+                    "campaignCriterionOperation": {
+                        "create": {
+                            "campaign": campaign_rn,
+                            "bidModifier": modifier,
+                            "adSchedule": {
+                                "dayOfWeek": day,
+                                "startHour": start_h,
+                                "endHour": end_h,
+                                "startMinute": "ZERO",
+                                "endMinute": "ZERO",
+                            },
+                        }
+                    }
+                })
+
+        if not create_operations:
+            return {
+                "success": True,
+                "message": "No bid modifier changes needed (all 1.0x)",
+                "removed_count": removed_count,
+                "applied_count": 0,
+            }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    headers=self._get_headers(access_token),
+                    json={"mutateOperations": create_operations},
+                )
+                self._increment_ops()
+
+                if response.status_code in (200, 201):
+                    result = response.json()
+                    applied = len(result.get("mutateOperationResponses", []))
+                    return {
+                        "success": True,
+                        "removed_count": removed_count,
+                        "applied_count": applied,
+                        "campaigns_affected": len(campaigns),
+                        "schedule_entries": len(schedule),
+                    }
+                else:
+                    error_text = response.text[:500]
+                    logger.error("Failed to set ad schedule: %s %s", response.status_code, error_text)
+                    return {"success": False, "error": error_text, "status_code": response.status_code}
+
+        except Exception as e:
+            logger.error("Ad schedule bid modifier error: %s", str(e))
+            return {"success": False, "error": str(e)}
+
 
 # Singleton instance
 google_ads_service = GoogleAdsService()

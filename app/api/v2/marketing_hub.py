@@ -2590,6 +2590,38 @@ async def get_daily_bid_analysis(
         return {"success": False, "error": str(e), "days": [], "recommendations": []}
 
 
+@router.post("/nashville/apply-bid-schedule")
+async def apply_bid_schedule(
+    current_user: CurrentUser,
+    body: dict,
+) -> dict:
+    """Apply ad schedule bid modifiers to Nashville campaigns.
+
+    Body: {
+        "campaign_filter": "Nashville",  // optional, defaults to Nashville
+        "schedule": [
+            {"day_of_week": "SUNDAY", "start_hour": 0, "end_hour": 24, "bid_modifier": 0.7},
+            {"day_of_week": "MONDAY", "start_hour": 7, "end_hour": 8, "bid_modifier": 1.5},
+            ...
+        ]
+    }
+    """
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+
+    campaign_filter = body.get("campaign_filter", "Nashville")
+    schedule = body.get("schedule", [])
+    if not schedule:
+        return {"success": False, "error": "No schedule entries provided"}
+
+    try:
+        return await ads.set_ad_schedule_bid_modifiers(campaign_filter, schedule)
+    except Exception as e:
+        logger.error("Apply bid schedule failed: %s", str(e))
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/nashville/pause-candidates")
 async def get_pause_candidates(
     current_user: CurrentUser,
