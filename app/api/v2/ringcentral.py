@@ -2357,6 +2357,11 @@ async def sip_provision(
         # so we must NOT include the "stun:" prefix here or it becomes "stun:stun:..."
         stun_servers = ["stun.l.google.com:19302", "stun.ringcentral.com:19302"]
 
+        # Log the full raw response for debugging
+        logger.info(f"SIP provision raw keys: {list(data.keys())}")
+        if data.get("device"):
+            logger.info(f"SIP provision device: {data['device']}")
+
         return {
             "sipInfo": {
                 "authorizationId": sip_info.get("authorizationId", ""),
@@ -2458,6 +2463,61 @@ async def get_extension_phone_numbers(
     result = await ringcentral_service._api_request(
         "GET",
         f"/restapi/v1.0/account/~/extension/{ext_id}/phone-number",
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    return result
+
+
+@router.get("/sip-provision-raw")
+async def sip_provision_raw(
+    current_user: CurrentUser,
+):
+    """Return the FULL raw SIP provision response from RC for debugging."""
+    if not ringcentral_service.is_configured:
+        raise HTTPException(status_code=503, detail="RingCentral not configured")
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    token = await ringcentral_service.get_access_token()
+    if not token:
+        raise HTTPException(status_code=401, detail="Failed to authenticate with RingCentral")
+
+    client = await ringcentral_service.get_client()
+    response = await client.post(
+        "/restapi/v1.0/client-info/sip-provision",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json={"sipInfo": [{"transport": "WSS"}]},
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    # Mask password but show everything else
+    for si in data.get("sipInfo", []):
+        if si.get("password"):
+            si["password"] = "***masked***"
+
+    return data
+
+
+@router.post("/extensions/{ext_id}/forwarding-number")
+async def add_forwarding_number(
+    ext_id: str,
+    body: dict,
+    current_user: CurrentUser,
+):
+    """Add a forwarding number (e.g. cell phone) to an extension.
+
+    Body: {"phoneNumber": "+19792361958", "label": "Will Cell", "type": "Other"}
+    """
+    if not ringcentral_service.is_configured:
+        raise HTTPException(status_code=503, detail="RingCentral not configured")
+
+    result = await ringcentral_service._api_request(
+        "POST",
+        f"/restapi/v1.0/account/~/extension/{ext_id}/forwarding-number",
+        data=body,
     )
     if result.get("error"):
         raise HTTPException(status_code=500, detail=result["error"])
