@@ -927,6 +927,7 @@ async def ensure_call_logs_nullable():
 
 async def ensure_billing_customer_id():
     """Ensure work_orders table has billing_customer_id column (migration 093)."""
+    from sqlalchemy import text
     from app.database import async_session_maker
     async with async_session_maker() as session:
         try:
