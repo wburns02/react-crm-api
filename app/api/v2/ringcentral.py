@@ -2329,15 +2329,17 @@ async def sip_provision(
         device_id = None
         if devices_resp.status_code == 200:
             for dev in devices_resp.json().get("records", []):
-                if dev.get("type") in ("WebRTC", "WebPhone") and dev.get("phoneLines"):
+                if dev.get("phoneLines"):
                     device_id = dev["id"]
-                    logger.info(f"SIP provision: using existing device {device_id} with phone lines")
+                    logger.info(f"SIP provision: found device {device_id} (type={dev.get('type')}) with {len(dev['phoneLines'])} phone lines")
                     break
 
-        # Call the SIP provision endpoint, optionally with existing device
-        provision_body = {"sipInfo": [{"transport": "WSS"}]}
+        # Call the SIP provision endpoint with existing device ID
+        # This tells RC to register SIP on the device that already has the phone line
+        provision_body: dict = {"sipInfo": [{"transport": "WSS"}]}
         if device_id:
             provision_body["device"] = {"id": device_id}
+            logger.info(f"SIP provision: requesting device {device_id}")
 
         response = await client.post(
             "/restapi/v1.0/client-info/sip-provision",
