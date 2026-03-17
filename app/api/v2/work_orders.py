@@ -138,6 +138,23 @@ async def _send_real_estate_inspection_report(wo: WorkOrder, db) -> None:
         logger.error(f"[RE-INSPECTION] Failed to send report email for WO {wo.id}: {e}")
 
 
+@router.post("/fix-billing-column")
+async def fix_billing_customer_column(db: DbSession, current_user: CurrentUser):
+    """Add billing_customer_id column if missing (migration 093 safety net)."""
+    try:
+        result = await db.execute(
+            text("SELECT column_name FROM information_schema.columns WHERE table_name = 'work_orders' AND column_name = 'billing_customer_id'")
+        )
+        if not result.fetchone():
+            await db.execute(text("ALTER TABLE work_orders ADD COLUMN billing_customer_id UUID REFERENCES customers(id) ON DELETE SET NULL"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS ix_work_orders_billing_customer_id ON work_orders(billing_customer_id)"))
+            await db.commit()
+            return {"status": "success", "message": "billing_customer_id column added"}
+        return {"status": "ok", "message": "billing_customer_id column already exists"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @router.post("/fix-table")
 async def fix_work_orders_table(db: DbSession, current_user: CurrentUser):
     """Add work_order_number column and backfill existing work orders."""
