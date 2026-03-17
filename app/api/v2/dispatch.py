@@ -172,11 +172,34 @@ async def customer_lookup(
     if len(normalized) < 7:
         return {"found": False, "customer": None, "last_work_order": None}
 
-    # Find customer
+    # Find customer — phone may be stored formatted like "(979) 236-1958"
+    # so we need to match against digits only.
+    # Try multiple search strategies:
+    digits = normalized[-10:]  # Last 10 digits
+    # Strategy 1: Direct contains (works if stored as raw digits)
     result = await db.execute(
-        select(Customer).where(Customer.phone.contains(normalized[-10:])).limit(1)
+        select(Customer).where(Customer.phone.contains(digits)).limit(1)
     )
     customer = result.scalar_one_or_none()
+
+    # Strategy 2: Build a LIKE pattern with wildcards between digit groups
+    # e.g. "9792361958" -> "%979%236%1958%"
+    if not customer and len(digits) == 10:
+        pattern = f"%{digits[:3]}%{digits[3:6]}%{digits[6:]}%"
+        result = await db.execute(
+            select(Customer).where(Customer.phone.like(pattern)).limit(1)
+        )
+        customer = result.scalar_one_or_none()
+
+    # Strategy 3: Use PostgreSQL regexp_replace to strip non-digits
+    if not customer:
+        from sqlalchemy import func, text
+        result = await db.execute(
+            select(Customer).where(
+                func.regexp_replace(Customer.phone, r'[^0-9]', '', text("'g'")).contains(digits)
+            ).limit(1)
+        )
+        customer = result.scalar_one_or_none()
 
     if not customer:
         return {"found": False, "customer": None, "last_work_order": None}
