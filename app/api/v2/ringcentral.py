@@ -2352,10 +2352,14 @@ async def sip_provision(
         if sip_flags.get("outboundProxyAddress"):
             # RC sometimes includes STUN in flags
             pass
-        # Default RC STUN servers
+        # Use RC's own STUN servers from the response, falling back to defaults
         # NOTE: ringcentral-web-phone SDK v2.x prepends "stun:" automatically,
-        # so we must NOT include the "stun:" prefix here or it becomes "stun:stun:..."
-        stun_servers = ["stun.l.google.com:19302", "stun.ringcentral.com:19302"]
+        # so strip any existing "stun:" prefix
+        raw_stun = sip_info.get("stunServers", [])
+        if raw_stun:
+            stun_servers = [s.replace("stun:", "") if s.startswith("stun:") else s for s in raw_stun]
+        else:
+            stun_servers = ["stun.l.google.com:19302", "stun.ringcentral.com:19302"]
 
         # Log the full raw response for debugging
         logger.info(f"SIP provision raw keys: {list(data.keys())}")
@@ -2575,6 +2579,22 @@ async def rc_passthrough(
         raise HTTPException(status_code=403, detail="Admin only")
 
     result = await ringcentral_service._api_request("GET", path)
+    return result
+
+
+@router.put("/rc-passthrough")
+async def rc_passthrough_put(
+    path: str,
+    body: dict,
+    current_user: CurrentUser,
+):
+    """Generic RC API PUT passthrough for admin operations."""
+    if not ringcentral_service.is_configured:
+        raise HTTPException(status_code=503, detail="RingCentral not configured")
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    result = await ringcentral_service._api_request("PUT", path, data=body)
     return result
 
 
