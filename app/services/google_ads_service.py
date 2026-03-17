@@ -2168,16 +2168,17 @@ class GoogleAdsService:
         if not schedule:
             return {"success": False, "error": "No schedule entries provided"}
 
-        # Get matching campaigns
+        # Get matching campaigns (exclude PMax — they don't support ad schedule)
         query = f"""
             SELECT campaign.resource_name, campaign.name
             FROM campaign
             WHERE campaign.status = 'ENABLED'
                 AND campaign.name LIKE '%{campaign_filter.strip()}%'
+                AND campaign.advertising_channel_type != 'PERFORMANCE_MAX'
         """
         results = await self._execute_query(query)
         if not results:
-            return {"success": False, "error": f"No campaigns found matching '{campaign_filter}'"}
+            return {"success": False, "error": f"No Search campaigns found matching '{campaign_filter}'"}
 
         campaigns = [
             r.get("campaign", {}).get("resourceName", "")
@@ -2193,6 +2194,7 @@ class GoogleAdsService:
             FROM campaign_criterion
             WHERE campaign_criterion.type = 'AD_SCHEDULE'
                 AND campaign.name LIKE '%{campaign_filter.strip()}%'
+                AND campaign.advertising_channel_type != 'PERFORMANCE_MAX'
                 AND campaign.status != 'REMOVED'
         """
         existing = await self._execute_query(remove_query)
