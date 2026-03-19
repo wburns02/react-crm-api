@@ -262,3 +262,151 @@ async def import_invoicehome(
     )
 
     return summary
+
+
+# ========================
+# Customer Contact Update
+# ========================
+
+
+class CustomerContactRecord(BaseModel):
+    customer: str
+    billingName: str = ""
+    address: str = ""
+    email: str = ""
+    phone: str = ""
+    billing: str = ""
+    invoiceId: str = ""
+
+
+class ContactUpdateRequest(BaseModel):
+    records: List[CustomerContactRecord]
+    dry_run: bool = False
+
+
+class ContactUpdateSummary(BaseModel):
+    total_records: int
+    updated: int
+    not_found: int
+    errors: List[dict]
+    dry_run: bool
+
+
+@router.post("/update-invoicehome-contacts", response_model=ContactUpdateSummary)
+async def update_invoicehome_contacts(
+    request: ContactUpdateRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update CRM customers with contact info scraped from InvoiceHome.
+
+    Matches customers by name (case-insensitive) and updates address,
+    email, and phone fields where they are currently empty.
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superuser required for bulk update",
+        )
+
+    records = request.records
+    dry_run = request.dry_run
+
+    # Build customer name cache
+    result = await db.execute(
+        select(Customer)
+    )
+    all_customers = result.scalars().all()
+
+    # name→Customer lookup (case-insensitive)
+    customer_cache = {}
+    for cust in all_customers:
+        full_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip().lower()
+        customer_cache[full_name] = cust
+        if cust.last_name:
+            last_key = cust.last_name.strip().lower()
+            if last_key not in customer_cache:
+                customer_cache[last_key] = cust
+
+    updated = 0
+    not_found = 0
+    errors = []
+
+    for i, record in enumerate(records):
+        try:
+            name_lower = record.customer.strip().lower()
+            # Also try with trailing ... removed
+            name_clean = name_lower.rstrip(".")
+            cust = customer_cache.get(name_lower) or customer_cache.get(name_clean)
+
+            if not cust:
+                # Try partial match
+                parts = record.customer.strip().split()
+                if len(parts) >= 2:
+                    first_last = f"{parts[0]} {parts[-1]}".lower()
+                    cust = customer_cache.get(first_last)
+
+            if not cust:
+                not_found += 1
+                continue
+
+            if dry_run:
+                updated += 1
+                continue
+
+            changed = False
+
+            # Parse address into components
+            if record.address and not cust.address_line1:
+                addr_parts = record.address.split(", ")
+                if addr_parts:
+                    cust.address_line1 = addr_parts[0]
+                    changed = True
+                if len(addr_parts) >= 2:
+                    # Try to parse "City, ST ZIP" or "City,ST ZIP"
+                    remaining = ", ".join(addr_parts[1:])
+                    import re
+                    csz = re.match(
+                        r"([^,]+?),?\s*([A-Z]{2})\s*(\d{5})?",
+                        remaining
+                    )
+                    if csz:
+                        cust.city = csz.group(1).strip()
+                        cust.state = csz.group(2).strip()
+                        if csz.group(3):
+                            cust.postal_code = csz.group(3).strip()
+
+            # Update email if empty
+            if record.email and not cust.email:
+                cust.email = record.email
+                changed = True
+
+            # Update phone if empty
+            if record.phone and not cust.phone:
+                cust.phone = record.phone
+                changed = True
+
+            if changed:
+                updated += 1
+
+        except Exception as e:
+            errors.append({
+                "customer": record.customer,
+                "error": str(e),
+            })
+
+    if not dry_run and updated > 0:
+        await db.commit()
+
+    logger.info(
+        f"InvoiceHome contact update: {updated} updated, "
+        f"{not_found} not found, {len(errors)} errors"
+    )
+
+    return ContactUpdateSummary(
+        total_records=len(records),
+        updated=updated,
+        not_found=not_found,
+        errors=errors[:50],
+        dry_run=dry_run,
+    )
