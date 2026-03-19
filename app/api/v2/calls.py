@@ -14,6 +14,8 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta, date
 import logging
+import httpx
+import json
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.call_log import CallLog
@@ -536,3 +538,123 @@ async def set_call_disposition(
     except Exception as e:
         logger.error(f"Error setting disposition for call {call_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── AI Call Summary + Auto-Disposition ───────────────────────────────
+
+
+class SummarizeTranscriptRequest(BaseModel):
+    transcript: str = Field(..., min_length=5)
+    customer_name: Optional[str] = None
+    direction: str = "inbound"
+
+
+class SummarizeTranscriptResponse(BaseModel):
+    summary: str
+    disposition: str
+    confidence: float
+    action_items: List[str]
+
+
+DISPOSITIONS_LIST = [
+    "answered", "voicemail", "no_answer", "busy",
+    "callback_requested", "appointment_set", "quote_given",
+    "service_inquiry", "billing_question", "complaint",
+    "not_interested", "wrong_number", "spam",
+]
+
+
+@router.post("/summarize-transcript", response_model=SummarizeTranscriptResponse)
+async def summarize_transcript(
+    request: SummarizeTranscriptRequest,
+    current_user: CurrentUser,
+):
+    """Summarize a call transcript and auto-detect disposition using AI.
+
+    Uses Anthropic Claude API (fast, accurate). Falls back to a rule-based
+    approach if the API key is not configured.
+    """
+    from app.config import settings
+
+    transcript = request.transcript.strip()
+    customer = request.customer_name or "the caller"
+
+    prompt = f"""Analyze this customer service call transcript for a septic/plumbing company.
+
+Caller: {customer} ({request.direction} call)
+Transcript:
+\"\"\"{transcript}\"\"\"
+
+Respond in JSON only:
+{{
+  "summary": "2-3 sentence summary of what the caller needed and what was discussed",
+  "disposition": "one of: {', '.join(DISPOSITIONS_LIST)}",
+  "confidence": 0.0-1.0,
+  "action_items": ["list of follow-up actions needed, if any"]
+}}"""
+
+    # Try Anthropic API
+    api_key = settings.ANTHROPIC_API_KEY
+    if api_key:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": "claude-haiku-4-5-20251001",
+                        "max_tokens": 300,
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                )
+                if resp.status_code == 200:
+                    content = resp.json()["content"][0]["text"]
+                    # Parse JSON from response
+                    content = content.strip()
+                    if content.startswith("```"):
+                        content = content.split("\n", 1)[1].rsplit("```", 1)[0]
+                    parsed = json.loads(content)
+                    return SummarizeTranscriptResponse(
+                        summary=parsed.get("summary", "Call summary unavailable"),
+                        disposition=parsed.get("disposition", "answered") if parsed.get("disposition") in DISPOSITIONS_LIST else "answered",
+                        confidence=min(max(float(parsed.get("confidence", 0.7)), 0), 1),
+                        action_items=parsed.get("action_items", []),
+                    )
+                else:
+                    logger.warning(f"Anthropic API returned {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            logger.error(f"Anthropic API error: {e}")
+
+    # Fallback: simple keyword-based summary + disposition
+    transcript_lower = transcript.lower()
+
+    # Detect disposition from keywords
+    disposition = "answered"
+    if any(w in transcript_lower for w in ["schedule", "appointment", "come out", "set up", "book"]):
+        disposition = "appointment_set"
+    elif any(w in transcript_lower for w in ["how much", "price", "cost", "quote", "estimate"]):
+        disposition = "quote_given"
+    elif any(w in transcript_lower for w in ["call back", "callback", "call me back", "try again"]):
+        disposition = "callback_requested"
+    elif any(w in transcript_lower for w in ["bill", "invoice", "payment", "charge"]):
+        disposition = "billing_question"
+    elif any(w in transcript_lower for w in ["pump", "inspect", "repair", "service", "tank", "septic"]):
+        disposition = "service_inquiry"
+    elif any(w in transcript_lower for w in ["complaint", "problem", "issue", "unhappy", "frustrated"]):
+        disposition = "complaint"
+
+    # Simple summary
+    words = transcript.split()
+    summary = " ".join(words[:40]) + ("..." if len(words) > 40 else "")
+    summary = f"{customer} called regarding: {summary}"
+
+    return SummarizeTranscriptResponse(
+        summary=summary,
+        disposition=disposition,
+        confidence=0.5,
+        action_items=[],
+    )
