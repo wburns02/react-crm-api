@@ -2590,6 +2590,37 @@ async def get_daily_bid_analysis(
         return {"success": False, "error": str(e), "days": [], "recommendations": []}
 
 
+@router.get("/customer-geo-stats")
+async def get_customer_geo_stats(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get customer counts by city/state with email availability."""
+    from sqlalchemy import text
+    result = await db.execute(text("""
+        SELECT
+            COALESCE(city, 'Unknown') as city,
+            COALESCE(state, 'Unknown') as state,
+            COUNT(*) as total,
+            COUNT(CASE WHEN email IS NOT NULL AND email != '' AND email LIKE '%%@%%' THEN 1 END) as with_email
+        FROM customers
+        WHERE is_archived = false
+        GROUP BY city, state
+        HAVING COUNT(*) >= 2
+        ORDER BY total DESC
+        LIMIT 50
+    """))
+    rows = result.fetchall()
+    return {
+        "success": True,
+        "segments": [
+            {"city": r[0], "state": r[1], "total": r[2], "with_email": r[3]}
+            for r in rows
+        ],
+        "total_rows": len(rows),
+    }
+
+
 @router.get("/ads/final-urls")
 async def get_ad_final_urls(current_user: CurrentUser) -> dict:
     """Get final URLs for all enabled ads to audit landing page targets."""
