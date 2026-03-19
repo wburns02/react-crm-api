@@ -39,6 +39,7 @@ from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
 from app.tasks.reminder_scheduler import start_reminder_scheduler, stop_reminder_scheduler
 from app.tasks.calendar_sync import start_calendar_sync, stop_calendar_sync
 from app.tasks.email_poller import start_email_poller, stop_email_poller
+from app.tasks.campaign_scheduler import start_campaign_scheduler, stop_campaign_scheduler
 from app.tasks.bookings_sync import start_bookings_sync, stop_bookings_sync
 # followup_scheduler and auto_dispatch don't have start/stop functions yet
 # from app.tasks.followup_scheduler import start_followup_scheduler, stop_followup_scheduler
@@ -1314,6 +1315,7 @@ async def lifespan(app: FastAPI):
     # Start MS365 email poller
     try:
         start_email_poller()
+        start_campaign_scheduler()
     except Exception as e:
         logger.warning(f"Failed to start email poller: {e}")
 
@@ -1411,6 +1413,7 @@ async def lifespan(app: FastAPI):
         pass
     stop_calendar_sync()
     stop_email_poller()
+    stop_campaign_scheduler()
     stop_bookings_sync()
     stop_marketing_report_scheduler()
     # stop_followup_scheduler()
