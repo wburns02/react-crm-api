@@ -2621,6 +2621,52 @@ async def get_customer_geo_stats(
     }
 
 
+@router.get("/customer-service-history")
+async def get_customer_service_history(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    cities: str = "",
+) -> dict:
+    """Get last service date for customers in specified cities."""
+    from sqlalchemy import text
+    city_list = [c.strip().lower() for c in cities.split(",") if c.strip()]
+    if not city_list:
+        city_list = ["columbia", "spring hill", "mt pleasant", "mount pleasant",
+                     "chapel hill", "lewisburg", "culleoka", "hampshire"]
+
+    placeholders = ",".join(f"'{c}'" for c in city_list)
+    result = await db.execute(text(f"""
+        SELECT
+            c.id, c.first_name, c.last_name, c.city, c.state, c.email,
+            MAX(wo.scheduled_date) as last_service,
+            MAX(wo.job_type) as last_job_type,
+            COUNT(wo.id) as total_jobs
+        FROM customers c
+        LEFT JOIN work_orders wo ON wo.customer_id = c.id AND wo.status = 'completed'
+        WHERE c.is_archived = false
+            AND LOWER(COALESCE(c.city, '')) IN ({placeholders})
+            AND c.email IS NOT NULL AND c.email != '' AND c.email LIKE '%%@%%'
+        GROUP BY c.id, c.first_name, c.last_name, c.city, c.state, c.email
+        ORDER BY last_service ASC NULLS FIRST
+        LIMIT 200
+    """))
+    rows = result.fetchall()
+    return {
+        "success": True,
+        "customers": [
+            {
+                "name": f"{r[1] or ''} {r[2] or ''}".strip(),
+                "city": r[3], "state": r[4], "email": r[5],
+                "last_service": str(r[6]) if r[6] else None,
+                "last_job_type": r[7],
+                "total_jobs": r[8],
+            }
+            for r in rows
+        ],
+        "total": len(rows),
+    }
+
+
 @router.get("/ads/final-urls")
 async def get_ad_final_urls(current_user: CurrentUser) -> dict:
     """Get final URLs for all enabled ads to audit landing page targets."""
