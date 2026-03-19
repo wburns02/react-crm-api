@@ -355,6 +355,81 @@ async def _get_segment_query(db: AsyncSession, segment_id: str):
             AND ({city_conditions})
         """)
         return [Customer.email.isnot(None), Customer.email != "", sub]
+    elif segment_id == "maury_county":
+        # Maury County, TN area
+        maury_cities = [
+            "Columbia", "Spring Hill", "Mt Pleasant", "Mount Pleasant",
+            "Chapel Hill", "Lewisburg", "Culleoka", "Hampshire",
+            "Santa Fe", "Ethridge", "Thompson Station",
+        ]
+        city_conditions = " OR ".join([f"LOWER(customers.city) = '{c.lower()}'" for c in maury_cities])
+        sub = text(f"""
+            (LOWER(customers.state) LIKE '%%tn%%' OR LOWER(customers.state) LIKE '%%tennessee%%')
+            AND ({city_conditions})
+        """)
+        return [Customer.email.isnot(None), Customer.email != "", sub]
+    elif segment_id == "maury_county_due":
+        # Maury County customers last serviced 10-18 months ago
+        maury_cities = [
+            "Columbia", "Spring Hill", "Mt Pleasant", "Mount Pleasant",
+            "Chapel Hill", "Lewisburg", "Culleoka", "Hampshire",
+        ]
+        city_conditions = " OR ".join([f"LOWER(customers.city) = '{c.lower()}'" for c in maury_cities])
+        ten_months_ago = now - timedelta(days=300)
+        eighteen_months_ago = now - timedelta(days=540)
+        sub = text(f"""
+            (LOWER(customers.state) LIKE '%%tn%%' OR LOWER(customers.state) LIKE '%%tennessee%%')
+            AND ({city_conditions})
+            AND EXISTS (
+                SELECT 1 FROM work_orders wo
+                WHERE wo.customer_id = customers.id
+                AND wo.status = 'completed'
+                AND wo.scheduled_date BETWEEN :start AND :end
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM work_orders wo2
+                WHERE wo2.customer_id = customers.id
+                AND wo2.status = 'completed'
+                AND wo2.scheduled_date > :end
+            )
+        """).bindparams(start=eighteen_months_ago, end=ten_months_ago)
+        return [Customer.email.isnot(None), Customer.email != "", sub]
+    elif segment_id == "maury_county_recent":
+        # Maury County customers serviced in last 10 months
+        maury_cities = [
+            "Columbia", "Spring Hill", "Mt Pleasant", "Mount Pleasant",
+            "Chapel Hill", "Lewisburg", "Culleoka", "Hampshire",
+        ]
+        city_conditions = " OR ".join([f"LOWER(customers.city) = '{c.lower()}'" for c in maury_cities])
+        ten_months_ago = now - timedelta(days=300)
+        sub = text(f"""
+            (LOWER(customers.state) LIKE '%%tn%%' OR LOWER(customers.state) LIKE '%%tennessee%%')
+            AND ({city_conditions})
+            AND EXISTS (
+                SELECT 1 FROM work_orders wo
+                WHERE wo.customer_id = customers.id
+                AND wo.status = 'completed'
+                AND wo.scheduled_date >= :cutoff
+            )
+        """).bindparams(cutoff=ten_months_ago)
+        return [Customer.email.isnot(None), Customer.email != "", sub]
+    elif segment_id == "maury_county_never":
+        # Maury County customers never serviced (leads)
+        maury_cities = [
+            "Columbia", "Spring Hill", "Mt Pleasant", "Mount Pleasant",
+            "Chapel Hill", "Lewisburg", "Culleoka", "Hampshire",
+        ]
+        city_conditions = " OR ".join([f"LOWER(customers.city) = '{c.lower()}'" for c in maury_cities])
+        sub = text(f"""
+            (LOWER(customers.state) LIKE '%%tn%%' OR LOWER(customers.state) LIKE '%%tennessee%%')
+            AND ({city_conditions})
+            AND NOT EXISTS (
+                SELECT 1 FROM work_orders wo
+                WHERE wo.customer_id = customers.id
+                AND wo.status = 'completed'
+            )
+        """)
+        return [Customer.email.isnot(None), Customer.email != "", sub]
     elif segment_id == "greenville_tn":
         # Greenville, Tennessee area
         gtn_cities = [
