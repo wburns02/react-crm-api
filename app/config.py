@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # Email (Brevo - formerly Sendinblue)
     BREVO_API_KEY: str | None = None
     SENDGRID_API_KEY: str | None = None  # Legacy - use BREVO_API_KEY instead
-    EMAIL_FROM_ADDRESS: str = "noreply@macseptic.com"
+    EMAIL_FROM_ADDRESS: str = "will@macseptic.com"
     EMAIL_FROM_NAME: str = "MAC Septic"
 
     # RingCentral
