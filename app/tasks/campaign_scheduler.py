@@ -26,16 +26,32 @@ _scheduler: AsyncIOScheduler | None = None
 async def process_scheduled_campaigns():
     """Find and send campaigns that are due."""
     async with async_session_maker() as db:
-        now = datetime.utcnow()
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        # Also try naive UTC for databases that store without timezone
+        now_naive = datetime.utcnow()
         result = await db.execute(
             select(MarketingCampaign).where(
                 and_(
                     MarketingCampaign.status.in_(["draft", "scheduled"]),
                     MarketingCampaign.scheduled_at.isnot(None),
-                    MarketingCampaign.scheduled_at <= now,
                 )
             )
         )
+        # Filter in Python to handle both tz-aware and tz-naive comparisons
+        all_scheduled = result.scalars().all()
+        campaigns = []
+        for c in all_scheduled:
+            sched = c.scheduled_at
+            if sched is None:
+                continue
+            # Make comparison work regardless of timezone info
+            if sched.tzinfo:
+                if sched <= now:
+                    campaigns.append(c)
+            else:
+                if sched <= now_naive:
+                    campaigns.append(c)
         campaigns = result.scalars().all()
 
         if not campaigns:
