@@ -598,15 +598,49 @@ class AIGateway:
                     "language": data.get("language", language),
                     "duration": data.get("duration"),
                 }
-        except httpx.ConnectError as e:
-            logger.warning(f"Whisper server unavailable: {e}")
-            return {"text": "", "error": "connection_failed"}
+        except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+            logger.warning(f"Whisper server unavailable: {e} — falling back to Google STT")
+            return await self._google_stt_fallback(audio_data, language)
         except httpx.HTTPStatusError as e:
-            logger.error(f"Whisper API error: {e.response.status_code} - {e.response.text}")
-            return {"text": "", "error": f"http_{e.response.status_code}"}
+            logger.error(f"Whisper API error: {e.response.status_code} — falling back to Google STT")
+            return await self._google_stt_fallback(audio_data, language)
         except Exception as e:
-            logger.error(f"Transcription error: {e}")
-            return {"text": "", "error": str(e)}
+            logger.error(f"Transcription error: {e} — falling back to Google STT")
+            return await self._google_stt_fallback(audio_data, language)
+
+    async def _google_stt_fallback(
+        self, audio_data: bytes, language: str = "en"
+    ) -> Dict[str, Any]:
+        """Fallback to Google Speech-to-Text when Whisper is unavailable."""
+        try:
+            from app.services.google_stt_service import get_google_stt_service
+            stt = get_google_stt_service()
+            if not stt or not stt.is_configured():
+                logger.warning("Google STT not configured — no transcription fallback")
+                return {"text": "", "error": "no_stt_fallback"}
+
+            import base64
+            audio_b64 = base64.b64encode(audio_data).decode()
+            lang_code = language + "-US" if len(language) == 2 else language
+
+            result = await stt.transcribe(
+                audio_content=audio_b64,
+                encoding="MP3",
+                sample_rate_hertz=16000,
+                language_code=lang_code,
+            )
+
+            text = result.get("transcript", result.get("text", ""))
+            if text:
+                logger.info(f"Google STT fallback succeeded: {len(text)} chars")
+            else:
+                logger.warning("Google STT returned empty transcript")
+
+            return {"text": text, "language": language, "source": "google_stt"}
+
+        except Exception as e:
+            logger.error(f"Google STT fallback failed: {e}")
+            return {"text": "", "error": f"stt_fallback_failed: {e}"}
 
     async def summarize_text(
         self,
