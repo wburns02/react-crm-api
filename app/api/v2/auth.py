@@ -102,7 +102,7 @@ async def login(
 
         # No MFA - create access token directly
         logger.info("Creating access token...")
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token_expires = timedelta(minutes=480)
         access_token = create_access_token(
             data={"sub": str(user.id), "email": user.email},
             expires_delta=access_token_expires,
@@ -116,14 +116,14 @@ async def login(
             httponly=True,
             secure=True,
             samesite="none",
-            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            max_age=480 * 60,
             path="/",
         )
 
         # Set refresh cookie (longer-lived, HTTP-only)
         refresh_token = create_access_token(
             data={"sub": str(user.id), "email": user.email, "type": "refresh"},
-            expires_delta=timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES),
+            expires_delta=timedelta(minutes=10080),
         )
         response.set_cookie(
             key="refresh",
@@ -131,7 +131,7 @@ async def login(
             httponly=True,
             secure=True,
             samesite="none",
-            max_age=settings.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
+            max_age=10080 * 60,
             path="/api/v2/auth/refresh",
         )
 
@@ -242,7 +242,7 @@ async def refresh_token(request: Request, response: Response, db: DbSession):
         # Issue new access token
         access_token = create_access_token(
             data={"sub": str(user.id), "email": user.email},
-            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+            expires_delta=timedelta(minutes=480),
         )
         response.set_cookie(
             key="session",
@@ -250,7 +250,7 @@ async def refresh_token(request: Request, response: Response, db: DbSession):
             httponly=True,
             secure=True,
             samesite="none",
-            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            max_age=480 * 60,
             path="/",
         )
         return Token(access_token=access_token, token=access_token, token_type="bearer")
@@ -359,7 +359,7 @@ async def login_mfa(
     user = result.scalar_one()
 
     # Create access token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=480)
     access_token = create_access_token(
         data={"sub": str(user.id), "email": user.email},
         expires_delta=access_token_expires,
@@ -372,7 +372,7 @@ async def login_mfa(
         httponly=True,
         secure=True,
         samesite="none",
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        max_age=480 * 60,
         path="/",
     )
 
