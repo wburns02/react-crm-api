@@ -483,3 +483,15 @@ async def disable_mfa(
 
     logger.info(f"MFA disabled for user {current_user.id}")
     return {"message": "MFA disabled successfully", "mfa_enabled": False}
+
+
+@router.get("/session-config")
+async def session_config():
+    """Debug: show current session timeout values."""
+    return {
+        "access_token_minutes": 480,
+        "refresh_token_minutes": 10080,
+        "access_cookie_max_age_seconds": 480 * 60,
+        "refresh_cookie_max_age_seconds": 10080 * 60,
+        "deploy_marker": "2026-03-26-hardcoded",
+    }
