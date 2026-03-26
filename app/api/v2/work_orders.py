@@ -1414,7 +1414,7 @@ async def update_work_order(
                             from app.services.sms_service import sms_service as sms_svc
                             pay_url = f"https://react.ecbtx.com/portal/pay/{inv.id}"
                             sms_msg = (
-                                f"Hi {customer.first_name or "there"}, your invoice "
+                                f"Hi {customer.first_name or 'there'}, your invoice "
                                 f"#{inv.invoice_number} for ${float(total):.2f} is ready. "
                                 f"Pay online: {pay_url}"
                             )
