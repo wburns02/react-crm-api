@@ -355,6 +355,10 @@ async def _get_segment_query(db: AsyncSession, segment_id: str):
             AND ({city_conditions})
         """)
         return [Customer.email.isnot(None), Customer.email != "", sub]
+    elif segment_id == "permit_owners":
+        # All customers imported from septic permit data
+        return [Customer.email.isnot(None), Customer.email != "",
+                Customer.lead_source == "permit_data"]
     elif segment_id == "maury_county":
         # Maury County, TN area
         maury_cities = [
