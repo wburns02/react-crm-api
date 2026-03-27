@@ -998,14 +998,18 @@ async def get_user_calls(
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    customer_id: Optional[str] = None,
+    direction: Optional[str] = None,
 ):
-    """Get calls for the current user's extension.
+    """Get calls, optionally filtered by customer_id."""
+    query = select(CallLog)
 
-    This is a stub endpoint for the Phone page that filters calls by user.
-    In a full implementation, this would filter by the user's RingCentral extension.
-    """
-    # Returns all calls — per-user filtering requires user.phone_extension column
-    query = select(CallLog).order_by(CallLog.created_at.desc())
+    if customer_id:
+        query = query.where(CallLog.customer_id == customer_id)
+    if direction:
+        query = query.where(CallLog.direction == direction)
+
+    query = query.order_by(CallLog.created_at.desc())
 
     # Count
     count_query = select(func.count()).select_from(query.subquery())
