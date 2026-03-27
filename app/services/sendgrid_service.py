@@ -115,3 +115,12 @@ async def get_stats(days: int = 7) -> dict:
         except Exception as e:
             logger.warning(f"SendGrid get_stats failed: {e}")
             return {"configured": True, "error": str(e)}
+
+
+# Module-level namespace so callers can do `from ... import sendgrid_service`
+import types as _types
+sendgrid_service = _types.SimpleNamespace(
+    is_configured=is_configured,
+    send_email=send_email,
+    get_stats=get_stats,
+)
