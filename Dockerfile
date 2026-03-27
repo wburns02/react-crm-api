@@ -1,5 +1,5 @@
 FROM python:3.12-slim
-# Build: v2.9.2 - Force Railway rebuild - 2026-02-02T17:25:00
+# Build: v3.2.0 - Nashville JWT + session fix - 2026-03-27
 
 WORKDIR /app
 
