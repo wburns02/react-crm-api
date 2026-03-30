@@ -68,14 +68,20 @@ class GoogleSTTStreamer:
         self,
         on_transcript: Callable[[str, bool], Awaitable[None]],
         language_code: Optional[str] = None,
+        encoding: str = "MULAW",
+        sample_rate: int = 8000,
     ):
         """
         Args:
             on_transcript: async callback(text, is_final) invoked for each result.
             language_code: BCP-47 language code, defaults to config value.
+            encoding: "MULAW" for Twilio or "LINEAR16" for browser WebRTC audio.
+            sample_rate: Sample rate in Hz (8000 for Twilio, 16000 for WebRTC).
         """
         self._on_transcript = on_transcript
         self._language_code = language_code or settings.GOOGLE_STT_LANGUAGE_CODE
+        self._encoding = encoding
+        self._sample_rate = sample_rate
         self._audio_queue: asyncio.Queue[Optional[bytes]] = asyncio.Queue()
         self._task: Optional[asyncio.Task] = None
         self._running = False
@@ -118,12 +124,24 @@ class GoogleSTTStreamer:
             try:
                 client = speech.SpeechAsyncClient(credentials=credentials)
 
+                # Map encoding string to enum
+                enc_map = {
+                    "MULAW": speech.RecognitionConfig.AudioEncoding.MULAW,
+                    "LINEAR16": speech.RecognitionConfig.AudioEncoding.LINEAR16,
+                }
+                audio_encoding = enc_map.get(
+                    self._encoding,
+                    speech.RecognitionConfig.AudioEncoding.MULAW,
+                )
+                # Use "telephony" model for phone audio, "default" for browser
+                model = "telephony" if self._encoding == "MULAW" else "latest_long"
+
                 config = speech.RecognitionConfig(
-                    encoding=speech.RecognitionConfig.AudioEncoding.MULAW,
-                    sample_rate_hertz=8000,
+                    encoding=audio_encoding,
+                    sample_rate_hertz=self._sample_rate,
                     language_code=self._language_code,
                     enable_automatic_punctuation=True,
-                    model="telephony",
+                    model=model,
                 )
                 streaming_config = speech.StreamingRecognitionConfig(
                     config=config,

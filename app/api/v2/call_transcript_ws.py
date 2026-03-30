@@ -1,9 +1,10 @@
 """
 WebSocket endpoints for real-time call transcription.
 
-Two WebSocket paths (mounted at app root, NOT under /api/v2):
-1. /ws/call-transcript/{call_sid}  -- Frontend connects here to receive transcripts
-2. /ws/twilio-media/{call_sid}     -- Twilio Media Streams sends audio here
+Three WebSocket paths (mounted at app root, NOT under /api/v2):
+1. /ws/call-transcript/{call_sid}     -- Frontend connects here to receive transcripts
+2. /ws/twilio-media/{call_sid}        -- Twilio Media Streams sends audio here
+3. /ws/ringcentral-audio/{call_id}    -- Frontend sends RingCentral WebRTC audio here
 """
 
 import base64
@@ -126,3 +127,62 @@ async def ws_twilio_media(websocket: WebSocket, call_sid: str):
         if streamer:
             await streamer.stop()
         logger.info(f"Twilio media stream cleanup complete for call {call_sid}")
+
+
+# --------------------------------------------------------------------------
+# 3. RingCentral Audio WebSocket -- receives PCM audio from browser WebRTC
+# --------------------------------------------------------------------------
+
+@router.websocket("/ws/ringcentral-audio/{call_id}")
+async def ws_ringcentral_audio(websocket: WebSocket, call_id: str):
+    """
+    Receives raw Linear16 PCM audio (16kHz, mono) from the browser.
+    The frontend captures RingCentral WebRTC remote audio via AudioContext
+    and sends Int16 PCM binary frames here.
+
+    Transcription results are broadcast to /ws/call-transcript/{call_id}.
+    """
+    await websocket.accept()
+    logger.info(f"RingCentral audio stream connected for call {call_id}")
+
+    streamer = None
+
+    try:
+        if google_stt_service.is_available():
+            async def on_transcript(text: str, is_final: bool):
+                await transcript_manager.broadcast_transcript(
+                    call_sid=call_id,
+                    text=text,
+                    is_final=is_final,
+                    speaker="customer",
+                )
+
+            streamer = GoogleSTTStreamer(
+                on_transcript=on_transcript,
+                encoding="LINEAR16",
+                sample_rate=16000,
+            )
+            await streamer.start()
+            logger.info(f"Google STT (LINEAR16/16kHz) started for RC call {call_id}")
+        else:
+            logger.warning(
+                f"Google STT not available for RC call {call_id}. "
+                f"Installed={google_stt_service.GOOGLE_SPEECH_AVAILABLE}, "
+                f"Enabled={google_stt_service.settings.GOOGLE_STT_ENABLED}, "
+                f"Creds={'set' if google_stt_service.settings.GOOGLE_STT_CREDENTIALS_JSON else 'missing'}"
+            )
+
+        while True:
+            # Receive binary PCM audio frames
+            audio_bytes = await websocket.receive_bytes()
+            if streamer and audio_bytes:
+                streamer.feed_audio(audio_bytes)
+
+    except WebSocketDisconnect:
+        logger.info(f"RingCentral audio stream disconnected for call {call_id}")
+    except Exception as e:
+        logger.error(f"RingCentral audio stream error for call {call_id}: {e}")
+    finally:
+        if streamer:
+            await streamer.stop()
+        logger.info(f"RingCentral audio stream cleanup complete for call {call_id}")
