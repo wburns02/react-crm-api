@@ -140,6 +140,14 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
 
+    # Outbound AI Agent
+    DEEPGRAM_API_KEY: str | None = None
+    ELEVENLABS_API_KEY: str | None = None
+    ELEVENLABS_VOICE_ID: str = "JBFqnCBsd6RMkjVDRZzb"  # George - warm male
+    OUTBOUND_AGENT_ENABLED: bool = False
+    OUTBOUND_AGENT_FROM_NUMBER: str | None = None  # Twilio number to call from
+    OUTBOUND_AGENT_TRANSFER_NUMBER: str = "+16153452544"  # MAC Septic office
+
     # Local AI Server (for vLLM on RTX 5090)
     AI_SERVER_URL: str = "http://localhost:8000"
     AI_SERVER_API_KEY: str | None = None
