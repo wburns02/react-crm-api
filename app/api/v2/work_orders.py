@@ -1408,46 +1408,51 @@ async def update_work_order(
                     db.add(inv)
                     await db.commit()
                     logger.info(f"Auto-generated invoice {inv.invoice_number} for WO {work_order_id} (via PATCH)")
-                    # Send "Pay Now" SMS with customer portal link
-                    try:
-                        if customer and customer.phone:
-                            from app.services.sms_service import sms_service as sms_svc
-                            pay_url = f"https://react.ecbtx.com/portal/pay/{inv.id}"
-                            sms_msg = (
-                                f"Hi {customer.first_name or 'there'}, your invoice "
-                                f"#{inv.invoice_number} for ${float(total):.2f} is ready. "
-                                f"Pay online: {pay_url}"
-                            )
-                            await sms_svc.send_sms(customer.phone, sms_msg)
-                            logger.info(f"Sent Pay Now SMS to {customer.phone} for invoice {inv.invoice_number}")
-                    except Exception as sms_err:
-                        logger.warning(f"Pay Now SMS failed for invoice {inv.invoice_number}: {sms_err}")
+                    # Send "Pay Now" SMS with customer portal link — PAUSED 2026-04-03
+                    # Re-enable when ready for real-time invoice notifications
+                    # try:
+                    #     if customer and customer.phone:
+                    #         from app.services.sms_service import sms_service as sms_svc
+                    #         pay_url = f"https://react.ecbtx.com/portal/pay/{inv.id}"
+                    #         sms_msg = (
+                    #             f"Hi {customer.first_name or 'there'}, your invoice "
+                    #             f"#{inv.invoice_number} for ${float(total):.2f} is ready. "
+                    #             f"Pay online: {pay_url}"
+                    #         )
+                    #         await sms_svc.send_sms(customer.phone, sms_msg)
+                    #         logger.info(f"Sent Pay Now SMS to {customer.phone} for invoice {inv.invoice_number}")
+                    # except Exception as sms_err:
+                    #     logger.warning(f"Pay Now SMS failed for invoice {inv.invoice_number}: {sms_err}")
+                    logger.info(f"Invoice SMS paused — skipping Pay Now SMS for {inv.invoice_number}")
         except Exception as e:
             await db.rollback()
             logger.warning(f"Auto-invoice generation failed for WO {work_order_id}: {e}")
 
-    # Auto-notify customer via SMS when job is marked completed
+    # Auto-notify customer via SMS when job is marked completed — PAUSED 2026-04-03
+    # Re-enable when ready for real-time completion notifications
     notification_sent = False
+    # if old_status != new_status and new_status == "completed":
+    #     try:
+    #         from app.services.sms_service import sms_service as sms_svc
+    #         if work_order.customer_id and customer:
+    #             phone = customer.phone
+    #             if phone:
+    #                 addr_parts = [work_order.service_address_line1, work_order.service_city]
+    #                 addr = ", ".join(p for p in addr_parts if p) or "your property"
+    #                 msg = (
+    #                     f"Hi {customer.first_name}! Your septic service at {addr} is complete. "
+    #                     f"Thank you for choosing MAC Septic. Questions? Call (512) 353-0555."
+    #                 )
+    #                 if sms_svc.is_configured:
+    #                     await sms_svc.send_sms(to=phone, body=msg)
+    #                     notification_sent = True
+    #                     logger.info(f"Completion SMS sent to {phone} for WO {work_order_id}")
+    #                 else:
+    #                     logger.info("SMS service not configured — completion SMS skipped")
+    #     except Exception as e:
+    #         logger.warning(f"Completion SMS failed for WO {work_order_id}: {e}")
     if old_status != new_status and new_status == "completed":
-        try:
-            from app.services.sms_service import sms_service as sms_svc
-            if work_order.customer_id and customer:
-                phone = customer.phone
-                if phone:
-                    addr_parts = [work_order.service_address_line1, work_order.service_city]
-                    addr = ", ".join(p for p in addr_parts if p) or "your property"
-                    msg = (
-                        f"Hi {customer.first_name}! Your septic service at {addr} is complete. "
-                        f"Thank you for choosing MAC Septic. Questions? Call (512) 353-0555."
-                    )
-                    if sms_svc.is_configured:
-                        await sms_svc.send_sms(to=phone, body=msg)
-                        notification_sent = True
-                        logger.info(f"Completion SMS sent to {phone} for WO {work_order_id}")
-                    else:
-                        logger.info("SMS service not configured — completion SMS skipped")
-        except Exception as e:
-            logger.warning(f"Completion SMS failed for WO {work_order_id}: {e}")
+        logger.info(f"Completion SMS paused — skipping notification for WO {work_order_id}")
 
     # Auto-email real estate inspection report to Doug on completion
     if old_status != new_status and new_status == "completed":
