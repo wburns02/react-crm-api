@@ -434,11 +434,11 @@ async def _cartesia_tts(text: str) -> Optional[bytes]:
                 "https://api.cartesia.ai/tts/bytes",
                 headers={
                     "X-API-Key": settings.CARTESIA_API_KEY,
-                    "Cartesia-Version": "2024-06-10",
+                    "Cartesia-Version": "2025-04-16",
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model_id": "sonic-2",
+                    "model_id": "sonic-3",
                     "transcript": text,
                     "voice": {"mode": "id", "id": voice_id},
                     "output_format": {
@@ -447,6 +447,7 @@ async def _cartesia_tts(text: str) -> Optional[bytes]:
                         "sample_rate": 8000,
                     },
                     "language": "en",
+                    "speed": "normal",
                 },
             )
 
