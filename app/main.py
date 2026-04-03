@@ -33,7 +33,7 @@ from app.webhooks.ringcentral import ringcentral_webhook_router
 from app.webhooks.brevo import brevo_webhook_router
 from app.api.v2.live_chat import router as live_chat_router
 from app.api.v2.call_transcript_ws import router as call_transcript_ws_router
-from app.api.v2.outbound_agent import router as outbound_agent_router, media_ws_router as outbound_agent_ws_router
+from app.api.v2.outbound_agent import media_ws_router as outbound_agent_ws_router
 from app.config import settings
 from app.database import init_db
 from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
@@ -1516,9 +1516,8 @@ app.include_router(live_chat_router, prefix="/api/v2/chat", tags=["live-chat"])
 # Replaces the older media_stream.py -- uses GoogleSTTStreamer + TranscriptWSManager
 app.include_router(call_transcript_ws_router)
 
-# Outbound AI Agent
-app.include_router(outbound_agent_router, prefix="/api/v2", tags=["outbound-agent"])
-app.include_router(outbound_agent_ws_router)  # WebSocket at root for Twilio media streams
+# Outbound AI Agent WebSocket (mounted at root for Twilio media streams)
+app.include_router(outbound_agent_ws_router)
 
 # Serve static assets (logos, etc.) — no auth required
 from starlette.staticfiles import StaticFiles
