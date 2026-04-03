@@ -142,8 +142,11 @@ class Settings(BaseSettings):
 
     # Outbound AI Agent
     DEEPGRAM_API_KEY: str | None = None
-    ELEVENLABS_API_KEY: str | None = None
-    ELEVENLABS_VOICE_ID: str = "JBFqnCBsd6RMkjVDRZzb"  # George - warm male
+    ELEVENLABS_API_KEY: str | None = None  # Legacy — kept for fallback
+    ELEVENLABS_VOICE_ID: str = "JBFqnCBsd6RMkjVDRZzb"
+    CARTESIA_API_KEY: str | None = None
+    CARTESIA_VOICE_ID: str | None = None  # Custom cloned voice ID
+    TTS_PROVIDER: str = "cartesia"  # "cartesia" or "elevenlabs"
     OUTBOUND_AGENT_ENABLED: bool = False
     OUTBOUND_AGENT_FROM_NUMBER: str | None = None  # Twilio number to call from
     OUTBOUND_AGENT_TRANSFER_NUMBER: str = "+16153452544"  # MAC Septic office

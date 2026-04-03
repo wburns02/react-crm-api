@@ -407,12 +407,63 @@ async def _speech_to_text(audio_bytes: bytes) -> Optional[str]:
         return None
 
 
-# ── TTS (ElevenLabs) ───────────────────────────────────────────────
+# ── TTS (Cartesia Sonic) ───────────────────────────────────────────
 
 async def _text_to_speech(text: str) -> Optional[bytes]:
-    """Convert text to speech using ElevenLabs, returns mu-law audio."""
+    """Convert text to speech using Cartesia Sonic, returns mu-law audio for Twilio."""
+    if settings.TTS_PROVIDER == "cartesia":
+        return await _cartesia_tts(text)
+    elif settings.TTS_PROVIDER == "elevenlabs":
+        return await _elevenlabs_tts(text)
+    else:
+        logger.error(f"Unknown TTS provider: {settings.TTS_PROVIDER}")
+        return None
+
+
+async def _cartesia_tts(text: str) -> Optional[bytes]:
+    """Cartesia Sonic TTS — fast, cheap, great quality."""
+    if not settings.CARTESIA_API_KEY:
+        logger.warning("CARTESIA_API_KEY not set")
+        return None
+
+    voice_id = settings.CARTESIA_VOICE_ID or "a0e99841-438c-4a64-b679-ae501e7d6091"  # Default: Barbershop Man
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://api.cartesia.ai/tts/bytes",
+                headers={
+                    "X-API-Key": settings.CARTESIA_API_KEY,
+                    "Cartesia-Version": "2024-06-10",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model_id": "sonic-2",
+                    "transcript": text,
+                    "voice": {"mode": "id", "id": voice_id},
+                    "output_format": {
+                        "container": "raw",
+                        "encoding": "pcm_mulaw",
+                        "sample_rate": 8000,
+                    },
+                    "language": "en",
+                },
+            )
+
+            if resp.status_code == 200:
+                return resp.content
+            else:
+                logger.error(f"Cartesia error: {resp.status_code} {resp.text[:200]}")
+                return None
+
+    except Exception as e:
+        logger.error(f"Cartesia TTS error: {e}")
+        return None
+
+
+async def _elevenlabs_tts(text: str) -> Optional[bytes]:
+    """ElevenLabs TTS fallback."""
     if not settings.ELEVENLABS_API_KEY:
-        logger.warning("ElevenLabs API key not set")
         return None
 
     try:
@@ -426,7 +477,7 @@ async def _text_to_speech(text: str) -> Optional[bytes]:
                 json={
                     "text": text,
                     "model_id": "eleven_turbo_v2_5",
-                    "output_format": "ulaw_8000",  # mu-law for Twilio
+                    "output_format": "ulaw_8000",
                     "voice_settings": {
                         "stability": 0.5,
                         "similarity_boost": 0.75,
@@ -442,7 +493,7 @@ async def _text_to_speech(text: str) -> Optional[bytes]:
                 return None
 
     except Exception as e:
-        logger.error(f"TTS error: {e}")
+        logger.error(f"ElevenLabs TTS error: {e}")
         return None
 
 
