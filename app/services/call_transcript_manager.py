@@ -84,6 +84,24 @@ class TranscriptWSManager:
                     if not conns:
                         del self._connections[call_sid]
 
+    async def broadcast_event(self, call_sid: str, event_type: str, data: dict) -> None:
+        """Broadcast an arbitrary JSON event to all listeners for a call."""
+        async with self._lock:
+            connections = self._connections.get(call_sid, set()).copy()
+
+        message = json.dumps({"type": event_type, "data": data})
+        disconnected = set()
+        for ws in connections:
+            try:
+                await ws.send_text(message)
+            except Exception:
+                disconnected.add(ws)
+
+        if disconnected:
+            async with self._lock:
+                for ws in disconnected:
+                    self._connections.get(call_sid, set()).discard(ws)
+
     def has_listeners(self, call_sid: str) -> bool:
         return bool(self._connections.get(call_sid))
 

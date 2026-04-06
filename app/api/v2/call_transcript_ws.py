@@ -7,15 +7,22 @@ Three WebSocket paths (mounted at app root, NOT under /api/v2):
 3. /ws/ringcentral-audio/{call_id}    -- Frontend sends RingCentral WebRTC audio here
 """
 
+import asyncio
 import base64
 import json
 import logging
+import re
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from sqlalchemy import select
 
 from app.services.call_transcript_manager import transcript_manager
 from app.services import google_stt_service
 from app.services.google_stt_service import GoogleSTTStreamer
+from app.services.location_extractor import LocationExtractor, haversine_distance, estimate_drive_minutes
+from app.services.market_config import get_market_by_area_code, get_zone
+from app.database import async_session_maker
+from app.models.customer import Customer
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +75,7 @@ async def ws_twilio_media(websocket: WebSocket, call_sid: str):
     logger.info(f"Twilio media stream connected for call {call_sid}")
 
     streamer = None
+    location_extractor: LocationExtractor | None = None
 
     try:
         if google_stt_service.is_available():
@@ -78,6 +86,18 @@ async def ws_twilio_media(websocket: WebSocket, call_sid: str):
                     is_final=is_final,
                     speaker="customer",
                 )
+                # Run location extraction on final transcript chunks
+                if is_final and location_extractor:
+                    try:
+                        location = await asyncio.to_thread(
+                            location_extractor.extract_location_from_text, text
+                        )
+                        if location:
+                            await transcript_manager.broadcast_event(
+                                call_sid, "location_detected", location
+                            )
+                    except Exception as e:
+                        logger.warning("Location extraction failed for call %s: %s", call_sid, e)
 
             streamer = GoogleSTTStreamer(on_transcript=on_transcript)
             await streamer.start()
@@ -108,6 +128,83 @@ async def ws_twilio_media(websocket: WebSocket, call_sid: str):
                     f"Twilio media event=start for call {call_sid}: "
                     f"tracks={start_info.get('tracks', [])}"
                 )
+
+                # Extract caller/called numbers from custom parameters
+                custom_params = start_info.get("customParameters", {})
+                caller_number = custom_params.get("caller_number", "")
+                called_number = custom_params.get("called_number", "")
+                logger.info(
+                    "Twilio media call %s: caller=%s, called=%s",
+                    call_sid, caller_number, called_number,
+                )
+
+                # Determine market from called number area code
+                area_code = ""
+                called_digits = re.sub(r"\D", "", called_number)
+                if len(called_digits) >= 10:
+                    area_code = called_digits[-10:][:3]
+                elif len(called_digits) >= 3:
+                    area_code = called_digits[:3]
+
+                market = get_market_by_area_code(area_code)
+                location_extractor = LocationExtractor(
+                    call_sid=call_sid,
+                    market_slug=market["slug"],
+                )
+                logger.info("Location extractor created for call %s, market=%s", call_sid, market["slug"])
+
+                # Customer phone lookup — broadcast location immediately if customer has lat/lng
+                if caller_number:
+                    try:
+                        async with async_session_maker() as db:
+                            digits_only = re.sub(r"\D", "", caller_number)
+                            if len(digits_only) > 10:
+                                digits_only = digits_only[-10:]
+
+                            result = await db.execute(
+                                select(Customer).where(
+                                    Customer.phone.ilike(f"%{digits_only[-10:]}%"),
+                                    Customer.is_active == True,  # noqa: E712
+                                ).limit(1)
+                            )
+                            customer = result.scalar_one_or_none()
+
+                            if customer and customer.latitude and customer.longitude:
+                                lat = float(customer.latitude)
+                                lng = float(customer.longitude)
+                                zone = get_zone(lat, lng, market["slug"])
+                                center = market["center"]
+                                dist = haversine_distance(center["lat"], center["lng"], lat, lng)
+                                drive_min = estimate_drive_minutes(dist)
+
+                                addr_parts = [
+                                    customer.address_line1 or "",
+                                    customer.city or "",
+                                    customer.state or "",
+                                ]
+                                address_text = ", ".join(p for p in addr_parts if p)
+
+                                location_data = {
+                                    "lat": lat,
+                                    "lng": lng,
+                                    "source": "customer_record",
+                                    "address_text": address_text,
+                                    "zone": zone,
+                                    "drive_minutes": drive_min,
+                                    "customer_id": str(customer.id),
+                                    "confidence": 0.95,
+                                    "transcript_excerpt": "",
+                                }
+                                location_extractor.last_location = location_data
+                                await transcript_manager.broadcast_event(
+                                    call_sid, "location_detected", location_data
+                                )
+                                logger.info(
+                                    "Customer location broadcast for call %s: %s",
+                                    call_sid, address_text,
+                                )
+                    except Exception as e:
+                        logger.warning("Customer lookup failed for call %s: %s", call_sid, e)
 
             elif event == "media":
                 payload = msg.get("media", {}).get("payload", "")
@@ -147,6 +244,14 @@ async def ws_ringcentral_audio(websocket: WebSocket, call_id: str):
 
     streamer = None
 
+    # RingCentral WS doesn't carry caller/called numbers, so use default market.
+    # Location extraction still works for transcript-detected city/address mentions.
+    from app.services.market_config import DEFAULT_MARKET_SLUG
+    rc_location_extractor = LocationExtractor(
+        call_sid=call_id,
+        market_slug=DEFAULT_MARKET_SLUG,
+    )
+
     try:
         if google_stt_service.is_available():
             async def on_transcript(text: str, is_final: bool):
@@ -156,6 +261,18 @@ async def ws_ringcentral_audio(websocket: WebSocket, call_id: str):
                     is_final=is_final,
                     speaker="customer",
                 )
+                # Run location extraction on final transcript chunks
+                if is_final and rc_location_extractor:
+                    try:
+                        location = await asyncio.to_thread(
+                            rc_location_extractor.extract_location_from_text, text
+                        )
+                        if location:
+                            await transcript_manager.broadcast_event(
+                                call_id, "location_detected", location
+                            )
+                    except Exception as e:
+                        logger.warning("Location extraction failed for RC call %s: %s", call_id, e)
 
             streamer = GoogleSTTStreamer(
                 on_transcript=on_transcript,
