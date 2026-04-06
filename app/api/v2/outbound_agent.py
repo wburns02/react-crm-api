@@ -15,6 +15,7 @@ import json
 import logging
 import struct
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request, Response, Depends
 from fastapi.responses import PlainTextResponse
