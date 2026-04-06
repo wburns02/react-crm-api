@@ -104,6 +104,11 @@ class CallAnalyticsResponse(BaseModel):
 
 def call_to_response(call: CallLog) -> dict:
     """Convert CallLog model to response dict."""
+    customer_name = None
+    if call.customer:
+        first = getattr(call.customer, "first_name", "") or ""
+        last = getattr(call.customer, "last_name", "") or ""
+        customer_name = f"{first} {last}".strip() or None
     return {
         "id": str(call.id),
         "ringcentral_call_id": call.ringcentral_call_id,
@@ -119,7 +124,13 @@ def call_to_response(call: CallLog) -> dict:
         "recording_url": call.recording_url,
         "notes": call.notes,
         "customer_id": str(call.customer_id) if call.customer_id else None,
+        "customer_name": customer_name,
         "answered_by": call.answered_by,
+        "transcription": call.transcription,
+        "ai_summary": call.ai_summary,
+        "sentiment": call.sentiment,
+        "sentiment_score": call.sentiment_score,
+        "quality_score": call.quality_score,
         "created_at": call.created_at,
     }
 
@@ -132,7 +143,7 @@ async def list_calls(
     db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     direction: Optional[str] = Query(None, description="Filter by direction: inbound, outbound"),
     disposition: Optional[str] = Query(None, description="Filter by disposition"),
     customer_id: Optional[str] = Query(None, description="Filter by customer"),
