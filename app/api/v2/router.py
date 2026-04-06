@@ -418,3 +418,11 @@ api_router.include_router(customer_timeline_router, prefix="/customers", tags=["
 # Revenue Forecast
 from app.api.v2.revenue_forecast import router as revenue_forecast_router
 api_router.include_router(revenue_forecast_router, prefix="/revenue", tags=["revenue-forecast"])
+
+# Service Markets (read-only market config + zone-check)
+from app.api.v2.service_markets import router as service_markets_router
+api_router.include_router(service_markets_router)
+
+# Nearby Jobs (work orders near a lat/lng for the current week)
+from app.api.v2.nearby_jobs import router as nearby_jobs_router
+api_router.include_router(nearby_jobs_router)
