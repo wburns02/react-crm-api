@@ -276,6 +276,136 @@ async def get_call_analytics(
         }
 
 
+@router.get("/library")
+async def call_library(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Call Library — pre-categorized recordings for training.
+
+    Categories:
+    - wins: connected calls where a work order or quote was created for
+      the same customer within 48 hours after the call
+    - pitches: longest connected calls (>2 min), sorted by quality_score
+      if available, else by duration
+    - losses: connected calls with no follow-up work order/quote, plus
+      voicemail/missed/no answer calls
+    - all: every call with a recording over 30 seconds
+    """
+    from app.models.work_order import WorkOrder
+    from app.models.quote import Quote
+
+    try:
+        # Get all calls with recordings > 30s
+        result = await db.execute(
+            select(CallLog)
+            .options(selectinload(CallLog.customer))
+            .where(
+                CallLog.recording_url.isnot(None),
+                CallLog.duration_seconds > 30,
+            )
+            .order_by(CallLog.call_date.desc())
+            .limit(500)
+        )
+        calls = result.scalars().all()
+
+        if not calls:
+            return {"wins": [], "pitches": [], "losses": [], "all": []}
+
+        # Gather customer IDs and date range for batch lookup
+        customer_ids = {c.customer_id for c in calls if c.customer_id}
+        if not customer_ids:
+            # No customer-linked calls — can't match work orders
+            all_items = [call_to_response(c) for c in calls]
+            connected = [c for c in all_items
+                         if (c["call_disposition"] or "").lower() in ("call connected", "accepted")]
+            not_connected = [c for c in all_items
+                            if (c["call_disposition"] or "").lower() in
+                            ("voicemail", "no answer", "missed", "busy", "rejected")]
+            return {
+                "wins": [],
+                "pitches": sorted(connected, key=lambda x: x["duration_seconds"] or 0, reverse=True)[:50],
+                "losses": not_connected,
+                "all": all_items,
+            }
+
+        # Find work orders created within 48h of any call for these customers
+        min_date = min(c.call_date for c in calls if c.call_date)
+        wo_result = await db.execute(
+            select(WorkOrder.customer_id, WorkOrder.created_at)
+            .where(
+                WorkOrder.customer_id.in_(customer_ids),
+                WorkOrder.created_at >= datetime.combine(min_date, datetime.min.time()),
+            )
+        )
+        wo_rows = wo_result.all()
+
+        # Find quotes created within 48h of any call
+        q_result = await db.execute(
+            select(Quote.customer_id, Quote.created_at)
+            .where(
+                Quote.customer_id.in_(customer_ids),
+                Quote.created_at >= datetime.combine(min_date, datetime.min.time()),
+            )
+        )
+        q_rows = q_result.all()
+
+        # Build lookup: customer_id -> list of creation timestamps
+        from collections import defaultdict
+        followups: dict[str, list[datetime]] = defaultdict(list)
+        for cid, created in wo_rows:
+            followups[str(cid)].append(created)
+        for cid, created in q_rows:
+            followups[str(cid)].append(created)
+
+        # Categorize each call
+        wins = []
+        pitches = []
+        losses = []
+        all_items = []
+
+        for call in calls:
+            item = call_to_response(call)
+            all_items.append(item)
+
+            disp = (call.call_disposition or "").lower()
+            is_connected = disp in ("call connected", "accepted")
+            is_missed = disp in ("voicemail", "no answer", "missed", "busy", "rejected")
+
+            # Check if a work order/quote was created within 48h after this call
+            has_followup = False
+            if call.customer_id and call.call_date:
+                call_dt = datetime.combine(call.call_date, call.call_time or datetime.min.time())
+                for ts in followups.get(str(call.customer_id), []):
+                    # Make ts offset-naive for comparison
+                    ts_naive = ts.replace(tzinfo=None) if ts.tzinfo else ts
+                    if timedelta(0) <= (ts_naive - call_dt) <= timedelta(hours=48):
+                        has_followup = True
+                        break
+
+            item["has_followup"] = has_followup
+
+            if has_followup and is_connected:
+                wins.append(item)
+            elif is_connected and call.duration_seconds and call.duration_seconds > 120:
+                pitches.append(item)
+            elif is_missed or (is_connected and not has_followup):
+                losses.append(item)
+
+        # Sort wins by quality_score (if available) then duration
+        wins.sort(key=lambda x: (x.get("quality_score") or 0, x.get("duration_seconds") or 0), reverse=True)
+        # Sort pitches by quality_score then duration
+        pitches.sort(key=lambda x: (x.get("quality_score") or 0, x.get("duration_seconds") or 0), reverse=True)
+        # Sort losses by duration (longest first — most to learn from)
+        losses.sort(key=lambda x: x.get("duration_seconds") or 0, reverse=True)
+
+        return {"wins": wins, "pitches": pitches, "losses": losses, "all": all_items}
+
+    except Exception as e:
+        logger.error(f"Call library error: {e}", exc_info=True)
+        return {"wins": [], "pitches": [], "losses": [], "all": []}
+
+
 @router.get("/dispositions", response_model=List[CallDispositionResponse])
 async def list_call_dispositions(
     db: DbSession,
