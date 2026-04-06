@@ -816,6 +816,12 @@ async def get_sync_status(db: DbSession):
     count_result = await db.execute(select(func.count(CallLog.id)))
     total_calls = count_result.scalar() or 0
 
+    # Count calls with recordings
+    rec_result = await db.execute(
+        select(func.count(CallLog.id)).where(CallLog.recording_url.isnot(None))
+    )
+    with_recordings = rec_result.scalar() or 0
+
     return {
         "last_sync": _last_sync_time.isoformat() if _last_sync_time else None,
         "last_sync_result": _last_sync_status,
@@ -823,6 +829,7 @@ async def get_sync_status(db: DbSession):
         "sync_interval_minutes": AUTO_SYNC_INTERVAL_SECONDS // 60,
         "most_recent_call": most_recent_call,
         "total_calls": total_calls,
+        "calls_with_recordings": with_recordings,
         "ringcentral_configured": ringcentral_service.is_configured,
     }
 
