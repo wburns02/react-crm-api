@@ -150,6 +150,7 @@ async def list_calls(
     date_from: Optional[date] = Query(None, description="Filter calls from this date"),
     date_to: Optional[date] = Query(None, description="Filter calls to this date"),
     search: Optional[str] = Query(None, description="Search by phone number"),
+    sort: Optional[str] = Query(None, description="Sort field (e.g. -call_date)"),
 ):
     """List call logs with filtering and pagination."""
     try:
@@ -179,7 +180,8 @@ async def list_calls(
 
         # Paginate and order
         offset = (page - 1) * page_size
-        query = query.offset(offset).limit(page_size).order_by(CallLog.created_at.desc())
+        order = CallLog.call_date.desc() if sort and sort.startswith("-") else CallLog.created_at.desc()
+        query = query.offset(offset).limit(page_size).order_by(order)
 
         result = await db.execute(query)
         calls = result.scalars().all()
