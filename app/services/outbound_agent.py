@@ -261,14 +261,15 @@ Previous Service: {p.get('last_service_date', 'None on file')}
         else:
             service = "septic service"
 
-        greeting = (
-            f"Hi, {first_name}? This is Sarah calling from MAC Septic. "
-            f"We sent you an estimate for {service} and I just wanted to follow up "
-            f"to see if you had any questions about it."
-        )
+        # Split greeting into two parts — first part plays while second generates
+        part1 = f"Hi, {first_name}? This is Sarah from MAC Septic."
+        part2 = f"We sent you an estimate for {service} and I just wanted to follow up to see if you had any questions."
+
+        greeting = part1 + " " + part2
 
         if self.on_speak:
-            await self.on_speak(greeting)
+            await self.on_speak(part1)
+            await self.on_speak(part2)
 
         self.transcript.append({"speaker": "agent", "text": greeting, "timestamp": datetime.utcnow().isoformat()})
         self.conversation.append({"role": "assistant", "content": greeting})
