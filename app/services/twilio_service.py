@@ -109,8 +109,8 @@ class TwilioService:
                 "success": True,
                 "call_sid": call.sid,
                 "status": call.status,
-                "from_number": call.from_,
-                "to_number": call.to,
+                "from_number": from_formatted,
+                "to_number": to_formatted,
                 "direction": "outbound",
             }
 
@@ -136,8 +136,8 @@ class TwilioService:
                 "items": [
                     {
                         "id": call.sid,
-                        "from_number": call.from_,
-                        "to_number": call.to,
+                        "from_number": getattr(call, "from_formatted", "") or getattr(call, "from_", ""),
+                        "to_number": call.to or "",
                         "direction": call.direction,
                         "status": call.status,
                         "start_time": call.start_time.isoformat() if call.start_time else None,
