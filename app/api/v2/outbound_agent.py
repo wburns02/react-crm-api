@@ -824,7 +824,7 @@ async def _text_to_speech(text: str) -> Optional[bytes]:
 
 
 async def _cartesia_tts(text: str) -> Optional[bytes]:
-    """Cartesia Sonic TTS — fast, cheap, great quality."""
+    """Cartesia Sonic TTS — get 24kHz PCM, downsample to 8kHz mu-law for Twilio."""
     if not settings.CARTESIA_API_KEY:
         logger.warning("CARTESIA_API_KEY not set")
         return None
@@ -833,6 +833,7 @@ async def _cartesia_tts(text: str) -> Optional[bytes]:
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
+            # Request high-quality 24kHz 16-bit PCM from Cartesia
             resp = await client.post(
                 "https://api.cartesia.ai/tts/bytes",
                 headers={
@@ -846,23 +847,50 @@ async def _cartesia_tts(text: str) -> Optional[bytes]:
                     "voice": {"mode": "id", "id": voice_id},
                     "output_format": {
                         "container": "raw",
-                        "encoding": "pcm_mulaw",
-                        "sample_rate": 8000,
+                        "encoding": "pcm_s16le",
+                        "sample_rate": 24000,
                     },
                     "language": "en",
                     "speed": "normal",
                 },
             )
 
-            if resp.status_code == 200:
-                return resp.content
-            else:
+            if resp.status_code != 200:
                 logger.error(f"Cartesia error: {resp.status_code} {resp.text[:200]}")
                 return None
+
+            # Downsample 24kHz 16-bit PCM → 8kHz mu-law for Twilio
+            return _pcm24k_to_mulaw8k(resp.content)
 
     except Exception as e:
         logger.error(f"Cartesia TTS error: {e}")
         return None
+
+
+def _pcm24k_to_mulaw8k(pcm_data: bytes) -> bytes:
+    """Downsample 24kHz 16-bit signed LE PCM to 8kHz mu-law.
+
+    Uses simple 3:1 decimation with averaging (low-pass filter)
+    then compands to mu-law.
+    """
+    import struct as _struct
+    import audioop
+
+    # Parse 16-bit samples
+    num_samples = len(pcm_data) // 2
+    samples = _struct.unpack(f"<{num_samples}h", pcm_data)
+
+    # 3:1 decimation with simple averaging (24000/3 = 8000)
+    decimated = []
+    for i in range(0, num_samples - 2, 3):
+        avg = (samples[i] + samples[i + 1] + samples[i + 2]) // 3
+        decimated.append(avg)
+
+    # Pack back to 16-bit PCM
+    pcm_8k = _struct.pack(f"<{len(decimated)}h", *decimated)
+
+    # Convert to mu-law using audioop (stdlib)
+    return audioop.lin2ulaw(pcm_8k, 2)
 
 
 async def _elevenlabs_tts(text: str) -> Optional[bytes]:
