@@ -584,8 +584,8 @@ async def ws_outbound_agent_media(websocket: WebSocket, call_sid: str):
                     await asyncio.sleep(2)  # Let audio finish before hanging up
                     await end_call()
                 else:
-                    # Normal human-answered path: send greeting after brief pause
-                    await asyncio.sleep(1)
+                    # Normal human-answered path: minimal pause then greet
+                    await asyncio.sleep(0.3)
                     await session.start_greeting()
 
             elif event == "media":
