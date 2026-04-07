@@ -139,7 +139,7 @@ class DeepgramStream:
         await self._audio_queue.put(None)
 
         # Send Deepgram CloseStream control message
-        if self._ws and not self._ws.closed:
+        if self._ws and getattr(self._ws, 'close_code', None) is None:
             try:
                 await self._ws.send(json.dumps({"type": "CloseStream"}))
             except Exception as exc:
@@ -155,7 +155,7 @@ class DeepgramStream:
                     pass
 
         # Close underlying socket
-        if self._ws and not self._ws.closed:
+        if self._ws and getattr(self._ws, 'close_code', None) is None:
             try:
                 await self._ws.close()
             except Exception as exc:
@@ -175,7 +175,7 @@ class DeepgramStream:
                 if chunk is None:
                     # Sentinel value — time to stop
                     break
-                if self._ws and not self._ws.closed:
+                if self._ws and getattr(self._ws, 'close_code', None) is None:
                     try:
                         await self._ws.send(chunk)
                     except ConnectionClosed:
