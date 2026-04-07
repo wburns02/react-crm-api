@@ -406,7 +406,8 @@ async def ws_outbound_agent_media(websocket: WebSocket, call_sid: str):
         nonlocal pending_speech, agent_is_speaking, stream_sid
 
         if is_final:
-            full_text = (pending_speech + " " + text).strip()
+            # is_final contains the complete utterance — discard accumulated interims
+            full_text = text.strip()
             pending_speech = ""
 
             if full_text:
