@@ -75,6 +75,9 @@ Jinja2>=3.1.0
 google-cloud-speech>=2.27.0
 google-auth>=2.34.0
 
+# Deepgram streaming STT (Twilio Media Streams via WebSocket)
+websockets>=12.0
+
 # Web scraping for TDEC permit lookup
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
