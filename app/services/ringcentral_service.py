@@ -55,6 +55,7 @@ class RingCentralService:
         self._access_token: Optional[str] = None
         self._token_expires: Optional[datetime] = None
         self._client: Optional[httpx.AsyncClient] = None
+        self._auth_cooldown_until: Optional[datetime] = None  # backoff after rate-limit/failure
 
     @property
     def is_configured(self) -> bool:
@@ -101,6 +102,11 @@ class RingCentralService:
         if self._access_token and self._token_expires and datetime.utcnow() < self._token_expires:
             return self._access_token
 
+        # Don't retry during cooldown (prevents rate-limit storms)
+        if self._auth_cooldown_until and datetime.utcnow() < self._auth_cooldown_until:
+            logger.debug(f"RingCentral auth in cooldown until {self._auth_cooldown_until}")
+            return None
+
         try:
             client = await self.get_client()
 
@@ -127,6 +133,7 @@ class RingCentralService:
 
             self._access_token = data["access_token"]
             self._token_expires = datetime.utcnow() + timedelta(seconds=data.get("expires_in", 3600) - 60)
+            self._auth_cooldown_until = None  # clear cooldown on success
 
             return self._access_token
 
@@ -134,10 +141,14 @@ class RingCentralService:
             error_detail = e.response.text if e.response else "No response body"
             logger.error(f"RingCentral auth failed: {e.response.status_code} - {error_detail}")
             self._last_auth_error = f"{e.response.status_code}: {error_detail}"
+            # Back off longer on rate-limit (429), shorter on other errors
+            cooldown_secs = 120 if e.response.status_code == 429 else 30
+            self._auth_cooldown_until = datetime.utcnow() + timedelta(seconds=cooldown_secs)
             return None
         except Exception as e:
             logger.error(f"Failed to get RingCentral access token: {e}")
             self._last_auth_error = str(e)
+            self._auth_cooldown_until = datetime.utcnow() + timedelta(seconds=30)
             return None
 
     async def _api_request(
