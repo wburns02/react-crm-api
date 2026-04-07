@@ -281,8 +281,10 @@ async def twilio_status_callback(request: Request):
     form = await request.form()
     call_sid = form.get("CallSid", "")
     status = form.get("CallStatus", "")
+    recording_url = form.get("RecordingUrl", None)
+    duration_raw = form.get("CallDuration", None)
 
-    logger.info(f"Outbound call status: SID={call_sid} Status={status}")
+    logger.info(f"Outbound call status: SID={call_sid} Status={status} RecordingUrl={recording_url}")
 
     if status in ("completed", "busy", "no-answer", "failed", "canceled"):
         session = active_sessions.get(call_sid)
@@ -294,6 +296,17 @@ async def twilio_status_callback(request: Request):
                     session.disposition = "no_answer"
                 elif status == "failed":
                     session.disposition = "no_answer"
+
+            # Store Twilio-reported recording URL and authoritative duration
+            if recording_url:
+                session._recording_url = recording_url
+                logger.info(f"Recording URL stored for {call_sid}: {recording_url}")
+            if duration_raw:
+                try:
+                    session._twilio_duration = int(duration_raw)
+                except (ValueError, TypeError):
+                    pass
+
             session.ended = True
 
     return PlainTextResponse("OK")
@@ -634,7 +647,9 @@ async def _persist_call(session: OutboundAgentSession) -> None:
         lines.append(f"{time_label} {speaker.upper()}: {text}")
 
     transcript_text = "\n".join(lines)
-    duration = int((datetime.utcnow() - session.started_at).total_seconds())
+    # Prefer Twilio-reported duration (from status callback) over wall-clock estimate
+    twilio_duration = getattr(session, '_twilio_duration', None)
+    duration = twilio_duration if twilio_duration is not None else int((datetime.utcnow() - session.started_at).total_seconds())
 
     # Infer sentiment from disposition
     positive_dispositions = {"appointment_set", "callback_requested"}
