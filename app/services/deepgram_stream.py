@@ -90,12 +90,21 @@ class DeepgramStream:
         headers = {"Authorization": f"Token {settings.DEEPGRAM_API_KEY}"}
 
         try:
-            self._ws = await websockets.connect(
-                _DG_URL,
-                extra_headers=headers,
-                ping_interval=20,
-                ping_timeout=10,
-            )
+            # websockets v12+ uses additional_headers; older versions use extra_headers
+            try:
+                self._ws = await websockets.connect(
+                    _DG_URL,
+                    additional_headers=headers,
+                    ping_interval=20,
+                    ping_timeout=10,
+                )
+            except TypeError:
+                self._ws = await websockets.connect(
+                    _DG_URL,
+                    extra_headers=headers,
+                    ping_interval=20,
+                    ping_timeout=10,
+                )
             logger.info("DeepgramStream: WebSocket connected")
         except Exception as exc:
             logger.error("DeepgramStream: failed to connect — %s", exc)
