@@ -75,6 +75,57 @@ def _unsubscribe_transcript(call_sid: str, q: asyncio.Queue) -> None:
             _transcript_listeners.pop(call_sid, None)
 
 
+# ── TEMP: Seed test prospects (remove after testing) ─────────────
+
+@router.post("/seed-test-prospects")
+async def seed_test_prospects():
+    """Create 10 test prospects with sent quotes for E2E testing."""
+    import uuid as _uuid
+    from app.models.customer import Customer
+    from app.models.quote import Quote
+    from datetime import timedelta, timezone
+
+    PHONE = "+19792361958"
+    PROSPECTS = [
+        {"first": "Mike", "last": "Johnson", "addr": "123 Oak Lane", "city": "Nashville", "state": "TN", "service": "Septic Tank Pumping", "amount": 625, "days": 5},
+        {"first": "Lisa", "last": "Williams", "addr": "456 Cedar Dr", "city": "Columbia", "state": "SC", "service": "Septic Inspection", "amount": 825, "days": 6},
+        {"first": "David", "last": "Brown", "addr": "789 Maple Ave", "city": "Nashville", "state": "TN", "service": "Septic Tank Pumping", "amount": 595, "days": 7},
+        {"first": "Sarah", "last": "Davis", "addr": "321 Pine St", "city": "Franklin", "state": "TN", "service": "Grease Trap Cleaning", "amount": 450, "days": 8},
+        {"first": "James", "last": "Wilson", "addr": "654 Elm Rd", "city": "Brentwood", "state": "TN", "service": "Septic Repair", "amount": 1200, "days": 5},
+        {"first": "Jennifer", "last": "Taylor", "addr": "987 Birch Blvd", "city": "Columbia", "state": "SC", "service": "Septic Tank Pumping", "amount": 625, "days": 6},
+        {"first": "Robert", "last": "Anderson", "addr": "147 Walnut Ct", "city": "Nashville", "state": "TN", "service": "Real Estate Inspection", "amount": 825, "days": 9},
+        {"first": "Emily", "last": "Thomas", "addr": "258 Spruce Way", "city": "Murfreesboro", "state": "TN", "service": "Aerobic System Service", "amount": 745, "days": 7},
+        {"first": "Chris", "last": "Martinez", "addr": "369 Ash Ln", "city": "Columbia", "state": "SC", "service": "Septic Tank Pumping", "amount": 595, "days": 10},
+        {"first": "Amanda", "last": "Garcia", "addr": "741 Hickory Dr", "city": "Nashville", "state": "TN", "service": "Septic Inspection", "amount": 825, "days": 8},
+    ]
+
+    async with async_session_maker() as db:
+        created = 0
+        for i, p in enumerate(PROSPECTS):
+            cid = _uuid.uuid4()
+            customer = Customer(
+                id=cid, first_name=p["first"], last_name=p["last"],
+                phone=PHONE, email=f"test.agent.{i}@macseptic.com",
+                address_line1=p["addr"], city=p["city"], state=p["state"],
+                postal_code="37000", customer_type="residential", is_active=True,
+            )
+            db.add(customer)
+            await db.flush()
+
+            sent_at = datetime.now(timezone.utc) - timedelta(days=p["days"])
+            quote = Quote(
+                id=_uuid.uuid4(), quote_number=f"TEST-{2000 + i}",
+                customer_id=cid, title=f"{p['service']} - {p['addr']}",
+                line_items=[{"service": p["service"], "description": f"{p['service']} at {p['addr']}", "quantity": 1, "rate": p["amount"], "amount": p["amount"]}],
+                subtotal=p["amount"], total=p["amount"], status="sent", sent_at=sent_at,
+            )
+            db.add(quote)
+            created += 1
+
+        await db.commit()
+    return {"created": created, "phone": PHONE}
+
+
 # ── Campaign Management Endpoints ──────────────────────────────────
 
 @router.post("/campaign/start")
