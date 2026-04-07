@@ -215,24 +215,33 @@ async def twilio_voice_webhook(request: Request):
 
     # Check if it went to voicemail via AMD
     if answered_by in ("machine_start", "machine_end_beep", "machine_end_silence"):
-        logger.info(f"Voicemail detected for {to_number}")
-        # Leave a voicemail via TTS
-        p = call_data["prospect"]
-        q = call_data["quote"]
-        line_items = q.get("line_items", [])
-        service = line_items[0].get("service", "septic service") if line_items else "septic service"
-        vm_text = (
-            f"Hi {p.get('first_name', '')}, this is MAC Septic following up "
-            f"on the estimate we sent for {service} at your property. "
-            f"Give us a call back at 615-345-2544 when you get a chance. Thanks!"
-        )
+        logger.info(f"Voicemail detected for {to_number} — starting media stream for Cartesia TTS voicemail")
+
+        # Start a media stream so we can use Cartesia TTS for the voicemail
+        ws_host = request.headers.get("host", "react-crm-api-production.up.railway.app")
+        ws_url = f"wss://{ws_host}/ws/outbound-agent/{call_sid}"
+
         twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>'
             '<Response>'
-            f'<Say voice="Polly.Matthew">{vm_text}</Say>'
-            '<Hangup/>'
+            '<Connect>'
+            f'<Stream url="{ws_url}" />'
+            '</Connect>'
             '</Response>'
         )
+
+        # Create a voicemail session flagged so the WS handler knows to leave a message
+        prospect = call_data["prospect"]
+        quote = call_data["quote"]
+
+        session = OutboundAgentSession(
+            call_sid=call_sid,
+            prospect=prospect,
+            quote=quote,
+        )
+        session._voicemail_mode = True
+        active_sessions[call_sid] = session
+
         remove_pending_call_data(to_number)
         return PlainTextResponse(twiml, media_type="text/xml")
 
@@ -486,9 +495,33 @@ async def ws_outbound_agent_media(websocket: WebSocket, call_sid: str):
             elif event == "start":
                 stream_sid = msg.get("start", {}).get("streamSid")
                 logger.info(f"Media stream started: streamSid={stream_sid}")
-                # Send greeting after a brief pause
-                await asyncio.sleep(1)
-                await session.start_greeting()
+
+                if getattr(session, '_voicemail_mode', False):
+                    # Voicemail path: wait for beep, then speak via Cartesia TTS
+                    await asyncio.sleep(2)  # Wait for the voicemail beep
+                    p = session.prospect
+                    q = session.quote
+                    line_items = q.get("line_items", [])
+                    service = line_items[0].get("service", "septic service") if line_items else "septic service"
+                    vm_text = (
+                        f"Hi {p.get('first_name', '')}, this is MAC Septic following up "
+                        f"on the estimate we sent for {service} at your property. "
+                        f"Give us a call back at 615-345-2544 when you get a chance. Thanks!"
+                    )
+                    logger.info(f"[Agent:{call_sid[:8]}] Leaving voicemail: {vm_text!r}")
+                    await speak(vm_text)
+                    session.disposition = "voicemail_left"
+                    session.transcript.append({
+                        "speaker": "agent",
+                        "text": vm_text,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    })
+                    await asyncio.sleep(2)  # Let audio finish before hanging up
+                    await end_call()
+                else:
+                    # Normal human-answered path: send greeting after brief pause
+                    await asyncio.sleep(1)
+                    await session.start_greeting()
 
             elif event == "media":
                 # Receive customer audio (mu-law 8kHz) and stream to Deepgram
