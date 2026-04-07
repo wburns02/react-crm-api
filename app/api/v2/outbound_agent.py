@@ -5,22 +5,27 @@ Handles:
 - Campaign management (start/stop/pause/status)
 - Twilio voice webhook (TwiML for media streams)
 - Twilio status callback
-- Media stream WebSocket (audio in/out)
-- Queue management
+- Media stream WebSocket (audio in/out, streaming STT with barge-in)
+- Live transcript SSE endpoint
+- Call persistence to CallLog
 """
 
 import asyncio
 import base64
 import json
 import logging
-import struct
-from datetime import datetime
+import uuid
+from datetime import datetime, date
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request, Response, Depends
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from app.config import settings
+from app.database import async_session_maker
+from app.models.call_log import CallLog
+from app.services.deepgram_stream import DeepgramStream
 from app.services.outbound_agent import OutboundAgentSession
 from app.services.campaign_dialer import (
     campaign, active_sessions, start_campaign, stop_campaign,
@@ -31,6 +36,43 @@ from app.services.campaign_dialer import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/outbound-agent", tags=["outbound-agent"])
+
+
+# ── Live Transcript Pub/Sub ────────────────────────────────────────
+
+_transcript_listeners: dict[str, list[asyncio.Queue]] = {}
+
+
+def _broadcast_transcript(call_sid: str, speaker: str, text: str) -> None:
+    """Push a transcript line to all SSE subscribers for this call."""
+    listeners = _transcript_listeners.get(call_sid)
+    if not listeners:
+        return
+    payload = {"call_sid": call_sid, "speaker": speaker, "text": text, "ts": datetime.utcnow().isoformat()}
+    for q in listeners:
+        try:
+            q.put_nowait(payload)
+        except asyncio.QueueFull:
+            pass
+
+
+def _subscribe_transcript(call_sid: str) -> asyncio.Queue:
+    """Register a new SSE subscriber for this call. Returns its queue."""
+    q: asyncio.Queue = asyncio.Queue(maxsize=200)
+    _transcript_listeners.setdefault(call_sid, []).append(q)
+    return q
+
+
+def _unsubscribe_transcript(call_sid: str, q: asyncio.Queue) -> None:
+    """Remove a subscriber queue."""
+    listeners = _transcript_listeners.get(call_sid)
+    if listeners:
+        try:
+            listeners.remove(q)
+        except ValueError:
+            pass
+        if not listeners:
+            _transcript_listeners.pop(call_sid, None)
 
 
 # ── Campaign Management Endpoints ──────────────────────────────────
@@ -114,6 +156,35 @@ async def api_call_log(call_sid: str):
     if session:
         return session.get_summary()
     return {"error": "Call not found"}
+
+
+# ── Live Transcript SSE ────────────────────────────────────────────
+
+@router.get("/live-transcript/{call_sid}")
+async def api_live_transcript(call_sid: str):
+    """
+    Server-Sent Events stream for the live call transcript.
+
+    Yields data: {json}\\n\\n lines for each transcript event.
+    Sends a keepalive comment every 30 seconds.
+    """
+    q = _subscribe_transcript(call_sid)
+
+    async def event_generator():
+        try:
+            while True:
+                try:
+                    payload = await asyncio.wait_for(q.get(), timeout=30.0)
+                    yield f"data: {json.dumps(payload)}\n\n"
+                except asyncio.TimeoutError:
+                    # keepalive
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _unsubscribe_transcript(call_sid, q)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 # ── Twilio Voice Webhook ───────────────────────────────────────────
@@ -231,7 +302,12 @@ async def ws_outbound_agent_media(websocket: WebSocket, call_sid: str):
     Twilio Media Streams WebSocket for the outbound AI agent.
 
     Receives mu-law 8kHz audio from the customer.
-    Sends mu-law 8kHz audio back (agent speech from ElevenLabs TTS).
+    Sends mu-law 8kHz audio back (agent speech via Cartesia/ElevenLabs TTS).
+
+    Uses streaming Deepgram STT with barge-in support:
+    - Interim results accumulate in pending_speech
+    - Final results trigger session.handle_speech()
+    - If agent is speaking and a final transcript arrives, audio is cancelled
     """
     await websocket.accept()
     logger.info(f"Outbound agent media stream connected: {call_sid}")
@@ -242,40 +318,118 @@ async def ws_outbound_agent_media(websocket: WebSocket, call_sid: str):
         await websocket.close()
         return
 
-    stream_sid = None
-    stt_buffer = bytearray()
-    stt_task = None
-    speech_accumulator = ""
-    silence_counter = 0
-    last_speech_time = datetime.utcnow()
+    stream_sid: Optional[str] = None
 
-    # Wire up the speak callback for TTS
-    async def speak(text: str):
-        """Convert text to speech via ElevenLabs and send to Twilio."""
-        nonlocal stream_sid
+    # Barge-in state
+    agent_is_speaking = False
+    tts_cancel: asyncio.Event = asyncio.Event()
+
+    # Streaming STT state
+    pending_speech = ""
+
+    # ── Deepgram callbacks ──────────────────────────────────────────
+
+    async def on_transcript(text: str, is_final: bool) -> None:
+        nonlocal pending_speech, agent_is_speaking, stream_sid
+
+        if is_final:
+            full_text = (pending_speech + " " + text).strip()
+            pending_speech = ""
+
+            if full_text:
+                # Barge-in: cancel agent TTS if speaking
+                if agent_is_speaking:
+                    logger.info(f"[Agent:{call_sid[:8]}] Barge-in detected — cancelling TTS")
+                    agent_is_speaking = False
+                    tts_cancel.set()
+                    # Flush Twilio audio buffer
+                    if stream_sid:
+                        try:
+                            clear_msg = json.dumps({"event": "clear", "streamSid": stream_sid})
+                            await websocket.send_text(clear_msg)
+                        except Exception as e:
+                            logger.warning(f"Failed to send clear message: {e}")
+
+                # Broadcast customer speech to SSE listeners
+                _broadcast_transcript(call_sid, "customer", full_text)
+
+                # Send to agent conversation engine
+                await session.handle_speech(full_text)
+        else:
+            # Accumulate interim results
+            pending_speech = (pending_speech + " " + text).strip()
+
+    async def on_utterance_end() -> None:
+        """Flush any pending interim speech when Deepgram signals end of utterance."""
+        nonlocal pending_speech
+
+        if pending_speech.strip():
+            flushed = pending_speech.strip()
+            pending_speech = ""
+            logger.info(f"[Agent:{call_sid[:8]}] Utterance-end flush: {flushed!r}")
+
+            if agent_is_speaking:
+                pass  # Don't interrupt for flush — final transcript handles barge-in
+
+            _broadcast_transcript(call_sid, "customer", flushed)
+            await session.handle_speech(flushed)
+
+    # ── TTS speak callback ──────────────────────────────────────────
+
+    async def speak(text: str) -> None:
+        """Convert text to speech and send to Twilio in 400ms chunks, respecting barge-in."""
+        nonlocal agent_is_speaking, stream_sid
+
         if not stream_sid:
             return
 
+        # Broadcast agent speech to SSE listeners
+        _broadcast_transcript(call_sid, "agent", text)
+
         try:
             audio_data = await _text_to_speech(text)
-            if audio_data:
-                # ElevenLabs returns mp3/pcm. We need mu-law for Twilio.
-                # For now, use Twilio's <Say> as a fallback since mu-law
-                # conversion requires additional processing.
-                # Send audio payload as base64 mu-law
-                payload = base64.b64encode(audio_data).decode()
+            if not audio_data:
+                return
+
+            agent_is_speaking = True
+            tts_cancel.clear()
+
+            # Send audio in 3200-byte chunks (~400ms of mu-law 8kHz audio)
+            chunk_size = 3200
+            offset = 0
+            while offset < len(audio_data):
+                # Check for barge-in cancellation between chunks
+                if tts_cancel.is_set():
+                    logger.info(f"[Agent:{call_sid[:8]}] TTS cancelled mid-stream (barge-in)")
+                    break
+
+                chunk = audio_data[offset:offset + chunk_size]
+                offset += chunk_size
+
+                payload = base64.b64encode(chunk).decode()
                 media_msg = json.dumps({
                     "event": "media",
                     "streamSid": stream_sid,
                     "media": {"payload": payload}
                 })
-                await websocket.send_text(media_msg)
+                try:
+                    await websocket.send_text(media_msg)
+                except Exception as e:
+                    logger.error(f"TTS send error: {e}")
+                    break
+
+                # 50ms pacing between chunks
+                await asyncio.sleep(0.05)
+
         except Exception as e:
-            logger.error(f"TTS/send error: {e}")
+            logger.error(f"TTS/speak error: {e}")
+        finally:
+            if not tts_cancel.is_set():
+                agent_is_speaking = False
 
-    session.on_speak = speak
+    # ── Other session callbacks ─────────────────────────────────────
 
-    async def end_call():
+    async def end_call() -> None:
         """Signal Twilio to end the call."""
         try:
             if TWILIO_AVAILABLE and settings.TWILIO_ACCOUNT_SID:
@@ -285,9 +439,7 @@ async def ws_outbound_agent_media(websocket: WebSocket, call_sid: str):
         except Exception as e:
             logger.error(f"Failed to end call {call_sid}: {e}")
 
-    session.on_end_call = end_call
-
-    async def transfer(number: str):
+    async def transfer(number: str) -> None:
         """Transfer the call."""
         try:
             if TWILIO_AVAILABLE and settings.TWILIO_ACCOUNT_SID:
@@ -298,7 +450,25 @@ async def ws_outbound_agent_media(websocket: WebSocket, call_sid: str):
         except Exception as e:
             logger.error(f"Failed to transfer call {call_sid}: {e}")
 
+    session.on_speak = speak
+    session.on_end_call = end_call
     session.on_transfer = transfer
+
+    # ── Connect Deepgram streaming STT ─────────────────────────────
+
+    dg = DeepgramStream(
+        on_transcript=on_transcript,
+        on_utterance_end=on_utterance_end,
+    )
+
+    try:
+        await dg.connect()
+    except Exception as e:
+        logger.error(f"Failed to connect Deepgram for {call_sid}: {e}")
+        await websocket.close()
+        return
+
+    # ── Main WebSocket loop ─────────────────────────────────────────
 
     try:
         while True:
@@ -321,34 +491,11 @@ async def ws_outbound_agent_media(websocket: WebSocket, call_sid: str):
                 await session.start_greeting()
 
             elif event == "media":
-                # Receive customer audio (mu-law 8kHz)
+                # Receive customer audio (mu-law 8kHz) and stream to Deepgram
                 payload = msg.get("media", {}).get("payload", "")
                 if payload:
                     audio_bytes = base64.b64decode(payload)
-                    stt_buffer.extend(audio_bytes)
-
-                    # Process STT every ~1 second of audio (8000 bytes at 8kHz mu-law)
-                    if len(stt_buffer) >= 8000:
-                        chunk = bytes(stt_buffer)
-                        stt_buffer.clear()
-
-                        # Simple energy-based VAD
-                        energy = sum(abs(b - 128) for b in chunk) / len(chunk)
-                        if energy > 10:  # Speech detected
-                            silence_counter = 0
-                            last_speech_time = datetime.utcnow()
-                            # Send to STT
-                            text = await _speech_to_text(chunk)
-                            if text:
-                                speech_accumulator += " " + text
-                        else:
-                            silence_counter += 1
-                            # After ~2 seconds of silence, process accumulated speech
-                            if silence_counter >= 2 and speech_accumulator.strip():
-                                accumulated = speech_accumulator.strip()
-                                speech_accumulator = ""
-                                silence_counter = 0
-                                await session.handle_speech(accumulated)
+                    dg.send_audio(audio_bytes)
 
             elif event == "stop":
                 logger.info(f"Media stream stopped for {call_sid}")
@@ -359,15 +506,170 @@ async def ws_outbound_agent_media(websocket: WebSocket, call_sid: str):
     except Exception as e:
         logger.error(f"Media stream error for {call_sid}: {e}")
     finally:
+        # Shut down Deepgram
+        try:
+            await dg.close()
+        except Exception as e:
+            logger.warning(f"Deepgram close error for {call_sid}: {e}")
+
         session.ended = True
         summary = session.get_summary()
         logger.info(f"Call {call_sid} ended. Disposition: {summary['disposition']}")
 
+        # Persist call to database
+        try:
+            await _persist_call(session)
+        except Exception as e:
+            logger.error(f"Failed to persist call {call_sid}: {e}")
 
-# ── STT (Deepgram) ─────────────────────────────────────────────────
+        # Clean up SSE listeners
+        _transcript_listeners.pop(call_sid, None)
+
+
+# ── Call Persistence ───────────────────────────────────────────────
+
+async def _generate_call_summary(session: OutboundAgentSession) -> Optional[str]:
+    """Generate a 2-3 sentence AI summary of the call using Claude Haiku."""
+    if not settings.ANTHROPIC_API_KEY:
+        return None
+    if not session.transcript:
+        return None
+
+    transcript_text = "\n".join(
+        f"{t['speaker'].upper()}: {t['text']}"
+        for t in session.transcript
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": settings.ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 200,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": (
+                                "Summarize this outbound sales call in 2-3 sentences. "
+                                "Include the outcome and any next steps.\n\n"
+                                f"{transcript_text}"
+                            ),
+                        }
+                    ],
+                },
+            )
+
+        if resp.status_code == 200:
+            data = resp.json()
+            blocks = data.get("content", [])
+            parts = [b["text"] for b in blocks if b.get("type") == "text"]
+            return " ".join(parts).strip() or None
+        else:
+            logger.warning(f"Claude summary error: {resp.status_code}")
+            return None
+
+    except Exception as e:
+        logger.warning(f"_generate_call_summary error: {e}")
+        return None
+
+
+async def _persist_call(session: OutboundAgentSession) -> None:
+    """Save the completed call to the call_logs table."""
+    p = session.prospect
+
+    # Build timestamped transcript string  [MM:SS] Speaker: text
+    lines = []
+    for entry in session.transcript:
+        ts_str = entry.get("timestamp", "")
+        speaker = entry.get("speaker", "unknown")
+        text = entry.get("text", "")
+        try:
+            ts_dt = datetime.fromisoformat(ts_str)
+            elapsed = (ts_dt - session.started_at).total_seconds()
+            elapsed = max(0, elapsed)
+            mm = int(elapsed // 60)
+            ss = int(elapsed % 60)
+            time_label = f"[{mm:02d}:{ss:02d}]"
+        except (ValueError, TypeError):
+            time_label = "[??:??]"
+        lines.append(f"{time_label} {speaker.upper()}: {text}")
+
+    transcript_text = "\n".join(lines)
+    duration = int((datetime.utcnow() - session.started_at).total_seconds())
+
+    # Infer sentiment from disposition
+    positive_dispositions = {"appointment_set", "callback_requested"}
+    negative_dispositions = {"not_interested", "service_completed_elsewhere", "do_not_call"}
+    disp = session.disposition or ""
+    if disp in positive_dispositions:
+        sentiment = "positive"
+    elif disp in negative_dispositions:
+        sentiment = "negative"
+    else:
+        sentiment = "neutral"
+
+    # Generate AI summary
+    ai_summary = await _generate_call_summary(session)
+
+    # Resolve customer_id
+    customer_id_raw = p.get("id")
+    customer_uuid = None
+    if customer_id_raw:
+        try:
+            customer_uuid = uuid.UUID(str(customer_id_raw))
+        except (ValueError, TypeError):
+            pass
+
+    # Caller/called numbers
+    caller_number = settings.OUTBOUND_AGENT_FROM_NUMBER or settings.TWILIO_PHONE_NUMBER or ""
+    called_number = p.get("phone", "")
+
+    # Recording URL from session if set
+    recording_url = getattr(session, "_recording_url", None)
+
+    now = datetime.utcnow()
+
+    try:
+        async with async_session_maker() as db:
+            call_log = CallLog(
+                id=uuid.uuid4(),
+                direction="outbound",
+                call_type="voice",
+                caller_number=caller_number,
+                called_number=called_number,
+                customer_id=customer_uuid,
+                call_disposition=disp or "unknown",
+                call_date=now.date(),
+                call_time=now.time(),
+                duration_seconds=duration,
+                recording_url=recording_url,
+                transcription=transcript_text,
+                transcription_status="completed" if transcript_text else "failed",
+                ai_summary=ai_summary,
+                sentiment=sentiment,
+                notes=session.disposition_notes or "",
+                assigned_to="ai_outbound_agent",
+                external_system="outbound_agent",
+                user_id="1",
+            )
+            db.add(call_log)
+            await db.commit()
+            logger.info(f"Call {session.call_sid} persisted to call_logs (duration={duration}s, disposition={disp})")
+    except Exception as e:
+        logger.error(f"_persist_call DB error for {session.call_sid}: {e}")
+        raise
+
+
+# ── STT (legacy batch — kept for potential fallback use) ───────────
 
 async def _speech_to_text(audio_bytes: bytes) -> Optional[str]:
-    """Transcribe mu-law audio using Deepgram Nova-3."""
+    """Transcribe mu-law audio using Deepgram Nova-3 (batch mode)."""
     if not settings.DEEPGRAM_API_KEY:
         return None
 
@@ -499,11 +801,8 @@ async def _elevenlabs_tts(text: str) -> Optional[bytes]:
         return None
 
 
-# Need httpx for API calls
-import httpx
-
 try:
     TWILIO_AVAILABLE = True
 except ImportError:
     TWILIO_AVAILABLE = False
-# Outbound agent v1.0
+# Outbound agent v2.0 — streaming STT + barge-in + call persistence + live transcript SSE
