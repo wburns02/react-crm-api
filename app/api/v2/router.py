@@ -132,8 +132,7 @@ from app.api.v2 import (
     workflow_automations,
     # Custom Report Builder
     custom_reports,
-    # Live Chat
-    chat,
+    # Live Chat (real implementation in live_chat.py, mounted in main.py)
     # Document Center
     documents,
     # Tank Size Estimation (Nashville)
@@ -374,8 +373,8 @@ api_router.include_router(custom_reports.router, prefix="/reports/custom", tags=
 # Document Center
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 
-# Live Chat (stub — returns empty data until real implementation)
-api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
+# Live Chat — real implementation in live_chat.py, mounted directly in main.py
+# (stub chat.py removed — it was overriding the real endpoints)
 
 # Public Availability API (Lead Form - No Auth Required)
 api_router.include_router(availability.router, prefix="/availability", tags=["availability"])
