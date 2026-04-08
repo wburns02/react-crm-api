@@ -950,6 +950,26 @@ async def ensure_billing_customer_id():
             logger.warning(f"Could not ensure billing_customer_id column: {type(e).__name__}: {e}")
 
 
+async def ensure_county_column():
+    """Ensure customers table has county column (migration 094)."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    async with async_session_maker() as session:
+        try:
+            result = await session.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'customers' AND column_name = 'county'"
+            ))
+            if not result.fetchone():
+                await session.execute(text(
+                    "ALTER TABLE customers ADD COLUMN county VARCHAR(100)"
+                ))
+                await session.commit()
+                logger.info("Added county column to customers")
+        except Exception as e:
+            logger.warning(f"Could not ensure county column: {type(e).__name__}: {e}")
+
+
 async def ensure_fk_on_delete():
     """Fix FK constraints that may lack ON DELETE SET NULL/CASCADE.
 
@@ -1280,6 +1300,9 @@ async def lifespan(app: FastAPI):
 
         # Ensure billing_customer_id column exists on work_orders (migration 093)
         await ensure_billing_customer_id()
+
+        # Ensure county column exists on customers (migration 094)
+        await ensure_county_column()
     except Exception as e:
         # SECURITY: Don't log full exception details which may contain credentials
         logger.error(f"Database initialization failed: {type(e).__name__}")
