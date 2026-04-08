@@ -15,6 +15,7 @@ from app.api.v2 import (
     ringcentral,
     twilio,
     prospects,
+    county_rules,
     payments,
     quotes,
     estimates,
@@ -180,6 +181,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
 api_router.include_router(prospects.router, prefix="/prospects", tags=["prospects"])
+api_router.include_router(county_rules.router, prefix="/county-rules", tags=["county-rules"])
 api_router.include_router(work_orders.router, prefix="/work-orders", tags=["work-orders"])
 api_router.include_router(communications.router, prefix="/communications", tags=["communications"])
 api_router.include_router(email.router, prefix="/email", tags=["email"])

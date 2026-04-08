@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 from app.api.deps import DbSession, CurrentUser
 from app.models.customer import Customer
+from app.services.county_lookup import lookup_county
 from app.schemas.customer import (
     CustomerCreate,
     CustomerUpdate,
@@ -130,6 +131,9 @@ async def create_prospect(
         data["prospect_stage"] = "new_lead"
 
     prospect = Customer(**data)
+    # Auto-lookup county from ZIP code for Texas addresses
+    if not prospect.county and prospect.postal_code and prospect.state:
+        prospect.county = lookup_county(prospect.postal_code, prospect.state)
     db.add(prospect)
     await db.commit()
     await db.refresh(prospect)
@@ -157,6 +161,12 @@ async def update_prospect(
     update_data = prospect_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(prospect, field, value)
+
+    # Re-lookup county if address fields changed
+    if any(f in update_data for f in ("postal_code", "state", "city")):
+        county = lookup_county(prospect.postal_code, prospect.state)
+        if county:
+            prospect.county = county
 
     await db.commit()
     await db.refresh(prospect)

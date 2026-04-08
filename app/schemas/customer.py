@@ -47,6 +47,7 @@ class CustomerBase(BaseModel):
     city: Optional[str] = Field(None, max_length=100)
     state: Optional[str] = Field(None, max_length=50)
     postal_code: Optional[str] = Field(None, max_length=20)
+    county: Optional[str] = Field(None, max_length=100)
 
     # Status
     is_active: Optional[bool] = True

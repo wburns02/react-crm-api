@@ -26,6 +26,7 @@ class Customer(Base):
     city = Column(String(100))
     state = Column(String(50))
     postal_code = Column(String(20))
+    county = Column(String(100))
 
     # Status
     is_active = Column(Boolean, default=True)

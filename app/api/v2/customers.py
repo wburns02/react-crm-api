@@ -13,6 +13,7 @@ from app.schemas.customer import (
 )
 from app.schemas.errors import LIST_ERROR_RESPONSES, CRUD_ERROR_RESPONSES
 from app.services.cache_service import get_cache_service, TTL
+from app.services.county_lookup import lookup_county
 
 router = APIRouter()
 
@@ -143,6 +144,9 @@ async def create_customer(
 ):
     """Create a new customer."""
     customer = Customer(**customer_data.model_dump())
+    # Auto-lookup county from ZIP code for Texas addresses
+    if not customer.county and customer.postal_code and customer.state:
+        customer.county = lookup_county(customer.postal_code, customer.state)
     if entity:
         customer.entity_id = entity.id
     db.add(customer)
@@ -185,6 +189,12 @@ async def update_customer(
     update_data = customer_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(customer, field, value)
+
+    # Re-lookup county if address fields changed
+    if any(f in update_data for f in ("postal_code", "state", "city")):
+        county = lookup_county(customer.postal_code, customer.state)
+        if county:
+            customer.county = county
 
     await db.commit()
     await db.refresh(customer)
