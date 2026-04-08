@@ -131,9 +131,9 @@ async def create_prospect(
         data["prospect_stage"] = "new_lead"
 
     prospect = Customer(**data)
-    # Auto-lookup county from ZIP code for Texas addresses
-    if not prospect.county and prospect.postal_code and prospect.state:
-        prospect.county = lookup_county(prospect.postal_code, prospect.state)
+    # Auto-lookup county from address
+    if not prospect.county and prospect.state:
+        prospect.county = lookup_county(prospect.postal_code, prospect.state, prospect.city)
     db.add(prospect)
     await db.commit()
     await db.refresh(prospect)
@@ -164,7 +164,7 @@ async def update_prospect(
 
     # Re-lookup county if address fields changed
     if any(f in update_data for f in ("postal_code", "state", "city")):
-        county = lookup_county(prospect.postal_code, prospect.state)
+        county = lookup_county(prospect.postal_code, prospect.state, prospect.city)
         if county:
             prospect.county = county
 

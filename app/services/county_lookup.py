@@ -218,22 +218,226 @@ TX_ZIP_TO_COUNTY["78654"] = "Burnet"  # Marble Falls
 TX_ZIP_TO_COUNTY["78657"] = "Burnet"  # Meadowlakes
 
 
-def lookup_county(postal_code: str | None, state: str | None) -> str | None:
-    """Look up county from ZIP code. Only works for Texas addresses."""
-    if not postal_code or not state:
+# ─── Tennessee ZIP code to county mapping ───
+TN_ZIP_TO_COUNTY: dict[str, str] = {}
+
+# Maury County (Columbia, Spring Hill south, Mt Pleasant)
+for z in ["38401", "38402", "38403", "38471", "38474", "38468", "38485"]:
+    TN_ZIP_TO_COUNTY[z] = "Maury"
+TN_ZIP_TO_COUNTY["38401"] = "Maury"  # Columbia
+TN_ZIP_TO_COUNTY["38474"] = "Maury"  # Santa Fe
+TN_ZIP_TO_COUNTY["38468"] = "Maury"  # Mt Pleasant
+
+# Williamson County (Franklin, Brentwood, Spring Hill north, Nolensville, Thompson's Station)
+for z in ["37064", "37065", "37067", "37068", "37069", "37027", "37174", "37135", "37179"]:
+    TN_ZIP_TO_COUNTY[z] = "Williamson"
+TN_ZIP_TO_COUNTY["37064"] = "Williamson"  # Franklin
+TN_ZIP_TO_COUNTY["37067"] = "Williamson"  # Franklin
+TN_ZIP_TO_COUNTY["37027"] = "Williamson"  # Brentwood
+TN_ZIP_TO_COUNTY["37174"] = "Williamson"  # Spring Hill
+TN_ZIP_TO_COUNTY["37135"] = "Williamson"  # Nolensville
+TN_ZIP_TO_COUNTY["37179"] = "Williamson"  # Thompson's Station
+
+# Hickman County (Centerville, Lyles, Bon Aqua, Nunnelly, Primm Springs)
+for z in ["37033", "37098", "37025", "37137", "37060"]:
+    TN_ZIP_TO_COUNTY[z] = "Hickman"
+TN_ZIP_TO_COUNTY["37033"] = "Hickman"  # Centerville
+TN_ZIP_TO_COUNTY["37098"] = "Hickman"  # Lyles
+TN_ZIP_TO_COUNTY["37025"] = "Hickman"  # Bon Aqua
+TN_ZIP_TO_COUNTY["37137"] = "Hickman"  # Nunnelly
+
+# Marshall County (Lewisburg, Chapel Hill, Cornersville, Belfast, Petersburg)
+for z in ["37091", "37034", "37047", "37019", "37144"]:
+    TN_ZIP_TO_COUNTY[z] = "Marshall"
+TN_ZIP_TO_COUNTY["37091"] = "Marshall"  # Lewisburg
+TN_ZIP_TO_COUNTY["37034"] = "Marshall"  # Chapel Hill
+TN_ZIP_TO_COUNTY["37047"] = "Marshall"  # Cornersville
+TN_ZIP_TO_COUNTY["37019"] = "Marshall"  # Belfast
+TN_ZIP_TO_COUNTY["37144"] = "Marshall"  # Petersburg
+
+# Lewis County (Hohenwald, Summertown, Hampshire)
+for z in ["38462", "38483", "38461"]:
+    TN_ZIP_TO_COUNTY[z] = "Lewis"
+TN_ZIP_TO_COUNTY["38462"] = "Lewis"  # Hohenwald
+TN_ZIP_TO_COUNTY["38483"] = "Lewis"  # Summertown
+TN_ZIP_TO_COUNTY["38461"] = "Lewis"  # Hampshire
+
+# Dickson County (Dickson, Burns, Charlotte, White Bluff, Vanleer, Cumberland Furnace)
+for z in ["37055", "37029", "37036", "37187", "37181", "37051"]:
+    TN_ZIP_TO_COUNTY[z] = "Dickson"
+TN_ZIP_TO_COUNTY["37055"] = "Dickson"  # Dickson
+TN_ZIP_TO_COUNTY["37029"] = "Dickson"  # Burns
+TN_ZIP_TO_COUNTY["37036"] = "Dickson"  # Charlotte
+TN_ZIP_TO_COUNTY["37187"] = "Dickson"  # White Bluff
+TN_ZIP_TO_COUNTY["37181"] = "Dickson"  # Vanleer
+
+# Davidson County (Nashville, Antioch, Madison, Goodlettsville, Hermitage, Joelton)
+for z in [
+    "37201", "37202", "37203", "37204", "37205", "37206", "37207", "37208",
+    "37209", "37210", "37211", "37212", "37213", "37214", "37215", "37216",
+    "37217", "37218", "37219", "37220", "37221", "37222", "37224", "37227",
+    "37228", "37229", "37230", "37232", "37234", "37235", "37236", "37238",
+    "37240", "37241", "37242", "37243", "37244", "37246", "37250",
+    "37013",  # Antioch
+    "37115",  # Madison
+    "37072",  # Goodlettsville (parts)
+    "37076",  # Hermitage
+    "37080",  # Joelton
+]:
+    TN_ZIP_TO_COUNTY[z] = "Davidson"
+
+# Rutherford County (Murfreesboro, Smyrna, La Vergne, Eagleville, Christiana, Rockvale)
+for z in ["37127", "37128", "37129", "37130", "37131", "37132", "37133",
+          "37167",  # Smyrna
+          "37086",  # La Vergne
+          "37060",  # Eagleville
+          "37037",  # Christiana
+          "37153",  # Rockvale
+          ]:
+    TN_ZIP_TO_COUNTY[z] = "Rutherford"
+TN_ZIP_TO_COUNTY["37060"] = "Rutherford"  # Eagleville
+
+# Sumner County (Gallatin, Hendersonville, Castalian Springs)
+TN_ZIP_TO_COUNTY["37066"] = "Sumner"  # Gallatin
+TN_ZIP_TO_COUNTY["37075"] = "Sumner"  # Hendersonville
+TN_ZIP_TO_COUNTY["37031"] = "Sumner"  # Castalian Springs
+
+# Wilson County (Lebanon, Mount Juliet)
+TN_ZIP_TO_COUNTY["37087"] = "Wilson"  # Lebanon
+TN_ZIP_TO_COUNTY["37088"] = "Wilson"  # Lebanon
+TN_ZIP_TO_COUNTY["37122"] = "Wilson"  # Mount Juliet
+TN_ZIP_TO_COUNTY["37138"] = "Wilson"  # Old Hickory (parts)
+
+# Cheatham County (Ashland City, Kingston Springs, Pleasant View)
+TN_ZIP_TO_COUNTY["37015"] = "Cheatham"  # Ashland City
+TN_ZIP_TO_COUNTY["37082"] = "Cheatham"  # Kingston Springs
+TN_ZIP_TO_COUNTY["37146"] = "Cheatham"  # Pleasant View
+
+# Lawrence County (Lawrenceburg)
+TN_ZIP_TO_COUNTY["38464"] = "Lawrence"  # Lawrenceburg
+
+# Giles County (Pulaski)
+TN_ZIP_TO_COUNTY["38478"] = "Giles"  # Pulaski
+
+# Perry County (Linden)
+TN_ZIP_TO_COUNTY["37096"] = "Perry"  # Linden
+
+# Wayne County (Waynesboro)
+TN_ZIP_TO_COUNTY["38485"] = "Wayne"  # Waynesboro
+
+# Bedford County (Shelbyville)
+TN_ZIP_TO_COUNTY["37160"] = "Bedford"  # Shelbyville
+TN_ZIP_TO_COUNTY["37162"] = "Bedford"  # Shelbyville
+
+# Coffee County (Tullahoma)
+TN_ZIP_TO_COUNTY["37388"] = "Coffee"  # Tullahoma
+
+# DeKalb County (Smithville)
+TN_ZIP_TO_COUNTY["37166"] = "DeKalb"  # Smithville
+
+# Cannon County (Woodbury)
+TN_ZIP_TO_COUNTY["37190"] = "Cannon"  # Woodbury
+
+# Fairview is in Williamson County
+TN_ZIP_TO_COUNTY["37062"] = "Williamson"  # Fairview
+
+
+# ─── Tennessee city-to-county mapping (fallback when ZIP is missing) ───
+TN_CITY_TO_COUNTY: dict[str, str] = {
+    # Maury County
+    "columbia": "Maury", "mt pleasant": "Maury", "mt. pleasant": "Maury",
+    "mount pleasant": "Maury", "culleoka": "Maury", "santa fe": "Maury",
+    "williamsport": "Maury", "duck river": "Maury",
+    # Williamson County
+    "franklin": "Williamson", "brentwood": "Williamson", "nolensville": "Williamson",
+    "fairview": "Williamson", "fariview": "Williamson",
+    "thompson station": "Williamson", "thompson's station": "Williamson",
+    "thomson station": "Williamson", "arrington": "Williamson",
+    "college grove": "Williamson",
+    # Spring Hill spans Maury/Williamson — default to Williamson (more populated side)
+    "spring hill": "Williamson",
+    # Hickman County
+    "centerville": "Hickman", "lyles": "Hickman", "bon aqua": "Hickman",
+    "nunnelly": "Hickman", "primm springs": "Hickman", "pleasantville": "Hickman",
+    "only": "Hickman",
+    # Marshall County
+    "lewisburg": "Marshall", "chapel hill": "Marshall", "chaple hill": "Marshall",
+    "chappell hill": "Marshall", "cornersville": "Marshall", "belfast": "Marshall",
+    "petersburg": "Marshall",
+    # Lewis County
+    "hohenwald": "Lewis", "hohenwlad": "Lewis", "summertown": "Lewis",
+    "hampshire": "Lewis", "hamphire": "Lewis", "hanpshire": "Lewis",
+    # Dickson County
+    "dickson": "Dickson", "burns": "Dickson", "bums": "Dickson",
+    "charlotte": "Dickson", "white bluff": "Dickson", "vanleer": "Dickson",
+    "cumberland furnace": "Dickson",
+    # Davidson County
+    "nashville": "Davidson", "antioch": "Davidson", "madison": "Davidson",
+    "goodlettsville": "Davidson", "hermitage": "Davidson", "joelton": "Davidson",
+    # Rutherford County
+    "murfreesboro": "Rutherford", "mufreesboro": "Rutherford",
+    "murfressboro": "Rutherford", "smyrna": "Rutherford",
+    "la vergne": "Rutherford", "lavergne": "Rutherford",
+    "eagleville": "Rutherford", "eaglevill": "Rutherford",
+    "christiana": "Rutherford", "rockvale": "Rutherford",
+    "lascassas": "Rutherford",
+    # Sumner County
+    "gallatin": "Sumner", "hendersonville": "Sumner",
+    "castalian springs": "Sumner",
+    # Wilson County
+    "lebanon": "Wilson", "mount juliet": "Wilson", "mt juliet": "Wilson",
+    # Cheatham County
+    "ashland city": "Cheatham", "kingston springs": "Cheatham",
+    # Lawrence County
+    "lawrenceburg": "Lawrence",
+    # Giles County
+    "pulaski": "Giles", "lynnville": "Giles",
+    # Wayne County
+    "waynesboro": "Wayne",
+    # Bedford County
+    "shelbyville": "Bedford", "bell buckle": "Bedford",
+    # Coffee County
+    "tullahoma": "Coffee",
+    # DeKalb County
+    "smithville": "DeKalb",
+    # Cannon County
+    "woodbury": "Cannon",
+    # Perry County
+    "linden": "Perry",
+}
+
+
+def lookup_county(postal_code: str | None, state: str | None, city: str | None = None) -> str | None:
+    """Look up county from ZIP code and/or city. Works for TX and TN."""
+    if not state:
         return None
 
-    # Only look up Texas addresses
     state_upper = state.strip().upper()
-    if state_upper not in ("TX", "TEXAS"):
+
+    # Texas lookup (ZIP-based)
+    if state_upper in ("TX", "TEXAS"):
+        if not postal_code:
+            return None
+        zip5 = postal_code.strip()[:5]
+        if not zip5.isdigit() or len(zip5) != 5:
+            return None
+        return TX_ZIP_TO_COUNTY.get(zip5)
+
+    # Tennessee lookup (ZIP first, then city fallback)
+    if state_upper in ("TN", "TENNESSEE"):
+        # Try ZIP first
+        if postal_code:
+            zip5 = postal_code.strip()[:5]
+            if zip5.isdigit() and len(zip5) == 5:
+                county = TN_ZIP_TO_COUNTY.get(zip5)
+                if county:
+                    return county
+        # Fall back to city name
+        if city:
+            return TN_CITY_TO_COUNTY.get(city.strip().lower())
         return None
 
-    # Normalize ZIP (take first 5 digits)
-    zip5 = postal_code.strip()[:5]
-    if not zip5.isdigit() or len(zip5) != 5:
-        return None
-
-    return TX_ZIP_TO_COUNTY.get(zip5)
+    return None
 
 
 def get_county_rules(county_name: str | None) -> dict | None:

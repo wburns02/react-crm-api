@@ -144,9 +144,9 @@ async def create_customer(
 ):
     """Create a new customer."""
     customer = Customer(**customer_data.model_dump())
-    # Auto-lookup county from ZIP code for Texas addresses
-    if not customer.county and customer.postal_code and customer.state:
-        customer.county = lookup_county(customer.postal_code, customer.state)
+    # Auto-lookup county from address
+    if not customer.county and customer.state:
+        customer.county = lookup_county(customer.postal_code, customer.state, customer.city)
     if entity:
         customer.entity_id = entity.id
     db.add(customer)
@@ -192,7 +192,7 @@ async def update_customer(
 
     # Re-lookup county if address fields changed
     if any(f in update_data for f in ("postal_code", "state", "city")):
-        county = lookup_county(customer.postal_code, customer.state)
+        county = lookup_county(customer.postal_code, customer.state, customer.city)
         if county:
             customer.county = county
 

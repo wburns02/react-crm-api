@@ -64,12 +64,13 @@ async def backfill_counties(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Backfill county for all Texas customers/prospects that have a ZIP code but no county."""
+    """Backfill county for all TX and TN customers/prospects without a county."""
     result = await db.execute(
         select(Customer).where(
-            Customer.postal_code.isnot(None),
-            Customer.postal_code != "",
-            or_(Customer.state == "TX", Customer.state == "tx", Customer.state == "Texas"),
+            or_(
+                Customer.state.in_(["TX", "tx", "Texas", "TEX"]),
+                Customer.state.in_(["TN", "tn", "Tennessee"]),
+            ),
             or_(Customer.county.is_(None), Customer.county == ""),
         )
     )
@@ -77,7 +78,7 @@ async def backfill_counties(
 
     updated = 0
     for customer in customers:
-        county = lookup_county(customer.postal_code, customer.state)
+        county = lookup_county(customer.postal_code, customer.state, customer.city)
         if county:
             customer.county = county
             updated += 1
