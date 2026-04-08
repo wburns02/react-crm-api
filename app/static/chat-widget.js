@@ -100,12 +100,12 @@
     '      <input type="text" id="mac-chat-name" placeholder="Your name" required>',
     '    </div>',
     '    <div class="mac-chat-form-field">',
-    '      <label for="mac-chat-email">Email</label>',
-    '      <input type="email" id="mac-chat-email" placeholder="you@example.com">',
+    '      <label for="mac-chat-email">Email *</label>',
+    '      <input type="email" id="mac-chat-email" placeholder="you@example.com" required>',
     '    </div>',
     '    <div class="mac-chat-form-field">',
-    '      <label for="mac-chat-phone">Phone</label>',
-    '      <input type="tel" id="mac-chat-phone" placeholder="(555) 123-4567">',
+    '      <label for="mac-chat-phone">Phone *</label>',
+    '      <input type="tel" id="mac-chat-phone" placeholder="(555) 123-4567" required>',
     '    </div>',
     '    <div class="mac-chat-error" id="mac-chat-form-error"></div>',
     '    <button class="mac-chat-form-btn" id="mac-chat-start-btn">Start Chat</button>',
@@ -219,8 +219,18 @@
   // Start conversation
   function startConversation() {
     var name = nameInput.value.trim();
+    var email = emailInput.value.trim();
+    var phone = phoneInput.value.trim();
     if (!name) {
       formError.textContent = 'Please enter your name.';
+      return;
+    }
+    if (!phone) {
+      formError.textContent = 'Please enter your phone number.';
+      return;
+    }
+    if (!email) {
+      formError.textContent = 'Please enter your email address.';
       return;
     }
     formError.textContent = '';
@@ -229,8 +239,8 @@
 
     apiCall('POST', '/api/v2/chat/conversations', {
       visitor_name: name,
-      visitor_email: emailInput.value.trim() || null,
-      visitor_phone: phoneInput.value.trim() || null,
+      visitor_email: email,
+      visitor_phone: phone,
       page_url: window.location.href,
       user_agent: navigator.userAgent
     }).then(function(data) {
