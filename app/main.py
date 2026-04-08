@@ -1542,6 +1542,28 @@ app.include_router(call_transcript_ws_router)
 # Outbound AI Agent WebSocket (mounted at root for Twilio media streams)
 app.include_router(outbound_agent_ws_router)
 
+# ── Duplicate route detection ────────────────────────────────────────────
+# Catch route-shadowing bugs at startup (e.g. stub overriding real endpoints).
+def _check_duplicate_routes(app_instance):
+    """Log a warning if two routes share the same method+path."""
+    seen: dict[str, str] = {}  # "GET /api/v2/chat/conversations" → "module.func"
+    for route in app_instance.routes:
+        if not hasattr(route, "methods"):
+            continue
+        for method in route.methods:
+            key = f"{method} {route.path}"
+            endpoint_name = getattr(route, "endpoint", None)
+            label = f"{endpoint_name.__module__}.{endpoint_name.__name__}" if endpoint_name else "unknown"
+            if key in seen:
+                logger.error(
+                    f"DUPLICATE ROUTE DETECTED: {key} registered by both "
+                    f"{seen[key]} and {label} — second handler will be shadowed!"
+                )
+            else:
+                seen[key] = label
+
+_check_duplicate_routes(app)
+
 # Serve static assets (logos, etc.) — no auth required
 from starlette.staticfiles import StaticFiles
 import pathlib
