@@ -1365,7 +1365,7 @@ High water usage can overload your septic system. Fix leaky faucets, use high-ef
 
 Watch for slow drains, gurgling sounds, foul odors, or wet spots in your yard. These could indicate a problem that needs professional attention. Don't wait - call a septic professional at the first sign of trouble.
 
-*Need professional septic service in East Texas? Contact us today for a free inspection!*""",
+*Need professional septic service in East Texas? Contact us today to schedule an inspection!*""",
 
     "faq": """## How Often Should I Pump My Septic Tank?
 
@@ -1384,7 +1384,7 @@ For a typical household of 4 people, your septic tank should be pumped every 3-5
 
 Don't wait until you have a problem! Regular maintenance saves money and prevents emergencies.
 
-*Schedule your free septic inspection today!*""",
+*Schedule your septic inspection today!*""",
 
     "gbp_post": """🏠 **Keep Your Septic System Healthy This Season!**
 
