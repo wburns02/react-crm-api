@@ -150,7 +150,7 @@ async def get_inspection_letter_queue(db: DbSession, current_user: CurrentUser):
     result = await db.execute(
         select(WorkOrder)
         .options(selectinload(WorkOrder.customer))
-        .where(WorkOrder.job_type == "real_estate_inspection")
+        .where(cast(WorkOrder.job_type, String) == "real_estate_inspection")
         .order_by(WorkOrder.scheduled_date.desc())
         .limit(100)
     )
