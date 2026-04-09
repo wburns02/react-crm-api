@@ -379,6 +379,7 @@ def render_letter_pdf(
     inspection_time: str = "",
     signer_key: str = "douglas_carter",
     letter_date: Optional[str] = None,
+    photos: list[dict] | None = None,
 ) -> bytes:
     """Render an approved inspection letter body into a PDF on MAC Septic
     letterhead using WeasyPrint.
@@ -404,6 +405,20 @@ def render_letter_pdf(
 
     # Licenses as comma-separated string
     licenses_str = " | ".join(signer["licenses"])
+
+    # Photo pages (appended after the letter body)
+    photo_pages = ""
+    if photos:
+        for i, photo in enumerate(photos):
+            photo_data = photo.get("data", "")
+            photo_type = photo.get("photo_type", "")
+            caption = photo_type.replace("_", " ").title() if photo_type else f"Photo {i + 1}"
+            if photo_data:
+                photo_pages += f'''
+    <div style="page-break-before: always; text-align: center; padding-top: 20px;">
+        <img src="{photo_data}" style="max-width: 100%; max-height: 85vh; object-fit: contain;" alt="{caption}">
+        <p style="margin-top: 12px; font-size: 10pt; color: #6b7280;">{caption}</p>
+    </div>'''
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -561,6 +576,7 @@ def render_letter_pdf(
         <p class="signer-title">{signer['title']}, MAC Septic Services</p>
         <p class="signer-licenses">{licenses_str}</p>
     </div>
+{photo_pages}
 </body>
 </html>"""
 

@@ -2701,6 +2701,20 @@ async def approve_inspection_letter(
             customer_email = cust.email or ""
             customer_phone = cust.phone or ""
 
+        # Fetch work order photos for the letter PDF
+        from app.models.work_order_photo import WorkOrderPhoto
+        photo_result = await db.execute(
+            select(WorkOrderPhoto)
+            .where(WorkOrderPhoto.work_order_id == job_id)
+            .order_by(WorkOrderPhoto.created_at)
+        )
+        photo_rows = photo_result.scalars().all()
+        photos = [
+            {"data": p.data, "photo_type": p.photo_type}
+            for p in photo_rows
+            if p.data
+        ]
+
         # Format inspection date
         inspection_date = ""
         if wo.scheduled_date:
@@ -2714,6 +2728,7 @@ async def approve_inspection_letter(
             customer_phone=customer_phone,
             inspection_date=inspection_date,
             signer_key=body.signer,
+            photos=photos,
         )
 
         # Store PDF as Document
