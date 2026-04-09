@@ -145,57 +145,62 @@ async def get_inspection_letter_queue(db: DbSession, current_user: CurrentUser):
     This is an admin/office endpoint (not employee portal) so Doug can
     access it from the main CRM sidebar.
     """
-    from sqlalchemy.orm import selectinload
+    try:
+        from sqlalchemy.orm import selectinload
+        from sqlalchemy import nullslast
 
-    result = await db.execute(
-        select(WorkOrder)
-        .options(selectinload(WorkOrder.customer))
-        .where(cast(WorkOrder.job_type, String) == "real_estate_inspection")
-        .order_by(WorkOrder.scheduled_date.desc())
-        .limit(100)
-    )
-    work_orders = result.scalars().all()
+        result = await db.execute(
+            select(WorkOrder)
+            .options(selectinload(WorkOrder.customer))
+            .where(cast(WorkOrder.job_type, String) == "real_estate_inspection")
+            .order_by(nullslast(WorkOrder.scheduled_date.desc()))
+            .limit(100)
+        )
+        work_orders = result.scalars().all()
 
-    items = []
-    for wo in work_orders:
-        checklist = wo.checklist or {}
-        inspection = checklist.get("inspection", {})
-        ai_letter = inspection.get("ai_letter", {})
-        summary = inspection.get("summary", {})
+        items = []
+        for wo in work_orders:
+            checklist = wo.checklist or {}
+            inspection = checklist.get("inspection", {})
+            ai_letter = inspection.get("ai_letter", {})
+            summary = inspection.get("summary", {})
 
-        customer_name = "Unknown"
-        customer_email = None
-        if wo.customer:
-            customer_name = f"{wo.customer.first_name or ''} {wo.customer.last_name or ''}".strip() or "Unknown"
-            customer_email = wo.customer.email
+            customer_name = "Unknown"
+            customer_email = None
+            if wo.customer:
+                customer_name = f"{wo.customer.first_name or ''} {wo.customer.last_name or ''}".strip() or "Unknown"
+                customer_email = wo.customer.email
 
-        address = ""
-        if wo.service_address_line1:
-            parts = [wo.service_address_line1, wo.service_city, wo.service_state, wo.service_postal_code]
-            address = ", ".join(p for p in parts if p)
-        elif wo.customer:
-            parts = [wo.customer.address_line1, wo.customer.city, wo.customer.state, wo.customer.postal_code]
-            address = ", ".join(p for p in parts if p)
+            address = ""
+            if wo.service_address_line1:
+                parts = [wo.service_address_line1, wo.service_city, wo.service_state, wo.service_postal_code]
+                address = ", ".join(p for p in parts if p)
+            elif wo.customer:
+                parts = [wo.customer.address_line1, wo.customer.city, wo.customer.state, wo.customer.postal_code]
+                address = ", ".join(p for p in parts if p)
 
-        letter_status = ai_letter.get("status", "none")
-        has_inspection_data = bool(inspection.get("steps"))
+            letter_status = ai_letter.get("status", "none")
+            has_inspection_data = bool(inspection.get("steps"))
 
-        items.append({
-            "id": str(wo.id),
-            "work_order_number": wo.work_order_number,
-            "customer_name": customer_name,
-            "customer_email": customer_email,
-            "address": address,
-            "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
-            "status": str(wo.status) if wo.status else None,
-            "letter_status": letter_status,
-            "has_inspection_data": has_inspection_data,
-            "overall_condition": summary.get("overall_condition"),
-            "sent_at": ai_letter.get("sent_at"),
-            "sent_to": ai_letter.get("sent_to"),
-        })
+            items.append({
+                "id": str(wo.id),
+                "work_order_number": wo.work_order_number,
+                "customer_name": customer_name,
+                "customer_email": customer_email,
+                "address": address,
+                "scheduled_date": wo.scheduled_date.isoformat() if wo.scheduled_date else None,
+                "status": str(wo.status) if wo.status else None,
+                "letter_status": letter_status,
+                "has_inspection_data": has_inspection_data,
+                "overall_condition": summary.get("overall_condition"),
+                "sent_at": ai_letter.get("sent_at"),
+                "sent_to": ai_letter.get("sent_to"),
+            })
 
-    return {"items": items, "total": len(items)}
+        return {"items": items, "total": len(items)}
+    except Exception as e:
+        logger.error(f"[INSPECTION-LETTERS] Queue endpoint error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/fix-billing-column")
