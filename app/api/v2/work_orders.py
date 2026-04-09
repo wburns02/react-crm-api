@@ -337,6 +337,160 @@ async def generate_standalone_letter_pdf(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/inspection-letters/{work_order_id}/generate")
+async def generate_letter_for_wo(
+    work_order_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Generate an AI letter draft for a specific work order (admin/office use)."""
+    try:
+        from sqlalchemy.orm import selectinload
+        from app.services.inspection_letter_service import generate_letter_draft
+
+        result = await db.execute(
+            select(WorkOrder)
+            .options(selectinload(WorkOrder.customer))
+            .where(WorkOrder.id == work_order_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        checklist = wo.checklist if isinstance(wo.checklist, dict) else {}
+        inspection = checklist.get("inspection") or {}
+
+        # Build customer info for response
+        customer_name = "Unknown"
+        customer_email = None
+        customer_phone = None
+        if wo.customer:
+            customer_name = f"{wo.customer.first_name or ''} {wo.customer.last_name or ''}".strip() or "Unknown"
+            customer_email = wo.customer.email
+            customer_phone = wo.customer.phone
+
+        address = ""
+        if wo.service_address_line1:
+            parts = [wo.service_address_line1, wo.service_city, wo.service_state, wo.service_postal_code]
+            address = ", ".join(p for p in parts if p)
+        elif wo.customer:
+            parts = [wo.customer.address_line1, wo.customer.city, wo.customer.state, wo.customer.postal_code]
+            address = ", ".join(p for p in parts if p)
+
+        insp_date = str(wo.scheduled_date) if wo.scheduled_date else ""
+        insp_time = "12:00 PM CST"
+
+        draft = await generate_letter_draft(checklist)
+
+        # Store draft in checklist
+        if draft.get("body"):
+            inspection["ai_letter"] = draft
+            checklist["inspection"] = inspection
+            wo.checklist = checklist
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(wo, "checklist")
+            await db.commit()
+
+        return {
+            "body": draft.get("body", ""),
+            "generated_at": draft.get("generated_at"),
+            "model": draft.get("model"),
+            "status": draft.get("status", "draft"),
+            "error": draft.get("error"),
+            "form_data": {
+                "customer_name": customer_name,
+                "customer_email": customer_email or "",
+                "customer_phone": customer_phone or "",
+                "address": address,
+                "inspection_date": insp_date,
+                "inspection_time": insp_time,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[INSPECTION-LETTERS] WO generate error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/inspection-letters/{work_order_id}/pdf")
+async def generate_letter_pdf_for_wo(
+    work_order_id: str,
+    body: dict,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Render letter PDF for a work order, including photos."""
+    try:
+        import base64
+        from sqlalchemy.orm import selectinload
+        from app.services.inspection_letter_service import render_letter_pdf
+        from app.models.work_order_photo import WorkOrderPhoto
+
+        letter_body = body.get("letter_body", "")
+        if not letter_body:
+            raise HTTPException(status_code=400, detail="letter_body is required")
+
+        result = await db.execute(
+            select(WorkOrder)
+            .options(selectinload(WorkOrder.customer))
+            .where(WorkOrder.id == work_order_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        customer_name = body.get("customer_name", "Valued Customer")
+        customer_address = body.get("address", "")
+        if not customer_address and wo.customer:
+            parts = [wo.customer.address_line1, wo.customer.city, wo.customer.state, wo.customer.postal_code]
+            customer_address = ", ".join(p for p in parts if p)
+
+        # Fetch photos
+        photo_result = await db.execute(
+            select(WorkOrderPhoto)
+            .where(WorkOrderPhoto.work_order_id == work_order_id)
+            .order_by(WorkOrderPhoto.created_at)
+        )
+        photo_rows = photo_result.scalars().all()
+        photos = [{"data": p.data, "photo_type": p.photo_type} for p in photo_rows if p.data]
+
+        pdf_bytes = render_letter_pdf(
+            letter_body=letter_body,
+            customer_name=customer_name,
+            customer_address=customer_address,
+            customer_email=body.get("customer_email", ""),
+            customer_phone=body.get("customer_phone", ""),
+            inspection_date=body.get("inspection_date", ""),
+            inspection_time=body.get("inspection_time", "12:00 PM CST"),
+            signer_key=body.get("signer", "douglas_carter"),
+            photos=photos,
+        )
+
+        # Store in checklist
+        checklist = wo.checklist if isinstance(wo.checklist, dict) else {}
+        inspection = checklist.get("inspection") or {}
+        inspection.setdefault("ai_letter", {})
+        inspection["ai_letter"]["status"] = "approved"
+        inspection["ai_letter"]["approved_body"] = letter_body
+        inspection["ai_letter"]["signer"] = body.get("signer", "douglas_carter")
+        checklist["inspection"] = inspection
+        wo.checklist = checklist
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(wo, "checklist")
+        await db.commit()
+
+        return {
+            "pdf_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+            "status": "approved",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[INSPECTION-LETTERS] WO PDF error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/fix-billing-column")
 async def fix_billing_customer_column(db: DbSession, current_user: CurrentUser):
     """Add billing_customer_id column if missing (migration 093 safety net)."""
