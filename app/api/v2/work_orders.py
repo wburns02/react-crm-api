@@ -231,6 +231,19 @@ class StandaloneLetterRequest(BaseModel):
     signer: str = "douglas_carter"
 
 
+@router.post("/inspection-letters/sync-forms")
+async def sync_inspection_forms_now(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Manually trigger sync of inspection form responses from SharePoint."""
+    from app.services.ms365_forms_sync_service import MS365FormsSyncService
+    if not MS365FormsSyncService.is_configured():
+        raise HTTPException(status_code=503, detail="MS365 not configured")
+    result = await MS365FormsSyncService.sync_inspection_forms()
+    return result
+
+
 @router.post("/inspection-letters/standalone/generate")
 async def generate_standalone_letter(
     body: StandaloneLetterRequest,

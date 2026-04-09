@@ -42,6 +42,7 @@ from app.tasks.calendar_sync import start_calendar_sync, stop_calendar_sync
 from app.tasks.email_poller import start_email_poller, stop_email_poller
 from app.tasks.campaign_scheduler import start_campaign_scheduler, stop_campaign_scheduler
 from app.tasks.bookings_sync import start_bookings_sync, stop_bookings_sync
+from app.tasks.forms_sync import start_forms_sync, stop_forms_sync
 # followup_scheduler and auto_dispatch don't have start/stop functions yet
 # from app.tasks.followup_scheduler import start_followup_scheduler, stop_followup_scheduler
 # from app.tasks.auto_dispatch import start_auto_dispatch, stop_auto_dispatch
@@ -1349,6 +1350,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start bookings sync: {e}")
 
+    # Start MS Forms inspection sync
+    try:
+        start_forms_sync()
+    except Exception as e:
+        logger.warning(f"Failed to start forms sync: {e}")
+
     # Start marketing daily report scheduler (7 AM)
     try:
         start_marketing_report_scheduler()
@@ -1439,6 +1446,7 @@ async def lifespan(app: FastAPI):
     stop_email_poller()
     stop_campaign_scheduler()
     stop_bookings_sync()
+    stop_forms_sync()
     stop_marketing_report_scheduler()
     # stop_followup_scheduler()
     # stop_auto_dispatch()
