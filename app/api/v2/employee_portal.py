@@ -9,7 +9,7 @@ Features:
 """
 
 from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File, Request
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, cast, String
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timedelta, timezone
@@ -2618,7 +2618,7 @@ async def get_inspection_letter_queue(
         select(WorkOrder)
         .options(selectinload(WorkOrder.customer))
         .where(
-            WorkOrder.job_type == "real_estate_inspection",
+            cast(WorkOrder.job_type, String) == "real_estate_inspection",
         )
         .order_by(WorkOrder.scheduled_date.desc())
         .limit(100)
