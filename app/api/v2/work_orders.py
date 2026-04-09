@@ -160,10 +160,10 @@ async def get_inspection_letter_queue(db: DbSession, current_user: CurrentUser):
 
         items = []
         for wo in work_orders:
-            checklist = wo.checklist or {}
-            inspection = checklist.get("inspection", {})
-            ai_letter = inspection.get("ai_letter", {})
-            summary = inspection.get("summary", {})
+            checklist = wo.checklist if isinstance(wo.checklist, dict) else {}
+            inspection = checklist.get("inspection") or {}
+            ai_letter = inspection.get("ai_letter") or {}
+            summary = inspection.get("summary") or {}
 
             customer_name = "Unknown"
             customer_email = None
