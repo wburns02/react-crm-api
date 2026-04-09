@@ -2601,6 +2601,280 @@ async def complete_inspection(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---------------------------------------------------------------------------
+# AI Inspection Letter endpoints
+# ---------------------------------------------------------------------------
+
+
+class ApproveLetterRequest(BaseModel):
+    edited_body: str
+    signer: str = "douglas_carter"
+
+
+@router.post("/jobs/{job_id}/inspection/generate-letter")
+async def generate_inspection_letter(
+    job_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Generate an AI-drafted inspection letter from checklist data."""
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.services.inspection_letter_service import generate_letter_draft
+
+    try:
+        result = await db.execute(
+            select(WorkOrder)
+            .options(selectinload(WorkOrder.customer))
+            .where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection", {})
+        if not inspection:
+            raise HTTPException(status_code=400, detail="No inspection data found")
+
+        draft = await generate_letter_draft(checklist)
+
+        inspection["ai_letter"] = draft
+        checklist["inspection"] = inspection
+        wo.checklist = checklist
+        flag_modified(wo, "checklist")
+        await db.commit()
+
+        return draft
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[GENERATE-LETTER] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/inspection/approve-letter")
+async def approve_inspection_letter(
+    job_id: str,
+    body: ApproveLetterRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Approve (and optionally edit) the AI letter draft, render PDF, store as Document."""
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.services.inspection_letter_service import render_letter_pdf
+    from app.models.document import Document
+    import base64
+
+    try:
+        result = await db.execute(
+            select(WorkOrder)
+            .options(selectinload(WorkOrder.customer))
+            .where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection", {})
+        if not inspection.get("ai_letter"):
+            raise HTTPException(status_code=400, detail="No letter draft found — generate first")
+
+        # Customer info
+        customer_name = "Valued Customer"
+        customer_address = ""
+        customer_email = ""
+        customer_phone = ""
+        cust = wo.customer
+        if cust:
+            customer_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Valued Customer"
+            # Use service address if available, fall back to customer address
+            if wo.service_address_line1:
+                addr_parts = [p for p in [wo.service_address_line1, wo.service_address_line2] if p]
+                customer_address = ", ".join(addr_parts)
+            else:
+                addr_parts = [p for p in [cust.address_line1, cust.city, cust.state, cust.postal_code] if p]
+                customer_address = ", ".join(addr_parts)
+            customer_email = cust.email or ""
+            customer_phone = cust.phone or ""
+
+        # Format inspection date
+        inspection_date = ""
+        if wo.scheduled_date:
+            inspection_date = wo.scheduled_date.strftime("%B %d, %Y")
+
+        pdf_bytes = render_letter_pdf(
+            letter_body=body.edited_body,
+            customer_name=customer_name,
+            customer_address=customer_address,
+            customer_email=customer_email,
+            customer_phone=customer_phone,
+            inspection_date=inspection_date,
+            signer_key=body.signer,
+        )
+
+        # Store PDF as Document
+        doc = Document(
+            id=uuid_mod.uuid4(),
+            document_type="inspection_letter",
+            reference_id=wo.id,
+            customer_id=wo.customer_id,
+            file_name=f"Inspection-Letter-{str(wo.id)[:8]}.pdf",
+            file_size=len(pdf_bytes),
+            pdf_data=pdf_bytes,
+            status="draft",
+            created_by=current_user.id,
+        )
+        if hasattr(wo, "entity_id") and wo.entity_id:
+            doc.entity_id = wo.entity_id
+        else:
+            # entity_id is NOT NULL — use a default
+            from app.models.work_order import WorkOrder as _WO  # noqa: F811
+            doc.entity_id = wo.entity_id or uuid_mod.UUID("3deea934-5787-4bf9-98ac-d7387667f085")
+        db.add(doc)
+        await db.flush()
+
+        # Update checklist with approval info
+        now = datetime.now(timezone.utc).isoformat()
+        inspection["ai_letter"].update({
+            "status": "approved",
+            "approved_body": body.edited_body,
+            "signer": body.signer,
+            "document_id": str(doc.id),
+            "approved_at": now,
+        })
+        checklist["inspection"] = inspection
+        wo.checklist = checklist
+        flag_modified(wo, "checklist")
+        await db.commit()
+
+        pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
+        return {
+            "document_id": str(doc.id),
+            "pdf_base64": pdf_base64,
+            "status": "approved",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[APPROVE-LETTER] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/inspection/send-letter")
+async def send_inspection_letter(
+    job_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Send the approved inspection letter PDF via email to the customer."""
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.models.document import Document
+    from app.services.email_service import EmailService
+    import base64
+
+    try:
+        result = await db.execute(
+            select(WorkOrder)
+            .options(selectinload(WorkOrder.customer))
+            .where(WorkOrder.id == job_id)
+        )
+        wo = result.scalars().first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="Work order not found")
+
+        checklist = wo.checklist or {}
+        inspection = checklist.get("inspection", {})
+        ai_letter = inspection.get("ai_letter", {})
+
+        if ai_letter.get("status") != "approved":
+            raise HTTPException(status_code=400, detail="Letter must be approved before sending")
+
+        document_id = ai_letter.get("document_id")
+        if not document_id:
+            raise HTTPException(status_code=400, detail="No document_id found — approve letter first")
+
+        # Fetch the stored PDF document
+        doc_result = await db.execute(
+            select(Document).where(Document.id == document_id)
+        )
+        doc = doc_result.scalars().first()
+        if not doc or not doc.pdf_data:
+            raise HTTPException(status_code=404, detail="Letter PDF document not found")
+
+        # Get customer email
+        cust = wo.customer
+        customer_email = cust.email if cust else None
+        if not customer_email:
+            raise HTTPException(status_code=400, detail="Customer has no email address on file")
+
+        customer_name = "Valued Customer"
+        if cust:
+            customer_name = f"{cust.first_name or ''} {cust.last_name or ''}".strip() or "Valued Customer"
+
+        # Send email
+        email_svc = EmailService()
+        if not email_svc.is_configured:
+            status_info = email_svc.get_status()
+            raise HTTPException(status_code=503, detail=f"Email not configured: {status_info.get('message')}")
+
+        pdf_b64 = base64.b64encode(doc.pdf_data).decode("utf-8")
+        attachments = [{
+            "content": pdf_b64,
+            "name": doc.file_name or f"Inspection-Letter-{str(wo.id)[:8]}.pdf",
+        }]
+
+        plain_text = (
+            f"Dear {customer_name},\n\n"
+            f"Please find attached your septic inspection letter from MAC Septic Services.\n\n"
+            f"If you have any questions, please don't hesitate to contact us.\n\n"
+            f"Thank you,\nMAC Septic Services\n(512) 737-8711"
+        )
+
+        email_result = await email_svc.send_email(
+            to=customer_email,
+            subject=f"Septic Inspection Letter — {customer_name}",
+            body=plain_text,
+            attachments=attachments,
+        )
+
+        if not email_result.get("success"):
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to send email: {email_result.get('error', 'Unknown error')}",
+            )
+
+        # Update letter status
+        now = datetime.now(timezone.utc)
+        ai_letter["status"] = "sent"
+        ai_letter["sent_at"] = now.isoformat()
+        ai_letter["sent_to"] = customer_email
+        inspection["ai_letter"] = ai_letter
+        checklist["inspection"] = inspection
+        wo.checklist = checklist
+        flag_modified(wo, "checklist")
+
+        # Update document status
+        doc.status = "sent"
+        doc.sent_at = now
+        doc.sent_to = customer_email
+
+        await db.commit()
+
+        return {"success": True, "sent_to": customer_email}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[SEND-LETTER] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class CreateEstimateRequest(BaseModel):
     include_pumping: Optional[bool] = None  # None = auto from recommend_pumping flag
     pumping_rate: Optional[float] = None    # Override default $595
