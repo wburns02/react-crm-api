@@ -203,6 +203,140 @@ async def get_inspection_letter_queue(db: DbSession, current_user: CurrentUser):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class StandaloneLetterRequest(BaseModel):
+    """Form data for generating a standalone inspection letter (no work order)."""
+    customer_name: str
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    address: str
+    inspection_date: str
+    inspection_time: str = "12:00 PM CST"
+    tank_location: str = ""
+    tank_depth: str = ""
+    permit_info: str = ""
+    installation_year: str = ""
+    system_type: str = "Standard septic system with one tank gravity flow"
+    tank_capacity: str = "1000 gallons"
+    flow_type: str = "gravity"
+    condition: str = "good"
+    pumped: bool = False
+    baffles: str = ""
+    operational_test: str = ""
+    drain_field: str = "No signs of leaching up or super saturation. System appears to be functioning properly overall."
+    notable_observations: str = ""
+    pump_info: str = ""
+    pump_chamber: str = ""
+    homeowner_present: bool = False
+    who_present: str = ""
+    signer: str = "douglas_carter"
+
+
+@router.post("/inspection-letters/standalone/generate")
+async def generate_standalone_letter(
+    body: StandaloneLetterRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Generate an AI inspection letter from manually entered form data (no work order)."""
+    try:
+        # Build a checklist dict that _build_inspection_text can consume
+        checklist = {
+            "address": body.address,
+            "steps": {
+                "1": {"address": body.address},
+                "2": {
+                    "tank_location": body.tank_location,
+                    "tank_depth": body.tank_depth,
+                },
+                "3": {
+                    "permit_info": body.permit_info,
+                    "installation_year": body.installation_year,
+                },
+                "4": {
+                    "system_type": f"{body.system_type}, {body.flow_type} flow",
+                    "tank_capacity": body.tank_capacity,
+                    "condition": body.condition,
+                },
+                "5": {
+                    "pumped": "yes" if body.pumped else "no",
+                    "baffles": body.baffles,
+                    "operational_test": body.operational_test,
+                },
+                "6": {
+                    "notable_observations": body.notable_observations,
+                    "pump_info": body.pump_info,
+                    "pump_chamber": body.pump_chamber,
+                },
+                "7": {
+                    "drain_field": body.drain_field,
+                },
+            },
+            "customFields": {
+                "homeowner_present": body.homeowner_present,
+            },
+        }
+
+        from app.services.inspection_letter_service import generate_letter_draft
+        draft = await generate_letter_draft(checklist)
+
+        return {
+            "body": draft.get("body", ""),
+            "generated_at": draft.get("generated_at"),
+            "model": draft.get("model"),
+            "status": draft.get("status", "draft"),
+            "error": draft.get("error"),
+            "form_data": {
+                "customer_name": body.customer_name,
+                "customer_email": body.customer_email,
+                "customer_phone": body.customer_phone,
+                "address": body.address,
+                "inspection_date": body.inspection_date,
+                "inspection_time": body.inspection_time,
+                "signer": body.signer,
+            },
+        }
+    except Exception as e:
+        logger.error(f"[INSPECTION-LETTERS] Standalone generate error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/inspection-letters/standalone/pdf")
+async def generate_standalone_letter_pdf(
+    body: dict,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Render a standalone inspection letter as a PDF."""
+    try:
+        import base64
+        from app.services.inspection_letter_service import render_letter_pdf
+
+        letter_body = body.get("letter_body", "")
+        if not letter_body:
+            raise HTTPException(status_code=400, detail="letter_body is required")
+
+        pdf_bytes = render_letter_pdf(
+            letter_body=letter_body,
+            customer_name=body.get("customer_name", "Valued Customer"),
+            customer_address=body.get("address", ""),
+            customer_email=body.get("customer_email", ""),
+            customer_phone=body.get("customer_phone", ""),
+            inspection_date=body.get("inspection_date", ""),
+            inspection_time=body.get("inspection_time", "12:00 PM CST"),
+            signer_key=body.get("signer", "douglas_carter"),
+        )
+
+        return {
+            "pdf_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+            "status": "approved",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[INSPECTION-LETTERS] Standalone PDF error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/fix-billing-column")
 async def fix_billing_customer_column(db: DbSession, current_user: CurrentUser):
     """Add billing_customer_id column if missing (migration 093 safety net)."""
