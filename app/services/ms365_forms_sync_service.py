@@ -196,6 +196,91 @@ class MS365FormsSyncService(MS365BaseService):
         return []
 
     @classmethod
+    async def find_inspection_by_address_or_name(
+        cls,
+        customer_name: str = "",
+        address: str = "",
+    ) -> dict | None:
+        """Search form rows for a matching inspection by customer name OR address.
+
+        Returns the inspection data dict for the best match, or None if no match found.
+        Matching is case-insensitive and uses substring matching for flexibility.
+        """
+        if not cls.is_configured():
+            logger.warning("MS365 not configured, cannot fetch form data")
+            return None
+
+        try:
+            site_id = await cls._get_site_id()
+            item_id = await cls._get_drive_item_id(site_id)
+            sheet_name = await cls._get_worksheet_name(site_id, item_id)
+            rows = await cls._read_rows(site_id, item_id, sheet_name)
+
+            # Normalize search terms
+            name_norm = (customer_name or "").lower().strip()
+            addr_norm = (address or "").lower().strip()
+
+            # Extract street number + street name from address for fuzzy matching
+            # e.g. "7186 Brush Creek Road, Fairview, TN, 37062" -> "7186 brush creek"
+            addr_short = ""
+            if addr_norm:
+                first_part = addr_norm.split(",")[0].strip()
+                addr_short = first_part
+
+            best_match = None
+            best_score = 0
+
+            for row in rows:
+                row_name = _safe_get(row, COL["client_name"]).lower().strip()
+                row_addr = _safe_get(row, COL["client_address"]).lower().strip()
+
+                score = 0
+                # Name match (full or partial)
+                if name_norm and row_name:
+                    if row_name == name_norm:
+                        score += 10
+                    elif name_norm in row_name or row_name in name_norm:
+                        score += 5
+                    else:
+                        # Last name match
+                        name_parts = name_norm.split()
+                        row_parts = row_name.split()
+                        if name_parts and row_parts:
+                            if name_parts[-1] == row_parts[-1]:
+                                score += 3
+
+                # Address match (full, first segment, or street number)
+                if addr_short and row_addr:
+                    if addr_short in row_addr or row_addr.startswith(addr_short):
+                        score += 10
+                    else:
+                        # Try matching just the street number
+                        addr_num = addr_short.split()[0] if addr_short.split() else ""
+                        row_addr_num = row_addr.split()[0] if row_addr.split() else ""
+                        if addr_num and addr_num == row_addr_num:
+                            score += 4
+
+                if score > best_score:
+                    best_score = score
+                    best_match = row
+
+            if best_match and best_score >= 3:
+                logger.info(
+                    "Found form match for name=%r addr=%r (score=%d)",
+                    customer_name, address, best_score,
+                )
+                return _row_to_inspection_data(best_match)
+
+            logger.info(
+                "No form match found for name=%r addr=%r (best score=%d)",
+                customer_name, address, best_score,
+            )
+            return None
+        except Exception as e:
+            logger.error("find_inspection_by_address_or_name failed: %s", e)
+            return None
+
+    @classmethod
     async def sync_inspection_forms(cls) -> dict:
         """
         Pull inspection form responses from SharePoint and create work orders.

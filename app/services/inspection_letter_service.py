@@ -310,6 +310,101 @@ _FEW_SHOT_EXAMPLES = [
 # ---------------------------------------------------------------------------
 
 
+def form_data_to_checklist(form_data: dict) -> dict:
+    """Convert MS Forms data structure to the checklist structure used by
+    _build_inspection_text. Maps the 24 form fields into numbered steps.
+    """
+    client = form_data.get("client", {})
+    system = form_data.get("system", {})
+    findings = form_data.get("findings", {})
+    weather = form_data.get("weather", {})
+
+    # Extract install year from "system_age" if it looks like a year
+    age = system.get("system_age", "")
+    install_year = ""
+    if age:
+        # Try "30 years" or "1994" format
+        import re
+        year_match = re.search(r"(19|20)\d{2}", age)
+        if year_match:
+            install_year = year_match.group(0)
+
+    # Build condition from findings
+    tank_good = (findings.get("tank_good_condition") or "").lower() == "yes"
+    has_damage = (findings.get("tank_visible_damage") or "").lower() == "yes"
+    leaching = (findings.get("drain_field_leaching") or "").lower() == "yes"
+    saturation = (findings.get("drain_field_super_saturation") or "").lower() == "yes"
+    functioning = (findings.get("system_functioning") or "").lower() == "yes"
+
+    if not functioning or leaching or saturation or has_damage:
+        condition = "poor" if (leaching or saturation or has_damage) else "fair"
+    elif tank_good and functioning:
+        condition = "good"
+    else:
+        condition = "good"
+
+    # Build drain field assessment text
+    if leaching or saturation:
+        drain_field_text = "Signs of leaching up or super saturation observed — drain field needs attention."
+    else:
+        drain_field_text = "No signs of leaching up or super saturation. System appears to be functioning properly overall."
+
+    # Build flow type
+    flow = (system.get("flow_type") or "").lower()
+    if "forced" in flow:
+        flow_type = "forced-flow"
+    else:
+        flow_type = "gravity flow"
+
+    # Build who present
+    who_present = form_data.get("who_present", "")
+    homeowner_present = "homeowner" in who_present.lower() or "seller" in who_present.lower()
+
+    checklist = {
+        "address": client.get("address", ""),
+        "steps": {
+            "1": {
+                "address": client.get("address", ""),
+                "customer_name": client.get("name", ""),
+            },
+            "2": {
+                "tank_location": system.get("tank_location", ""),
+                "tank_depth": system.get("tank_depth", ""),
+            },
+            "3": {
+                "permit_info": f"System installed approximately {age}" if age else "",
+                "installation_year": install_year,
+            },
+            "4": {
+                "system_type": f"{system.get('system_type', 'Standard septic system')}, {flow_type}",
+                "tank_capacity": system.get("system_size", "1000 gallons"),
+                "condition": condition,
+            },
+            "5": {
+                "pumped": "no",  # Forms don't typically capture this
+                "baffles": "",
+                "operational_test": "",
+            },
+            "6": {
+                "notable_observations": form_data.get("additional_info", ""),
+                "pump_info": "",
+                "pump_chamber": "",
+            },
+            "7": {
+                "drain_field": drain_field_text,
+            },
+        },
+        "customFields": {
+            "homeowner_present": homeowner_present,
+            "who_present": who_present,
+            "technician": form_data.get("technician", ""),
+            "weather": weather.get("conditions", ""),
+            "last_precipitation": weather.get("last_precipitation", ""),
+        },
+    }
+    return checklist
+
+
 async def generate_letter_draft(checklist: dict) -> Dict[str, Any]:
     """Generate a narrative inspection letter body using the AI gateway.
 

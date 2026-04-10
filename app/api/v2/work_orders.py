@@ -393,6 +393,36 @@ async def generate_letter_for_wo(
         insp_date = str(wo.scheduled_date) if wo.scheduled_date else ""
         insp_time = "12:00 PM CST"
 
+        # Check if checklist has any usable inspection data
+        has_steps = bool(inspection.get("steps")) or bool(checklist.get("steps"))
+
+        # If no inspection data in checklist, try to fetch from MS Forms by customer/address
+        forms_source = None
+        if not has_steps:
+            try:
+                from app.services.ms365_forms_sync_service import MS365FormsSyncService
+                if MS365FormsSyncService.is_configured():
+                    logger.info(f"[INSPECTION-LETTERS] No checklist data for WO {wo.id}, trying Forms lookup")
+                    form_data = await MS365FormsSyncService.find_inspection_by_address_or_name(
+                        customer_name=customer_name,
+                        address=address,
+                    )
+                    if form_data:
+                        from app.services.inspection_letter_service import form_data_to_checklist
+                        checklist = form_data_to_checklist(form_data)
+                        forms_source = "ms_forms"
+                        # Also save the form data to the work order for future use
+                        wo_checklist = wo.checklist if isinstance(wo.checklist, dict) else {}
+                        wo_checklist["inspection"] = checklist
+                        wo_checklist["inspection"]["source"] = "ms_forms"
+                        wo.checklist = wo_checklist
+                        from sqlalchemy.orm.attributes import flag_modified
+                        flag_modified(wo, "checklist")
+                        await db.commit()
+                        logger.info(f"[INSPECTION-LETTERS] Backfilled WO {wo.id} with MS Forms data")
+            except Exception as forms_err:
+                logger.warning(f"[INSPECTION-LETTERS] MS Forms fallback failed: {forms_err}")
+
         draft = await generate_letter_draft(checklist)
 
         # Store draft in checklist
@@ -410,6 +440,7 @@ async def generate_letter_for_wo(
             "model": draft.get("model"),
             "status": draft.get("status", "draft"),
             "error": draft.get("error"),
+            "source": forms_source or "checklist",
             "form_data": {
                 "customer_name": customer_name,
                 "customer_email": customer_email or "",
