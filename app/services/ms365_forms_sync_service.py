@@ -22,6 +22,23 @@ SP_SITE_HOST = "macseptic.sharepoint.com"
 SP_SITE_PATH = "/sites/Operations"
 WORKBOOK_NAME = "Septic Inspection Form.xlsx"
 
+# Full SharePoint sharing URL for the workbook (from the browser URL)
+# Used via Graph /shares/{encoded-url}/driveItem to resolve to drive item
+WORKBOOK_SHARING_URL = (
+    "https://macseptic.sharepoint.com/:x:/r/sites/Operations/_layouts/15/Doc.aspx"
+    "?sourcedoc=%7BE1D76069-4BE7-4E58-AE62-6BB608929AA3%7D"
+    "&file=Septic%20Inspection%20Form.xlsx"
+)
+
+
+def _encode_share_url(url: str) -> str:
+    """Encode a URL for the Graph /shares/ endpoint.
+    Format: u! + base64url(url) with padding removed.
+    """
+    import base64
+    b64 = base64.urlsafe_b64encode(url.encode("utf-8")).decode("ascii").rstrip("=")
+    return f"u!{b64}"
+
 # Column mapping — zero-indexed positions for each field in the Excel row
 COL = {
     "location": 0,
@@ -251,6 +268,23 @@ class MS365FormsSyncService(MS365BaseService):
                     return (cls._drive_id, cls._drive_item_id)
         except Exception as e:
             logger.warning("Site search failed: %s", e)
+
+        # Strategy 5: Resolve via the /shares/{encoded-url}/driveItem endpoint
+        # This works even without Sites.Read.All because the app just needs
+        # permission to items shared with the sharing URL.
+        try:
+            encoded = _encode_share_url(WORKBOOK_SHARING_URL)
+            data = await cls.graph_get(f"/shares/{encoded}/driveItem")
+            parent_ref = data.get("parentReference", {})
+            cls._drive_id = parent_ref.get("driveId", "")
+            cls._drive_item_id = data["id"]
+            logger.info(
+                "Found workbook via /shares/ endpoint: drive=%s item=%s",
+                cls._drive_id, cls._drive_item_id,
+            )
+            return (cls._drive_id, cls._drive_item_id)
+        except Exception as e:
+            logger.warning("Shares endpoint lookup failed: %s", e)
 
         raise RuntimeError(
             f"Could not find '{WORKBOOK_NAME}' in any drive of site {site_id}. "
