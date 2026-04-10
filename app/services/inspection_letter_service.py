@@ -417,14 +417,21 @@ async def generate_letter_draft(checklist: dict) -> Dict[str, Any]:
     from app.services.ai_gateway import ai_gateway
 
     inspection_text = _build_inspection_text(checklist)
+
+    # If no detailed inspection data, generate a generic template from whatever
+    # minimum info we have (address, customer name). This lets Doug get a
+    # starting draft and fill in the specifics manually.
     if not inspection_text:
-        return {
-            "body": "",
-            "generated_at": datetime.utcnow().isoformat(),
-            "model": None,
-            "status": "error",
-            "error": "No inspection data found in checklist.",
-        }
+        fallback_parts = []
+        addr = checklist.get("address") or checklist.get("service_address") or ""
+        cust = checklist.get("customer_name") or checklist.get("client_name") or ""
+        if addr:
+            fallback_parts.append(f"Address: {addr}")
+        if cust:
+            fallback_parts.append(f"Customer: {cust}")
+        fallback_parts.append("Note: Detailed inspection data was not captured in the CRM.")
+        fallback_parts.append("Generate a general inspection letter template with placeholder language for the tank location, permit info, system details, and drain field assessment. Use bracketed placeholders like [TANK LOCATION] that the user will fill in.")
+        inspection_text = ". ".join(fallback_parts)
 
     # Build messages: few-shot examples + the real request
     messages = list(_FEW_SHOT_EXAMPLES) + [

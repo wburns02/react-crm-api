@@ -628,6 +628,13 @@ async def generate_letter_for_wo(
             except Exception as forms_err:
                 logger.warning(f"[INSPECTION-LETTERS] MS Forms fallback failed: {forms_err}")
 
+        # Ensure checklist has customer_name and address so the generic
+        # template fallback has something to work with
+        if not checklist.get("address"):
+            checklist["address"] = address
+        if not checklist.get("customer_name"):
+            checklist["customer_name"] = customer_name
+
         draft = await generate_letter_draft(checklist)
 
         # Store draft in checklist
