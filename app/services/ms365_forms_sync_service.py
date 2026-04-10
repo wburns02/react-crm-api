@@ -319,6 +319,23 @@ class MS365FormsSyncService(MS365BaseService):
         return []
 
     @classmethod
+    async def _get_cached_rows(cls) -> list[list] | None:
+        """Get form rows from the manual upload cache (if any)."""
+        try:
+            from app.services.cache_service import get_cache_service
+            cache = get_cache_service()
+            cached = await cache.get("inspection_forms:cached_rows")
+            if cached:
+                # Cache service auto-deserializes JSON
+                rows = cached.get("rows", []) if isinstance(cached, dict) else []
+                if rows:
+                    logger.info(f"Using {len(rows)} cached form rows from manual upload")
+                    return rows
+        except Exception as e:
+            logger.debug(f"No cached form rows: {e}")
+        return None
+
+    @classmethod
     async def find_inspection_by_address_or_name(
         cls,
         customer_name: str = "",
@@ -328,16 +345,21 @@ class MS365FormsSyncService(MS365BaseService):
 
         Returns the inspection data dict for the best match, or None if no match found.
         Matching is case-insensitive and uses substring matching for flexibility.
-        """
-        if not cls.is_configured():
-            logger.warning("MS365 not configured, cannot fetch form data")
-            return None
 
+        Tries cached rows (from manual upload) first, then falls back to Graph API.
+        """
         try:
-            site_id = await cls._get_site_id()
-            drive_id, item_id = await cls._get_drive_item_id(site_id)
-            sheet_name = await cls._get_worksheet_name(drive_id, item_id)
-            rows = await cls._read_rows(drive_id, item_id, sheet_name)
+            # Try cached rows first (from manual upload workaround)
+            rows = await cls._get_cached_rows()
+
+            if not rows:
+                if not cls.is_configured():
+                    logger.warning("MS365 not configured and no cached rows")
+                    return None
+                site_id = await cls._get_site_id()
+                drive_id, item_id = await cls._get_drive_item_id(site_id)
+                sheet_name = await cls._get_worksheet_name(drive_id, item_id)
+                rows = await cls._read_rows(drive_id, item_id, sheet_name)
 
             # Normalize search terms
             name_norm = (customer_name or "").lower().strip()

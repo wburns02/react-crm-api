@@ -203,6 +203,73 @@ async def get_inspection_letter_queue(db: DbSession, current_user: CurrentUser):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/inspection-letters/upload-forms")
+async def upload_forms_excel(
+    request: Request,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Accept a manually-uploaded MS Forms Excel export and cache the rows.
+
+    Workaround for when Azure app lacks SharePoint file permissions.
+    Parses the uploaded .xlsx, extracts all rows, and stores them in
+    the cache service for subsequent letter generation.
+    """
+    try:
+        import io
+        from openpyxl import load_workbook
+        from app.services.cache_service import get_cache_service, TTL
+
+        # Get the uploaded file from multipart form
+        form = await request.form()
+        upload = form.get("file")
+        if upload is None or not hasattr(upload, "read"):
+            raise HTTPException(status_code=400, detail="No file uploaded")
+
+        content = await upload.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="File is empty")
+
+        # Parse the Excel workbook
+        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        sheet = wb.active
+        if sheet is None:
+            raise HTTPException(status_code=400, detail="Workbook has no sheets")
+
+        rows = []
+        headers = None
+        for i, row in enumerate(sheet.iter_rows(values_only=True)):
+            if i == 0:
+                headers = [str(c).strip() if c else "" for c in row]
+                continue
+            if not any(row):
+                continue
+            rows.append([str(c).strip() if c is not None else "" for c in row])
+
+        if not rows:
+            return {"rows": 0, "headers": headers or [], "message": "No data rows found"}
+
+        # Cache the rows for 7 days (cache_service auto-JSON-serializes)
+        cache = get_cache_service()
+        await cache.set(
+            "inspection_forms:cached_rows",
+            {"headers": headers, "rows": rows},
+            ttl=7 * 24 * 3600,
+        )
+
+        logger.info(f"[INSPECTION-LETTERS] Cached {len(rows)} form rows from upload")
+        return {
+            "rows": len(rows),
+            "headers": headers,
+            "message": f"Cached {len(rows)} inspection responses",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[INSPECTION-LETTERS] Upload forms error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/inspection-letters/debug-forms")
 async def debug_forms_sync(db: DbSession, current_user: CurrentUser):
     """Debug endpoint: show all drives, files, and permission checks."""
