@@ -472,13 +472,40 @@ class MS365FormsSyncService(MS365BaseService):
                                 WorkOrder.scheduled_date == scheduled_date
                             )
 
-                        existing = await db.execute(dup_query)
-                        if existing.scalar_one_or_none():
-                            result["skipped"] += 1
-                            continue
-
-                        # Build inspection data
+                        # Build inspection data first (we'll use it either way)
                         inspection_data = _row_to_inspection_data(row)
+
+                        existing = await db.execute(dup_query)
+                        existing_wo = existing.scalar_one_or_none()
+                        if existing_wo:
+                            # Update the existing WO's checklist with the form data
+                            # if it doesn't already have inspection data
+                            existing_checklist = existing_wo.checklist if isinstance(existing_wo.checklist, dict) else {}
+                            existing_inspection = existing_checklist.get("inspection") or {}
+                            has_existing_data = bool(existing_inspection.get("steps")) or bool(existing_inspection.get("client"))
+
+                            if not has_existing_data:
+                                # Convert form data to checklist structure with steps
+                                from app.services.inspection_letter_service import form_data_to_checklist
+                                form_checklist = form_data_to_checklist(inspection_data)
+                                # Preserve any existing ai_letter drafts
+                                preserved_letter = existing_inspection.get("ai_letter")
+                                form_checklist["source"] = "ms_forms"
+                                if preserved_letter:
+                                    form_checklist["ai_letter"] = preserved_letter
+                                existing_checklist["inspection"] = form_checklist
+                                existing_checklist["forms_import"] = True
+                                existing_wo.checklist = existing_checklist
+                                from sqlalchemy.orm.attributes import flag_modified
+                                flag_modified(existing_wo, "checklist")
+                                result["synced"] += 1
+                                logger.info(
+                                    "Forms sync: backfilled existing WO %s (%s) with form data",
+                                    existing_wo.work_order_number, address,
+                                )
+                            else:
+                                result["skipped"] += 1
+                            continue
 
                         # Parse client name into first/last
                         client_name = _safe_get(row, COL["client_name"])
