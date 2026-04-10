@@ -460,23 +460,48 @@ class MS365FormsSyncService(MS365BaseService):
                             result["skipped"] += 1
                             continue
 
-                        # Check for duplicate — same address + date + job type
-                        dup_query = select(WorkOrder.id).where(
+                        # Check for duplicate — same address OR same customer name,
+                        # job type, real estate inspection. Match by address first,
+                        # fall back to customer name match.
+                        from sqlalchemy import cast as sa_cast, String as sa_String
+                        from app.models.customer import Customer as CustomerModel
+                        client_name = _safe_get(row, COL["client_name"])
+
+                        # Try address match first
+                        dup_query = select(WorkOrder).where(
                             and_(
                                 WorkOrder.service_address_line1 == address,
-                                WorkOrder.job_type == "real_estate_inspection",
+                                sa_cast(WorkOrder.job_type, sa_String) == "real_estate_inspection",
                             )
                         )
-                        if scheduled_date:
-                            dup_query = dup_query.where(
-                                WorkOrder.scheduled_date == scheduled_date
-                            )
 
                         # Build inspection data first (we'll use it either way)
                         inspection_data = _row_to_inspection_data(row)
 
                         existing = await db.execute(dup_query)
-                        existing_wo = existing.scalar_one_or_none()
+                        existing_wo = existing.scalars().first()
+
+                        # If no match by address, try matching by customer name
+                        # through the Customer join
+                        if not existing_wo and client_name:
+                            name_parts = client_name.split(None, 1)
+                            first = name_parts[0] if name_parts else ""
+                            last = name_parts[1] if len(name_parts) > 1 else ""
+                            if first and last:
+                                name_query = (
+                                    select(WorkOrder)
+                                    .join(CustomerModel, WorkOrder.customer_id == CustomerModel.id)
+                                    .where(
+                                        and_(
+                                            sa_cast(WorkOrder.job_type, sa_String) == "real_estate_inspection",
+                                            CustomerModel.first_name.ilike(first),
+                                            CustomerModel.last_name.ilike(last),
+                                        )
+                                    )
+                                    .limit(1)
+                                )
+                                name_result = await db.execute(name_query)
+                                existing_wo = name_result.scalars().first()
                         if existing_wo:
                             # Update the existing WO's checklist with the form data
                             # if it doesn't already have inspection data
