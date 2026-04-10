@@ -203,6 +203,93 @@ async def get_inspection_letter_queue(db: DbSession, current_user: CurrentUser):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/inspection-letters/debug-forms")
+async def debug_forms_sync(db: DbSession, current_user: CurrentUser):
+    """Debug endpoint: show all drives, files, and permission checks."""
+    from app.services.ms365_forms_sync_service import (
+        MS365FormsSyncService,
+        SP_SITE_HOST,
+        SP_SITE_PATH,
+        WORKBOOK_NAME,
+        WORKBOOK_SHARING_URL,
+        _encode_share_url,
+    )
+
+    debug = {
+        "configured": MS365FormsSyncService.is_configured(),
+        "steps": [],
+    }
+    if not debug["configured"]:
+        debug["error"] = "MS365 not configured in env vars"
+        return debug
+
+    try:
+        # Step 1: Site lookup
+        try:
+            site_data = await MS365FormsSyncService.graph_get(
+                f"/sites/{SP_SITE_HOST}:{SP_SITE_PATH}"
+            )
+            debug["steps"].append({"step": "site_lookup", "ok": True, "site_id": site_data.get("id"), "name": site_data.get("displayName")})
+            site_id = site_data["id"]
+        except Exception as e:
+            debug["steps"].append({"step": "site_lookup", "ok": False, "error": str(e)})
+            return debug
+
+        # Step 2: List all drives in the site
+        try:
+            drives_data = await MS365FormsSyncService.graph_get(f"/sites/{site_id}/drives")
+            drives = drives_data.get("value", [])
+            debug["steps"].append({
+                "step": "list_drives",
+                "ok": True,
+                "count": len(drives),
+                "drives": [{"id": d.get("id"), "name": d.get("name"), "driveType": d.get("driveType")} for d in drives],
+            })
+        except Exception as e:
+            debug["steps"].append({"step": "list_drives", "ok": False, "error": str(e)})
+            drives = []
+
+        # Step 3: For each drive, try to find the workbook
+        for drive in drives:
+            drive_id = drive["id"]
+            drive_name = drive.get("name", "?")
+            try:
+                item = await MS365FormsSyncService.graph_get(f"/drives/{drive_id}/root:/{WORKBOOK_NAME}")
+                debug["steps"].append({"step": f"find_in_drive_{drive_name}", "ok": True, "item_id": item.get("id")})
+            except Exception as e:
+                debug["steps"].append({"step": f"find_in_drive_{drive_name}", "ok": False, "error": str(e)[:200]})
+
+        # Step 4: Try listing children of each drive root
+        for drive in drives[:3]:  # Limit to first 3 to avoid noise
+            drive_id = drive["id"]
+            drive_name = drive.get("name", "?")
+            try:
+                children = await MS365FormsSyncService.graph_get(f"/drives/{drive_id}/root/children")
+                items = children.get("value", [])
+                names = [c.get("name") for c in items]
+                debug["steps"].append({
+                    "step": f"list_children_{drive_name}",
+                    "ok": True,
+                    "count": len(items),
+                    "names": names[:20],
+                })
+            except Exception as e:
+                debug["steps"].append({"step": f"list_children_{drive_name}", "ok": False, "error": str(e)[:200]})
+
+        # Step 5: Try /shares/ endpoint
+        try:
+            encoded = _encode_share_url(WORKBOOK_SHARING_URL)
+            shares_data = await MS365FormsSyncService.graph_get(f"/shares/{encoded}/driveItem")
+            debug["steps"].append({"step": "shares_endpoint", "ok": True, "item_id": shares_data.get("id"), "name": shares_data.get("name")})
+        except Exception as e:
+            debug["steps"].append({"step": "shares_endpoint", "ok": False, "error": str(e)[:300]})
+
+        return debug
+    except Exception as e:
+        debug["fatal_error"] = str(e)
+        return debug
+
+
 class StandaloneLetterRequest(BaseModel):
     """Form data for generating a standalone inspection letter (no work order)."""
     customer_name: str
