@@ -189,7 +189,21 @@ CRITICAL RULES:
 - NO closing/sign-off (no "Sincerely", "Best regards", etc.)
 - NO signature block
 - Start directly with "On the above date and time..."
-- End with the drain field / overall assessment paragraph"""
+- End with the drain field / overall assessment paragraph
+
+HANDLING MISSING DATA:
+- If the inspection data is incomplete, ALWAYS generate a complete letter using
+  [BRACKETED PLACEHOLDERS] for unknown details.
+- Examples of placeholders:
+  "The septic tank was located [TANK LOCATION relative to house]."
+  "The tank appeared to be approximately [TANK DEPTH] deep."
+  "[TDEC/DHEC PERMIT INFO - or homeowner statement about install year]."
+  "This is a [SYSTEM TYPE] with an estimated capacity of [CAPACITY] gallons."
+- NEVER ask the user for more information. NEVER say "Please provide..."
+- NEVER refuse to generate the letter. Always produce a full draft letter
+  with placeholders — the user will fill them in manually.
+- Use the address provided (if any) in the opening; otherwise use [ADDRESS].
+- Even with minimal data, produce ALL the standard paragraphs using placeholders."""
 
 # ---------------------------------------------------------------------------
 # Few-shot examples
