@@ -284,6 +284,57 @@ async def debug_forms_sync(db: DbSession, current_user: CurrentUser):
         except Exception as e:
             debug["steps"].append({"step": "shares_endpoint", "ok": False, "error": str(e)[:300]})
 
+        # Step 6: Try the configured drive ID directly
+        from app.config import settings
+        configured_drive = getattr(settings, "MS365_SHAREPOINT_DRIVE_ID", None)
+        if configured_drive:
+            try:
+                drive_info = await MS365FormsSyncService.graph_get(f"/drives/{configured_drive}")
+                debug["steps"].append({
+                    "step": "configured_drive_info",
+                    "ok": True,
+                    "name": drive_info.get("name"),
+                    "driveType": drive_info.get("driveType"),
+                })
+            except Exception as e:
+                debug["steps"].append({"step": "configured_drive_info", "ok": False, "error": str(e)[:300]})
+
+            # List children of configured drive root
+            try:
+                children = await MS365FormsSyncService.graph_get(f"/drives/{configured_drive}/root/children")
+                items = children.get("value", [])
+                names = [c.get("name") for c in items]
+                debug["steps"].append({
+                    "step": "configured_drive_root_children",
+                    "ok": True,
+                    "count": len(items),
+                    "names": names[:30],
+                })
+            except Exception as e:
+                debug["steps"].append({"step": "configured_drive_root_children", "ok": False, "error": str(e)[:300]})
+
+            # Try to find the workbook in configured drive
+            try:
+                item = await MS365FormsSyncService.graph_get(f"/drives/{configured_drive}/root:/{WORKBOOK_NAME}")
+                debug["steps"].append({"step": "find_in_configured_drive", "ok": True, "item_id": item.get("id")})
+            except Exception as e:
+                debug["steps"].append({"step": "find_in_configured_drive", "ok": False, "error": str(e)[:200]})
+
+            # Search the configured drive
+            try:
+                import urllib.parse
+                q = urllib.parse.quote("Septic")
+                data = await MS365FormsSyncService.graph_get(f"/drives/{configured_drive}/root/search(q='{q}')")
+                results = data.get("value", [])
+                debug["steps"].append({
+                    "step": "search_configured_drive",
+                    "ok": True,
+                    "count": len(results),
+                    "matches": [{"name": r.get("name"), "id": r.get("id")} for r in results[:10]],
+                })
+            except Exception as e:
+                debug["steps"].append({"step": "search_configured_drive", "ok": False, "error": str(e)[:300]})
+
         return debug
     except Exception as e:
         debug["fatal_error"] = str(e)
