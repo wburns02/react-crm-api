@@ -144,6 +144,7 @@ class MS365FormsSyncService(MS365BaseService):
     """Sync inspection form responses from SharePoint Excel workbook."""
 
     _site_id: str | None = None
+    _drive_id: str | None = None
     _drive_item_id: str | None = None
 
     @classmethod
@@ -157,22 +158,110 @@ class MS365FormsSyncService(MS365BaseService):
         return cls._site_id
 
     @classmethod
-    async def _get_drive_item_id(cls, site_id: str) -> str:
-        """Find the Excel workbook drive item ID."""
-        if cls._drive_item_id:
-            return cls._drive_item_id
-        data = await cls.graph_get(
-            f"/sites/{site_id}/drive/root:/{WORKBOOK_NAME}"
+    async def _get_drive_item_id(cls, site_id: str) -> tuple[str, str]:
+        """Find the Excel workbook drive item ID.
+
+        Tries multiple strategies:
+        1. Search in the configured SharePoint drive (from settings)
+        2. Search across all drives in the site
+        3. Use the known source doc ID from the SharePoint URL directly
+        4. Search the site via /search endpoint
+
+        Returns: (drive_id, item_id)
+        """
+        if cls._drive_item_id and cls._drive_id:
+            return (cls._drive_id, cls._drive_item_id)
+
+        from app.config import settings
+
+        # Strategy 1: Try the configured drive first
+        configured_drive = getattr(settings, "MS365_SHAREPOINT_DRIVE_ID", None)
+        if configured_drive:
+            try:
+                data = await cls.graph_get(
+                    f"/drives/{configured_drive}/root:/{WORKBOOK_NAME}"
+                )
+                cls._drive_id = configured_drive
+                cls._drive_item_id = data["id"]
+                logger.info(
+                    "Found workbook in configured drive: %s",
+                    cls._drive_item_id,
+                )
+                return (cls._drive_id, cls._drive_item_id)
+            except Exception as e:
+                logger.info("Not in configured drive: %s", e)
+
+        # Strategy 2: List all drives in the site and search each
+        try:
+            drives_data = await cls.graph_get(f"/sites/{site_id}/drives")
+            drives = drives_data.get("value", [])
+            logger.info("Site has %d drives", len(drives))
+            for drive in drives:
+                drive_id = drive["id"]
+                drive_name = drive.get("name", "unknown")
+                try:
+                    data = await cls.graph_get(
+                        f"/drives/{drive_id}/root:/{WORKBOOK_NAME}"
+                    )
+                    cls._drive_id = drive_id
+                    cls._drive_item_id = data["id"]
+                    logger.info(
+                        "Found workbook in drive '%s': %s",
+                        drive_name, cls._drive_item_id,
+                    )
+                    return (cls._drive_id, cls._drive_item_id)
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.warning("Could not list site drives: %s", e)
+
+        # Strategy 3: Use the known source doc GUID from the SharePoint URL
+        # The URL contains sourcedoc={E1D76069-4BE7-4E58-AE62-6BB608929AA3}
+        source_doc_id = "E1D76069-4BE7-4E58-AE62-6BB608929AA3"
+        try:
+            # Try to look up the file via site's items endpoint using the GUID
+            data = await cls.graph_get(
+                f"/sites/{site_id}/drive/items/{source_doc_id}"
+            )
+            cls._drive_id = data.get("parentReference", {}).get("driveId", "")
+            cls._drive_item_id = data["id"]
+            logger.info(
+                "Found workbook via source doc GUID: drive=%s item=%s",
+                cls._drive_id, cls._drive_item_id,
+            )
+            return (cls._drive_id, cls._drive_item_id)
+        except Exception as e:
+            logger.info("Source doc GUID lookup failed: %s", e)
+
+        # Strategy 4: Search the site for the file by name
+        try:
+            import urllib.parse
+            q = urllib.parse.quote("Septic Inspection Form")
+            data = await cls.graph_get(
+                f"/sites/{site_id}/drive/root/search(q='{q}')"
+            )
+            for item in data.get("value", []):
+                if "Septic Inspection Form" in (item.get("name") or ""):
+                    cls._drive_id = item.get("parentReference", {}).get("driveId", "")
+                    cls._drive_item_id = item["id"]
+                    logger.info(
+                        "Found workbook via search: %s",
+                        cls._drive_item_id,
+                    )
+                    return (cls._drive_id, cls._drive_item_id)
+        except Exception as e:
+            logger.warning("Site search failed: %s", e)
+
+        raise RuntimeError(
+            f"Could not find '{WORKBOOK_NAME}' in any drive of site {site_id}. "
+            "Check Azure app permissions (Sites.Read.All or Files.Read.All)."
         )
-        cls._drive_item_id = data["id"]
-        logger.info("Resolved workbook item ID: %s", cls._drive_item_id)
-        return cls._drive_item_id
 
     @classmethod
-    async def _get_worksheet_name(cls, site_id: str, item_id: str) -> str:
+    async def _get_worksheet_name(cls, drive_id: str, item_id: str) -> str:
         """List worksheets and return the first one's name."""
         data = await cls.graph_get(
-            f"/sites/{site_id}/drive/items/{item_id}/workbook/worksheets"
+            f"/drives/{drive_id}/items/{item_id}/workbook/worksheets"
         )
         worksheets = data.get("value", [])
         if not worksheets:
@@ -182,12 +271,12 @@ class MS365FormsSyncService(MS365BaseService):
         return name
 
     @classmethod
-    async def _read_rows(cls, site_id: str, item_id: str, sheet_name: str) -> list[list]:
+    async def _read_rows(cls, drive_id: str, item_id: str, sheet_name: str) -> list[list]:
         """Read all rows from the used range of the worksheet."""
         import urllib.parse
         encoded_sheet = urllib.parse.quote(sheet_name, safe="")
         data = await cls.graph_get(
-            f"/sites/{site_id}/drive/items/{item_id}/workbook/worksheets/{encoded_sheet}/usedRange"
+            f"/drives/{drive_id}/items/{item_id}/workbook/worksheets/{encoded_sheet}/usedRange"
         )
         rows = data.get("values", [])
         # Skip header row (first row is column headers)
@@ -212,9 +301,9 @@ class MS365FormsSyncService(MS365BaseService):
 
         try:
             site_id = await cls._get_site_id()
-            item_id = await cls._get_drive_item_id(site_id)
-            sheet_name = await cls._get_worksheet_name(site_id, item_id)
-            rows = await cls._read_rows(site_id, item_id, sheet_name)
+            drive_id, item_id = await cls._get_drive_item_id(site_id)
+            sheet_name = await cls._get_worksheet_name(drive_id, item_id)
+            rows = await cls._read_rows(drive_id, item_id, sheet_name)
 
             # Normalize search terms
             name_norm = (customer_name or "").lower().strip()
@@ -294,9 +383,9 @@ class MS365FormsSyncService(MS365BaseService):
 
         try:
             site_id = await cls._get_site_id()
-            item_id = await cls._get_drive_item_id(site_id)
-            sheet_name = await cls._get_worksheet_name(site_id, item_id)
-            rows = await cls._read_rows(site_id, item_id, sheet_name)
+            drive_id, item_id = await cls._get_drive_item_id(site_id)
+            sheet_name = await cls._get_worksheet_name(drive_id, item_id)
+            rows = await cls._read_rows(drive_id, item_id, sheet_name)
 
             if not rows:
                 logger.info("Forms sync: no data rows found")
