@@ -203,6 +203,65 @@ async def get_inspection_letter_queue(db: DbSession, current_user: CurrentUser):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/inspection-letters/debug-find")
+async def debug_find_in_forms(
+    name: str = "",
+    address: str = "",
+    db: DbSession = None,
+    current_user: CurrentUser = None,
+):
+    """Debug: search the Forms workbook for a customer name/address match."""
+    from app.services.ms365_forms_sync_service import MS365FormsSyncService, COL, _safe_get
+
+    if not MS365FormsSyncService.is_configured():
+        return {"error": "MS365 not configured"}
+
+    try:
+        site_id = await MS365FormsSyncService._get_site_id()
+        drive_id, item_id = await MS365FormsSyncService._get_drive_item_id(site_id)
+        sheet_name = await MS365FormsSyncService._get_worksheet_name(drive_id, item_id)
+        rows = await MS365FormsSyncService._read_rows(drive_id, item_id, sheet_name)
+
+        name_lower = name.lower()
+        addr_lower = address.lower()
+
+        matches = []
+        all_names = []
+        for i, row in enumerate(rows):
+            row_name = _safe_get(row, COL["client_name"])
+            row_addr = _safe_get(row, COL["client_address"])
+            all_names.append(f"{row_name} @ {row_addr}")
+
+            # Simple substring match in either direction
+            if (name_lower and (name_lower in row_name.lower() or row_name.lower() in name_lower)) or \
+               (addr_lower and (addr_lower[:20] in row_addr.lower() or row_addr.lower()[:20] in addr_lower)):
+                matches.append({
+                    "row": i + 2,
+                    "name": row_name,
+                    "address": row_addr,
+                    "full_row": [str(c)[:100] for c in row],
+                })
+
+        # Also try the actual find function
+        find_result = await MS365FormsSyncService.find_inspection_by_address_or_name(
+            customer_name=name,
+            address=address,
+        )
+
+        return {
+            "total_rows": len(rows),
+            "search_name": name,
+            "search_address": address,
+            "matches": matches[:5],
+            "find_function_result": bool(find_result),
+            "find_function_data": find_result if find_result else None,
+            "all_rows_sample": all_names[:20],
+        }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()[:2000]}
+
+
 @router.post("/inspection-letters/upload-forms")
 async def upload_forms_excel(
     request: Request,
