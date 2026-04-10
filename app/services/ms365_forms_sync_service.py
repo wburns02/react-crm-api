@@ -40,31 +40,43 @@ def _encode_share_url(url: str) -> str:
     return f"u!{b64}"
 
 # Column mapping — zero-indexed positions for each field in the Excel row
+# MS Forms prepends 5 metadata columns (Id, Start time, Completion time,
+# Email, Name) before the actual form responses.
 COL = {
-    "location": 0,
-    "technician": 1,
-    "who_present": 2,
-    "date": 3,
-    "time": 4,
-    "weather": 5,
-    "last_precipitation": 6,
-    "client_name": 7,
-    "client_address": 8,
-    "client_phone": 9,
-    "client_email": 10,
-    "last_service": 11,
-    "tank_location": 12,
-    "tank_depth": 13,
-    "system_type": 14,
-    "system_size": 15,
-    "system_age": 16,
-    "flow_type": 17,
-    "tank_good_condition": 18,
-    "tank_visible_damage": 19,
-    "drain_field_leaching": 20,
-    "drain_field_super_saturation": 21,
-    "system_functioning": 22,
-    "additional_info": 23,
+    "location": 5,
+    "technician": 6,
+    "who_present": 7,
+    "date": 8,
+    "time": 9,
+    "weather": 10,
+    "last_precipitation": 11,
+    "client_name": 12,
+    "client_address": 13,
+    "client_city": 14,
+    "client_state": 15,
+    "client_zip": 16,
+    "client_phone": 17,
+    "client_email": 18,
+    "last_service": 19,
+    "tank_location": 20,
+    "tank_depth": 21,
+    "system_type": 22,
+    "system_size": 23,
+    "system_age": 24,
+    "flow_type": 25,
+    "pump_chamber_size": 26,
+    "pump_make_model": 27,
+    "tank_good_condition": 28,
+    "tank_good_condition_explain": 29,
+    "tank_visible_damage": 30,
+    "tank_visible_damage_explain": 31,
+    "drain_field_leaching": 32,
+    "drain_field_leaching_explain": 33,
+    "drain_field_super_saturation": 34,
+    "drain_field_super_saturation_explain": 35,
+    "system_functioning": 36,
+    "system_functioning_explain": 37,
+    "additional_info": 38,
 }
 
 
@@ -102,6 +114,14 @@ def _row_to_inspection_data(row: list) -> dict:
     """Map a spreadsheet row to our inspection checklist structure."""
     g = lambda key: _safe_get(row, COL[key])
 
+    # Build a full address from street + city + state + zip
+    street = g("client_address")
+    city = g("client_city")
+    state = g("client_state")
+    zip_code = g("client_zip")
+    address_parts = [p for p in [street, city, state, zip_code] if p]
+    full_address = ", ".join(address_parts)
+
     return {
         "location": g("location"),
         "technician": g("technician"),
@@ -114,7 +134,11 @@ def _row_to_inspection_data(row: list) -> dict:
         },
         "client": {
             "name": g("client_name"),
-            "address": g("client_address"),
+            "address": full_address,
+            "street": street,
+            "city": city,
+            "state": state,
+            "zip": zip_code,
             "phone": g("client_phone"),
             "email": g("client_email"),
         },
@@ -128,13 +152,20 @@ def _row_to_inspection_data(row: list) -> dict:
             "system_size": g("system_size"),
             "system_age": g("system_age"),
             "flow_type": g("flow_type"),
+            "pump_chamber_size": g("pump_chamber_size"),
+            "pump_make_model": g("pump_make_model"),
         },
         "findings": {
             "tank_good_condition": g("tank_good_condition"),
+            "tank_good_condition_explain": g("tank_good_condition_explain"),
             "tank_visible_damage": g("tank_visible_damage"),
+            "tank_visible_damage_explain": g("tank_visible_damage_explain"),
             "drain_field_leaching": g("drain_field_leaching"),
+            "drain_field_leaching_explain": g("drain_field_leaching_explain"),
             "drain_field_super_saturation": g("drain_field_super_saturation"),
+            "drain_field_super_saturation_explain": g("drain_field_super_saturation_explain"),
             "system_functioning": g("system_functioning"),
+            "system_functioning_explain": g("system_functioning_explain"),
         },
         "additional_info": g("additional_info"),
     }
