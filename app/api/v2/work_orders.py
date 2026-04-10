@@ -203,6 +203,44 @@ async def get_inspection_letter_queue(db: DbSession, current_user: CurrentUser):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/inspection-letters/debug-row")
+async def debug_form_row(
+    row_index: int = 0,
+    db: DbSession = None,
+    current_user: CurrentUser = None,
+):
+    """Dump a full row from the MS Forms Excel so we can see the column layout."""
+    from app.services.ms365_forms_sync_service import MS365FormsSyncService
+    import urllib.parse
+
+    if not MS365FormsSyncService.is_configured():
+        return {"error": "MS365 not configured"}
+
+    try:
+        site_id = await MS365FormsSyncService._get_site_id()
+        drive_id, item_id = await MS365FormsSyncService._get_drive_item_id(site_id)
+
+        # Read the FULL used range including the header row
+        data = await MS365FormsSyncService.graph_get(
+            f"/drives/{drive_id}/items/{item_id}/workbook/worksheets/{urllib.parse.quote(await MS365FormsSyncService._get_worksheet_name(drive_id, item_id), safe='')}/usedRange"
+        )
+        all_rows = data.get("values", [])
+        if not all_rows:
+            return {"error": "No rows"}
+
+        headers = all_rows[0]
+        sample_row = all_rows[row_index + 1] if row_index + 1 < len(all_rows) else all_rows[1]
+
+        return {
+            "total_rows": len(all_rows),
+            "headers": [{"idx": i, "name": h} for i, h in enumerate(headers)],
+            "sample_row": [{"idx": i, "value": str(v)[:200] if v is not None else ""} for i, v in enumerate(sample_row)],
+        }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()[:2000]}
+
+
 @router.get("/inspection-letters/debug-find")
 async def debug_find_in_forms(
     name: str = "",
