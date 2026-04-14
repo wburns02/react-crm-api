@@ -143,11 +143,85 @@ async def _create_chat_notifications(
         db.add(notif)
 
 
-def _send_chat_sms_alerts(body: str) -> None:
+# Per-conversation throttle for follow-up visitor SMS alerts (timestamps).
+_last_visitor_alert_ts: dict[str, float] = {}
+
+# Per-admin-phone rolling list of recently-alerted conversations.
+# Maps normalized admin phone (digits only) → list of (index, conversation_id, ts).
+# Newest entries pushed to the front; trimmed to RECENT_ALERT_LIMIT.
+RECENT_ALERT_LIMIT = 5
+_recent_alerts_by_phone: dict[str, list[tuple[int, str, float]]] = {}
+_alert_index_counter = 0
+
+
+def _digits_only(phone: str) -> str:
+    d = "".join(c for c in (phone or "") if c.isdigit())
+    if len(d) == 11 and d.startswith("1"):
+        d = d[1:]
+    return d
+
+
+def _track_alert(admin_phone: str, conversation_id: str) -> int:
+    """Record a chat-alert SMS sent to admin_phone. Returns the short index."""
+    global _alert_index_counter
+    _alert_index_counter += 1
+    idx = _alert_index_counter
+    key = _digits_only(admin_phone)
+    history = _recent_alerts_by_phone.setdefault(key, [])
+    history.insert(0, (idx, conversation_id, time.time()))
+    del history[RECENT_ALERT_LIMIT:]
+    return idx
+
+
+def _resolve_chat_for_reply(
+    from_phone: str, text: str
+) -> tuple[Optional[str], str]:
+    """Given an inbound SMS from an admin, figure out which chat to reply to.
+
+    Returns (conversation_id, cleaned_text). cleaned_text strips any routing
+    prefix the admin used. conversation_id is None if no match.
+    """
+    body = text.strip()
+    key = _digits_only(from_phone)
+    history = _recent_alerts_by_phone.get(key, [])
+
+    # Form 1: "#<full-or-prefix-uuid> message"
+    if body.startswith("#"):
+        rest = body[1:].split(None, 1)
+        prefix = rest[0] if rest else ""
+        cleaned = rest[1] if len(rest) > 1 else ""
+        for _idx, cid, _ts in history:
+            if cid.startswith(prefix.lower()) or cid.replace("-", "").startswith(
+                prefix.lower().replace("-", "")
+            ):
+                return cid, cleaned
+        return None, cleaned
+
+    # Form 2: "<index>: message" or "<index> message"
+    parts = body.split(None, 1)
+    if parts and parts[0].rstrip(":").isdigit():
+        try:
+            wanted = int(parts[0].rstrip(":"))
+            cleaned = parts[1] if len(parts) > 1 else ""
+            for idx, cid, _ts in history:
+                if idx == wanted:
+                    return cid, cleaned
+        except ValueError:
+            pass
+
+    # Form 3: default — most recent alerted chat
+    if history:
+        return history[0][1], body
+    return None, body
+
+
+def _send_chat_sms_alerts(body: str, conversation_id: Optional[str] = None) -> None:
     """Fire-and-forget SMS blast to all numbers in CHAT_ALERT_SMS_NUMBERS.
 
-    Failures are logged but never raised — a chat must still succeed even
-    if RingCentral is down or unconfigured.
+    Each recipient gets a unique short [#N] index prepended so they can reply
+    "N: message" to route their text-back to this conversation. Failures are
+    logged but never raised — a chat must still succeed even if RingCentral
+    is down or unconfigured.
     """
     numbers_csv = (settings.CHAT_ALERT_SMS_NUMBERS or "").strip()
     if not numbers_csv:
@@ -157,10 +231,10 @@ def _send_chat_sms_alerts(body: str) -> None:
     if not numbers:
         return
 
-    async def _send_one(number: str) -> None:
+    async def _send_one(number: str, indexed_body: str) -> None:
         try:
             from app.services.sms_service import send_sms
-            result = await send_sms(to=number, body=body)
+            result = await send_sms(to=number, body=indexed_body)
             if getattr(result, "error", None):
                 logger.warning(
                     f"Chat SMS alert to {number} failed: {result.error}"
@@ -168,11 +242,100 @@ def _send_chat_sms_alerts(body: str) -> None:
         except Exception as e:
             logger.warning(f"Chat SMS alert to {number} raised: {e}")
 
-    # Schedule all sends in the background without awaiting — the HTTP
-    # response returns immediately.
     loop = asyncio.get_event_loop()
     for number in numbers:
-        loop.create_task(_send_one(number))
+        if conversation_id:
+            idx = _track_alert(number, conversation_id)
+            indexed_body = f"[#{idx}] {body}\n(Reply '{idx}: <msg>' to answer)"
+        else:
+            indexed_body = body
+        loop.create_task(_send_one(number, indexed_body))
+
+
+async def post_sms_reply_to_chat(
+    from_phone: str, text: str
+) -> Optional[dict]:
+    """Called by the RingCentral webhook for inbound SMS from a known admin.
+
+    Returns a dict describing what happened, or None if the sender is not a
+    configured chat admin (so the webhook can fall through to customer SMS
+    routing).
+    """
+    admin_csv = (settings.CHAT_ALERT_SMS_NUMBERS or "").strip()
+    if not admin_csv:
+        return None
+
+    admin_keys = {_digits_only(n) for n in admin_csv.split(",") if n.strip()}
+    sender_key = _digits_only(from_phone)
+    if sender_key not in admin_keys:
+        return None  # Not an admin — let customer SMS routing handle it
+
+    conv_id_str, cleaned_text = _resolve_chat_for_reply(from_phone, text)
+    if not conv_id_str or not cleaned_text:
+        # Send a help text back so the admin knows why nothing happened
+        loop = asyncio.get_event_loop()
+
+        async def _help():
+            try:
+                from app.services.sms_service import send_sms
+                await send_sms(
+                    to=from_phone,
+                    body=(
+                        "MAC Septic chat: couldn't route your reply. "
+                        "Use 'N: message' (e.g. '1: Hello') or '#<chatid> message'."
+                    ),
+                )
+            except Exception:
+                pass
+
+        loop.create_task(_help())
+        return {"handled": True, "routed": False, "reason": "no match"}
+
+    try:
+        conv_uuid = uuid.UUID(conv_id_str)
+    except ValueError:
+        return {"handled": True, "routed": False, "reason": "bad uuid"}
+
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(ChatConversation).where(ChatConversation.id == conv_uuid)
+        )
+        conversation = result.scalar_one_or_none()
+        if not conversation or conversation.status != "active":
+            return {"handled": True, "routed": False, "reason": "conv inactive"}
+
+        agent_name = "MAC Septic"  # SMS-originated replies aren't tied to a User row
+        msg = ChatMessage(
+            id=uuid.uuid4(),
+            conversation_id=conv_uuid,
+            sender_type="agent",
+            sender_name=agent_name,
+            content=cleaned_text,
+        )
+        db.add(msg)
+        await db.commit()
+        await db.refresh(msg)
+
+        await manager.broadcast_event(
+            "chat_message_received",
+            {
+                "event": "agent_reply",
+                "conversation_id": str(conv_uuid),
+                "message_id": str(msg.id),
+                "sender_type": "agent",
+                "sender_name": agent_name,
+                "content": cleaned_text,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "via": "sms",
+            },
+        )
+
+    return {
+        "handled": True,
+        "routed": True,
+        "conversation_id": str(conv_uuid),
+        "message_id": str(msg.id),
+    }
 
 
 # ─── Business Hours ──────────────────────────────────────────────────
@@ -290,7 +453,8 @@ async def leave_offline_message(req: OfflineMessageRequest, request: Request):
     # SMS alert — callbacks are urgent, always notify
     _send_chat_sms_alerts(
         f"📞 MAC Septic callback request from {req.visitor_name} "
-        f"({req.visitor_phone}). Message: {req.message[:120]}"
+        f"({req.visitor_phone}). Message: {req.message[:120]}",
+        conversation_id=str(conversation.id),
     )
 
     return OfflineMessageResponse(
@@ -347,8 +511,8 @@ async def start_conversation(req: StartConversationRequest, request: Request):
     visitor = req.visitor_name or "Website Visitor"
     phone_part = f" ({req.visitor_phone})" if req.visitor_phone else ""
     _send_chat_sms_alerts(
-        f"💬 New MAC Septic chat from {visitor}{phone_part}. "
-        f"Reply: https://react.ecbtx.com/chat"
+        f"💬 New MAC Septic chat from {visitor}{phone_part}",
+        conversation_id=str(conversation.id),
     )
 
     return StartConversationResponse(
@@ -408,6 +572,18 @@ async def send_visitor_message(
                 "content": req.content,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
+        )
+
+    # SMS alert for follow-up visitor messages — throttled to one alert per
+    # conversation per 30s so a multi-line typer doesn't blow up the phone.
+    now_ts = time.time()
+    last = _last_visitor_alert_ts.get(str(conv_uuid), 0.0)
+    if now_ts - last > 30:
+        _last_visitor_alert_ts[str(conv_uuid)] = now_ts
+        visitor = conversation.visitor_name or "Website Visitor"
+        _send_chat_sms_alerts(
+            f"💬 {visitor}: {req.content[:140]}",
+            conversation_id=str(conv_uuid),
         )
 
     return msg_response

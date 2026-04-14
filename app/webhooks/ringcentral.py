@@ -101,6 +101,23 @@ async def handle_ringcentral_sms(request: Request):
         extra={"from_suffix": from_number[-4:] if from_number else None, "rc_id": rc_message_id},
     )
 
+    # Intercept: if the sender is a configured live-chat admin, route their
+    # text as an agent reply to the chat instead of treating it as a
+    # customer-originated SMS.
+    try:
+        from app.api.v2.live_chat import post_sms_reply_to_chat
+        chat_result = await post_sms_reply_to_chat(from_number, text)
+    except Exception as e:
+        logger.warning(f"Chat SMS reply routing failed: {e}")
+        chat_result = None
+
+    if chat_result and chat_result.get("handled"):
+        logger.info(
+            "Inbound SMS routed to live chat",
+            extra={"routed": chat_result.get("routed"), "conv": chat_result.get("conversation_id")},
+        )
+        return {"status": "ok", "routed_to_chat": True, **chat_result}
+
     normalized = _normalize_phone(from_number)
 
     async with async_session_maker() as db:
