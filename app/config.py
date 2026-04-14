@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     RINGCENTRAL_JWT_TOKEN: str | None = None
     RINGCENTRAL_SMS_FROM_NUMBER: str | None = None  # TCR-approved A2P number
 
+    # Live chat SMS alerts — comma-separated E.164 numbers to text on new chat
+    CHAT_ALERT_SMS_NUMBERS: str | None = "+19792361958"
+
     # Samsara Fleet Tracking
     SAMSARA_API_TOKEN: str | None = None
 

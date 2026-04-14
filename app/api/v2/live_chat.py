@@ -22,6 +22,8 @@ from app.models.user import User
 from app.api.deps import get_current_user
 from app.services.websocket_manager import manager
 from app.core.rate_limit import rate_limit_by_ip
+from app.config import settings
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +143,38 @@ async def _create_chat_notifications(
         db.add(notif)
 
 
+def _send_chat_sms_alerts(body: str) -> None:
+    """Fire-and-forget SMS blast to all numbers in CHAT_ALERT_SMS_NUMBERS.
+
+    Failures are logged but never raised — a chat must still succeed even
+    if RingCentral is down or unconfigured.
+    """
+    numbers_csv = (settings.CHAT_ALERT_SMS_NUMBERS or "").strip()
+    if not numbers_csv:
+        return
+
+    numbers = [n.strip() for n in numbers_csv.split(",") if n.strip()]
+    if not numbers:
+        return
+
+    async def _send_one(number: str) -> None:
+        try:
+            from app.services.sms_service import send_sms
+            result = await send_sms(to=number, body=body)
+            if getattr(result, "error", None):
+                logger.warning(
+                    f"Chat SMS alert to {number} failed: {result.error}"
+                )
+        except Exception as e:
+            logger.warning(f"Chat SMS alert to {number} raised: {e}")
+
+    # Schedule all sends in the background without awaiting — the HTTP
+    # response returns immediately.
+    loop = asyncio.get_event_loop()
+    for number in numbers:
+        loop.create_task(_send_one(number))
+
+
 # ─── Business Hours ──────────────────────────────────────────────────
 
 CST = ZoneInfo("America/Chicago")
@@ -253,6 +287,12 @@ async def leave_offline_message(req: OfflineMessageRequest, request: Request):
             },
         )
 
+    # SMS alert — callbacks are urgent, always notify
+    _send_chat_sms_alerts(
+        f"📞 MAC Septic callback request from {req.visitor_name} "
+        f"({req.visitor_phone}). Message: {req.message[:120]}"
+    )
+
     return OfflineMessageResponse(
         conversation_id=str(conversation.id),
         status="active",
@@ -302,6 +342,14 @@ async def start_conversation(req: StartConversationRequest, request: Request):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
+
+    # SMS alert — new live chat started
+    visitor = req.visitor_name or "Website Visitor"
+    phone_part = f" ({req.visitor_phone})" if req.visitor_phone else ""
+    _send_chat_sms_alerts(
+        f"💬 New MAC Septic chat from {visitor}{phone_part}. "
+        f"Reply: https://react.ecbtx.com/chat"
+    )
 
     return StartConversationResponse(
         conversation_id=str(conversation.id),
