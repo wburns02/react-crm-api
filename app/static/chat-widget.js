@@ -19,9 +19,14 @@
     messages: [],
     lastMessageTs: null,
     pollTimer: null,
+    typingTimer: null,
+    lastTypingPing: 0,
     unreadCount: 0,
-    connected: true
+    connected: true,
+    agentTyping: false,
+    agentTypingName: null
   };
+  var optimisticCounter = 0;
 
   // Inject CSS
   var style = document.createElement('style');
@@ -44,6 +49,14 @@
     '.mac-chat-msg-visitor{align-self:flex-end;background:' + BRAND_COLOR + ';color:#fff;border-bottom-right-radius:4px;}',
     '.mac-chat-msg-agent{align-self:flex-start;background:#e5e7eb;color:#1f2937;border-bottom-left-radius:4px;}',
     '.mac-chat-msg-system{align-self:center;background:transparent;color:#9ca3af;font-size:12px;font-style:italic;text-align:center;padding:4px 8px;}',
+    '.mac-chat-msg-failed{opacity:0.65;border:1px dashed #ef4444;}',
+    '.mac-chat-msg-sending{opacity:0.7;}',
+    '.mac-chat-msg-retry{display:inline-block;margin-left:6px;color:#fff;text-decoration:underline;cursor:pointer;font-size:10px;}',
+    '.mac-chat-typing-dots{align-self:flex-start;display:flex;gap:3px;padding:8px 14px;background:#e5e7eb;border-radius:16px;border-bottom-left-radius:4px;}',
+    '.mac-chat-typing-dots span{width:6px;height:6px;border-radius:50%;background:#9ca3af;animation:mac-chat-bounce 1.2s infinite ease-in-out;}',
+    '.mac-chat-typing-dots span:nth-child(2){animation-delay:0.15s;}',
+    '.mac-chat-typing-dots span:nth-child(3){animation-delay:0.3s;}',
+    '@keyframes mac-chat-bounce{0%,60%,100%{transform:translateY(0);opacity:0.4;}30%{transform:translateY(-4px);opacity:1;}}',
     '.mac-chat-msg-time{font-size:10px;opacity:0.6;margin-top:4px;display:block;}',
     '.mac-chat-msg-visitor .mac-chat-msg-time{text-align:right;}',
     '.mac-chat-msg-agent .mac-chat-msg-time{text-align:left;}',
@@ -179,13 +192,34 @@
     var div = document.createElement('div');
     var senderType = msg.sender_type || 'system';
     div.className = 'mac-chat-msg mac-chat-msg-' + senderType;
-    var content = (msg.content || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-    div.innerHTML = content + '<span class="mac-chat-msg-time">' + formatTime(msg.created_at || msg.timestamp) + '</span>';
+    if (msg._status === 'sending') div.className += ' mac-chat-msg-sending';
+    if (msg._status === 'failed') div.className += ' mac-chat-msg-failed';
+
+    // Build content with textContent for XSS safety, preserving line breaks
+    var lines = (msg.content || '').split('\n');
+    lines.forEach(function(line, i) {
+      if (i > 0) div.appendChild(document.createElement('br'));
+      div.appendChild(document.createTextNode(line));
+    });
+
+    if (msg._status === 'failed') {
+      var retry = document.createElement('a');
+      retry.className = 'mac-chat-msg-retry';
+      retry.setAttribute('data-retry-id', msg._localId);
+      retry.textContent = 'Retry';
+      div.appendChild(document.createTextNode(' '));
+      div.appendChild(retry);
+    }
+
+    var timeSpan = document.createElement('span');
+    timeSpan.className = 'mac-chat-msg-time';
+    timeSpan.textContent = formatTime(msg.created_at || msg.timestamp);
+    div.appendChild(timeSpan);
     return div;
   }
 
   function renderMessages() {
-    messagesArea.innerHTML = '';
+    messagesArea.textContent = '';
     if (state.messages.length === 0) {
       var welcome = document.createElement('div');
       welcome.className = 'mac-chat-msg mac-chat-msg-system';
@@ -195,6 +229,12 @@
     state.messages.forEach(function(msg) {
       messagesArea.appendChild(renderMessage(msg));
     });
+    if (state.agentTyping) {
+      var t = document.createElement('div');
+      t.className = 'mac-chat-typing-dots';
+      for (var i = 0; i < 3; i++) t.appendChild(document.createElement('span'));
+      messagesArea.appendChild(t);
+    }
     messagesArea.scrollTop = messagesArea.scrollHeight;
   }
 
@@ -260,7 +300,33 @@
     });
   }
 
-  // Send message
+  // Find index of a message by its optimistic local ID
+  function findOptimisticIdx(localId) {
+    for (var i = 0; i < state.messages.length; i++) {
+      if (state.messages[i]._localId === localId) return i;
+    }
+    return -1;
+  }
+
+  // Send message (shared between new sends and retries)
+  function performSend(localId, text) {
+    return apiCall('POST', '/api/v2/chat/conversations/' + state.conversationId + '/messages', {
+      content: text,
+      sender_type: 'visitor'
+    }).then(function(data) {
+      var idx = findOptimisticIdx(localId);
+      if (idx !== -1) state.messages[idx] = data;
+      updateLastTs();
+      renderMessages();
+    }).catch(function() {
+      var idx = findOptimisticIdx(localId);
+      if (idx !== -1) {
+        state.messages[idx]._status = 'failed';
+      }
+      renderMessages();
+    });
+  }
+
   function sendMessage() {
     var text = msgInput.value.trim();
     if (!text || !state.conversationId) return;
@@ -268,27 +334,59 @@
     msgInput.value = '';
     sendBtn.disabled = true;
 
-    // Optimistic render
-    var optimistic = { content: text, sender_type: 'visitor', created_at: new Date().toISOString() };
+    // Clear typing indicator — we're sending, no longer typing
+    state.lastTypingPing = 0;
+
+    var localId = 'local-' + (++optimisticCounter);
+    var optimistic = {
+      _localId: localId,
+      _status: 'sending',
+      content: text,
+      sender_type: 'visitor',
+      created_at: new Date().toISOString()
+    };
     state.messages.push(optimistic);
     renderMessages();
 
-    apiCall('POST', '/api/v2/chat/conversations/' + state.conversationId + '/messages', {
-      content: text,
-      sender_type: 'visitor'
-    }).then(function(data) {
-      // Replace optimistic with server response
-      state.messages[state.messages.length - 1] = data;
-      updateLastTs();
-      renderMessages();
-    }).catch(function() {
-      // Mark failed
-      optimistic.content += ' (failed to send)';
-      renderMessages();
-    }).finally(function() {
+    performSend(localId, text).finally(function() {
       sendBtn.disabled = false;
       msgInput.focus();
     });
+  }
+
+  function retryMessage(localId) {
+    var idx = findOptimisticIdx(localId);
+    if (idx === -1) return;
+    var msg = state.messages[idx];
+    msg._status = 'sending';
+    renderMessages();
+    performSend(localId, msg.content);
+  }
+
+  // Send typing indicator (throttled to at most 1 per 2s)
+  function pingTyping() {
+    if (!state.conversationId) return;
+    var now = Date.now();
+    if (now - state.lastTypingPing < 2000) return;
+    state.lastTypingPing = now;
+    apiCall('POST', '/api/v2/chat/conversations/' + state.conversationId + '/typing', {
+      sender_type: 'visitor',
+      sender_name: state.visitorName || null
+    }).catch(function() {});
+  }
+
+  // Poll typing state from server
+  function pollTyping() {
+    if (!state.conversationId || !state.open) return;
+    apiCall('GET', '/api/v2/chat/conversations/' + state.conversationId + '/typing')
+      .then(function(data) {
+        var agentTyping = !!(data && data.agent_typing);
+        if (agentTyping !== state.agentTyping) {
+          state.agentTyping = agentTyping;
+          state.agentTypingName = data && data.agent_name || null;
+          renderMessages();
+        }
+      }).catch(function() {});
   }
 
   function updateLastTs() {
@@ -349,12 +447,17 @@
   function startPolling() {
     stopPolling();
     state.pollTimer = setInterval(pollMessages, POLL_INTERVAL);
+    state.typingTimer = setInterval(pollTyping, 2000);
   }
 
   function stopPolling() {
     if (state.pollTimer) {
       clearInterval(state.pollTimer);
       state.pollTimer = null;
+    }
+    if (state.typingTimer) {
+      clearInterval(state.typingTimer);
+      state.typingTimer = null;
     }
   }
 
@@ -426,6 +529,16 @@
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    }
+  });
+  msgInput.addEventListener('input', pingTyping);
+
+  // Retry click (delegated) for failed messages
+  messagesArea.addEventListener('click', function(e) {
+    var target = e.target;
+    if (target && target.classList && target.classList.contains('mac-chat-msg-retry')) {
+      var id = target.getAttribute('data-retry-id');
+      if (id) retryMessage(id);
     }
   });
 

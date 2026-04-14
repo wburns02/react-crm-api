@@ -2,18 +2,17 @@
 
 Public endpoints (no auth) for the chat widget on macseptic.com,
 plus authenticated endpoints for CRM staff to manage conversations.
-
-TODO: Add rate limiting to public endpoints to prevent abuse.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func, case, desc, text
+from sqlalchemy import select, func, desc, text
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 import logging
+import time
 import uuid
 
 from app.database import async_session_maker
@@ -22,6 +21,7 @@ from app.models.notification import Notification
 from app.models.user import User
 from app.api.deps import get_current_user
 from app.services.websocket_manager import manager
+from app.core.rate_limit import rate_limit_by_ip
 
 logger = logging.getLogger(__name__)
 
@@ -202,8 +202,9 @@ async def get_chat_status():
 
 
 @router.post("/offline-message", response_model=OfflineMessageResponse)
-async def leave_offline_message(req: OfflineMessageRequest):
+async def leave_offline_message(req: OfflineMessageRequest, request: Request):
     """Leave a message when staff is offline. Creates a conversation flagged for callback."""
+    rate_limit_by_ip(request, requests_per_minute=5)
     async with async_session_maker() as db:
         conversation = ChatConversation(
             id=uuid.uuid4(),
@@ -260,8 +261,9 @@ async def leave_offline_message(req: OfflineMessageRequest):
 
 
 @router.post("/conversations", response_model=StartConversationResponse)
-async def start_conversation(req: StartConversationRequest):
+async def start_conversation(req: StartConversationRequest, request: Request):
     """Start a new chat conversation from the website widget."""
+    rate_limit_by_ip(request, requests_per_minute=5)
     async with async_session_maker() as db:
         conversation = ChatConversation(
             id=uuid.uuid4(),
@@ -310,8 +312,11 @@ async def start_conversation(req: StartConversationRequest):
 @router.post(
     "/conversations/{conversation_id}/messages", response_model=MessageResponse
 )
-async def send_visitor_message(conversation_id: str, req: SendMessageRequest):
+async def send_visitor_message(
+    conversation_id: str, req: SendMessageRequest, request: Request
+):
     """Send a message from the website visitor."""
+    rate_limit_by_ip(request, requests_per_minute=30)
     try:
         conv_uuid = uuid.UUID(conversation_id)
     except ValueError:
@@ -421,7 +426,7 @@ async def list_conversations(
         except Exception:
             await db.rollback()
 
-        # Subquery for last message + counts
+        # Single-pass aggregation: last_message_at, message_count, last content via DISTINCT ON
         last_msg_sq = (
             select(
                 ChatMessage.conversation_id,
@@ -432,49 +437,68 @@ async def list_conversations(
             .subquery()
         )
 
+        # Latest message content per conversation via correlated subquery
+        latest_content_sq = (
+            select(ChatMessage.content)
+            .where(ChatMessage.conversation_id == ChatConversation.id)
+            .order_by(desc(ChatMessage.created_at))
+            .limit(1)
+            .correlate(ChatConversation)
+            .scalar_subquery()
+        )
+
+        # Unread count aggregated in one query: visitor messages after last_read_at
+        unread_sq = (
+            select(
+                ChatMessage.conversation_id,
+                func.count(ChatMessage.id).label("unread_count"),
+            )
+            .join(
+                ChatConversation,
+                ChatConversation.id == ChatMessage.conversation_id,
+            )
+            .where(
+                ChatMessage.sender_type == "visitor",
+                (
+                    (ChatConversation.last_read_at.is_(None))
+                    | (ChatMessage.created_at > ChatConversation.last_read_at)
+                ),
+            )
+            .group_by(ChatMessage.conversation_id)
+            .subquery()
+        )
+
         query = (
             select(
                 ChatConversation,
                 last_msg_sq.c.last_message_at,
                 last_msg_sq.c.message_count,
+                latest_content_sq.label("last_content"),
+                unread_sq.c.unread_count,
             )
             .outerjoin(
                 last_msg_sq,
                 ChatConversation.id == last_msg_sq.c.conversation_id,
+            )
+            .outerjoin(
+                unread_sq,
+                ChatConversation.id == unread_sq.c.conversation_id,
             )
         )
 
         if status and status != "all":
             query = query.where(ChatConversation.status == status)
 
-        query = query.order_by(desc(last_msg_sq.c.last_message_at.is_(None)), desc(last_msg_sq.c.last_message_at), desc(ChatConversation.created_at))
+        query = query.order_by(
+            desc(last_msg_sq.c.last_message_at.is_(None)),
+            desc(last_msg_sq.c.last_message_at),
+            desc(ChatConversation.created_at),
+        )
         result = await db.execute(query)
         rows = result.all()
 
         items = []
-        for conv, last_msg_at, msg_count in rows:
-            # Compute unread: visitor messages after last_read_at
-            unread_query = select(func.count(ChatMessage.id)).where(
-                ChatMessage.conversation_id == conv.id,
-                ChatMessage.sender_type == "visitor",
-            )
-            if conv.last_read_at:
-                unread_query = unread_query.where(
-                    ChatMessage.created_at > conv.last_read_at
-                )
-            unread_result = await db.execute(unread_query)
-            unread = unread_result.scalar() or 0
-            # Fetch last message content
-            last_content = None
-            if msg_count and msg_count > 0:
-                lm_result = await db.execute(
-                    select(ChatMessage.content)
-                    .where(ChatMessage.conversation_id == conv.id)
-                    .order_by(desc(ChatMessage.created_at))
-                    .limit(1)
-                )
-                last_content = lm_result.scalar_one_or_none()
-
+        for conv, last_msg_at, msg_count, last_content, unread in rows:
             meta = conv.metadata_json or {}
             items.append(
                 ConversationListItem(
@@ -711,3 +735,278 @@ async def delete_conversation(
         await db.commit()
 
     return {"id": str(conv_uuid), "deleted": True}
+
+
+# ─── Typing Indicators ──────────────────────────────────────────────
+#
+# In-memory store with 5s TTL. Keyed by conversation_id, value is
+# {sender_type: (timestamp, sender_name)}. Not persisted — if the
+# process restarts, indicators just vanish, which is fine.
+
+_TYPING_TTL_SECONDS = 5.0
+_typing_state: dict[str, dict[str, tuple[float, Optional[str]]]] = {}
+
+
+def _prune_typing(conv_id: str) -> dict[str, Optional[str]]:
+    """Remove expired entries and return active typers for a conversation."""
+    now = time.time()
+    entries = _typing_state.get(conv_id, {})
+    active = {
+        sender: name
+        for sender, (ts, name) in entries.items()
+        if now - ts < _TYPING_TTL_SECONDS
+    }
+    if active:
+        _typing_state[conv_id] = {
+            sender: (ts, name)
+            for sender, (ts, name) in entries.items()
+            if now - ts < _TYPING_TTL_SECONDS
+        }
+    else:
+        _typing_state.pop(conv_id, None)
+    return active
+
+
+class TypingRequest(BaseModel):
+    sender_type: str = Field(..., pattern="^(visitor|agent)$")
+    sender_name: Optional[str] = None
+
+
+class TypingStatusResponse(BaseModel):
+    visitor_typing: bool = False
+    agent_typing: bool = False
+    agent_name: Optional[str] = None
+
+
+@router.post("/conversations/{conversation_id}/typing")
+async def set_typing(
+    conversation_id: str,
+    req: TypingRequest,
+    request: Request,
+):
+    """Mark a conversation as being typed in. Public endpoint used by both
+    widget (visitor) and CRM staff (agent). Rate-limited per IP."""
+    rate_limit_by_ip(request, requests_per_minute=60)
+    try:
+        uuid.UUID(conversation_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid conversation ID")
+
+    _typing_state.setdefault(conversation_id, {})[req.sender_type] = (
+        time.time(),
+        req.sender_name,
+    )
+    return {"ok": True}
+
+
+@router.get(
+    "/conversations/{conversation_id}/typing",
+    response_model=TypingStatusResponse,
+)
+async def get_typing(conversation_id: str):
+    """Get current typing state for a conversation. Polled every ~2s."""
+    try:
+        uuid.UUID(conversation_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid conversation ID")
+
+    active = _prune_typing(conversation_id)
+    return TypingStatusResponse(
+        visitor_typing="visitor" in active,
+        agent_typing="agent" in active,
+        agent_name=active.get("agent") if "agent" in active else None,
+    )
+
+
+# ─── Canned Responses ───────────────────────────────────────────────
+
+_CANNED_TABLE_DDL = """
+CREATE TABLE IF NOT EXISTS chat_canned_responses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    shortcut VARCHAR(50),
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+"""
+
+_CANNED_SEED = [
+    ("Greeting", "Hi! Thanks for reaching out to MAC Septic. How can I help you today?", "/hi"),
+    ("Service area", "We serve the Austin metro and surrounding counties. What's your zip code so I can confirm?", "/area"),
+    ("Pump-out pricing", "A standard residential pump-out is $395. Larger tanks or heavy solids may add $50–$150. Want me to schedule one?", "/pump"),
+    ("Schedule question", "We can usually get a tech out within 1–2 business days. What day works best for you?", "/sched"),
+    ("Aerobic maintenance", "Aerobic systems need a licensed maintenance contract — $290/yr covers 3 inspections + chlorine. Want me to sign you up?", "/aerobic"),
+    ("Callback offer", "I'll have someone give you a call back shortly. What's the best number to reach you at?", "/call"),
+]
+
+_canned_seeded = False
+
+
+async def _ensure_canned_table(db):
+    """Create table + seed default responses on first use. Idempotent."""
+    global _canned_seeded
+    await db.execute(text(_CANNED_TABLE_DDL))
+    if not _canned_seeded:
+        count_result = await db.execute(
+            text("SELECT COUNT(*) FROM chat_canned_responses")
+        )
+        if (count_result.scalar() or 0) == 0:
+            for idx, (title, content, shortcut) in enumerate(_CANNED_SEED):
+                await db.execute(
+                    text(
+                        "INSERT INTO chat_canned_responses (title, content, shortcut, sort_order) "
+                        "VALUES (:t, :c, :s, :o)"
+                    ),
+                    {"t": title, "c": content, "s": shortcut, "o": idx},
+                )
+        _canned_seeded = True
+    await db.commit()
+
+
+class CannedResponseItem(BaseModel):
+    id: str
+    title: str
+    content: str
+    shortcut: Optional[str] = None
+    sort_order: int = 0
+
+
+class CannedResponseCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+    content: str = Field(..., min_length=1, max_length=5000)
+    shortcut: Optional[str] = Field(None, max_length=50)
+    sort_order: int = 0
+
+
+class CannedResponseUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    content: Optional[str] = Field(None, min_length=1, max_length=5000)
+    shortcut: Optional[str] = Field(None, max_length=50)
+    sort_order: Optional[int] = None
+
+
+@router.get("/canned-responses", response_model=list[CannedResponseItem])
+async def list_canned_responses(current_user: User = Depends(get_current_user)):
+    """List all canned responses (staff only)."""
+    async with async_session_maker() as db:
+        await _ensure_canned_table(db)
+        result = await db.execute(
+            text(
+                "SELECT id, title, content, shortcut, sort_order "
+                "FROM chat_canned_responses ORDER BY sort_order, title"
+            )
+        )
+        return [
+            CannedResponseItem(
+                id=str(row[0]),
+                title=row[1],
+                content=row[2],
+                shortcut=row[3],
+                sort_order=row[4],
+            )
+            for row in result.all()
+        ]
+
+
+@router.post("/canned-responses", response_model=CannedResponseItem)
+async def create_canned_response(
+    req: CannedResponseCreate,
+    current_user: User = Depends(get_current_user),
+):
+    """Create a canned response (staff only)."""
+    async with async_session_maker() as db:
+        await _ensure_canned_table(db)
+        new_id = uuid.uuid4()
+        await db.execute(
+            text(
+                "INSERT INTO chat_canned_responses (id, title, content, shortcut, sort_order) "
+                "VALUES (:id, :t, :c, :s, :o)"
+            ),
+            {
+                "id": new_id,
+                "t": req.title,
+                "c": req.content,
+                "s": req.shortcut,
+                "o": req.sort_order,
+            },
+        )
+        await db.commit()
+    return CannedResponseItem(
+        id=str(new_id),
+        title=req.title,
+        content=req.content,
+        shortcut=req.shortcut,
+        sort_order=req.sort_order,
+    )
+
+
+@router.patch("/canned-responses/{response_id}", response_model=CannedResponseItem)
+async def update_canned_response(
+    response_id: str,
+    req: CannedResponseUpdate,
+    current_user: User = Depends(get_current_user),
+):
+    """Update a canned response (staff only)."""
+    try:
+        resp_uuid = uuid.UUID(response_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid response ID")
+
+    updates = {k: v for k, v in req.model_dump(exclude_none=True).items()}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    set_clause = ", ".join(f"{k} = :{k}" for k in updates.keys())
+    params = {**updates, "id": resp_uuid}
+
+    async with async_session_maker() as db:
+        await _ensure_canned_table(db)
+        await db.execute(
+            text(
+                f"UPDATE chat_canned_responses SET {set_clause}, updated_at = NOW() "
+                f"WHERE id = :id"
+            ),
+            params,
+        )
+        await db.commit()
+        result = await db.execute(
+            text(
+                "SELECT id, title, content, shortcut, sort_order "
+                "FROM chat_canned_responses WHERE id = :id"
+            ),
+            {"id": resp_uuid},
+        )
+        row = result.one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Canned response not found")
+
+    return CannedResponseItem(
+        id=str(row[0]),
+        title=row[1],
+        content=row[2],
+        shortcut=row[3],
+        sort_order=row[4],
+    )
+
+
+@router.delete("/canned-responses/{response_id}")
+async def delete_canned_response(
+    response_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a canned response (staff only)."""
+    try:
+        resp_uuid = uuid.UUID(response_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid response ID")
+
+    async with async_session_maker() as db:
+        await _ensure_canned_table(db)
+        await db.execute(
+            text("DELETE FROM chat_canned_responses WHERE id = :id"),
+            {"id": resp_uuid},
+        )
+        await db.commit()
+    return {"id": str(resp_uuid), "deleted": True}
