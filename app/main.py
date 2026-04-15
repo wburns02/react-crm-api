@@ -3321,6 +3321,125 @@ async def health_ensure_documents_table():
     return results
 
 
+@app.post("/health/db/ensure-qb-gopayment-tables")
+async def health_ensure_qb_gopayment_tables():
+    """Apply migration 095 idempotently: payments columns + qb_sync_log + integration_settings_kv."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+
+    results = {"columns_added": [], "tables_created": [], "tables_skipped": [], "errors": []}
+
+    async with async_session_maker() as session:
+        try:
+            # ── payments: new columns ──
+            for col_name, col_ddl in [
+                ("processor", "VARCHAR(32)"),
+                ("external_txn_id", "VARCHAR(128)"),
+                ("reference_code", "VARCHAR(32)"),
+                ("sync_status", "VARCHAR(16)"),
+                ("synced_at", "TIMESTAMP"),
+            ]:
+                exists = await session.execute(text(
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = 'payments' AND column_name = :c)"
+                ), {"c": col_name})
+                if not exists.scalar():
+                    await session.execute(text(
+                        f"ALTER TABLE payments ADD COLUMN {col_name} {col_ddl}"
+                    ))
+                    results["columns_added"].append(col_name)
+
+            await session.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_payments_external_txn_id ON payments(external_txn_id)"
+            ))
+            await session.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_payments_reference_code ON payments(reference_code)"
+            ))
+            await session.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_payments_sync_status ON payments(sync_status)"
+            ))
+
+            # Backfill
+            await session.execute(text(
+                "UPDATE payments SET processor = 'stripe' "
+                "WHERE processor IS NULL AND stripe_charge_id IS NOT NULL"
+            ))
+            await session.execute(text(
+                "UPDATE payments SET processor = 'clover' "
+                "WHERE processor IS NULL AND payment_method = 'clover'"
+            ))
+            await session.execute(text(
+                "UPDATE payments SET processor = 'manual' WHERE processor IS NULL"
+            ))
+
+            # ── qb_sync_log ──
+            r = await session.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'qb_sync_log')"
+            ))
+            if not r.scalar():
+                await session.execute(text("""
+                    CREATE TABLE qb_sync_log (
+                        id UUID PRIMARY KEY,
+                        run_started_at TIMESTAMP NOT NULL,
+                        run_completed_at TIMESTAMP,
+                        transactions_fetched INTEGER DEFAULT 0,
+                        transactions_matched INTEGER DEFAULT 0,
+                        transactions_unmatched INTEGER DEFAULT 0,
+                        error_message TEXT,
+                        triggered_by VARCHAR(64)
+                    )
+                """))
+                await session.execute(text(
+                    "CREATE INDEX ix_qb_sync_log_run_started_at ON qb_sync_log(run_started_at DESC)"
+                ))
+                results["tables_created"].append("qb_sync_log")
+            else:
+                results["tables_skipped"].append("qb_sync_log")
+
+            # ── integration_settings_kv ──
+            r = await session.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                "WHERE table_name = 'integration_settings_kv')"
+            ))
+            if not r.scalar():
+                await session.execute(text("""
+                    CREATE TABLE integration_settings_kv (
+                        key VARCHAR(64) PRIMARY KEY,
+                        value VARCHAR(255),
+                        updated_at TIMESTAMP DEFAULT now(),
+                        updated_by VARCHAR(255)
+                    )
+                """))
+                results["tables_created"].append("integration_settings_kv")
+            else:
+                results["tables_skipped"].append("integration_settings_kv")
+
+            # Seed default primary processor
+            await session.execute(text(
+                "INSERT INTO integration_settings_kv (key, value) "
+                "VALUES ('primary_payment_processor', 'clover') "
+                "ON CONFLICT (key) DO NOTHING"
+            ))
+
+            # Stamp alembic version (best-effort; safe no-op if already at 095+)
+            try:
+                cur = await session.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+                row = cur.fetchone()
+                if row and row[0] == "094":
+                    await session.execute(text(
+                        "UPDATE alembic_version SET version_num = '095'"
+                    ))
+                    results["alembic_stamped"] = "094 → 095"
+            except Exception:
+                pass
+
+            await session.commit()
+        except Exception as e:
+            results["errors"].append(f"{type(e).__name__}: {str(e)}")
+
+    return results
+
+
 @app.post("/health/db/ensure-custom-reports")
 async def health_ensure_custom_reports():
     """Create custom_reports and report_snapshots tables if missing."""
