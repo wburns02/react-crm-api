@@ -148,8 +148,22 @@ def _build_inspection_text(checklist: dict) -> str:
 
     # Additional custom fields
     custom = checklist.get("customFields", {})
+    if custom.get("date_of_inspection"):
+        parts.append(f"Date of inspection: {custom['date_of_inspection']}")
+    if custom.get("time_of_inspection"):
+        parts.append(f"Time of inspection: {custom['time_of_inspection']}")
+    if custom.get("technician"):
+        parts.append(f"Inspecting technician: {custom['technician']}")
+    if custom.get("weather"):
+        parts.append(f"Weather at inspection: {custom['weather']}")
+    if custom.get("last_precipitation"):
+        parts.append(f"Last precipitation in area: {custom['last_precipitation']}")
+    if custom.get("who_present"):
+        parts.append(f"Present at inspection: {custom['who_present']}")
     if custom.get("homeowner_present"):
         parts.append("Homeowner present during inspection, permission received.")
+    if custom.get("last_cleaning"):
+        parts.append(f"Client-reported last cleaning/service: {custom['last_cleaning']}")
     for key in ["additional_notes", "extra_observations"]:
         if custom.get(key):
             parts.append(custom[key])
@@ -174,13 +188,20 @@ STYLE RULES:
 STRUCTURE (follow this order):
 1. Opening: "On the above date and time, an on-site survey of the septic system was conducted by MAC Septic."
    - If homeowner was present, add: "Prior to the inspection, MAC Septic received permission to be on-site by the homeowner. The homeowner was present during the time of the inspection."
+   - If a "Present at inspection" value is given (Realtor, Potential Buyer, Seller/Homeowner), weave that into a sentence naming who was on-site.
+   - If weather conditions and/or last precipitation are provided, include a single sentence describing conditions at the time of inspection (e.g., "Weather at the time of inspection was overcast with the last precipitation reported approximately 4-7 days prior.").
 2. Tank location and physical description (depth, surface access, markings)
 3. Permit/history (TDEC/DHEC search results, homeowner statements about installation year)
-4. System type, capacity, and condition assessment
+   - If a client-reported last cleaning/service is provided, include it here.
+4. System type, capacity, flow type (gravity vs forced-flow), and condition assessment
+   - For forced-flow systems, describe the pump chamber and effluent pump (make/model) if provided.
 5. Pumping paragraph (only if pumped): "Simultaneous to the Septic Inspection, MAC Septic accessed, pumped and cleaned the tank..."
    - Include baffle inspection, operational test results
-6. Notable observations (access issues, structural concerns, pump details)
-7. Closing: "The drain field shows no signs of leaching up or super saturation. This system appears to be functioning properly overall."
+6. Notable observations (access issues, structural concerns, pump details, findings explanations from the technician)
+7. Drain field assessment sentence(s). If leaching/saturation/damage findings were noted, describe them specifically (use the provided explanation text) instead of the generic "no signs" sentence.
+8. Closing sentence about overall system function.
+
+USE ALL AVAILABLE DATA — never omit a field the tech captured. If "Inspecting technician" is given, do NOT name them in the letter body (the signature block handles attribution), but do factor their observations into the narrative.
 
 CRITICAL RULES:
 - Output ONLY the narrative body paragraphs
@@ -374,6 +395,38 @@ def form_data_to_checklist(form_data: dict) -> dict:
     who_present = form_data.get("who_present", "")
     homeowner_present = "homeowner" in who_present.lower() or "seller" in who_present.lower()
 
+    # Pull the findings explanations so the AI can reference them
+    tank_good_explain = findings.get("tank_good_condition_explain") or ""
+    damage_explain = findings.get("tank_visible_damage_explain") or ""
+    leaching_explain = findings.get("drain_field_leaching_explain") or ""
+    saturation_explain = findings.get("drain_field_super_saturation_explain") or ""
+    functioning_explain = findings.get("system_functioning_explain") or ""
+
+    # Pump chamber / forced-flow details
+    pump_chamber_bits = []
+    if system.get("pump_chamber_size"):
+        pump_chamber_bits.append(f"pump chamber ~{system['pump_chamber_size']}")
+    if system.get("pump_make_model"):
+        pump_chamber_bits.append(f"pump {system['pump_make_model']}")
+    pump_chamber_text = ", ".join(pump_chamber_bits)
+
+    # Build combined findings commentary
+    findings_bits = []
+    if has_damage and damage_explain:
+        findings_bits.append(f"Damage noted: {damage_explain}")
+    elif tank_good_explain and not tank_good:
+        findings_bits.append(f"Condition note: {tank_good_explain}")
+    if leaching and leaching_explain:
+        findings_bits.append(f"Leaching: {leaching_explain}")
+    if saturation and saturation_explain:
+        findings_bits.append(f"Saturation: {saturation_explain}")
+    if not functioning and functioning_explain:
+        findings_bits.append(f"Functioning concern: {functioning_explain}")
+
+    notable = form_data.get("additional_info", "")
+    if findings_bits:
+        notable = ". ".join([b for b in ([notable] + findings_bits) if b])
+
     checklist = {
         "address": client.get("address", ""),
         "steps": {
@@ -400,9 +453,9 @@ def form_data_to_checklist(form_data: dict) -> dict:
                 "operational_test": "",
             },
             "6": {
-                "notable_observations": form_data.get("additional_info", ""),
-                "pump_info": "",
-                "pump_chamber": "",
+                "notable_observations": notable,
+                "pump_info": system.get("pump_make_model", ""),
+                "pump_chamber": pump_chamber_text,
             },
             "7": {
                 "drain_field": drain_field_text,
@@ -414,6 +467,11 @@ def form_data_to_checklist(form_data: dict) -> dict:
             "technician": form_data.get("technician", ""),
             "weather": weather.get("conditions", ""),
             "last_precipitation": weather.get("last_precipitation", ""),
+            "date_of_inspection": form_data.get("date_of_inspection", ""),
+            "time_of_inspection": form_data.get("time_of_inspection", ""),
+            "client_phone": client.get("phone", ""),
+            "client_email": client.get("email", ""),
+            "last_cleaning": (form_data.get("service_history") or {}).get("last_cleaning", ""),
         },
     }
     return checklist
