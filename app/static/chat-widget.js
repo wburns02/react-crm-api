@@ -318,7 +318,16 @@
       if (idx !== -1) state.messages[idx] = data;
       updateLastTs();
       renderMessages();
-    }).catch(function() {
+    }).catch(function(err) {
+      // If the conversation is closed or gone, bail out to the start form
+      // rather than leaving a "failed" bubble the visitor can't recover from.
+      var msg = (err && err.message) || '';
+      if (msg.indexOf('404') !== -1 || msg.indexOf('400') !== -1) {
+        stopPolling();
+        showStartForm();
+        formError.textContent = 'This chat has ended. Please start a new one.';
+        return;
+      }
       var idx = findOptimisticIdx(localId);
       if (idx !== -1) {
         state.messages[idx]._status = 'failed';
@@ -494,25 +503,32 @@
     stopPolling();
   }
 
-  // Load existing conversation on init
+  // Load existing conversation on init — verify it's still active before
+  // restoring, so the visitor never gets stuck in a closed chat.
   function loadExisting() {
     if (!state.conversationId) return;
 
-    apiCall('GET', '/api/v2/chat/conversations/' + state.conversationId + '/messages').then(function(data) {
-      var msgs = Array.isArray(data) ? data : (data.messages || []);
-      state.messages = msgs;
-      updateLastTs();
-      // Check if conversation is closed
-      if (data.status === 'closed') {
-        showStartForm();
+    apiCall('GET', '/api/v2/chat/conversations/' + state.conversationId + '/public-status')
+      .then(function(status) {
+        if (!status || !status.exists || status.status !== 'active') {
+          // Conversation is closed, missing, or invalid — clear cache silently.
+          state.conversationId = null;
+          state.messages = [];
+          localStorage.removeItem(STORAGE_KEY);
+          return;
+        }
+        // Conversation is live — pull its messages
+        return apiCall('GET', '/api/v2/chat/conversations/' + state.conversationId + '/messages')
+          .then(function(data) {
+            var msgs = Array.isArray(data) ? data : (data.messages || []);
+            state.messages = msgs;
+            updateLastTs();
+          });
+      }).catch(function() {
+        // Network or API error — clear cache so next open starts fresh
+        state.conversationId = null;
         localStorage.removeItem(STORAGE_KEY);
-        return;
-      }
-    }).catch(function() {
-      // Conversation not found or error - reset
-      state.conversationId = null;
-      localStorage.removeItem(STORAGE_KEY);
-    });
+      });
   }
 
   // Event listeners

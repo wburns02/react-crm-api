@@ -589,6 +589,34 @@ async def send_visitor_message(
     return msg_response
 
 
+class PublicConversationStatus(BaseModel):
+    status: str
+    exists: bool
+
+
+@router.get(
+    "/conversations/{conversation_id}/public-status",
+    response_model=PublicConversationStatus,
+)
+async def get_public_conversation_status(conversation_id: str):
+    """Public endpoint — widget uses this on load to detect if a cached
+    conversation ID is still active, so it can reset cleanly rather than
+    letting the visitor hit a 400 on their first message."""
+    try:
+        conv_uuid = uuid.UUID(conversation_id)
+    except ValueError:
+        return PublicConversationStatus(status="invalid", exists=False)
+
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(ChatConversation.status).where(ChatConversation.id == conv_uuid)
+        )
+        row = result.first()
+        if not row:
+            return PublicConversationStatus(status="missing", exists=False)
+        return PublicConversationStatus(status=row[0], exists=True)
+
+
 @router.get(
     "/conversations/{conversation_id}/messages", response_model=list[MessageResponse]
 )
