@@ -290,10 +290,34 @@ async def call_library(
       if available, else by duration
     - losses: connected calls with no follow-up work order/quote, plus
       voicemail/missed/no answer calls
+    - realtors: calls where a real estate agent / realtor is on the line
+      (detected via keywords in transcript, AI summary, or notes)
     - all: every call with a recording over 30 seconds
     """
     from app.models.work_order import WorkOrder
     from app.models.quote import Quote
+
+    REALTOR_KEYWORDS = (
+        "realtor", "real estate", "real-estate", "realty",
+        "listing agent", "buyer's agent", "buyers agent",
+        "seller's agent", "sellers agent", "listing broker",
+        "under contract", "closing date", "title company",
+        "option period", "inspection period", "home inspector",
+        "coldwell", "keller williams", "re/max", "remax",
+        "century 21", "compass real", "ebby halliday",
+        "i'm a realtor", "i'm a real estate", "i'm an agent",
+        "i have a listing", "my client is buying", "my client is selling",
+    )
+
+    def is_realtor_call(item: dict) -> bool:
+        blob = " ".join(filter(None, [
+            item.get("transcription") or "",
+            item.get("ai_summary") or "",
+            item.get("notes") or "",
+        ])).lower()
+        if not blob:
+            return False
+        return any(kw in blob for kw in REALTOR_KEYWORDS)
 
     try:
         # Get all calls with recordings > 30s
@@ -310,7 +334,7 @@ async def call_library(
         calls = result.scalars().all()
 
         if not calls:
-            return {"wins": [], "pitches": [], "losses": [], "all": []}
+            return {"wins": [], "pitches": [], "losses": [], "realtors": [], "all": []}
 
         # Gather customer IDs and date range for batch lookup
         customer_ids = {c.customer_id for c in calls if c.customer_id}
@@ -322,10 +346,13 @@ async def call_library(
             not_connected = [c for c in all_items
                             if (c["call_disposition"] or "").lower() in
                             ("voicemail", "no answer", "missed", "busy", "rejected")]
+            realtors = [c for c in all_items if is_realtor_call(c)]
+            realtors.sort(key=lambda x: x.get("duration_seconds") or 0, reverse=True)
             return {
                 "wins": [],
                 "pitches": sorted(connected, key=lambda x: x["duration_seconds"] or 0, reverse=True)[:50],
                 "losses": not_connected,
+                "realtors": realtors,
                 "all": all_items,
             }
 
@@ -398,12 +425,15 @@ async def call_library(
         pitches.sort(key=lambda x: (x.get("quality_score") or 0, x.get("duration_seconds") or 0), reverse=True)
         # Sort losses by duration (longest first — most to learn from)
         losses.sort(key=lambda x: x.get("duration_seconds") or 0, reverse=True)
+        # Realtor calls — any call (connected or not) mentioning realtor keywords
+        realtors = [item for item in all_items if is_realtor_call(item)]
+        realtors.sort(key=lambda x: x.get("duration_seconds") or 0, reverse=True)
 
-        return {"wins": wins, "pitches": pitches, "losses": losses, "all": all_items}
+        return {"wins": wins, "pitches": pitches, "losses": losses, "realtors": realtors, "all": all_items}
 
     except Exception as e:
         logger.error(f"Call library error: {e}", exc_info=True)
-        return {"wins": [], "pitches": [], "losses": [], "all": []}
+        return {"wins": [], "pitches": [], "losses": [], "realtors": [], "all": []}
 
 
 @router.get("/dispositions", response_model=List[CallDispositionResponse])
