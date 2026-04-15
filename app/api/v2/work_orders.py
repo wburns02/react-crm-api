@@ -180,7 +180,11 @@ async def get_inspection_letter_queue(db: DbSession, current_user: CurrentUser):
                 address = ", ".join(p for p in parts if p)
 
             letter_status = ai_letter.get("status", "none")
-            has_inspection_data = bool(inspection.get("steps"))
+            has_inspection_data = bool(
+                inspection.get("steps")
+                or inspection.get("client")
+                or inspection.get("findings")
+            )
 
             items.append({
                 "id": str(wo.id),

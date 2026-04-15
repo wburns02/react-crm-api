@@ -578,6 +578,10 @@ class MS365FormsSyncService(MS365BaseService):
 
                         wo_number = await _generate_wo_number(db)
 
+                        from app.services.inspection_letter_service import form_data_to_checklist
+                        form_checklist = form_data_to_checklist(inspection_data)
+                        form_checklist["source"] = "ms_forms"
+
                         wo = WorkOrder(
                             id=uuid.uuid4(),
                             work_order_number=wo_number,
@@ -590,7 +594,7 @@ class MS365FormsSyncService(MS365BaseService):
                             notes="Imported from MS Forms inspection form",
                             source="import",
                             checklist={
-                                "inspection": inspection_data,
+                                "inspection": form_checklist,
                                 "forms_import": True,
                             },
                         )
