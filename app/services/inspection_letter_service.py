@@ -213,18 +213,23 @@ CRITICAL RULES:
 - End with the drain field / overall assessment paragraph
 
 HANDLING MISSING DATA:
-- If the inspection data is incomplete, ALWAYS generate a complete letter using
-  [BRACKETED PLACEHOLDERS] for unknown details.
-- Examples of placeholders:
-  "The septic tank was located [TANK LOCATION relative to house]."
-  "The tank appeared to be approximately [TANK DEPTH] deep."
-  "[TDEC/DHEC PERMIT INFO - or homeowner statement about install year]."
-  "This is a [SYSTEM TYPE] with an estimated capacity of [CAPACITY] gallons."
+- Prefer graceful omission over bracket placeholders. If a field was not captured,
+  simply leave that sentence or clause out rather than writing "[PUMP MAKE/MODEL]"
+  or "[NOTABLE OBSERVATIONS]". A shorter, clean letter is better than a letter
+  cluttered with brackets.
+- Only use [BRACKETED PLACEHOLDERS] for data that is STRUCTURALLY REQUIRED and
+  genuinely unknown — for example, if the tank location is missing the letter
+  cannot be written at all without that, so use "[TANK LOCATION]" there.
+- If condition is flagged "poor" or "fair" but no explanation was captured,
+  simply write "The tank was noted to warrant follow-up at the time of the
+  inspection." rather than a bracket. Do NOT ask the user to provide details.
+- Do NOT emit brackets for: pump make/model, pump chamber details, baffle
+  inspection, operational test, last cleaning, notable observations,
+  additional info — if absent, omit those sentences entirely.
 - NEVER ask the user for more information. NEVER say "Please provide..."
-- NEVER refuse to generate the letter. Always produce a full draft letter
-  with placeholders — the user will fill them in manually.
-- Use the address provided (if any) in the opening; otherwise use [ADDRESS].
-- Even with minimal data, produce ALL the standard paragraphs using placeholders."""
+- NEVER refuse to generate the letter. Always produce the best possible draft
+  with the data available.
+- Use the address provided (if any) in the opening; otherwise use [ADDRESS]."""
 
 # ---------------------------------------------------------------------------
 # Few-shot examples
