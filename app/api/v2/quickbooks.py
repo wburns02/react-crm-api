@@ -406,6 +406,270 @@ async def get_sync_history(
 # =============================================================================
 
 
+# =============================================================================
+# GoPayment Sync (QBO → CRM)
+# =============================================================================
+
+
+@router.post("/sync/pull")
+async def trigger_qb_payment_pull(
+    db: DbSession,
+    current_user: CurrentUser,
+    lookback_days: int = 14,
+) -> dict:
+    """Pull recent QB payments + match to CRM invoices by reference code."""
+    qbo = get_qbo_service()
+    triggered_by = current_user.email if current_user else "manual"
+    summary = await qbo.pull_recent_payments(
+        db, triggered_by=triggered_by, lookback_days=lookback_days
+    )
+    return summary
+
+
+@router.get("/sync/log")
+async def get_qb_sync_log(
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = 20,
+) -> dict:
+    """Return recent QB sync run summaries."""
+    from sqlalchemy import text as sql_text
+    result = await db.execute(
+        sql_text(
+            """
+            SELECT id::text, run_started_at, run_completed_at,
+                   transactions_fetched, transactions_matched, transactions_unmatched,
+                   error_message, triggered_by
+            FROM qb_sync_log
+            ORDER BY run_started_at DESC
+            LIMIT :lim
+            """
+        ),
+        {"lim": limit},
+    )
+    runs = [
+        {
+            "id": r[0],
+            "run_started_at": r[1].isoformat() if r[1] else None,
+            "run_completed_at": r[2].isoformat() if r[2] else None,
+            "transactions_fetched": r[3] or 0,
+            "transactions_matched": r[4] or 0,
+            "transactions_unmatched": r[5] or 0,
+            "error_message": r[6],
+            "triggered_by": r[7],
+        }
+        for r in result.fetchall()
+    ]
+    return {"runs": runs, "count": len(runs)}
+
+
+@router.get("/payments/unmatched")
+async def get_unmatched_qb_payments(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """List QB-sourced payment records with sync_status='unmatched'."""
+    from sqlalchemy import text as sql_text
+    result = await db.execute(
+        sql_text(
+            """
+            SELECT id::text, amount, external_txn_id, reference_code,
+                   payment_date, created_at
+            FROM payments
+            WHERE processor = 'quickbooks_gopayment' AND sync_status = 'unmatched'
+            ORDER BY created_at DESC
+            LIMIT 200
+            """
+        )
+    )
+    payments = [
+        {
+            "id": r[0],
+            "amount": float(r[1] or 0),
+            "external_txn_id": r[2],
+            "reference_code": r[3],
+            "payment_date": r[4].isoformat() if r[4] else None,
+            "created_at": r[5].isoformat() if r[5] else None,
+        }
+        for r in result.fetchall()
+    ]
+    return {"payments": payments, "count": len(payments)}
+
+
+@router.post("/payments/{payment_id}/match")
+async def manually_match_qb_payment(
+    payment_id: str,
+    invoice_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Manually link an unmatched QB payment to a CRM invoice."""
+    from sqlalchemy import text as sql_text
+    result = await db.execute(
+        sql_text(
+            """
+            UPDATE payments
+            SET invoice_id = :iid,
+                customer_id = (SELECT customer_id FROM invoices WHERE id = :iid),
+                sync_status = 'matched',
+                synced_at = NOW()
+            WHERE id = :pid
+              AND processor = 'quickbooks_gopayment'
+            RETURNING id::text
+            """
+        ),
+        {"iid": invoice_id, "pid": payment_id},
+    )
+    row = result.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Payment not found or not QB-sourced")
+
+    # Mark invoice paid if fully covered
+    await db.execute(
+        sql_text(
+            """
+            UPDATE invoices SET status = 'paid'
+            WHERE id = :iid
+              AND status != 'paid'
+              AND amount <= (
+                  SELECT COALESCE(SUM(amount), 0) FROM payments
+                  WHERE invoice_id = :iid AND status = 'completed'
+              )
+            """
+        ),
+        {"iid": invoice_id},
+    )
+    await db.commit()
+    return {"success": True, "payment_id": payment_id, "invoice_id": invoice_id}
+
+
+@router.get("/reference-code/{invoice_id}")
+async def get_invoice_reference_code(
+    invoice_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Return the reference code a tech should type into the GoPayment memo."""
+    from sqlalchemy import text as sql_text
+    result = await db.execute(
+        sql_text(
+            "SELECT invoice_number, amount FROM invoices WHERE id = :id"
+        ),
+        {"id": invoice_id},
+    )
+    row = result.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    return {
+        "invoice_id": invoice_id,
+        "reference_code": row[0] or invoice_id[:8].upper(),
+        "amount": float(row[1] or 0),
+        "instructions": "Type this code into the GoPayment memo field when taking the card payment.",
+    }
+
+
+@router.post("/payments/pending")
+async def record_pending_gopayment(
+    db: DbSession,
+    current_user: CurrentUser,
+    invoice_id: str,
+    customer_id: Optional[str] = None,
+    amount: float = 0,
+    reference_code: str = "",
+    notes: Optional[str] = None,
+) -> dict:
+    """Record a pending GoPayment charge — tech has initiated on the GoPayment app,
+    CRM waits for sync to confirm via external_txn_id match.
+    """
+    from sqlalchemy import text as sql_text
+    if not reference_code:
+        raise HTTPException(status_code=400, detail="reference_code is required")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="amount must be positive")
+
+    result = await db.execute(
+        sql_text(
+            """
+            INSERT INTO payments (
+                id, customer_id, invoice_id, amount, currency, payment_method, status,
+                processor, reference_code, sync_status, description,
+                payment_date, created_at
+            ) VALUES (
+                gen_random_uuid(), :cust, :inv, :amt, 'USD', 'card', 'pending',
+                'quickbooks_gopayment', :ref, 'pending', :desc,
+                NOW(), NOW()
+            )
+            RETURNING id::text
+            """
+        ),
+        {
+            "cust": customer_id,
+            "inv": invoice_id,
+            "amt": amount,
+            "ref": reference_code,
+            "desc": notes or f"QB GoPayment pending — ref {reference_code}",
+        },
+    )
+    row = result.fetchone()
+    await db.commit()
+    return {
+        "success": True,
+        "payment_id": row[0] if row else None,
+        "status": "pending",
+        "reference_code": reference_code,
+    }
+
+
+# =============================================================================
+# Primary payment processor toggle (admin)
+# =============================================================================
+
+
+@router.get("/primary-processor")
+async def get_primary_processor(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Return the current default payment processor (clover | quickbooks_gopayment)."""
+    from sqlalchemy import text as sql_text
+    result = await db.execute(
+        sql_text(
+            "SELECT value FROM integration_settings_kv WHERE key = 'primary_payment_processor'"
+        )
+    )
+    row = result.fetchone()
+    return {"primary_payment_processor": row[0] if row else "clover"}
+
+
+@router.patch("/primary-processor")
+async def set_primary_processor(
+    db: DbSession,
+    current_user: CurrentUser,
+    processor: str,
+) -> dict:
+    """Set the default payment processor. Accepts 'clover' or 'quickbooks_gopayment'."""
+    if processor not in ("clover", "quickbooks_gopayment"):
+        raise HTTPException(
+            status_code=400,
+            detail="processor must be 'clover' or 'quickbooks_gopayment'",
+        )
+    from sqlalchemy import text as sql_text
+    await db.execute(
+        sql_text(
+            """
+            INSERT INTO integration_settings_kv (key, value, updated_at, updated_by)
+            VALUES ('primary_payment_processor', :val, NOW(), :by)
+            ON CONFLICT (key) DO UPDATE
+              SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+            """
+        ),
+        {"val": processor, "by": current_user.email if current_user else "system"},
+    )
+    await db.commit()
+    return {"success": True, "primary_payment_processor": processor}
+
+
 @router.get("/reconciliation")
 async def get_reconciliation_report(
     db: DbSession,

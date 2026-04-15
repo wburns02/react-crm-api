@@ -361,6 +361,173 @@ class QBOService:
             logger.error(f"Failed to sync invoice {invoice_id}", exc_info=True)
             return None
 
+    # ── Inbound Payment Pull (QBO → CRM) ────────────────────────
+
+    async def pull_recent_payments(
+        self,
+        db: AsyncSession,
+        triggered_by: str = "manual",
+        lookback_days: int = 14,
+    ) -> dict:
+        """Fetch recent QB payments + sales receipts and match to CRM invoices.
+
+        Returns a summary dict matching a qb_sync_log row.
+        """
+        import uuid as uuid_module
+        from datetime import date
+
+        run_id = uuid_module.uuid4()
+        run_started = datetime.utcnow()
+        fetched = matched = unmatched = 0
+        error_msg: Optional[str] = None
+
+        try:
+            since_date = (datetime.utcnow() - timedelta(days=lookback_days)).date().isoformat()
+
+            # Query QB Payment entity
+            query = (
+                f"SELECT * FROM Payment WHERE TxnDate >= '{since_date}' "
+                f"MAXRESULTS 200"
+            )
+            result = await self._api_request(
+                db, "GET", f"query?query={query.replace(' ', '%20')}"
+            )
+
+            payments = []
+            if result and "QueryResponse" in result:
+                payments = result["QueryResponse"].get("Payment", []) or []
+
+            fetched = len(payments)
+
+            for qb_pmt in payments:
+                qb_txn_id = str(qb_pmt.get("Id", ""))
+                if not qb_txn_id:
+                    continue
+
+                # Idempotency: skip if already synced
+                existing = await db.execute(
+                    text(
+                        "SELECT id FROM payments WHERE external_txn_id = :tid AND processor = 'quickbooks_gopayment'"
+                    ),
+                    {"tid": qb_txn_id},
+                )
+                if existing.fetchone():
+                    continue
+
+                amount = float(qb_pmt.get("TotalAmt", 0) or 0)
+                txn_date = qb_pmt.get("TxnDate")
+                memo = (qb_pmt.get("PrivateNote") or "").strip()
+                ref_code = _extract_reference_code(memo)
+
+                matched_invoice_id = None
+                matched_customer_id = None
+                status = "unmatched"
+
+                if ref_code:
+                    inv_row = await db.execute(
+                        text(
+                            "SELECT id::text, customer_id::text FROM invoices "
+                            "WHERE invoice_number = :code LIMIT 1"
+                        ),
+                        {"code": ref_code},
+                    )
+                    row = inv_row.fetchone()
+                    if row:
+                        matched_invoice_id = row[0]
+                        matched_customer_id = row[1]
+                        status = "matched"
+
+                await db.execute(
+                    text(
+                        """
+                        INSERT INTO payments (
+                            id, customer_id, invoice_id, amount, currency, payment_method, status,
+                            processor, external_txn_id, reference_code, sync_status, synced_at,
+                            payment_date, created_at
+                        ) VALUES (
+                            gen_random_uuid(), :cust_id, :inv_id, :amt, 'USD', 'card', 'completed',
+                            'quickbooks_gopayment', :tid, :ref, :sync, NOW(),
+                            :pdate, NOW()
+                        )
+                        """
+                    ),
+                    {
+                        "cust_id": matched_customer_id,
+                        "inv_id": matched_invoice_id,
+                        "amt": amount,
+                        "tid": qb_txn_id,
+                        "ref": ref_code,
+                        "sync": status,
+                        "pdate": txn_date,
+                    },
+                )
+
+                if status == "matched":
+                    matched += 1
+                    # If invoice fully covered, mark paid
+                    await db.execute(
+                        text(
+                            """
+                            UPDATE invoices SET status = 'paid'
+                            WHERE id = :iid
+                              AND status != 'paid'
+                              AND amount <= (
+                                  SELECT COALESCE(SUM(amount), 0) FROM payments
+                                  WHERE invoice_id = :iid AND status = 'completed'
+                              )
+                            """
+                        ),
+                        {"iid": matched_invoice_id},
+                    )
+                else:
+                    unmatched += 1
+
+            # Update last_sync timestamp on active token
+            await db.execute(
+                text(
+                    "UPDATE qbo_oauth_tokens SET last_sync_at = NOW() WHERE is_active = true"
+                )
+            )
+
+        except Exception as e:
+            error_msg = str(e)[:500]
+            logger.error("QBO pull_recent_payments failed", exc_info=True)
+
+        # Log run
+        run_completed = datetime.utcnow()
+        await db.execute(
+            text(
+                """
+                INSERT INTO qb_sync_log (
+                    id, run_started_at, run_completed_at,
+                    transactions_fetched, transactions_matched, transactions_unmatched,
+                    error_message, triggered_by
+                ) VALUES (:id, :start, :end, :fetched, :matched, :unmatched, :err, :by)
+                """
+            ),
+            {
+                "id": run_id,
+                "start": run_started,
+                "end": run_completed,
+                "fetched": fetched,
+                "matched": matched,
+                "unmatched": unmatched,
+                "err": error_msg,
+                "by": triggered_by,
+            },
+        )
+        await db.commit()
+
+        return {
+            "run_id": str(run_id),
+            "transactions_fetched": fetched,
+            "transactions_matched": matched,
+            "transactions_unmatched": unmatched,
+            "error_message": error_msg,
+            "run_started_at": run_started.isoformat(),
+            "run_completed_at": run_completed.isoformat(),
+        }
+
     # ── Payment Sync ────────────────────────────────────────────
 
     async def sync_payment(self, db: AsyncSession, payment_id: str) -> Optional[dict]:
@@ -390,6 +557,20 @@ class QBOService:
         except Exception:
             logger.error(f"Failed to sync payment {payment_id}", exc_info=True)
             return None
+
+
+def _extract_reference_code(memo: str) -> Optional[str]:
+    """Parse reference code (MAC-1234, INV-1234, or bare 1234) from a GoPayment memo string."""
+    if not memo:
+        return None
+    import re
+    m = re.search(r"\b([A-Z]{2,5}-\d{3,8})\b", memo.upper())
+    if m:
+        return m.group(1)
+    m = re.search(r"\b(\d{3,8})\b", memo)
+    if m:
+        return m.group(1)
+    return None
 
 
 # Singleton

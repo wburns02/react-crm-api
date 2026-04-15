@@ -41,6 +41,13 @@ class Payment(Base):
     refund_id = Column(String(255))
     refunded_at = Column(DateTime)
 
+    # Multi-processor tracking (Clover, QuickBooks GoPayment, Stripe, manual)
+    processor = Column(String(32), index=True)  # 'clover' | 'quickbooks_gopayment' | 'stripe' | 'manual'
+    external_txn_id = Column(String(128), index=True)  # QB txn id, Clover payment id, etc.
+    reference_code = Column(String(32), index=True)  # Code tech types in GoPayment memo for matching
+    sync_status = Column(String(16), index=True)  # 'pending' | 'matched' | 'unmatched' | 'failed'
+    synced_at = Column(DateTime)
+
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
