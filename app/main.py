@@ -1543,6 +1543,13 @@ app.include_router(ringcentral_webhook_router, prefix="/webhooks/ringcentral", t
 app.include_router(brevo_webhook_router, prefix="/webhooks/brevo", tags=["webhooks"])
 app.include_router(live_chat_router, prefix="/api/v2/chat", tags=["live-chat"])
 
+# HR module (feature-flagged via HR_MODULE_ENABLED)
+from app.hr.feature_flag import hr_module_enabled
+from app.hr.router import hr_router
+
+if hr_module_enabled():
+    app.include_router(hr_router, prefix="/api/v2")
+
 # WebSocket routes for real-time call transcription (mounted at root, not /api/v2)
 # Replaces the older media_stream.py -- uses GoogleSTTStreamer + TranscriptWSManager
 app.include_router(call_transcript_ws_router)
