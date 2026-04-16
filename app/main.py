@@ -1543,6 +1543,21 @@ app.include_router(ringcentral_webhook_router, prefix="/webhooks/ringcentral", t
 app.include_router(brevo_webhook_router, prefix="/webhooks/brevo", tags=["webhooks"])
 app.include_router(live_chat_router, prefix="/api/v2/chat", tags=["live-chat"])
 
+# HR module (feature-flagged via HR_MODULE_ENABLED)
+from app.hr.feature_flag import hr_module_enabled
+from app.hr.router import hr_router
+from app.hr.esign.router import esign_public_router
+from app.hr.careers.router import careers_router
+
+if hr_module_enabled():
+    app.include_router(hr_router, prefix="/api/v2")
+    # Public e-sign endpoints have no auth — mount outside hr_router so they
+    # don't inherit anything that might be added later to the admin tree.
+    app.include_router(esign_public_router, prefix="/api/v2/public")
+    # Public SSR careers pages mount at /careers (no /api/v2 prefix) so they
+    # are indexable by search engines and shareable as friendly URLs.
+    app.include_router(careers_router)
+
 # WebSocket routes for real-time call transcription (mounted at root, not /api/v2)
 # Replaces the older media_stream.py -- uses GoogleSTTStreamer + TranscriptWSManager
 app.include_router(call_transcript_ws_router)
@@ -2306,6 +2321,100 @@ async def run_uuid_migrations():
                 results["version_after"] = result.scalar_one_or_none()
             except Exception:
                 results["version_after"] = None
+
+    except Exception as e:
+        results["errors"].append(f"{type(e).__name__}: {str(e)}")
+
+    return results
+
+
+@app.post("/health/db/migrate-hr")
+async def run_hr_migrations():
+    """Apply HR module migrations 096-100.
+
+    Behaviour:
+      * If `hr_audit_log` already exists, only stamp alembic to '100' and exit
+        (idempotent).
+      * Otherwise stamp alembic to '095' (the pre-HR head) and `alembic upgrade
+        head` — Railway's startup skips alembic entirely (railway.json runs
+        uvicorn directly) so nothing else advances alembic_version.
+
+    Requires HR module PDFs bundled in the image at app/hr/esign/pdfs/ (they
+    are — committed to the repo).  PDF storage writes land at HR_STORAGE_ROOT;
+    missing keys fall back to the bundled copies at read time.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    import os
+    import subprocess
+
+    results: dict = {"stamp": False, "upgrade": False, "errors": [], "steps": []}
+
+    try:
+        async with async_session_maker() as session:
+            try:
+                result = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["version_before"] = result.scalar_one_or_none()
+            except Exception:
+                results["version_before"] = None
+
+            try:
+                r = await session.execute(text(
+                    "SELECT to_regclass('public.hr_audit_log') IS NOT NULL AS exists"
+                ))
+                hr_already_present = bool(r.scalar())
+            except Exception:
+                hr_already_present = False
+            results["hr_tables_present_before"] = hr_already_present
+
+        os.chdir("/app")
+
+        if hr_already_present:
+            proc = subprocess.run(
+                ["alembic", "stamp", "100"], capture_output=True, text=True, timeout=60
+            )
+            results["stamp"] = proc.returncode == 0
+            results["upgrade"] = True
+            results["steps"].append("HR tables already present; stamped alembic to 100")
+            if proc.stderr:
+                results["stamp_stderr"] = proc.stderr[-1000:]
+        else:
+            proc = subprocess.run(
+                ["alembic", "stamp", "095"], capture_output=True, text=True, timeout=60
+            )
+            results["stamp"] = proc.returncode == 0
+            if proc.stderr:
+                results["stamp_stderr"] = proc.stderr[-1000:]
+            if not results["stamp"]:
+                results["errors"].append("alembic stamp 095 failed")
+                return results
+            results["steps"].append("stamped alembic at 095")
+
+            proc = subprocess.run(
+                ["alembic", "upgrade", "head"], capture_output=True, text=True, timeout=600
+            )
+            results["upgrade"] = proc.returncode == 0
+            if proc.stdout:
+                results["upgrade_stdout"] = proc.stdout[-2000:]
+            if proc.stderr:
+                results["upgrade_stderr"] = proc.stderr[-2000:]
+            if results["upgrade"]:
+                results["steps"].append("ran alembic upgrade head (096-100)")
+            else:
+                results["errors"].append("alembic upgrade head failed")
+
+        async with async_session_maker() as session:
+            try:
+                result = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["version_after"] = result.scalar_one_or_none()
+            except Exception:
+                results["version_after"] = None
+
+            try:
+                r = await session.execute(text("SELECT count(*) FROM hr_document_templates"))
+                results["seeded_templates"] = r.scalar_one()
+            except Exception:
+                results["seeded_templates"] = None
 
     except Exception as e:
         results["errors"].append(f"{type(e).__name__}: {str(e)}")

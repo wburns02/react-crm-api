@@ -157,6 +157,26 @@ from app.models.property_lookup import PropertyLookup
 # Email Marketing Lists
 from app.models.email_list import EmailList, EmailSubscriber
 
+# HR Module (feature-flagged; models registered so SQLite test DB creates them)
+from app.hr.shared.models import HrAuditLog, HrRoleAssignment  # noqa: F401
+from app.hr.workflow.models import (  # noqa: F401
+    HrWorkflowTemplate,
+    HrWorkflowTemplateTask,
+    HrWorkflowTemplateDependency,
+    HrWorkflowInstance,
+    HrWorkflowTask,
+    HrWorkflowTaskDependency,
+    HrWorkflowTaskComment,
+    HrWorkflowTaskAttachment,
+)
+from app.hr.recruiting.models import HrRequisition  # noqa: F401
+from app.hr.esign.models import (  # noqa: F401
+    HrDocumentTemplate,
+    HrSignatureRequest,
+    HrSignedDocument,
+    HrSignatureEvent,
+)
+
 __all__ = [
     # Core models
     "Customer",

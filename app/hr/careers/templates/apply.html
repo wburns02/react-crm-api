@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Apply — {{ req.title }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white text-neutral-900">
+  <main class="max-w-xl mx-auto px-6 py-10">
+    <a href="/careers/{{ req.slug }}" class="text-sm text-gray-500 hover:underline">← Back to job</a>
+    <h1 class="text-2xl font-semibold mt-4">Apply for {{ req.title }}</h1>
+    <p class="mt-4 text-gray-600">
+      Application form coming soon. Please email resume to
+      <a class="underline" href="mailto:careers@macseptic.com">careers@macseptic.com</a>
+      while we finish the online form.
+    </p>
+  </main>
+</body>
+</html>

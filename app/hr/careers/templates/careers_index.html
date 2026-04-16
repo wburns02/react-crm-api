@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Careers at Mac Septic</title>
+  <meta name="description" content="Join the Mac Septic team. Open positions in Tennessee and Texas.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta property="og:title" content="Careers at Mac Septic">
+  <meta property="og:description" content="Join the Mac Septic team. Open positions in Tennessee and Texas.">
+  <link rel="alternate" type="application/xml" title="Indeed Jobs" href="/careers/jobs.xml">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white text-neutral-900">
+  <header class="border-b border-neutral-200">
+    <div class="max-w-4xl mx-auto px-6 py-6">
+      <h1 class="text-3xl font-semibold">Careers at Mac Septic</h1>
+      <p class="text-gray-600 mt-2">Serving Tennessee &amp; Texas. Open roles below.</p>
+    </div>
+  </header>
+  <main class="max-w-4xl mx-auto px-6 py-10">
+    {% if reqs %}
+      <ul class="divide-y divide-neutral-200">
+        {% for r in reqs %}
+          <li class="py-4 flex justify-between items-center gap-6">
+            <div class="min-w-0">
+              <a href="/careers/{{ r.slug }}" class="text-xl font-medium hover:underline">{{ r.title }}</a>
+              <p class="text-sm text-gray-600">
+                {% if r.location_city %}{{ r.location_city }}{% if r.location_state %}, {{ r.location_state }}{% endif %} — {% endif %}
+                {{ r.employment_type.replace('_', ' ') }}
+              </p>
+            </div>
+            {% if r.compensation_display %}<span class="text-sm shrink-0">{{ r.compensation_display }}</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-gray-600">No open positions right now. Check back soon.</p>
+    {% endif %}
+  </main>
+</body>
+</html>
