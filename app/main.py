@@ -2499,9 +2499,9 @@ async def seed_demo_requisition():
                     "(id, slug, title, status, employment_type, "
                     " location_city, location_state, compensation_display, opened_at) "
                     "VALUES (gen_random_uuid(), 'e2e-demo-tech', 'E2E Demo Technician', "
-                    "        'open', 'full_time', 'Houston', 'TX', '$20-$28/hr', :now)"
-                ),
-                {"now": datetime.now(timezone.utc)},
+                    "        'open', 'full_time', 'Houston', 'TX', '$20-$28/hr', "
+                    "        NOW() AT TIME ZONE 'UTC')"
+                )
             )
             await session.commit()
             results["created"] = True
