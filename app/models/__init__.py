@@ -169,6 +169,7 @@ from app.hr.workflow.models import (  # noqa: F401
     HrWorkflowTaskComment,
     HrWorkflowTaskAttachment,
 )
+from app.hr.recruiting.models import HrRequisition  # noqa: F401
 
 __all__ = [
     # Core models
