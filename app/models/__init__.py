@@ -157,6 +157,9 @@ from app.models.property_lookup import PropertyLookup
 # Email Marketing Lists
 from app.models.email_list import EmailList, EmailSubscriber
 
+# HR Module (feature-flagged; models registered so SQLite test DB creates them)
+from app.hr.shared.models import HrAuditLog, HrRoleAssignment  # noqa: F401
+
 __all__ = [
     # Core models
     "Customer",
