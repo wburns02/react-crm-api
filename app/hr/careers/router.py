@@ -28,7 +28,7 @@ async def jobs_feed(request: Request, db: DbSession) -> Response:
 async def careers_index(request: Request, db: DbSession) -> HTMLResponse:
     reqs = await list_requisitions(db, status="open")
     return _TEMPLATES.TemplateResponse(
-        "careers_index.html", {"request": request, "reqs": reqs}
+        request, "careers_index.html", {"reqs": reqs}
     )
 
 
@@ -40,7 +40,7 @@ async def requisition_detail(
     if req is None or req.status != "open":
         return HTMLResponse("Not found", status_code=404)
     return _TEMPLATES.TemplateResponse(
-        "requisition_detail.html", {"request": request, "req": req}
+        request, "requisition_detail.html", {"req": req}
     )
 
 
@@ -50,5 +50,5 @@ async def apply(request: Request, slug: str, db: DbSession) -> HTMLResponse:
     if req is None or req.status != "open":
         return HTMLResponse("Not found", status_code=404)
     return _TEMPLATES.TemplateResponse(
-        "apply.html", {"request": request, "req": req}
+        request, "apply.html", {"req": req}
     )
