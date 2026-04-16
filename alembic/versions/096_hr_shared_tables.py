@@ -1,6 +1,6 @@
 """hr shared tables (audit log + role assignments)
 
-Revision ID: 096_hr_shared_tables
+Revision ID: 096
 Revises: 095
 """
 from alembic import op
@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import INET, UUID
 
 
-revision = "096_hr_shared_tables"
+revision = "096"
 down_revision = "095"
 branch_labels = None
 depends_on = None

@@ -2328,6 +2328,100 @@ async def run_uuid_migrations():
     return results
 
 
+@app.post("/health/db/migrate-hr")
+async def run_hr_migrations():
+    """Apply HR module migrations 096-100.
+
+    Behaviour:
+      * If `hr_audit_log` already exists, only stamp alembic to '100' and exit
+        (idempotent).
+      * Otherwise stamp alembic to '095' (the pre-HR head) and `alembic upgrade
+        head` — Railway's startup skips alembic entirely (railway.json runs
+        uvicorn directly) so nothing else advances alembic_version.
+
+    Requires HR module PDFs bundled in the image at app/hr/esign/pdfs/ (they
+    are — committed to the repo).  PDF storage writes land at HR_STORAGE_ROOT;
+    missing keys fall back to the bundled copies at read time.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    import os
+    import subprocess
+
+    results: dict = {"stamp": False, "upgrade": False, "errors": [], "steps": []}
+
+    try:
+        async with async_session_maker() as session:
+            try:
+                result = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["version_before"] = result.scalar_one_or_none()
+            except Exception:
+                results["version_before"] = None
+
+            try:
+                r = await session.execute(text(
+                    "SELECT to_regclass('public.hr_audit_log') IS NOT NULL AS exists"
+                ))
+                hr_already_present = bool(r.scalar())
+            except Exception:
+                hr_already_present = False
+            results["hr_tables_present_before"] = hr_already_present
+
+        os.chdir("/app")
+
+        if hr_already_present:
+            proc = subprocess.run(
+                ["alembic", "stamp", "100"], capture_output=True, text=True, timeout=60
+            )
+            results["stamp"] = proc.returncode == 0
+            results["upgrade"] = True
+            results["steps"].append("HR tables already present; stamped alembic to 100")
+            if proc.stderr:
+                results["stamp_stderr"] = proc.stderr[-1000:]
+        else:
+            proc = subprocess.run(
+                ["alembic", "stamp", "095"], capture_output=True, text=True, timeout=60
+            )
+            results["stamp"] = proc.returncode == 0
+            if proc.stderr:
+                results["stamp_stderr"] = proc.stderr[-1000:]
+            if not results["stamp"]:
+                results["errors"].append("alembic stamp 095 failed")
+                return results
+            results["steps"].append("stamped alembic at 095")
+
+            proc = subprocess.run(
+                ["alembic", "upgrade", "head"], capture_output=True, text=True, timeout=600
+            )
+            results["upgrade"] = proc.returncode == 0
+            if proc.stdout:
+                results["upgrade_stdout"] = proc.stdout[-2000:]
+            if proc.stderr:
+                results["upgrade_stderr"] = proc.stderr[-2000:]
+            if results["upgrade"]:
+                results["steps"].append("ran alembic upgrade head (096-100)")
+            else:
+                results["errors"].append("alembic upgrade head failed")
+
+        async with async_session_maker() as session:
+            try:
+                result = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["version_after"] = result.scalar_one_or_none()
+            except Exception:
+                results["version_after"] = None
+
+            try:
+                r = await session.execute(text("SELECT count(*) FROM hr_document_templates"))
+                results["seeded_templates"] = r.scalar_one()
+            except Exception:
+                results["seeded_templates"] = None
+
+    except Exception as e:
+        results["errors"].append(f"{type(e).__name__}: {str(e)}")
+
+    return results
+
+
 @app.post("/health/db/fix-alembic")
 async def fix_alembic_version():
     """Fix alembic_version table: widen version_num column and stamp to head (065)."""

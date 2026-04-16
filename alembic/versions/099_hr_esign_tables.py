@@ -1,15 +1,15 @@
 """hr e-sign tables (document templates, signature requests, signed documents, events)
 
-Revision ID: 099_hr_esign_tables
-Revises: 098_hr_requisition_minimal
+Revision ID: 099
+Revises: 098
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import INET, UUID
 
 
-revision = "099_hr_esign_tables"
-down_revision = "098_hr_requisition_minimal"
+revision = "099"
+down_revision = "098"
 branch_labels = None
 depends_on = None
 

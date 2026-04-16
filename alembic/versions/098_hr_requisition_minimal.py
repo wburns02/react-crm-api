@@ -1,15 +1,15 @@
 """hr requisition table (minimal schema for careers page)
 
-Revision ID: 098_hr_requisition_minimal
-Revises: 097_hr_workflow_tables
+Revision ID: 098
+Revises: 097
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
 
-revision = "098_hr_requisition_minimal"
-down_revision = "097_hr_workflow_tables"
+revision = "098"
+down_revision = "097"
 branch_labels = None
 depends_on = None
 

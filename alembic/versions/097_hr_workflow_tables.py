@@ -1,15 +1,15 @@
 """hr workflow engine tables (templates, instances, tasks, deps, comments, attachments)
 
-Revision ID: 097_hr_workflow_tables
-Revises: 096_hr_shared_tables
+Revision ID: 097
+Revises: 096
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
 
-revision = "097_hr_workflow_tables"
-down_revision = "096_hr_shared_tables"
+revision = "097"
+down_revision = "096"
 branch_labels = None
 depends_on = None
 
