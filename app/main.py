@@ -1547,12 +1547,16 @@ app.include_router(live_chat_router, prefix="/api/v2/chat", tags=["live-chat"])
 from app.hr.feature_flag import hr_module_enabled
 from app.hr.router import hr_router
 from app.hr.esign.router import esign_public_router
+from app.hr.careers.router import careers_router
 
 if hr_module_enabled():
     app.include_router(hr_router, prefix="/api/v2")
     # Public e-sign endpoints have no auth — mount outside hr_router so they
     # don't inherit anything that might be added later to the admin tree.
     app.include_router(esign_public_router, prefix="/api/v2/public")
+    # Public SSR careers pages mount at /careers (no /api/v2 prefix) so they
+    # are indexable by search engines and shareable as friendly URLs.
+    app.include_router(careers_router)
 
 # WebSocket routes for real-time call transcription (mounted at root, not /api/v2)
 # Replaces the older media_stream.py -- uses GoogleSTTStreamer + TranscriptWSManager

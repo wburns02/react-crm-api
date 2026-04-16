@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ req.title }} — Mac Septic Careers</title>
+  <meta name="description" content="{{ req.title }} position at Mac Septic{% if req.location_city %} in {{ req.location_city }}{% if req.location_state %}, {{ req.location_state }}{% endif %}{% endif %}.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta property="og:title" content="{{ req.title }} — Mac Septic Careers">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white text-neutral-900">
+  <main class="max-w-3xl mx-auto px-6 py-10">
+    <a href="/careers" class="text-sm text-gray-500 hover:underline">← All positions</a>
+    <h1 class="text-3xl font-semibold mt-4">{{ req.title }}</h1>
+    <p class="text-gray-600">
+      {% if req.location_city %}{{ req.location_city }}{% if req.location_state %}, {{ req.location_state }}{% endif %} — {% endif %}
+      {{ req.employment_type.replace('_', ' ') }}
+    </p>
+    {% if req.compensation_display %}<p class="mt-2 font-medium">{{ req.compensation_display }}</p>{% endif %}
+    {% if req.description_md %}<section class="prose mt-8">{{ req.description_md | safe }}</section>{% endif %}
+    {% if req.requirements_md %}<section class="prose mt-8"><h2>Requirements</h2>{{ req.requirements_md | safe }}</section>{% endif %}
+    {% if req.benefits_md %}<section class="prose mt-8"><h2>Benefits</h2>{{ req.benefits_md | safe }}</section>{% endif %}
+    <a href="/careers/{{ req.slug }}/apply" class="inline-block mt-10 px-6 py-3 bg-black text-white rounded">Apply</a>
+  </main>
+</body>
+</html>
