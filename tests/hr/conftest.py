@@ -8,6 +8,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 
+# Ensure hr_router is mounted on the shared FastAPI app for every HR test.
+# main.py gates registration on HR_MODULE_ENABLED which is not set at conftest
+# import time, so tests would otherwise hit 404 on /api/v2/hr/* routes.
+def _mount_hr_router_once() -> None:
+    from app.hr.router import hr_router
+    from app.main import app as fastapi_app
+
+    already = any(
+        getattr(r, "path", "").startswith("/api/v2/hr")
+        for r in fastapi_app.routes
+    )
+    if not already:
+        fastapi_app.include_router(hr_router, prefix="/api/v2")
+
+
+_mount_hr_router_once()
+
+
+@pytest_asyncio.fixture
+async def authed_client(authenticated_client):
+    """Plan-doc alias for the existing authenticated bearer-token client."""
+    return authenticated_client
+
 
 @pytest_asyncio.fixture
 async def db(test_db: AsyncSession) -> AsyncSession:
