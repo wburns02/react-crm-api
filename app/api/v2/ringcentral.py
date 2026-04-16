@@ -1878,10 +1878,9 @@ async def get_call_recording(
 
         # Extract recording ID from the URL
         recording_id = None
-        if "/recording/" in call.recording_url:
-            parts = call.recording_url.split("/recording/")
-            if len(parts) > 1:
-                recording_id = parts[1].split("?")[0]  # Remove query params
+        match = _re.search(r"/recording/(\d+)", call.recording_url)
+        if match:
+            recording_id = match.group(1)
 
         if not recording_id:
             raise HTTPException(
@@ -1904,7 +1903,7 @@ async def get_call_recording(
             "recording_id": recording_id,
             "content_type": recording_meta.get("contentType", "audio/mpeg"),
             "duration": recording_meta.get("duration"),
-            "secure_url": f"/api/v2/ringcentral/recording/{recording_id}/content",
+            "secure_url": f"/ringcentral/recording/{recording_id}/content",
         }
 
     except HTTPException:
