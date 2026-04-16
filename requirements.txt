@@ -32,6 +32,11 @@ apscheduler>=3.10.0
 # Excel parsing for MS Forms inspection uploads
 openpyxl>=3.1.0
 
+# HR e-sign PDF rendering (pypdf + reportlab) and signature image handling (Pillow)
+pypdf>=4.0.0
+reportlab>=4.0.0
+Pillow>=10.0.0
+
 # Auth - pinned to avoid CVE-2024-23342 in ecdsa
 python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0
