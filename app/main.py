@@ -2381,9 +2381,10 @@ async def run_hr_migrations():
             has_esign_templates = await _has("hr_document_templates")
             has_applicants = await _has("hr_applicants")
             has_message_templates = await _has("hr_recruiting_message_templates")
+            has_employee_certs = await _has("hr_employee_certifications")
+            has_onboarding_tokens = await _has("hr_onboarding_tokens")
 
-            # Count seeded rows to distinguish 101 (tables present, no seed
-            # yet) from 102 (tables + seed).
+            # Count seeded rows to distinguish migrations that create vs seed.
             seeded_msg_templates = 0
             if has_message_templates:
                 try:
@@ -2394,6 +2395,18 @@ async def run_hr_migrations():
                 except Exception:
                     pass
 
+            seeded_lifecycle_templates = 0
+            try:
+                r = await session.execute(
+                    text(
+                        "SELECT count(*) FROM hr_workflow_templates "
+                        "WHERE name IN ('New Field Tech Onboarding', 'Tech Separation')"
+                    )
+                )
+                seeded_lifecycle_templates = r.scalar_one()
+            except Exception:
+                pass
+
             results["hr_tables_present_before"] = has_audit
             results["detected_state"] = {
                 "hr_audit_log": has_audit,
@@ -2401,14 +2414,21 @@ async def run_hr_migrations():
                 "hr_document_templates": has_esign_templates,
                 "hr_applicants": has_applicants,
                 "hr_recruiting_message_templates": has_message_templates,
+                "hr_employee_certifications": has_employee_certs,
+                "hr_onboarding_tokens": has_onboarding_tokens,
                 "seeded_msg_templates": seeded_msg_templates,
+                "seeded_lifecycle_templates": seeded_lifecycle_templates,
             }
 
         os.chdir("/app")
 
         # Pick the alembic revision that matches what's already in the DB.
         # Always stamp and then upgrade head so any newer migrations apply.
-        if has_message_templates and seeded_msg_templates >= 5:
+        if has_employee_certs and seeded_lifecycle_templates >= 2:
+            stamp_target = "104"
+        elif has_employee_certs:
+            stamp_target = "103"
+        elif has_message_templates and seeded_msg_templates >= 5:
             stamp_target = "102"
         elif has_message_templates or has_applicants:
             stamp_target = "101"

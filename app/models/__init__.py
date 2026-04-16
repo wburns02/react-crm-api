@@ -182,6 +182,15 @@ from app.hr.esign.models import (  # noqa: F401
     HrSignedDocument,
     HrSignatureEvent,
 )
+from app.hr.employees.models import (  # noqa: F401
+    HrEmployeeCertification,
+    HrEmployeeDocument,
+    HrFuelCard,
+    HrFuelCardAssignment,
+    HrTruckAssignment,
+    HrAccessGrant,
+    HrOnboardingToken,
+)
 
 __all__ = [
     # Core models
