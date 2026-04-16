@@ -38,6 +38,15 @@ def _mount_hr_router_once() -> None:
     if not careers_mounted:
         fastapi_app.include_router(careers_router)
 
+    from app.hr.recruiting.public_apply import public_apply_router
+
+    apply_mounted = any(
+        getattr(r, "path", "").startswith("/api/v2/public/careers")
+        for r in fastapi_app.routes
+    )
+    if not apply_mounted:
+        fastapi_app.include_router(public_apply_router, prefix="/api/v2/public")
+
 
 _mount_hr_router_once()
 

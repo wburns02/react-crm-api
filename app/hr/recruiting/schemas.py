@@ -48,3 +48,22 @@ class RequisitionOut(BaseModel):
     hiring_manager_id: int | None
     onboarding_template_id: UUIDStr | None
     created_at: datetime
+
+
+class RequisitionPatch(BaseModel):
+    title: str | None = None
+    department: str | None = None
+    location_city: str | None = None
+    location_state: str | None = None
+    employment_type: EmploymentType | None = None
+    compensation_display: str | None = None
+    description_md: str | None = None
+    requirements_md: str | None = None
+    benefits_md: str | None = None
+    status: Status | None = None
+    hiring_manager_id: int | None = None
+    onboarding_template_id: UUIDStr | None = None
+
+
+class RequisitionWithCountsOut(RequisitionOut):
+    applicant_count: int = 0

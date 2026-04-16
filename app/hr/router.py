@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 
 from app.hr.esign.router import esign_admin_router
+from app.hr.recruiting.applicant_router import applicants_router
+from app.hr.recruiting.application_router import applications_router
 from app.hr.recruiting.router import recruiting_router
 from app.hr.workflow.router import workflow_router
 
@@ -8,6 +10,8 @@ from app.hr.workflow.router import workflow_router
 hr_router = APIRouter(prefix="/hr", tags=["hr"])
 hr_router.include_router(workflow_router)
 hr_router.include_router(recruiting_router)
+hr_router.include_router(applicants_router)
+hr_router.include_router(applications_router)
 hr_router.include_router(esign_admin_router)
 
 
