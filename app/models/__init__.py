@@ -170,6 +170,12 @@ from app.hr.workflow.models import (  # noqa: F401
     HrWorkflowTaskAttachment,
 )
 from app.hr.recruiting.models import HrRequisition  # noqa: F401
+from app.hr.esign.models import (  # noqa: F401
+    HrDocumentTemplate,
+    HrSignatureRequest,
+    HrSignedDocument,
+    HrSignatureEvent,
+)
 
 __all__ = [
     # Core models
