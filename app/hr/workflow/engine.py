@@ -164,3 +164,128 @@ async def spawn_instance(
         actor_user_id=started_by,
     )
     return instance
+
+
+_ALLOWED_TRANSITIONS: dict[str, set[str]] = {
+    "ready": {"in_progress", "completed", "skipped"},
+    "in_progress": {"completed", "skipped"},
+    "blocked": set(),
+    "completed": set(),
+    "skipped": set(),
+}
+
+
+async def advance_task(
+    db: AsyncSession,
+    *,
+    task_id: UUID,
+    new_status: str,
+    actor_user_id: int | None,
+    reason: str | None = None,
+    result: dict | None = None,
+) -> HrWorkflowTask:
+    task = (
+        await db.execute(
+            select(HrWorkflowTask).where(HrWorkflowTask.id == task_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if task is None:
+        raise ValueError(f"task {task_id} not found")
+    if new_status not in _ALLOWED_TRANSITIONS[task.status]:
+        raise ValueError(f"task is {task.status}, cannot transition to {new_status}")
+    if new_status == "skipped" and not reason:
+        raise ValueError("skipped transition requires reason")
+
+    old_status = task.status
+    task.status = new_status
+    if new_status == "completed":
+        task.completed_at = datetime.now(timezone.utc)
+        task.completed_by = actor_user_id
+        if result is not None:
+            task.result = result
+
+    await db.flush()
+    diff: dict = {"status": [old_status, new_status]}
+    if reason:
+        diff["reason"] = [None, reason]
+    await write_audit(
+        db,
+        entity_type="workflow_task",
+        entity_id=task.id,
+        event="status_changed",
+        diff=diff,
+        actor_user_id=actor_user_id,
+    )
+
+    if new_status in {"completed", "skipped"}:
+        await _unblock_dependents(db, completed_task_id=task.id)
+        await _maybe_complete_instance(
+            db, instance_id=task.instance_id, actor_user_id=actor_user_id
+        )
+    return task
+
+
+async def _unblock_dependents(db: AsyncSession, *, completed_task_id: UUID) -> None:
+    dependent_ids = (
+        await db.execute(
+            select(HrWorkflowTaskDependency.task_id).where(
+                HrWorkflowTaskDependency.depends_on_task_id == completed_task_id
+            )
+        )
+    ).scalars().all()
+
+    for dep_id in dependent_ids:
+        dep_task = (
+            await db.execute(
+                select(HrWorkflowTask).where(HrWorkflowTask.id == dep_id).with_for_update()
+            )
+        ).scalar_one_or_none()
+        if dep_task is None or dep_task.status != "blocked":
+            continue
+
+        statuses = (
+            await db.execute(
+                select(HrWorkflowTask.status)
+                .join(
+                    HrWorkflowTaskDependency,
+                    HrWorkflowTaskDependency.depends_on_task_id == HrWorkflowTask.id,
+                )
+                .where(HrWorkflowTaskDependency.task_id == dep_task.id)
+            )
+        ).scalars().all()
+        if statuses and all(s in {"completed", "skipped"} for s in statuses):
+            dep_task.status = "ready"
+            await write_audit(
+                db,
+                entity_type="workflow_task",
+                entity_id=dep_task.id,
+                event="status_changed",
+                diff={"status": ["blocked", "ready"]},
+            )
+
+
+async def _maybe_complete_instance(
+    db: AsyncSession, *, instance_id: UUID, actor_user_id: int | None
+) -> None:
+    statuses = (
+        await db.execute(
+            select(HrWorkflowTask.status).where(HrWorkflowTask.instance_id == instance_id)
+        )
+    ).scalars().all()
+    if statuses and all(s in {"completed", "skipped"} for s in statuses):
+        instance = (
+            await db.execute(
+                select(HrWorkflowInstance).where(HrWorkflowInstance.id == instance_id)
+            )
+        ).scalar_one()
+        if instance.status == "active":
+            instance.status = "completed"
+            instance.completed_at = datetime.now(timezone.utc)
+            await write_audit(
+                db,
+                entity_type="workflow_instance",
+                entity_id=instance.id,
+                event="completed",
+                diff={"status": ["active", "completed"]},
+                actor_user_id=actor_user_id,
+            )
