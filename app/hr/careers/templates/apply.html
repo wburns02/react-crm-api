@@ -10,11 +10,87 @@
   <main class="max-w-xl mx-auto px-6 py-10">
     <a href="/careers/{{ req.slug }}" class="text-sm text-gray-500 hover:underline">← Back to job</a>
     <h1 class="text-2xl font-semibold mt-4">Apply for {{ req.title }}</h1>
-    <p class="mt-4 text-gray-600">
-      Application form coming soon. Please email resume to
-      <a class="underline" href="mailto:careers@macseptic.com">careers@macseptic.com</a>
-      while we finish the online form.
-    </p>
+    <p class="text-sm text-gray-600 mt-1">All fields marked * are required.</p>
+
+    <form id="apply-form" method="post" enctype="multipart/form-data"
+          action="/api/v2/public/careers/{{ req.slug }}/apply" class="mt-6 space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="block">
+          <span class="text-sm">First name *</span>
+          <input name="first_name" required class="w-full border rounded px-3 py-2">
+        </label>
+        <label class="block">
+          <span class="text-sm">Last name *</span>
+          <input name="last_name" required class="w-full border rounded px-3 py-2">
+        </label>
+      </div>
+      <label class="block">
+        <span class="text-sm">Email *</span>
+        <input name="email" type="email" required class="w-full border rounded px-3 py-2">
+      </label>
+      <label class="block">
+        <span class="text-sm">Phone</span>
+        <input name="phone" type="tel" class="w-full border rounded px-3 py-2" placeholder="(555) 555-0100">
+      </label>
+      <label class="block">
+        <span class="text-sm">Resume (PDF, JPG, PNG; 10 MB max)</span>
+        <input name="resume" type="file" accept=".pdf,.jpg,.jpeg,.png" class="w-full">
+      </label>
+      <label class="flex items-start gap-3">
+        <input type="checkbox" name="sms_consent" value="true" class="mt-1">
+        <span class="text-sm text-neutral-700">
+          I agree to receive SMS messages about this application from Mac Septic.
+          Message &amp; data rates may apply. Reply STOP to opt out.
+        </span>
+      </label>
+      <input type="hidden" name="source" value="careers_page">
+      <button id="submit-btn" type="submit"
+              class="px-4 py-2 bg-black text-white rounded-lg hover:bg-neutral-800 disabled:opacity-50">
+        Submit application
+      </button>
+      <p id="apply-error" role="alert" class="text-red-600 text-sm hidden"></p>
+    </form>
+
+    <div id="apply-success" class="hidden mt-10 p-6 rounded-xl border border-green-200 bg-green-50">
+      <h2 class="text-lg font-semibold text-green-900">Application received</h2>
+      <p class="text-sm text-green-900 mt-2">
+        Thanks — we'll be in touch soon.
+      </p>
+    </div>
+
+    <script>
+      const form = document.getElementById("apply-form");
+      const err = document.getElementById("apply-error");
+      const ok = document.getElementById("apply-success");
+      const btn = document.getElementById("submit-btn");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        err.classList.add("hidden");
+        btn.disabled = true;
+        btn.textContent = "Submitting…";
+        try {
+          const res = await fetch(form.action, {
+            method: "POST",
+            body: new FormData(form),
+          });
+          if (res.status === 201) {
+            form.classList.add("hidden");
+            ok.classList.remove("hidden");
+          } else {
+            const data = await res.json().catch(() => ({}));
+            err.textContent = data.detail || `Submit failed (${res.status})`;
+            err.classList.remove("hidden");
+          }
+        } catch (_) {
+          err.textContent = "Network error. Please try again.";
+          err.classList.remove("hidden");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Submit application";
+        }
+      });
+    </script>
   </main>
 </body>
 </html>

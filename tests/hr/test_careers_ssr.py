@@ -72,3 +72,22 @@ async def test_careers_index_handles_empty_state(client, db):
     r = await client.get("/careers")
     assert r.status_code == 200
     assert "No open positions" in r.text
+
+
+@pytest.mark.asyncio
+async def test_apply_page_includes_real_form(client, db):
+    db.add(
+        HrRequisition(
+            slug="apply-form",
+            title="Apply Tester",
+            status="open",
+            employment_type="full_time",
+        )
+    )
+    await db.commit()
+    r = await client.get("/careers/apply-form/apply")
+    assert r.status_code == 200
+    assert 'id="apply-form"' in r.text
+    assert 'action="/api/v2/public/careers/apply-form/apply"' in r.text
+    assert "Resume" in r.text
+    assert "sms_consent" in r.text
