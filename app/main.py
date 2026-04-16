@@ -2373,39 +2373,41 @@ async def run_hr_migrations():
 
         os.chdir("/app")
 
-        if hr_already_present:
-            proc = subprocess.run(
-                ["alembic", "stamp", "100"], capture_output=True, text=True, timeout=60
-            )
-            results["stamp"] = proc.returncode == 0
-            results["upgrade"] = True
-            results["steps"].append("HR tables already present; stamped alembic to 100")
-            if proc.stderr:
-                results["stamp_stderr"] = proc.stderr[-1000:]
-        else:
-            proc = subprocess.run(
-                ["alembic", "stamp", "095"], capture_output=True, text=True, timeout=60
-            )
-            results["stamp"] = proc.returncode == 0
-            if proc.stderr:
-                results["stamp_stderr"] = proc.stderr[-1000:]
-            if not results["stamp"]:
-                results["errors"].append("alembic stamp 095 failed")
-                return results
-            results["steps"].append("stamped alembic at 095")
+        # Stamp step: if HR tables aren't yet present, start from 095 so the
+        # core-table migrations (096..100) run.  If they are present, start
+        # from the highest known Plan 1 head (100) so only newer Plan 2+
+        # migrations need to apply.  Either way, always follow up with
+        # `alembic upgrade head` so Plan 2 / Plan 3 migrations land.
+        stamp_target = "100" if hr_already_present else "095"
+        proc = subprocess.run(
+            ["alembic", "stamp", stamp_target],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        results["stamp"] = proc.returncode == 0
+        if proc.stderr:
+            results["stamp_stderr"] = proc.stderr[-1000:]
+        if not results["stamp"]:
+            results["errors"].append(f"alembic stamp {stamp_target} failed")
+            return results
+        results["steps"].append(f"stamped alembic at {stamp_target}")
 
-            proc = subprocess.run(
-                ["alembic", "upgrade", "head"], capture_output=True, text=True, timeout=600
-            )
-            results["upgrade"] = proc.returncode == 0
-            if proc.stdout:
-                results["upgrade_stdout"] = proc.stdout[-2000:]
-            if proc.stderr:
-                results["upgrade_stderr"] = proc.stderr[-2000:]
-            if results["upgrade"]:
-                results["steps"].append("ran alembic upgrade head (096-100)")
-            else:
-                results["errors"].append("alembic upgrade head failed")
+        proc = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        results["upgrade"] = proc.returncode == 0
+        if proc.stdout:
+            results["upgrade_stdout"] = proc.stdout[-2000:]
+        if proc.stderr:
+            results["upgrade_stderr"] = proc.stderr[-2000:]
+        if results["upgrade"]:
+            results["steps"].append(f"ran alembic upgrade head (from {stamp_target})")
+        else:
+            results["errors"].append("alembic upgrade head failed")
 
         async with async_session_maker() as session:
             try:
