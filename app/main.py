@@ -2362,23 +2362,64 @@ async def run_hr_migrations():
             except Exception:
                 results["version_before"] = None
 
-            try:
-                r = await session.execute(text(
-                    "SELECT to_regclass('public.hr_audit_log') IS NOT NULL AS exists"
-                ))
-                hr_already_present = bool(r.scalar())
-            except Exception:
-                hr_already_present = False
-            results["hr_tables_present_before"] = hr_already_present
+            # Detect the latest HR table already created so we stamp to the
+            # matching alembic revision before upgrading.  Running upgrade
+            # without this would re-run a `CREATE TABLE` that already exists
+            # and error out.
+            async def _has(relname: str) -> bool:
+                try:
+                    r = await session.execute(
+                        text("SELECT to_regclass(:n) IS NOT NULL"),
+                        {"n": f"public.{relname}"},
+                    )
+                    return bool(r.scalar())
+                except Exception:
+                    return False
+
+            has_audit = await _has("hr_audit_log")
+            has_requisitions = await _has("hr_requisitions")
+            has_esign_templates = await _has("hr_document_templates")
+            has_applicants = await _has("hr_applicants")
+            has_message_templates = await _has("hr_recruiting_message_templates")
+
+            # Count seeded rows to distinguish 101 (tables present, no seed
+            # yet) from 102 (tables + seed).
+            seeded_msg_templates = 0
+            if has_message_templates:
+                try:
+                    r = await session.execute(
+                        text("SELECT count(*) FROM hr_recruiting_message_templates")
+                    )
+                    seeded_msg_templates = r.scalar_one()
+                except Exception:
+                    pass
+
+            results["hr_tables_present_before"] = has_audit
+            results["detected_state"] = {
+                "hr_audit_log": has_audit,
+                "hr_requisitions": has_requisitions,
+                "hr_document_templates": has_esign_templates,
+                "hr_applicants": has_applicants,
+                "hr_recruiting_message_templates": has_message_templates,
+                "seeded_msg_templates": seeded_msg_templates,
+            }
 
         os.chdir("/app")
 
-        # Stamp step: if HR tables aren't yet present, start from 095 so the
-        # core-table migrations (096..100) run.  If they are present, start
-        # from the highest known Plan 1 head (100) so only newer Plan 2+
-        # migrations need to apply.  Either way, always follow up with
-        # `alembic upgrade head` so Plan 2 / Plan 3 migrations land.
-        stamp_target = "100" if hr_already_present else "095"
+        # Pick the alembic revision that matches what's already in the DB.
+        # Always stamp and then upgrade head so any newer migrations apply.
+        if has_message_templates and seeded_msg_templates >= 5:
+            stamp_target = "102"
+        elif has_message_templates or has_applicants:
+            stamp_target = "101"
+        elif has_esign_templates:
+            stamp_target = "100"
+        elif has_requisitions:
+            stamp_target = "098"
+        elif has_audit:
+            stamp_target = "096"
+        else:
+            stamp_target = "095"
         proc = subprocess.run(
             ["alembic", "stamp", stamp_target],
             capture_output=True,
