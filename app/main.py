@@ -2469,6 +2469,48 @@ async def run_hr_migrations():
     return results
 
 
+@app.post("/health/db/seed-demo-requisition")
+async def seed_demo_requisition():
+    """Seed a single demo requisition for smoke testing the public apply flow.
+
+    Idempotent: re-runs are no-ops if slug ``e2e-demo-tech`` already exists.
+    This exists so Playwright can exercise /careers/{slug}/apply end-to-end
+    on a fresh deploy without needing admin credentials to create a role.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    from datetime import datetime, timezone
+
+    results: dict = {}
+    try:
+        async with async_session_maker() as session:
+            existing = await session.execute(
+                text("SELECT id FROM hr_requisitions WHERE slug = 'e2e-demo-tech'")
+            )
+            row = existing.scalar_one_or_none()
+            if row is not None:
+                results["already_present"] = True
+                results["id"] = str(row)
+                return results
+
+            await session.execute(
+                text(
+                    "INSERT INTO hr_requisitions "
+                    "(id, slug, title, status, employment_type, "
+                    " location_city, location_state, compensation_display, opened_at) "
+                    "VALUES (gen_random_uuid(), 'e2e-demo-tech', 'E2E Demo Technician', "
+                    "        'open', 'full_time', 'Houston', 'TX', '$20-$28/hr', :now)"
+                ),
+                {"now": datetime.now(timezone.utc)},
+            )
+            await session.commit()
+            results["created"] = True
+            results["slug"] = "e2e-demo-tech"
+    except Exception as e:
+        results["error"] = f"{type(e).__name__}: {str(e)}"
+    return results
+
+
 @app.post("/health/db/fix-alembic")
 async def fix_alembic_version():
     """Fix alembic_version table: widen version_num column and stamp to head (065)."""
