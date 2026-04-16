@@ -1859,7 +1859,7 @@ async def get_call_recording(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Get secure recording URL for a call."""
+    """Get secure recording URL for a call (supports RingCentral and Twilio)."""
     try:
         result = await db.execute(select(CallLog).where(CallLog.id == call_id))
         call = result.scalar_one_or_none()
@@ -1876,17 +1876,33 @@ async def get_call_recording(
                 detail="No recording available for this call",
             )
 
-        # Extract recording ID from the URL
-        recording_id = None
-        match = _re.search(r"/recording/(\d+)", call.recording_url)
-        if match:
-            recording_id = match.group(1)
+        url = call.recording_url
 
-        if not recording_id:
+        # Twilio recordings
+        if "twilio.com" in url:
+            twilio_match = _re.search(r"/Recordings/(RE[a-f0-9]+)", url)
+            if not twilio_match:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid Twilio recording URL format",
+                )
+            recording_sid = twilio_match.group(1)
+            return {
+                "call_id": call_id,
+                "recording_id": recording_sid,
+                "content_type": "audio/mpeg",
+                "duration": None,
+                "secure_url": f"/ringcentral/twilio-recording/{recording_sid}/content",
+            }
+
+        # RingCentral recordings
+        match = _re.search(r"/recording/(\d+)", url)
+        if not match:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid recording URL format",
             )
+        recording_id = match.group(1)
 
         # Get fresh recording metadata with secure access
         recording_meta = await ringcentral_service.get_recording(recording_id)
@@ -1950,6 +1966,60 @@ async def stream_recording_content(
         raise
     except Exception as e:
         logger.error(f"Error streaming recording content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/twilio-recording/{recording_sid}/content")
+async def stream_twilio_recording_content(
+    recording_sid: str,
+    current_user: CurrentUser,
+):
+    """Stream Twilio recording content securely without exposing credentials."""
+    try:
+        from app.config import settings
+        import httpx
+        from fastapi.responses import Response
+
+        account_sid = settings.TWILIO_ACCOUNT_SID
+        auth_token = settings.TWILIO_AUTH_TOKEN
+
+        if not account_sid or not auth_token:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Twilio not configured",
+            )
+
+        # Twilio recording URL with .mp3 extension for audio format
+        twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Recordings/{recording_sid}.mp3"
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                twilio_url,
+                auth=(account_sid, auth_token),
+                follow_redirects=True,
+                timeout=30.0,
+            )
+
+        if resp.status_code != 200:
+            logger.error(f"Twilio recording fetch failed: {resp.status_code}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Twilio recording not found",
+            )
+
+        return Response(
+            content=resp.content,
+            media_type="audio/mpeg",
+            headers={
+                "Cache-Control": "private, max-age=3600",
+                "Content-Disposition": f'inline; filename="recording-{recording_sid}.mp3"',
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error streaming Twilio recording: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
