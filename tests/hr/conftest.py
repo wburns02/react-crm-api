@@ -12,15 +12,23 @@ from app.models.user import User
 # main.py gates registration on HR_MODULE_ENABLED which is not set at conftest
 # import time, so tests would otherwise hit 404 on /api/v2/hr/* routes.
 def _mount_hr_router_once() -> None:
+    from app.hr.esign.router import esign_public_router
     from app.hr.router import hr_router
     from app.main import app as fastapi_app
 
-    already = any(
+    hr_mounted = any(
         getattr(r, "path", "").startswith("/api/v2/hr")
         for r in fastapi_app.routes
     )
-    if not already:
+    if not hr_mounted:
         fastapi_app.include_router(hr_router, prefix="/api/v2")
+
+    public_mounted = any(
+        getattr(r, "path", "").startswith("/api/v2/public/sign")
+        for r in fastapi_app.routes
+    )
+    if not public_mounted:
+        fastapi_app.include_router(esign_public_router, prefix="/api/v2/public")
 
 
 _mount_hr_router_once()
