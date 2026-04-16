@@ -90,7 +90,7 @@ async def transition_stage(
 
     old_stage = row.stage
     row.stage = new_stage
-    row.stage_entered_at = datetime.now(timezone.utc)
+    row.stage_entered_at = datetime.utcnow()
     if new_stage == "rejected":
         row.rejection_reason = reason
     if note:

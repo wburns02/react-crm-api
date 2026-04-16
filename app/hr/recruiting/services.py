@@ -19,7 +19,7 @@ async def create_requisition(
     data = payload.model_dump()
     row = HrRequisition(**data, created_by=actor_user_id)
     if payload.status == "open":
-        row.opened_at = datetime.now(timezone.utc)
+        row.opened_at = datetime.utcnow()
     db.add(row)
     await db.flush()
     await write_audit(
@@ -69,9 +69,9 @@ async def update_requisition(
     if "status" in diff:
         new_status = diff["status"][1]
         if new_status == "open" and row.opened_at is None:
-            row.opened_at = datetime.now(timezone.utc)
+            row.opened_at = datetime.utcnow()
         if new_status == "closed":
-            row.closed_at = datetime.now(timezone.utc)
+            row.closed_at = datetime.utcnow()
     await db.flush()
     if diff:
         await write_audit(

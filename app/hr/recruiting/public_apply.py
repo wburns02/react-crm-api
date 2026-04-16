@@ -77,7 +77,7 @@ async def apply(
             source_ref=source_ref,
             sms_consent_given=sms_consent,
             sms_consent_ip=ip if sms_consent else None,
-            sms_consent_at=datetime.now(timezone.utc) if sms_consent else None,
+            sms_consent_at=datetime.utcnow() if sms_consent else None,
         )
         db.add(applicant)
         await db.flush()
@@ -89,7 +89,7 @@ async def apply(
         if sms_consent and not applicant.sms_consent_given:
             applicant.sms_consent_given = True
             applicant.sms_consent_ip = ip
-            applicant.sms_consent_at = datetime.now(timezone.utc)
+            applicant.sms_consent_at = datetime.utcnow()
 
     try:
         application = HrApplication(

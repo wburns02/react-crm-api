@@ -52,7 +52,7 @@ async def create_signature_request(
         document_template_id=template.id,
         field_values=payload.field_values,
         status="sent",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=payload.ttl_days),
+        expires_at=datetime.utcnow() + timedelta(days=payload.ttl_days),
         workflow_task_id=
             UUID(payload.workflow_task_id) if payload.workflow_task_id else None,
     )
@@ -75,7 +75,7 @@ async def mark_viewed(
     req = await _get_active_by_token(db, token=token)
     if req.status == "sent":
         req.status = "viewed"
-        req.viewed_at = datetime.now(timezone.utc)
+        req.viewed_at = datetime.utcnow()
     db.add(
         HrSignatureEvent(
             signature_request_id=req.id,
@@ -136,13 +136,13 @@ async def submit_signature(
         signature_field=sig_field,
         signer_name=req.signer_name,
         signer_ip=ip,
-        timestamp_override=datetime.now(timezone.utc).isoformat(),
+        timestamp_override=datetime.utcnow().isoformat(),
     )
     signed_key = storage.save_bytes(pdf_bytes, ".pdf")
     h = hashlib.sha256(pdf_bytes).hexdigest()
 
     req.status = "signed"
-    req.signed_at = datetime.now(timezone.utc)
+    req.signed_at = datetime.utcnow()
 
     signed_doc = HrSignedDocument(
         signature_request_id=req.id,
@@ -197,11 +197,12 @@ async def _get_active_by_token(db: AsyncSession, *, token: str) -> HrSignatureRe
     ).scalar_one_or_none()
     if req is None:
         raise SignatureError("token not found")
-    # Compare naive-vs-aware: SQLite returns naive datetimes. Normalise.
+    # Normalise: both sides must be naive UTC.  Postgres columns are
+    # `TIMESTAMP WITHOUT TIME ZONE`, so the DB returns naive datetimes.
     expires = req.expires_at
-    if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
-    if req.status in {"expired", "revoked"} or expires < datetime.now(timezone.utc):
+    if expires.tzinfo is not None:
+        expires = expires.astimezone(timezone.utc).replace(tzinfo=None)
+    if req.status in {"expired", "revoked"} or expires < datetime.utcnow():
         raise SignatureError("signature link expired or revoked")
     if req.status == "signed":
         raise SignatureError("already signed")
