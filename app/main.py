@@ -1362,6 +1362,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start marketing report scheduler: {e}")
 
+    # HR cert-expiry daily SMS scheduler (gated by HR_MODULE_ENABLED).
+    try:
+        from app.hr.feature_flag import hr_module_enabled
+        if hr_module_enabled():
+            from app.hr.shared.cert_expiry_job import start_cert_expiry_scheduler
+            start_cert_expiry_scheduler()
+    except Exception as e:
+        logger.warning(f"Failed to start HR cert-expiry scheduler: {e}")
+
     # Background task watchdog — restarts crashed tasks every 5 minutes
 
     # Follow-up scheduler and auto-dispatch — TODO: add start/stop functions
@@ -1562,16 +1571,20 @@ if hr_module_enabled():
     # are indexable by search engines and shareable as friendly URLs.
     app.include_router(careers_router)
     # Plan 3: hire → onboarding spawn is called inline from
-    # application_services.transition_stage; no registration needed.
-    import app.hr.onboarding.triggers  # noqa: F401 — ensures module load at startup
+    # application_services.transition_stage; import the module so the file
+    # loads at startup (using `importlib` to avoid shadowing `app` — the
+    # module `app.hr.onboarding.triggers` shares a top-level name with the
+    # FastAPI `app` variable in this scope).
+    import importlib as _importlib
+    _importlib.import_module("app.hr.onboarding.triggers")
     # Plan 3: public MyOnboarding API + SSR shell.
     from app.hr.onboarding.public_router import onboarding_public_router
     from app.hr.careers.router import onboarding_ssr_router
     app.include_router(onboarding_public_router, prefix="/api/v2/public")
     app.include_router(onboarding_ssr_router)
-    # Plan 3: cert-expiry SMS scheduler (daily 07:00).
-    from app.hr.shared.cert_expiry_job import start_cert_expiry_scheduler
-    start_cert_expiry_scheduler()
+    # Plan 3: cert-expiry SMS scheduler is started inside the lifespan
+    # (AsyncIOScheduler.start() requires a running event loop, so it can't
+    # run at module import time).
 
 # WebSocket routes for real-time call transcription (mounted at root, not /api/v2)
 # Replaces the older media_stream.py -- uses GoogleSTTStreamer + TranscriptWSManager
