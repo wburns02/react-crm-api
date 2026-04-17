@@ -8,6 +8,7 @@ from app.hr.recruiting.applicant_services import (
     create_applicant,
     get_applicant,
     list_applicants,
+    search_applicants,
 )
 
 
@@ -31,8 +32,25 @@ async def list_(
     user: CurrentUser,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(None, min_length=1, max_length=128),
+    requisition_id: UUID | None = Query(None),
+    stage: str | None = Query(None),
+    source: str | None = Query(None),
+    since_days: int | None = Query(None, ge=1, le=365),
 ) -> list[ApplicantOut]:
-    rows = await list_applicants(db, limit=limit, offset=offset)
+    if q or requisition_id or stage or source or since_days:
+        rows = await search_applicants(
+            db,
+            q=q,
+            requisition_id=requisition_id,
+            stage=stage,
+            source=source,
+            since_days=since_days,
+            limit=limit,
+            offset=offset,
+        )
+    else:
+        rows = await list_applicants(db, limit=limit, offset=offset)
     return [ApplicantOut.model_validate(r) for r in rows]
 
 
