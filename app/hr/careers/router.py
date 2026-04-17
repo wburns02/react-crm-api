@@ -3,8 +3,10 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
 
 from app.api.deps import DbSession
+from app.hr.employees.models import HrOnboardingToken
 from app.hr.recruiting.careers_feed import build_indeed_xml
 from app.hr.recruiting.services import get_requisition_by_slug, list_requisitions
 
@@ -51,4 +53,27 @@ async def apply(request: Request, slug: str, db: DbSession) -> HTMLResponse:
         return HTMLResponse("Not found", status_code=404)
     return _TEMPLATES.TemplateResponse(
         request, "apply.html", {"req": req}
+    )
+
+
+# Plan 3: public MyOnboarding SSR shell.  Lives under the careers router so
+# it shares the same Jinja2 templates dir and root mount (no /api/v2 prefix).
+onboarding_ssr_router = APIRouter(tags=["hr-onboarding-public-ssr"])
+
+
+@onboarding_ssr_router.get("/onboarding/{token}", response_class=HTMLResponse)
+async def my_onboarding(
+    request: Request, token: str, db: DbSession
+) -> HTMLResponse:
+    row = (
+        await db.execute(
+            select(HrOnboardingToken).where(HrOnboardingToken.token == token)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return HTMLResponse(
+            "<p>This link is invalid or expired.</p>", status_code=404
+        )
+    return _TEMPLATES.TemplateResponse(
+        request, "my_onboarding.html", {"token": token}
     )

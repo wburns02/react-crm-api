@@ -1362,6 +1362,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start marketing report scheduler: {e}")
 
+    # HR cert-expiry daily SMS scheduler (gated by HR_MODULE_ENABLED).
+    try:
+        from app.hr.feature_flag import hr_module_enabled
+        if hr_module_enabled():
+            from app.hr.shared.cert_expiry_job import start_cert_expiry_scheduler
+            start_cert_expiry_scheduler()
+    except Exception as e:
+        logger.warning(f"Failed to start HR cert-expiry scheduler: {e}")
+
     # Background task watchdog — restarts crashed tasks every 5 minutes
 
     # Follow-up scheduler and auto-dispatch — TODO: add start/stop functions
@@ -1561,6 +1570,21 @@ if hr_module_enabled():
     # Public SSR careers pages mount at /careers (no /api/v2 prefix) so they
     # are indexable by search engines and shareable as friendly URLs.
     app.include_router(careers_router)
+    # Plan 3: hire → onboarding spawn is called inline from
+    # application_services.transition_stage; import the module so the file
+    # loads at startup (using `importlib` to avoid shadowing `app` — the
+    # module `app.hr.onboarding.triggers` shares a top-level name with the
+    # FastAPI `app` variable in this scope).
+    import importlib as _importlib
+    _importlib.import_module("app.hr.onboarding.triggers")
+    # Plan 3: public MyOnboarding API + SSR shell.
+    from app.hr.onboarding.public_router import onboarding_public_router
+    from app.hr.careers.router import onboarding_ssr_router
+    app.include_router(onboarding_public_router, prefix="/api/v2/public")
+    app.include_router(onboarding_ssr_router)
+    # Plan 3: cert-expiry SMS scheduler is started inside the lifespan
+    # (AsyncIOScheduler.start() requires a running event loop, so it can't
+    # run at module import time).
 
 # WebSocket routes for real-time call transcription (mounted at root, not /api/v2)
 # Replaces the older media_stream.py -- uses GoogleSTTStreamer + TranscriptWSManager
@@ -2381,9 +2405,10 @@ async def run_hr_migrations():
             has_esign_templates = await _has("hr_document_templates")
             has_applicants = await _has("hr_applicants")
             has_message_templates = await _has("hr_recruiting_message_templates")
+            has_employee_certs = await _has("hr_employee_certifications")
+            has_onboarding_tokens = await _has("hr_onboarding_tokens")
 
-            # Count seeded rows to distinguish 101 (tables present, no seed
-            # yet) from 102 (tables + seed).
+            # Count seeded rows to distinguish migrations that create vs seed.
             seeded_msg_templates = 0
             if has_message_templates:
                 try:
@@ -2394,6 +2419,18 @@ async def run_hr_migrations():
                 except Exception:
                     pass
 
+            seeded_lifecycle_templates = 0
+            try:
+                r = await session.execute(
+                    text(
+                        "SELECT count(*) FROM hr_workflow_templates "
+                        "WHERE name IN ('New Field Tech Onboarding', 'Tech Separation')"
+                    )
+                )
+                seeded_lifecycle_templates = r.scalar_one()
+            except Exception:
+                pass
+
             results["hr_tables_present_before"] = has_audit
             results["detected_state"] = {
                 "hr_audit_log": has_audit,
@@ -2401,14 +2438,21 @@ async def run_hr_migrations():
                 "hr_document_templates": has_esign_templates,
                 "hr_applicants": has_applicants,
                 "hr_recruiting_message_templates": has_message_templates,
+                "hr_employee_certifications": has_employee_certs,
+                "hr_onboarding_tokens": has_onboarding_tokens,
                 "seeded_msg_templates": seeded_msg_templates,
+                "seeded_lifecycle_templates": seeded_lifecycle_templates,
             }
 
         os.chdir("/app")
 
         # Pick the alembic revision that matches what's already in the DB.
         # Always stamp and then upgrade head so any newer migrations apply.
-        if has_message_templates and seeded_msg_templates >= 5:
+        if has_employee_certs and seeded_lifecycle_templates >= 2:
+            stamp_target = "104"
+        elif has_employee_certs:
+            stamp_target = "103"
+        elif has_message_templates and seeded_msg_templates >= 5:
             stamp_target = "102"
         elif has_message_templates or has_applicants:
             stamp_target = "101"
