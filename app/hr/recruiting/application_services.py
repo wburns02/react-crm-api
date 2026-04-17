@@ -124,6 +124,18 @@ async def transition_stage(
                 "actor_user_id": actor_user_id,
             },
         )
+        # Plan 3: promote applicant → technician, spawn onboarding instance,
+        # issue public MyOnboarding token, all on the caller's session so
+        # everything lands atomically with the stage transition.
+        from app.hr.onboarding.triggers import spawn_onboarding_for_hire
+
+        await spawn_onboarding_for_hire(
+            db,
+            application_id=row.id,
+            applicant_id=row.applicant_id,
+            requisition_id=row.requisition_id,
+            actor_user_id=actor_user_id,
+        )
 
     # Candidate SMS is consent-gated and silently no-ops when phone / consent
     # / template are missing.  Import inside the function so the test suite

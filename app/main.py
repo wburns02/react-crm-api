@@ -1561,6 +1561,9 @@ if hr_module_enabled():
     # Public SSR careers pages mount at /careers (no /api/v2 prefix) so they
     # are indexable by search engines and shareable as friendly URLs.
     app.include_router(careers_router)
+    # Plan 3: hire → onboarding spawn is called inline from
+    # application_services.transition_stage; no registration needed.
+    import app.hr.onboarding.triggers  # noqa: F401 — ensures module load at startup
 
 # WebSocket routes for real-time call transcription (mounted at root, not /api/v2)
 # Replaces the older media_stream.py -- uses GoogleSTTStreamer + TranscriptWSManager
