@@ -1564,6 +1564,11 @@ if hr_module_enabled():
     # Plan 3: hire → onboarding spawn is called inline from
     # application_services.transition_stage; no registration needed.
     import app.hr.onboarding.triggers  # noqa: F401 — ensures module load at startup
+    # Plan 3: public MyOnboarding API + SSR shell.
+    from app.hr.onboarding.public_router import onboarding_public_router
+    from app.hr.careers.router import onboarding_ssr_router
+    app.include_router(onboarding_public_router, prefix="/api/v2/public")
+    app.include_router(onboarding_ssr_router)
 
 # WebSocket routes for real-time call transcription (mounted at root, not /api/v2)
 # Replaces the older media_stream.py -- uses GoogleSTTStreamer + TranscriptWSManager

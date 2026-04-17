@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Your Onboarding — Mac Septic</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-neutral-50 text-neutral-900">
+  <main class="max-w-3xl mx-auto px-6 py-10">
+    <header class="mb-8">
+      <h1 class="text-3xl font-semibold">Welcome to Mac Septic</h1>
+      <p class="text-neutral-600 mt-2">
+        Complete the tasks below to finish your onboarding.  This page is
+        yours; bookmark it.
+      </p>
+    </header>
+
+    <section id="progress" class="mb-8">
+      <div class="flex items-center justify-between text-sm mb-2">
+        <span>Progress</span>
+        <span id="progress-pct">—</span>
+      </div>
+      <div class="w-full bg-neutral-200 rounded-full h-2">
+        <div id="progress-bar" class="bg-indigo-600 h-2 rounded-full" style="width: 0%"></div>
+      </div>
+    </section>
+
+    <section id="tasks" class="space-y-3"></section>
+
+    <p id="error" class="mt-6 text-red-600 text-sm hidden" role="alert"></p>
+  </main>
+
+  <script>
+    const token = {{ token | tojson }};
+    const stateEl = document.getElementById("tasks");
+    const pctEl = document.getElementById("progress-pct");
+    const barEl = document.getElementById("progress-bar");
+    const errEl = document.getElementById("error");
+
+    async function refresh() {
+      errEl.classList.add("hidden");
+      try {
+        const res = await fetch(`/api/v2/public/onboarding/${token}`);
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const data = await res.json();
+        pctEl.textContent = `${data.progress_pct}%`;
+        barEl.style.width = `${data.progress_pct}%`;
+        render(data.tasks);
+      } catch (e) {
+        errEl.textContent = `Could not load: ${e.message}`;
+        errEl.classList.remove("hidden");
+      }
+    }
+
+    function render(tasks) {
+      while (stateEl.firstChild) stateEl.removeChild(stateEl.firstChild);
+      for (const t of tasks) {
+        const card = document.createElement("div");
+        const bg = t.status === "completed"
+          ? "bg-green-50 border-green-200"
+          : t.status === "in_progress"
+          ? "bg-indigo-50 border-indigo-200"
+          : t.status === "blocked"
+          ? "bg-neutral-100 border-neutral-200 opacity-75"
+          : "bg-white border-neutral-200";
+        card.className = `p-4 rounded-lg border ${bg} flex items-center justify-between gap-4`;
+
+        const body = document.createElement("div");
+        body.className = "min-w-0";
+        const h = document.createElement("div");
+        h.className = "font-medium";
+        h.textContent = t.name;
+        const sub = document.createElement("div");
+        sub.className = "text-xs text-neutral-500 mt-1";
+        sub.textContent = `${t.kind.replace("_", " ")} · ${t.status}${t.stage ? " · " + t.stage.replace("_", " ") : ""}`;
+        body.appendChild(h);
+        body.appendChild(sub);
+
+        const right = document.createElement("div");
+        right.className = "flex gap-2 shrink-0";
+
+        if (t.assignee_role === "hire" && (t.status === "ready" || t.status === "in_progress")) {
+          const btn = document.createElement("button");
+          btn.className = "px-3 py-1.5 text-sm bg-black text-white rounded-lg";
+          btn.textContent = t.status === "in_progress" ? "Finish" : "Mark done";
+          btn.addEventListener("click", () => advance(t.id, "completed"));
+          right.appendChild(btn);
+        } else if (t.assignee_role !== "hire") {
+          const note = document.createElement("span");
+          note.className = "text-xs text-neutral-500";
+          note.textContent = `Handled by ${t.assignee_role.toUpperCase()}`;
+          right.appendChild(note);
+        }
+
+        card.appendChild(body);
+        card.appendChild(right);
+        stateEl.appendChild(card);
+      }
+    }
+
+    async function advance(taskId, status) {
+      try {
+        const res = await fetch(`/api/v2/public/onboarding/${token}/tasks/${taskId}/advance`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.detail || `Status ${res.status}`);
+        }
+        await refresh();
+      } catch (e) {
+        errEl.textContent = `Could not update: ${e.message}`;
+        errEl.classList.remove("hidden");
+      }
+    }
+
+    refresh();
+  </script>
+</body>
+</html>

@@ -47,6 +47,23 @@ def _mount_hr_router_once() -> None:
     if not apply_mounted:
         fastapi_app.include_router(public_apply_router, prefix="/api/v2/public")
 
+    from app.hr.onboarding.public_router import onboarding_public_router
+    from app.hr.careers.router import onboarding_ssr_router
+
+    onb_mounted = any(
+        getattr(r, "path", "").startswith("/api/v2/public/onboarding")
+        for r in fastapi_app.routes
+    )
+    if not onb_mounted:
+        fastapi_app.include_router(onboarding_public_router, prefix="/api/v2/public")
+
+    onb_ssr_mounted = any(
+        getattr(r, "path", "") == "/onboarding/{token}"
+        for r in fastapi_app.routes
+    )
+    if not onb_ssr_mounted:
+        fastapi_app.include_router(onboarding_ssr_router)
+
 
 _mount_hr_router_once()
 
