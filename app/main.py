@@ -1569,6 +1569,9 @@ if hr_module_enabled():
     from app.hr.careers.router import onboarding_ssr_router
     app.include_router(onboarding_public_router, prefix="/api/v2/public")
     app.include_router(onboarding_ssr_router)
+    # Plan 3: cert-expiry SMS scheduler (daily 07:00).
+    from app.hr.shared.cert_expiry_job import start_cert_expiry_scheduler
+    start_cert_expiry_scheduler()
 
 # WebSocket routes for real-time call transcription (mounted at root, not /api/v2)
 # Replaces the older media_stream.py -- uses GoogleSTTStreamer + TranscriptWSManager
