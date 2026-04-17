@@ -1455,24 +1455,87 @@ def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> floa
 def _nearest_neighbor_route(
     jobs: list[dict], start_lat: float, start_lng: float
 ) -> tuple[list[dict], float]:
-    """Greedy nearest-neighbor TSP approximation."""
-    remaining = list(jobs)
-    ordered = []
-    current_lat, current_lng = start_lat, start_lng
-    total_dist = 0.0
+    """Nearest-neighbor TSP that respects time_window_start constraints.
 
-    while remaining:
+    Jobs WITH a time_window_start are pinned at their correct chronological
+    position. Jobs WITHOUT a time window are slotted into the remaining gaps
+    using nearest-neighbor distance optimization.
+
+    This means: if Tod has a 9:00 AM job and a 1:00 PM job, the optimizer
+    routes flexible jobs between those two fixed appointments.
+    """
+    from datetime import time as time_type
+
+    def _parse_time(t) -> time_type | None:
+        """Parse a time_window_start value (time obj, str, or None)."""
+        if t is None:
+            return None
+        if isinstance(t, time_type):
+            return t
+        if isinstance(t, str):
+            try:
+                parts = t.split(":")
+                return time_type(int(parts[0]), int(parts[1]))
+            except (ValueError, IndexError):
+                return None
+        return None
+
+    # Separate time-pinned vs flexible jobs
+    pinned = []
+    flexible = []
+    for j in jobs:
+        tw = _parse_time(j.get("time_window_start"))
+        if tw is not None:
+            pinned.append((tw, j))
+        else:
+            flexible.append(j)
+
+    # Sort pinned jobs by time
+    pinned.sort(key=lambda x: x[0])
+
+    # Build final route: interleave pinned jobs with nearest-neighbor flexible fills
+    ordered = []
+    total_dist = 0.0
+    current_lat, current_lng = start_lat, start_lng
+
+    for _tw, pinned_job in pinned:
+        # Before each pinned job, greedily fill with nearest flexible jobs
+        # that are closer to current position than the pinned job
+        pinned_dist = _haversine_miles(current_lat, current_lng, pinned_job["lat"], pinned_job["lng"])
+        while flexible:
+            nearest_flex = min(
+                flexible,
+                key=lambda j: _haversine_miles(current_lat, current_lng, j["lat"], j["lng"]),
+            )
+            flex_dist = _haversine_miles(current_lat, current_lng, nearest_flex["lat"], nearest_flex["lng"])
+            # Only insert flexible job if it's on the way (closer than pinned)
+            if flex_dist < pinned_dist * 0.6:
+                total_dist += flex_dist
+                current_lat, current_lng = nearest_flex["lat"], nearest_flex["lng"]
+                ordered.append(nearest_flex)
+                flexible.remove(nearest_flex)
+                # Recalculate pinned distance from new position
+                pinned_dist = _haversine_miles(current_lat, current_lng, pinned_job["lat"], pinned_job["lng"])
+            else:
+                break
+
+        # Add the pinned job
+        dist = _haversine_miles(current_lat, current_lng, pinned_job["lat"], pinned_job["lng"])
+        total_dist += dist
+        current_lat, current_lng = pinned_job["lat"], pinned_job["lng"]
+        ordered.append(pinned_job)
+
+    # Append remaining flexible jobs via nearest-neighbor
+    while flexible:
         nearest = min(
-            remaining,
-            key=lambda j: _haversine_miles(
-                current_lat, current_lng, j["lat"], j["lng"]
-            ),
+            flexible,
+            key=lambda j: _haversine_miles(current_lat, current_lng, j["lat"], j["lng"]),
         )
         dist = _haversine_miles(current_lat, current_lng, nearest["lat"], nearest["lng"])
         total_dist += dist
         current_lat, current_lng = nearest["lat"], nearest["lng"]
         ordered.append(nearest)
-        remaining.remove(nearest)
+        flexible.remove(nearest)
 
     return ordered, total_dist
 
@@ -1589,6 +1652,7 @@ async def optimize_route(
             "address": address,
             "lat": lat,
             "lng": lng,
+            "time_window_start": wo.time_window_start,
         })
 
     # Run nearest-neighbor optimization
