@@ -102,6 +102,32 @@ async def download_reference_doc(slug: str, current_user: CurrentUser):
     )
 
 
+@router.get("/{slug}/{filename}")
+async def get_reference_doc_asset(slug: str, filename: str, current_user: CurrentUser):
+    """Serve static assets (images, etc.) referenced by document HTML.
+
+    The HTML files use relative paths like 'mac-septic-icon-darkblue.png',
+    which the browser resolves to /api/v2/reference-docs/<slug>/<filename>.
+    This endpoint serves those files from the docs directory.
+    """
+    # Only serve known safe extensions
+    allowed_ext = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".css"}
+    ext = Path(filename).suffix.lower()
+    if ext not in allowed_ext:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_path = DOCS_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    media_types = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".svg": "image/svg+xml", ".ico": "image/x-icon",
+        ".css": "text/css",
+    }
+    return FileResponse(path=str(file_path), media_type=media_types.get(ext, "application/octet-stream"))
+
+
 @router.post("/{slug}/send")
 async def send_reference_doc(slug: str, body: SendDocRequest, current_user: CurrentUser):
     """Email a reference document to a customer."""
