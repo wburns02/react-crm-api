@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Septage Disposal Facilities - MAC Septic</title>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: letter; margin: 0.5in 0.6in; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Albert Sans', 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    color: #1a1a1a;
+    max-width: 8.5in;
+    margin: 0 auto;
+    padding: 0.4in 0.5in;
+  }
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #104b95;
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+  .company-name { font-size: 20pt; font-weight: 800; color: #104b95; letter-spacing: 1px; margin-bottom: 2px; }
+  .tagline { font-size: 9pt; color: #555; letter-spacing: 0.5px; }
+  .doc-title { font-size: 14pt; font-weight: 700; color: #1a1a1a; margin-top: 8px; text-transform: uppercase; letter-spacing: 1px; }
+  .doc-subtitle { font-size: 9pt; color: #b91c1c; font-weight: 600; margin-top: 2px; }
+  .bold { font-weight: 700; }
+  .red { color: #b91c1c; font-weight: 700; }
+  .green { color: #104b95; font-weight: 700; }
+
+  .section-header {
+    font-size: 10pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    padding: 5px 10px; margin-bottom: 8px; margin-top: 14px; border-radius: 3px; color: white;
+  }
+  .green-header { background: #104b95; }
+  .blue-header { background: #2aabe1; }
+  .amber-header { background: #da6833; }
+  .gray-header { background: #4b5563; }
+
+  /* Facility cards */
+  .facility {
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .facility-header {
+    padding: 5px 10px;
+    font-weight: 700;
+    font-size: 9.5pt;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .facility-header .tag {
+    font-size: 7.5pt;
+    font-weight: 600;
+    background: rgba(255,255,255,0.25);
+    padding: 1px 6px;
+    border-radius: 8px;
+  }
+  .facility-body {
+    padding: 8px 10px;
+    font-size: 9pt;
+  }
+  .facility-body .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 16px;
+    margin-bottom: 6px;
+  }
+  .facility-body .info-item {
+    font-size: 8.5pt;
+  }
+  .facility-body .info-label {
+    font-weight: 700;
+    color: #555;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .facility-body .notes {
+    font-size: 8.5pt;
+    color: #444;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 4px;
+    margin-top: 4px;
+  }
+  .facility-body .req-badge {
+    display: inline-block;
+    font-size: 7.5pt;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-right: 3px;
+    margin-bottom: 2px;
+  }
+  .badge-required { background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; }
+  .badge-info { background: #e6f7fc; color: #2aabe1; border: 1px solid #93c5fd; }
+  .badge-ok { background: #e8f1fa; color: #166534; border: 1px solid #86efac; }
+
+  .callout {
+    border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; font-size: 9pt;
+  }
+  .callout-green { background: #e8f1fa; border-left: 4px solid #104b95; }
+  .callout-amber { background: #fef3eb; border-left: 4px solid #da6833; }
+  .callout-blue { background: #e6f7fc; border-left: 4px solid #2aabe1; }
+  .callout-red { background: #fef2f2; border-left: 4px solid #b91c1c; }
+  .callout strong { display: block; margin-bottom: 3px; }
+
+  .footer {
+    margin-top: 10px; padding-top: 6px; text-align: center; font-size: 7.5pt; color: #777;
+    border-top: 2px solid #104b95;
+  }
+
+  @media print {
+    body { padding: 0; }
+    .facility { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="company-name" style="text-align: center;"><img src="mac-septic-icon-darkblue.png" alt="MAC Septic" style="max-width: 280px; height: auto; display: inline-block;"></div>
+  <div class="tagline">Nearly 30 Years of Experience &bull; TCEQ Licensed &bull; 512.737.8711</div>
+  <div class="doc-title">Septage Disposal Facilities &amp; Dump Stations</div>
+  <div class="doc-subtitle">INTERNAL REFERENCE &mdash; Central Texas (I-35 Corridor)</div>
+</div>
+
+<div class="callout callout-amber">
+  <strong>TCEQ Compliance Reminder</strong>
+  All septage haulers must comply with <span class="bold">30 TAC Chapter 312</span> (Sludge Use, Disposal, and Transportation). Every load requires a manifest/trip ticket showing origin, volume, waste type, and destination. All vehicles must carry a valid TCEQ transporter registration. Domestic septage only at most municipal receiving stations &mdash; grease trap and industrial waste typically require separate disposal.
+</div>
+
+<!-- ============================================ -->
+<!-- SECTION: CONFIRMED FACILITIES -->
+<!-- ============================================ -->
+<div class="section-header green-header">Confirmed Receiving Facilities</div>
+
+<!-- Austin Water - Walnut Creek -->
+<div class="facility">
+  <div class="facility-header" style="background: #104b95;">
+    <span>Austin Water &mdash; Walnut Creek WWTP (Liquid Waste Hauler Program)</span>
+    <span class="tag">VERIFIED</span>
+  </div>
+  <div class="facility-body">
+    <div class="info-grid">
+      <div class="info-item"><span class="info-label">Address</span><br>7113 E. Martin Luther King Jr. Blvd. (FM 969), Austin, TX 78754</div>
+      <div class="info-item"><span class="info-label">Hours</span><br>Mon-Fri: 6:30 AM - 2:30 PM<br>Sat: 7:00 AM - 2:45 PM<br>Closed Sun &amp; City holidays</div>
+      <div class="info-item"><span class="info-label">Admin Office</span><br>Glen Bell Service Center<br>3907 S. Industrial Dr, Suite 100<br>Austin, TX 78744</div>
+      <div class="info-item"><span class="info-label">Contact</span><br>Phone: 512-972-1090<br>Fax: 512-972-1260<br>Email: awlwh@austintexas.gov</div>
+      <div class="info-item"><span class="info-label">Rates (FY2025-2026, through Sept 30, 2026)</span><br><span class="bold">$55.52 per 1,000 gal</span> of truck capacity<br>After-hours: $338.61 per 2-hr interval (2-hr min)</div>
+      <div class="info-item"><span class="info-label">Permit &amp; Fees</span><br>Hauler Permit: $117.94<br>Vehicle Inspection: $57.27 each<br>Manifest Book: $16.79 (~$18.18 w/tax)</div>
+    </div>
+    <div>
+      <span class="req-badge badge-required">Registration Required</span>
+      <span class="req-badge badge-required">TCEQ Transporter License</span>
+      <span class="req-badge badge-required">4" Cam-Lock Hose (10-15 ft)</span>
+      <span class="req-badge badge-info">Manifests Required Every Load</span>
+    </div>
+    <div class="notes"><span class="bold">Accepts:</span> Septic tank waste, portable toilet waste, waste-activated sludge from residential WWTPs (pre-approval required). Governed by City Code Chapter 15-5.<br>
+    <span class="bold">Website:</span> <a href="https://www.austintexas.gov/department/liquid-waste-hauler-program" style="color: #2aabe1;">austintexas.gov/department/liquid-waste-hauler-program</a></div>
+  </div>
+</div>
+
+<!-- SAWS -->
+<div class="facility">
+  <div class="facility-header" style="background: #104b95;">
+    <span>SAWS &mdash; Dos Rios Water Recycling Center (San Antonio)</span>
+    <span class="tag">VERIFIED</span>
+  </div>
+  <div class="facility-body">
+    <div class="info-grid">
+      <div class="info-item"><span class="info-label">Address</span><br>1002 SW 36th St, San Antonio, TX 78237</div>
+      <div class="info-item"><span class="info-label">Contact</span><br>SAWS Main: 210-233-3000<br>Industrial Pretreatment (hauler registration)<br>customerservice@saws.org</div>
+      <div class="info-item"><span class="info-label">Hours</span><br>Mon-Fri business hours (call to confirm)</div>
+      <div class="info-item"><span class="info-label">Rates</span><br>Per-gallon fees set annually<br>(Call SAWS for current schedule)</div>
+    </div>
+    <div>
+      <span class="req-badge badge-required">SAWS Hauler Registration Required</span>
+      <span class="req-badge badge-required">TCEQ Transporter License</span>
+      <span class="req-badge badge-required">Manifests Required</span>
+    </div>
+    <div class="notes"><span class="bold">Must be registered</span> to pump anywhere in SAWS service territory. Each hauler maintains a permit and pays fees per unload. SAWS also operates Leon Creek WRC and Medio Creek WRC &mdash; call to confirm which accept septage.<br>
+    <span class="bold">Website:</span> <a href="https://www.saws.org/protecting-our-environment/water-resource-compliance-protection/industrial/pretreatment/" style="color: #2aabe1;">saws.org (Industrial Pretreatment)</a></div>
+  </div>
+</div>
+
+<!-- Second Nature Compost -->
+<div class="facility">
+  <div class="facility-header" style="background: #104b95;">
+    <span>Second Nature Compost (San Antonio Area)</span>
+    <span class="tag">PRIVATE</span>
+  </div>
+  <div class="facility-body">
+    <div class="info-grid">
+      <div class="info-item"><span class="info-label">Contact</span><br>Bo Phillips<br>Phone: 210-382-4079<br>Email: Bo@txcompost.com</div>
+      <div class="info-item"><span class="info-label">Type</span><br>Private composting facility<br>Accepts domestic septage</div>
+    </div>
+    <div>
+      <span class="req-badge badge-required">Annual Registration Packet</span>
+      <span class="req-badge badge-info">Contract/Agreement Required</span>
+    </div>
+    <div class="notes">Review and sign annual registration packet (SNC Annual Registration Packet). Composting facility &mdash; verify TCEQ authorization for septage receiving.</div>
+  </div>
+</div>
+
+<!-- Greenway Ag -->
+<div class="facility">
+  <div class="facility-header" style="background: #104b95;">
+    <span>Greenway Ag (San Antonio Area)</span>
+    <span class="tag">PRIVATE LAND APP</span>
+  </div>
+  <div class="facility-body">
+    <div class="info-grid">
+      <div class="info-item"><span class="info-label">Contact</span><br>Steve K<br>Phone: 210-296-4778</div>
+      <div class="info-item"><span class="info-label">Type</span><br>Private agricultural land application site<br>TCEQ Chapter 312 authorized</div>
+    </div>
+    <div>
+      <span class="req-badge badge-info">Verify Disposal Site Requirements</span>
+      <span class="req-badge badge-info">Manifests Required</span>
+    </div>
+    <div class="notes">Land application of septage under TCEQ authorization. May have seasonal restrictions (no application during heavy rain). Confirm current acceptance and any contract requirements.</div>
+  </div>
+</div>
+
+<!-- SARA -->
+<div class="facility">
+  <div class="facility-header" style="background: #104b95;">
+    <span>SARA &mdash; Martinez II WWTP (San Antonio)</span>
+    <span class="tag">VERIFY STATUS</span>
+  </div>
+  <div class="facility-body">
+    <div class="info-grid">
+      <div class="info-item"><span class="info-label">Contact</span><br>San Antonio River Authority<br>Phone: 210-227-1373</div>
+      <div class="info-item"><span class="info-label">Notes</span><br>Many SARA plants now managed by SAWS.<br>Confirm if SARA independently accepts septage or if this routes through SAWS registration.</div>
+    </div>
+    <div class="notes"><span class="bold">Website:</span> <a href="https://www.sariverauthority.org" style="color: #2aabe1;">sariverauthority.org</a></div>
+  </div>
+</div>
+
+<!-- Round Rock -->
+<div class="facility">
+  <div class="facility-header" style="background: #104b95;">
+    <span>City of Round Rock &mdash; Brushy Creek Regional WWTP</span>
+    <span class="tag">VERIFIED</span>
+  </div>
+  <div class="facility-body">
+    <div class="info-grid">
+      <div class="info-item"><span class="info-label">East Plant Address</span><br>3939 E. Palm Valley Blvd, Round Rock, TX 78665</div>
+      <div class="info-item"><span class="info-label">Contact</span><br>Round Rock Utilities: 512-218-5555<br><a href="https://www.roundrocktexas.gov/city-departments/utilities-and-environmental-services/wastewater/" style="color: #2aabe1;">Wastewater Dept</a></div>
+    </div>
+    <div>
+      <span class="req-badge badge-ok">Has Septage Receiving Station</span>
+      <span class="req-badge badge-info">Call for Registration &amp; Rates</span>
+    </div>
+    <div class="notes">Confirmed receiving station exists &mdash; haulers currently dump via manhole near solids processing units. Also operates a West Regional WWTP in downtown Round Rock. Call Utilities to confirm current hours, rates, and registration requirements.</div>
+  </div>
+</div>
+
+<!-- GBRA Lockhart -->
+<div class="facility">
+  <div class="facility-header" style="background: #104b95;">
+    <span>GBRA &mdash; FM 20 WWTP (Lockhart, Caldwell County)</span>
+    <span class="tag">VERIFIED</span>
+  </div>
+  <div class="facility-body">
+    <div class="info-grid">
+      <div class="info-item"><span class="info-label">Operator</span><br>Guadalupe-Blanco River Authority<br>Operated for City of Lockhart since 1999</div>
+      <div class="info-item"><span class="info-label">Contact</span><br>GBRA Main: 830-379-5822<br>2225 E. Common St, New Braunfels, TX 78130<br><a href="https://www.gbra.org/operations/wastewater-treatment/" style="color: #2aabe1;">gbra.org/operations/wastewater-treatment</a></div>
+    </div>
+    <div>
+      <span class="req-badge badge-ok">Approved Septage Receiving</span>
+      <span class="req-badge badge-info">Call for Requirements</span>
+    </div>
+    <div class="notes">FM 20 Plant is an approved site for acceptance and treatment of septic tank waste. GBRA operates both of Lockhart's WWTPs. Has hauler tank washout station on-site. Contact for current rates and registration.</div>
+  </div>
+</div>
+
+<!-- Fredericksburg -->
+<div class="facility">
+  <div class="facility-header" style="background: #da6833;">
+    <span>City of Fredericksburg WWTP (Gillespie County)</span>
+    <span class="tag">COUNTY-RESTRICTED</span>
+  </div>
+  <div class="facility-body">
+    <div class="info-grid">
+      <div class="info-item"><span class="info-label">Contact</span><br>City of Fredericksburg Public Works<br>Phone: <span class="red">Verify &mdash; 540 area code is Virginia</span><br>Try: 830-997-7521 (City main)</div>
+      <div class="info-item"><span class="info-label">Restriction</span><br><span class="red">Gillespie County waste ONLY</span><br>Not useful unless servicing in Gillespie County</div>
+    </div>
+    <div>
+      <span class="req-badge badge-required">Gillespie County Origin Only</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SECTION: CONTACT TO VERIFY -->
+<!-- ============================================ -->
+<div class="section-header blue-header">Additional Facilities &mdash; Contact to Verify Septage Acceptance</div>
+
+<div class="callout callout-blue">
+  <strong>Not all municipal WWTPs accept hauled septage.</strong>
+  The facilities below serve counties in your service area and may have receiving stations. Call each utility department and ask: "Do you accept hauled domestic septage from licensed TCEQ transporters? What are your hours, rates, and registration requirements?"
+</div>
+
+<table style="width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 10px;">
+  <thead>
+    <tr style="background: #2aabe1; color: white;">
+      <th style="padding: 4px 8px; text-align: left;">Facility</th>
+      <th style="padding: 4px 8px; text-align: left;">City / County</th>
+      <th style="padding: 4px 8px; text-align: left;">Phone</th>
+      <th style="padding: 4px 8px; text-align: left;">Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="border-bottom: 1px solid #e5e7eb;">
+      <td style="padding: 4px 8px;"><span class="bold">Georgetown Utility Systems</span><br>San Gabriel River WWTP</td>
+      <td style="padding: 4px 8px;">Georgetown<br>Williamson Co.</td>
+      <td style="padding: 4px 8px;">512-930-3640<br>300-1 Industrial Ave<br><a href="https://georgetowntexas.gov/utilities/" style="color:#2aabe1;">georgetowntexas.gov</a></td>
+      <td style="padding: 4px 8px;">Large, growing system. Customer Care at Municipal Complex. Call Utility Systems to ask about septage receiving program.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
+      <td style="padding: 4px 8px;"><span class="bold">Cedar Park / BCRUA</span><br>Brushy Creek Regional</td>
+      <td style="padding: 4px 8px;">Cedar Park<br>Williamson Co.</td>
+      <td style="padding: 4px 8px;">512-259-0100<br><a href="https://www.bcrua.org" style="color:#2aabe1;">bcrua.org</a></td>
+      <td style="padding: 4px 8px;">BCRUA serves Round Rock, Cedar Park, Leander, and Austin. Cedar Park also has a 2.5 MGD city-owned reclamation facility. Septage likely routes to Round Rock East Plant (see Confirmed above). Call to verify.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb;">
+      <td style="padding: 4px 8px;"><span class="bold">Austin Water &mdash; Hornsby Bend</span><br>Biosolids Management Plant<br>2210 S FM 973, Austin 78725</td>
+      <td style="padding: 4px 8px;">Austin<br>Travis Co.</td>
+      <td style="padding: 4px 8px;">512-972-1960</td>
+      <td style="padding: 4px 8px;"><span class="bold" style="color:#104b95;">ADDING septage receiving</span> &mdash; headworks improvement project includes new septage receiving station. Call to confirm if operational yet or still routing to Walnut Creek.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
+      <td style="padding: 4px 8px;"><span class="bold">San Marcos Utilities</span><br>Cape's Dam WWTP</td>
+      <td style="padding: 4px 8px;">San Marcos<br>Hays Co.</td>
+      <td style="padding: 4px 8px;">512-393-8100</td>
+      <td style="padding: 4px 8px;">Logical dump point for Hays County work. Confirm receiving program.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb;">
+      <td style="padding: 4px 8px;"><span class="bold">Kyle Water Utilities</span><br>Plum Creek WWTP</td>
+      <td style="padding: 4px 8px;">Kyle<br>Hays Co.</td>
+      <td style="padding: 4px 8px;">512-262-1010<br><a href="https://www.cityofkyle.gov/city-services/water-utilities/" style="color:#2aabe1;">cityofkyle.gov</a></td>
+      <td style="padding: 4px 8px;">Major WWTP expansion underway (adding dewatering facility). Discharges to Plum Creek. Call Water Utilities to ask about septage receiving.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
+      <td style="padding: 4px 8px;"><span class="bold">Buda WWTP</span><br>(Operated by GBRA)</td>
+      <td style="padding: 4px 8px;">Buda<br>Hays Co.</td>
+      <td style="padding: 4px 8px;">512-295-8845<br>(Wastewater Dept)</td>
+      <td style="padding: 4px 8px;">Activated sludge plant operated by GBRA. Contact GBRA (830-379-5822) or City of Buda Wastewater to confirm if they accept hauled septage.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb;">
+      <td style="padding: 4px 8px;"><span class="bold">New Braunfels Utilities (NBU)</span><br>Kuehler WWTP</td>
+      <td style="padding: 4px 8px;">New Braunfels<br>Comal Co.</td>
+      <td style="padding: 4px 8px;">830-629-8400</td>
+      <td style="padding: 4px 8px;">Major utility, multiple treatment plants. Key for Comal County work.<br><a href="https://www.nbutexas.com" style="color: #2aabe1;">nbutexas.com</a></td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
+      <td style="padding: 4px 8px;"><span class="bold">Seguin Utilities</span><br>Geronimo Creek WWTP<br>450 Seitz Rd, Seguin</td>
+      <td style="padding: 4px 8px;">Seguin<br>Guadalupe Co.</td>
+      <td style="padding: 4px 8px;">830-401-2404<br>(Water/WW Dept)</td>
+      <td style="padding: 4px 8px;">County seat. Geronimo Creek WWTP is the main facility. Contact Water &amp; Wastewater Dept to confirm septage receiving.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb;">
+      <td style="padding: 4px 8px;"><span class="bold">Bastrop Public Works</span></td>
+      <td style="padding: 4px 8px;">Bastrop<br>Bastrop Co.</td>
+      <td style="padding: 4px 8px;">512-332-8960<br>(7am-4pm)<br>After hrs: 512-332-8830</td>
+      <td style="padding: 4px 8px;">High septic density. New WWTP #3 came online 2024 (SpaceX area expansion). Contact Water/WW Dept to confirm septage receiving at new plant.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
+      <td style="padding: 4px 8px;"><span class="bold">Elgin Utilities</span></td>
+      <td style="padding: 4px 8px;">Elgin<br>Bastrop Co.</td>
+      <td style="padding: 4px 8px;">512-281-5724</td>
+      <td style="padding: 4px 8px;">Smaller facility. Worth asking.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb;">
+      <td style="padding: 4px 8px;"><span class="bold">Marble Falls Utilities</span><br>Marble Falls WWTP</td>
+      <td style="padding: 4px 8px;">Marble Falls<br>Burnet Co.</td>
+      <td style="padding: 4px 8px;">830-693-3615</td>
+      <td style="padding: 4px 8px;"><span class="bold" style="color:#104b95;">CONFIRMED</span> &mdash; has liquid sludge program accepting waste from septic haulers. New One Water Reclamation Facility under construction (expected 2027). Call for current rates and registration.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
+      <td style="padding: 4px 8px;"><span class="bold">City of Burnet</span></td>
+      <td style="padding: 4px 8px;">Burnet<br>Burnet Co.</td>
+      <td style="padding: 4px 8px;">512-756-6093</td>
+      <td style="padding: 4px 8px;">Smaller system serving Burnet proper.</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb;">
+      <td style="padding: 4px 8px;"><span class="bold">City of Lockhart</span></td>
+      <td style="padding: 4px 8px;">Lockhart<br>Caldwell Co.</td>
+      <td style="padding: 4px 8px;">512-398-3461</td>
+      <td style="padding: 4px 8px;">GBRA operates their plants (see FM 20 above).</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
+      <td style="padding: 4px 8px;"><span class="bold">City of Luling</span></td>
+      <td style="padding: 4px 8px;">Luling<br>Caldwell Co.</td>
+      <td style="padding: 4px 8px;">830-875-2481</td>
+      <td style="padding: 4px 8px;">Smaller system.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============================================ -->
+<!-- SECTION: FINDING MORE -->
+<!-- ============================================ -->
+<div class="section-header gray-header">How to Find Additional Disposal Sites</div>
+
+<div style="font-size: 9pt; margin-bottom: 10px;">
+  <ul style="padding-left: 16px;">
+    <li style="margin-bottom: 4px;"><span class="bold">TCEQ Central Registry:</span> Search for Chapter 312 (Sludge) permits in your target counties to find private land application sites not listed here. <a href="https://www15.tceq.texas.gov/crpub/" style="color: #2aabe1;">tceq.texas.gov/crpub</a></li>
+    <li style="margin-bottom: 4px;"><span class="bold">TCEQ Sludge Program:</span> <a href="https://www.tceq.texas.gov/permitting/registration/sludge" style="color: #2aabe1;">tceq.texas.gov/permitting/registration/sludge</a></li>
+    <li style="margin-bottom: 4px;"><span class="bold">Texas On-Site Wastewater Association (TOWA):</span> Member directory and disposal facility resources. <a href="https://www.txowa.org" style="color: #2aabe1;">txowa.org</a></li>
+    <li style="margin-bottom: 4px;"><span class="bold">TCEQ Transporter/Hauler FAQ:</span> <a href="https://www.tceq.texas.gov/assistance/industry/oil-and-gas/transporters-and-haulers-commonly-asked-questions" style="color: #2aabe1;">tceq.texas.gov (Transporters FAQ)</a></li>
+    <li style="margin-bottom: 4px;"><span class="bold">Ask fellow haulers:</span> The septic community is tight-knit. Other haulers often share dump site info.</li>
+  </ul>
+</div>
+
+<div class="callout callout-red">
+  <strong>Fredericksburg Phone Number Warning</strong>
+  The phone number you have for Fredericksburg WWTP (540-645-3796) has a <span class="bold">Virginia area code</span>. Fredericksburg, TX is area code 830. Try the City main line at <span class="bold">830-997-7521</span> and ask for Public Works.
+</div>
+
+<div class="footer">
+  MAC Septic &bull; 512.737.8711 &bull; macseptic.com &bull; will@macseptic.com<br>
+  INTERNAL DOCUMENT &mdash; Last updated April 2026. Verify all rates, hours, and requirements directly with each facility before dispatching.
+</div>
+
+</body>
+</html>

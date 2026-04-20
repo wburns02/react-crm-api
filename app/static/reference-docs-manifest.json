@@ -1,5 +1,5 @@
 {
-  "docs_dir": "/home/will/mac-septic-docs",
+  "docs_dir": "app/static/reference-docs",
   "documents": [
     {"slug": "call-playbook", "file": "call-playbook.html", "title": "Call Playbook", "category": "Playbooks", "description": "Step-by-step guide for handling inbound customer calls", "file_type": "html"},
     {"slug": "call-recording-setup", "file": "call-recording-setup.html", "title": "Call Recording Setup", "category": "Playbooks", "description": "How to configure call recording systems", "file_type": "html"},

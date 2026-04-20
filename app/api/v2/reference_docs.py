@@ -20,7 +20,9 @@ MANIFEST_PATH = Path(__file__).resolve().parent.parent.parent / "static" / "refe
 with open(MANIFEST_PATH) as f:
     _manifest = json.load(f)
 
-DOCS_DIR = Path(_manifest["docs_dir"])
+# Resolve docs_dir relative to the project root (the repo root, parent of app/)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+DOCS_DIR = _PROJECT_ROOT / _manifest["docs_dir"]
 DOCUMENTS = _manifest["documents"]
 DOCS_BY_SLUG = {doc["slug"]: doc for doc in DOCUMENTS}
 

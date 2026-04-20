@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real Consequences of Septic System Neglect - MAC Septic</title>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  @page {
+    size: letter;
+    margin: 0.5in 0.6in;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Albert Sans', 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    color: #1a1a1a;
+    max-width: 8.5in;
+    margin: 0 auto;
+    padding: 0.4in 0.5in;
+  }
+
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #104b95;
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+  .company-name {
+    font-size: 22pt;
+    font-weight: 800;
+    color: #104b95;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+  }
+  .tagline {
+    font-size: 9pt;
+    color: #555;
+    letter-spacing: 0.5px;
+  }
+  .doc-title {
+    font-size: 15pt;
+    font-weight: 700;
+    color: #b91c1c;
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .bold { font-weight: 700; }
+  .red { color: #b91c1c; font-weight: 700; }
+  .green { color: #104b95; font-weight: 700; }
+
+  .section-header {
+    font-size: 10pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 5px 10px;
+    margin-bottom: 8px;
+    margin-top: 14px;
+    border-radius: 3px;
+    color: white;
+  }
+  .green-header { background: #104b95; }
+  .red-header { background: #b91c1c; }
+  .amber-header { background: #da6833; }
+  .blue-header { background: #2aabe1; }
+
+  .callout {
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    font-size: 9pt;
+  }
+  .callout-green { background: #e8f1fa; border-left: 4px solid #104b95; }
+  .callout-red { background: #fef2f2; border-left: 4px solid #b91c1c; }
+  .callout-amber { background: #fef3eb; border-left: 4px solid #da6833; }
+  .callout-blue { background: #e6f7fc; border-left: 4px solid #2aabe1; }
+  .callout strong { display: block; margin-bottom: 3px; }
+
+  .case-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .case-card-header {
+    padding: 5px 10px;
+    font-weight: 700;
+    font-size: 9.5pt;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .case-card-header .case-tag {
+    font-size: 8pt;
+    font-weight: 400;
+    opacity: 0.9;
+    background: rgba(255,255,255,0.2);
+    padding: 1px 6px;
+    border-radius: 8px;
+  }
+  .case-card-body {
+    padding: 8px 10px;
+    font-size: 9pt;
+  }
+  .case-card-body .case-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-bottom: 6px;
+    font-size: 8.5pt;
+    color: #555;
+  }
+  .case-card-body .case-detail {
+    margin-bottom: 4px;
+  }
+  .case-card-body .case-outcome {
+    background: #fef2f2;
+    border-radius: 3px;
+    padding: 4px 8px;
+    margin-top: 6px;
+    font-size: 8.5pt;
+  }
+  .case-card-body .case-source {
+    font-size: 7.5pt;
+    color: #888;
+    margin-top: 4px;
+  }
+  .case-card-body .case-source a {
+    color: #2aabe1;
+  }
+
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    margin: 10px 0;
+  }
+  .stat-box {
+    flex: 1;
+    background: #fef2f2;
+    border: 2px solid #b91c1c;
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+  }
+  .stat-box .stat-num {
+    font-size: 18pt;
+    font-weight: 800;
+    color: #b91c1c;
+    line-height: 1.1;
+  }
+  .stat-box .stat-label {
+    font-size: 8pt;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+
+  .penalty-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 10px 0;
+    font-size: 8.5pt;
+  }
+  .penalty-table th {
+    background: #b91c1c;
+    color: white;
+    padding: 5px 8px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .penalty-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  .penalty-table tr:nth-child(even) td {
+    background: #fafafa;
+  }
+
+  .inv-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 6px 0 10px 0;
+    font-size: 8.5pt;
+  }
+  .inv-table th {
+    background: #2aabe1;
+    color: white;
+    padding: 4px 8px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 8pt;
+  }
+  .inv-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: center;
+  }
+  .inv-table tr:nth-child(even) td {
+    background: #f0f4ff;
+  }
+
+  .cta-box {
+    background: #104b95;
+    color: white;
+    border-radius: 8px;
+    padding: 14px 18px;
+    text-align: center;
+    margin-top: 14px;
+  }
+  .cta-box .cta-headline { font-size: 13pt; font-weight: 800; margin-bottom: 4px; }
+  .cta-box .cta-phone { font-size: 16pt; font-weight: 800; margin: 4px 0; }
+  .cta-box .cta-sub { font-size: 9pt; opacity: 0.9; }
+
+  .footer {
+    margin-top: 10px;
+    padding-top: 6px;
+    text-align: center;
+    font-size: 7.5pt;
+    color: #777;
+  }
+
+  @media print {
+    body { padding: 0; }
+    .case-card { break-inside: avoid; }
+    .stats-row { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="company-name" style="text-align: center;"><img src="mac-septic-icon-darkblue.png" alt="MAC Septic" style="max-width: 280px; height: auto; display: inline-block;"></div>
+  <div class="tagline">Nearly 30 Years of Experience &bull; TCEQ Licensed &bull; 512.737.8711</div>
+  <div class="doc-title">Real Consequences of Septic System Neglect</div>
+</div>
+
+<div class="callout callout-red">
+  <strong>These Are Not Hypotheticals</strong>
+  Every case below is documented in TCEQ enforcement records, Texas court filings, or local news reporting. Fines, lawsuits, and health hazards from neglected septic systems happen in Texas every year &mdash; often to homeowners who didn't know they were out of compliance.
+</div>
+
+<div class="stats-row">
+  <div class="stat-box">
+    <div class="stat-num">1,453</div>
+    <div class="stat-label">OSSF Investigations<br>Statewide (FY2024)</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-num">598</div>
+    <div class="stat-label">In Central Texas Alone<br>(TCEQ Region 10)</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-num">$25,000</div>
+    <div class="stat-label">Max Penalty Per Day<br>(TX Water Code 7.102)</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-num">$760,769</div>
+    <div class="stat-label">Largest Jury Verdict<br>(Pogue v. Williamson)</div>
+  </div>
+</div>
+
+<div class="section-header red-header">TCEQ Enforcement Actions Against Property Owners</div>
+
+<div class="case-card">
+  <div class="case-card-header" style="background: #b91c1c;">
+    <span>Sandra Ortega &mdash; Individual Homeowner</span>
+    <span class="case-tag">$19,600 Fine</span>
+  </div>
+  <div class="case-card-body">
+    <div class="case-meta">
+      <span><span class="bold">TCEQ Docket:</span> 2017-0937-MLM-E</span>
+      <span><span class="bold">Location:</span> Mertzon, Irion County, TX</span>
+      <span><span class="bold">Investigated:</span> 2015, 2016, 2017</span>
+    </div>
+    <div class="case-detail">Operated an <span class="bold">unpermitted OSSF</span> and discharged wastewater into the environment &mdash; after TCEQ had already issued a prior Default Order (2013-0757-MLM-E). Repeat offender with <span class="red">"Unsatisfactory"</span> compliance history. TCEQ found "indifference to legal duty."</div>
+    <div class="case-detail">Required to clean all affected areas, submit an OSSF permit application or abandon the system, and cease all unauthorized discharges including from kitchen sink and laundry.</div>
+    <div class="case-outcome"><span class="red">Penalty: $19,600</span> &mdash; Payment plan: 35 payments of $100 ($16,000 deferred for financial hardship). Three separate litigation petitions filed (2017, 2018).</div>
+    <div class="case-source">Source: <a href="https://www.tceq.texas.gov/assets/public/comm_exec/agendas/comm/backup/Agendas/2019/04-24-2019/0937MLM.pdf">TCEQ Case 46670 (PDF)</a></div>
+  </div>
+</div>
+
+<div class="case-card">
+  <div class="case-card-header" style="background: #b91c1c;">
+    <span>Dreamland Tank Town, LLC &mdash; Edwards Aquifer Violation</span>
+    <span class="case-tag">$22,500 Fine</span>
+  </div>
+  <div class="case-card-body">
+    <div class="case-meta">
+      <span><span class="bold">TCEQ Docket:</span> 2022-0124-MLM-E</span>
+      <span><span class="bold">Location:</span> Dripping Springs, Hays County, TX</span>
+      <span><span class="bold">Complaints:</span> June and October 2021</span>
+    </div>
+    <div class="case-detail">Expanded a septic system and installed modular homes with septic on the <span class="bold">Edwards Aquifer Contributing Zone</span> without an Edwards Aquifer Protection Plan. Disturbed approximately 7.31 acres. Also built pickleball courts, live music stage, minigolf, and disc golf without authorization.</div>
+    <div class="case-outcome"><span class="red">Penalty: $22,500</span> &mdash; $9,000 paid to General Revenue; remainder offset via Supplemental Environmental Projects. Required to submit and obtain approval of an Edwards Aquifer Contributing Zone Plan.</div>
+    <div class="case-source">Source: <a href="https://www.tceq.texas.gov/downloads/agency/decisions/agendas/backup/2022/2022-0124-mlm-e.pdf">TCEQ Case 61832 (PDF)</a></div>
+  </div>
+</div>
+
+<div class="case-card">
+  <div class="case-card-header" style="background: #b91c1c;">
+    <span>HPA Texas &mdash; Lapsed Maintenance Contract + Altered System</span>
+    <span class="case-tag">$8,500 Fine</span>
+  </div>
+  <div class="case-card-body">
+    <div class="case-meta">
+      <span><span class="bold">TCEQ Docket:</span> 2022-0964-OSS-E</span>
+      <span><span class="bold">Location:</span> Midlothian, Ellis County, TX</span>
+      <span><span class="bold">Investigated:</span> July 5, 2022</span>
+    </div>
+    <div class="case-detail">TCEQ found three violations at a residential property: (1) <span class="red">Failed to maintain an OSSF maintenance contract</span>. (2) Altered spray heads &mdash; one modified to spray 360 degrees instead of the permitted 180 degrees, and only 2 of 4 permitted spray heads installed. (3) OSSF irrigation field was less than 50 feet from a creek and less than 10 feet from property boundaries.</div>
+    <div class="case-outcome"><span class="red">Penalty: $8,500</span> ($6,800 paid to General Revenue). This case specifically includes a fine for having no maintenance contract.</div>
+    <div class="case-source">Source: <a href="https://www.tceq.texas.gov/downloads/agency/decisions/agendas/backup/2022/2022-0964-oss-e.pdf">TCEQ Case 62735 (PDF)</a></div>
+  </div>
+</div>
+
+<div class="case-card">
+  <div class="case-card-header" style="background: #b91c1c;">
+    <span>Chaparral Property Services &mdash; Repeat OSSF Offender</span>
+    <span class="case-tag">$8,800 Fine</span>
+  </div>
+  <div class="case-card-body">
+    <div class="case-meta">
+      <span><span class="bold">TCEQ Docket:</span> 2022-0090-OSS-E</span>
+      <span><span class="bold">Location:</span> Paint Rock, Concho County, TX</span>
+    </div>
+    <div class="case-detail">Failed to obtain authorization prior to constructing, altering, or operating an OSSF &mdash; <span class="bold">violating a prior TCEQ Agreed Order</span> (Docket 2019-1702-OSS-E). TCEQ found "indifference to legal duty based on violation of a previous order."</div>
+    <div class="case-outcome"><span class="red">Penalty: $8,800</span> &mdash; Payment plan: 35 payments of $244. System was eventually abandoned.</div>
+    <div class="case-source">Source: <a href="https://www.tceq.texas.gov/downloads/agency/decisions/agendas/backup/2022/2022-0090-oss-e.pdf">TCEQ Case 58522 (PDF)</a></div>
+  </div>
+</div>
+
+<!-- PUMP OUT RISKS -->
+<div class="section-header" style="background: #7c2d12;">What Happens When You Don't Pump Out Regularly</div>
+
+<div class="callout callout-amber">
+  <strong>Skipping pump-outs doesn't save money &mdash; it creates expensive problems.</strong>
+  Your aerobic system can only hold so much. When solids build up beyond what the bacteria can break down, the damage cascades through every compartment. Here is what actually happens:
+</div>
+
+<div style="display: flex; gap: 12px; margin-bottom: 12px;">
+  <div style="flex: 1;">
+    <div class="case-card">
+      <div class="case-card-header" style="background: #7c2d12;">
+        <span>Pump and Spray Head Damage</span>
+        <span class="case-tag">$3,000 - $5,000+</span>
+      </div>
+      <div class="case-card-body">
+        <div class="case-detail">When solids accumulate in the pump tank past the 6-7 inch mark, they get suctioned directly through the pump. Solids clog the spray heads, which creates <span class="red">back pressure</span> against the pump. The pump works harder, the plastic impellers crack, and the motor overheats. You end up replacing the pump <span class="bold">and</span> the spray heads.</div>
+        <div class="case-outcome"><span class="red">Pump replacement: $3,000 - $5,000.</span> Spray head replacement: $50 - $150 each (most systems have 4-8). Emergency service call on top of that. A $595 pump-out would have prevented all of it.</div>
+      </div>
+    </div>
+
+    <div class="case-card">
+      <div class="case-card-header" style="background: #7c2d12;">
+        <span>Drainfield / Spray Field Failure</span>
+        <span class="case-tag">$5,000 - $7,000</span>
+      </div>
+      <div class="case-card-body">
+        <div class="case-detail">Solids that make it past the pump get pushed into the drainfield or spray lines. Drip emitters clog permanently. Spray heads disperse untreated waste across your yard. The soil around drainfield lines becomes saturated with biomat (a black, slimy layer of organic buildup) that <span class="bold">seals the soil</span> and prevents absorption.</div>
+        <div class="case-outcome"><span class="red">Once a drainfield is clogged with biomat, it often cannot be restored</span> &mdash; the entire field must be relocated and rebuilt. This requires new permitting, excavation, and installation.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1;">
+    <div class="case-card">
+      <div class="case-card-header" style="background: #7c2d12;">
+        <span>Sewage Backup into Your Home</span>
+        <span class="case-tag">$3,000 - $25,000+</span>
+      </div>
+      <div class="case-card-body">
+        <div class="case-detail">When the system can no longer move water forward &mdash; clogged spray heads, failed pump, saturated drainfield &mdash; <span class="red">the sewage has nowhere to go but back up</span>. It comes up through the lowest drains in your home: floor drains, showers, and toilets. Raw sewage inside your home requires professional hazmat remediation.</div>
+        <div class="case-outcome"><span class="red">Sewage remediation: $3,000 - $10,000+.</span> If drywall, flooring, or cabinets are contaminated, the cost can exceed $25,000. Homeowner's insurance often <span class="bold">does not cover</span> sewage backups caused by maintenance neglect.</div>
+      </div>
+    </div>
+
+    <div class="case-card">
+      <div class="case-card-header" style="background: #7c2d12;">
+        <span>Complete System Replacement</span>
+        <span class="case-tag">$15,000 - $30,000+</span>
+      </div>
+      <div class="case-card-body">
+        <div class="case-detail">Years of neglect can destroy every component: the aerator burns out, the treatment tank fills with undigested sludge, the settling tank stops working, the pump fails, and the drainfield is beyond recovery. At that point, the only option is a <span class="bold">complete system replacement</span> &mdash; new engineering, new permit, new excavation, new equipment.</div>
+        <div class="case-outcome"><span class="red">Full aerobic system replacement: $15,000 - $30,000+</span> depending on system type, soil conditions, and lot size. Compare that to regular pump-outs starting at $595 every few years.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="display: flex; gap: 12px; margin-bottom: 12px;">
+  <div style="flex: 1;">
+    <div class="case-card">
+      <div class="case-card-header" style="background: #7c2d12;">
+        <span>Health Hazards &mdash; Your Family and Neighbors</span>
+        <span class="case-tag">Liability Exposure</span>
+      </div>
+      <div class="case-card-body">
+        <div class="case-detail">A failing system discharges partially treated or raw sewage onto your property surface &mdash; or worse, into groundwater. Standing sewage attracts mosquitoes and exposes anyone who walks through the yard (children, pets, guests) to <span class="bold">E. coli, Hepatitis A, Giardia, Cryptosporidium</span>, and other pathogens. If your system contaminates a neighbor's well or property, <span class="red">you are legally liable</span>.</div>
+        <div class="case-outcome">In the Edwards Aquifer Recharge Zone (Hays, Comal, Travis, Bexar), a failing OSSF can contaminate the drinking water supply for over 2 million people. TCEQ and counties take this especially seriously &mdash; penalties up to <span class="red">$10,000/day</span>.</div>
+      </div>
+    </div>
+  </div>
+  <div style="flex: 1;">
+    <div class="case-card">
+      <div class="case-card-header" style="background: #7c2d12;">
+        <span>Property Value and Home Sale Impact</span>
+        <span class="case-tag">Sale Blocked or Delayed</span>
+      </div>
+      <div class="case-card-body">
+        <div class="case-detail">Most Central Texas counties require proof of an active maintenance contract and a passing system inspection before a home can close. A system that needs a pump-out will <span class="bold">fail the inspection</span>. A system with visible damage (clogged spray heads, standing water, odor) will trigger a full TCEQ investigation. Buyers walk away or demand <span class="red">$10,000 - $30,000 in concessions</span>.</div>
+        <div class="case-outcome">As shown in the Pogue v. Williamson case above, a buyer who discovers septic problems after closing can sue for <span class="red">fraud and non-disclosure</span> &mdash; and juries have awarded over $760,000 in damages.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="callout callout-green">
+  <strong>The Math Is Simple</strong>
+  Regular pump-outs start at <span class="bold">$595</span> every few years. Skipping them leads to pump replacement ($3,000 - $5,000), drainfield failure ($5,000 - $7,000), sewage backup remediation ($3,000 - $25,000), or complete system replacement ($15,000 - $30,000+). A maintenance contract with regular pump-outs is the cheapest insurance you can buy for a system that costs more than most cars.
+</div>
+
+<div class="section-header amber-header">Civil Lawsuits &mdash; When Septic Problems Become Legal Nightmares</div>
+
+<div class="case-card">
+  <div class="case-card-header" style="background: #da6833;">
+    <span>Villas at Timberwood &mdash; 75-Home "Sewage Nightmare"</span>
+    <span class="case-tag">$3.5M+ in Damages</span>
+  </div>
+  <div class="case-card-body">
+    <div class="case-meta">
+      <span><span class="bold">Court:</span> Bexar County District Court</span>
+      <span><span class="bold">Location:</span> Far North Bexar County (Stone Oak / Bulverde area)</span>
+      <span><span class="bold">Filed:</span> 2019</span>
+    </div>
+    <div class="case-detail"><span class="bold">What happened:</span> A 75-home subdivision's septic system was built too close to Mustang Creek (violating the 100-foot setback), with disbursement lines too close together and too shallow, and designed for homes half the size actually built.</div>
+    <div class="case-detail"><span class="bold">The result:</span> <span class="red">Raw sewage geysers</span> &mdash; one resident (Joshua Gallion) witnessed a 25-foot geyser approximately 50 yards from his home. Sewage ran off into Mustang Creek, threatening the Edwards Aquifer. Residents were told <span class="red">not to flush their toilets</span> because pumps were broken. Trees near standing sewage were diseased and dying.</div>
+    <div class="case-detail"><span class="bold">The cost:</span> $2.5 million estimated to connect to SAWS sewer. Over $1 million in tree replacement. HOA sued Timberwood Development Co. and Chesmar Homes &mdash; reached a "significant" settlement.</div>
+    <div class="case-outcome"><span class="red">Bexar County Commissioners approved $2 million in federal ARPA funds (January 2024)</span> to connect all 75 homes to the San Antonio Water System.</div>
+    <div class="case-source">Sources: <a href="https://www.ksat.com/news/2019/09/18/residents-suing-developer-home-builder-over-sewage-nightmare-in-far-north-bexar-county/">KSAT News (Sept 2019)</a> | <a href="https://www.ksat.com/news/local/2024/01/24/homeowners-facing-septic-nightmare-celebrate-after-securing-2m-to-connect-to-saws-sewer-system/">KSAT Follow-Up (Jan 2024)</a></div>
+  </div>
+</div>
+
+<div class="case-card">
+  <div class="case-card-header" style="background: #da6833;">
+    <span>Pogue v. Williamson &mdash; Buyer Discovers Non-Compliant Septic</span>
+    <span class="case-tag">$760,769 Jury Verdict</span>
+  </div>
+  <div class="case-card-body">
+    <div class="case-meta">
+      <span><span class="bold">Case No.:</span> 01-17-00844-CV</span>
+      <span><span class="bold">Court:</span> TX Court of Appeals, First District (Houston)</span>
+      <span><span class="bold">Decision:</span> March 12, 2020</span>
+    </div>
+    <div class="case-detail">Buyer purchased a $210,000 home and discovered the septic tank was <span class="bold">not code-compliant</span>, along with mold and termite infestation. Buyer spent over <span class="red">$85,000 on repairs</span> between 2010 and 2013. Sued sellers for fraud, negligent misrepresentation, and DTPA violations.</div>
+    <div class="case-outcome"><span class="red">Jury awarded $760,769</span> to the buyer. (Reversed on appeal due to "as-is" clause in the deed of trust &mdash; but demonstrates the scale of potential liability for sellers with non-compliant septic systems.)</div>
+    <div class="case-source">Source: <a href="https://www.texascommerciallitigator.blog/2020/05/texas-homebuyers-beware-closing-document-language-may-render-seller-disclosure-statement-meaningless.html">Texas Commercial Litigator Blog</a></div>
+  </div>
+</div>
+
+<div class="case-card">
+  <div class="case-card-header" style="background: #da6833;">
+    <span>Robicheaux v. Leisure Realtor &mdash; Undisclosed Septic System</span>
+    <span class="case-tag">$100,000+ Claim</span>
+  </div>
+  <div class="case-card-body">
+    <div class="case-meta">
+      <span><span class="bold">Court:</span> Harris County District Court</span>
+      <span><span class="bold">Filed:</span> May 18, 2018</span>
+    </div>
+    <div class="case-detail">Buyers alleged sellers provided a disclosure notice that <span class="bold">failed to mention the property had a septic system</span>. When asked directly, sellers represented there was no septic system. Buyers paid <span class="red">$30,533 to replace</span> the undisclosed system.</div>
+    <div class="case-outcome"><span class="red">Sought up to $100,000</span> plus attorney fees for breach of contract and fraud by affirmative misrepresentation.</div>
+    <div class="case-source">Source: <a href="https://setexasrecord.com/stories/512533622-houston-homebuyers-allege-real-estate-company-failed-to-disclose-property-had-septic-system">Southeast Texas Record</a></div>
+  </div>
+</div>
+
+<div class="section-header blue-header">TCEQ OSSF Investigations &mdash; Active and Increasing</div>
+
+<div style="display: flex; gap: 16px;">
+  <div style="flex: 1;">
+    <table class="inv-table">
+      <thead>
+        <tr>
+          <th>Fiscal Year</th>
+          <th>Statewide</th>
+          <th>Region 10 (Central TX)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>FY2019</td><td>1,304</td><td>&mdash;</td></tr>
+        <tr><td>FY2020</td><td>1,431</td><td>&mdash;</td></tr>
+        <tr><td>FY2021</td><td>1,381</td><td>&mdash;</td></tr>
+        <tr><td>FY2022</td><td>1,629</td><td>627</td></tr>
+        <tr><td>FY2023</td><td>1,480</td><td>583</td></tr>
+        <tr><td>FY2024</td><td>1,453</td><td>598</td></tr>
+      </tbody>
+    </table>
+    <div style="font-size: 7.5pt; color: #888;">Source: <a href="https://www.tceq.texas.gov/downloads/compliance/enforcement/actions-reports/aer/fy2024/2024-enforcement-report.pdf" style="color: #2aabe1;">TCEQ FY2024 Annual Enforcement Report</a></div>
+  </div>
+  <div style="flex: 1;">
+    <div class="callout callout-blue" style="height: 100%;">
+      <strong>What This Means</strong>
+      TCEQ conducts roughly <span class="bold">1,400+ OSSF investigations every year</span> statewide. Central Texas (Region 10) consistently has the <span class="red">highest investigation count</span> of any region &mdash; nearly 600 per year. This is not theoretical enforcement. Complaints from neighbors, failed inspections during property sales, and routine county audits all trigger investigations.
+    </div>
+  </div>
+</div>
+
+<div class="section-header red-header">Penalty Framework &mdash; What the Law Allows</div>
+
+<table class="penalty-table">
+  <thead>
+    <tr>
+      <th style="width: 32%;">Authority</th>
+      <th style="width: 28%;">Penalty</th>
+      <th>Applies When</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="bold">TX Health and Safety Code 366.0515</span></td>
+      <td>$50 to $200 (1st offense)<br>$200 to $1,000 or up to <span class="red">6 months jail</span> (subsequent)</td>
+      <td>Misdemeanor for operating an OSSF without a permit or in violation of rules</td>
+    </tr>
+    <tr>
+      <td><span class="bold">TX Water Code 7.102</span></td>
+      <td>Up to <span class="red">$25,000 per day</span></td>
+      <td>Civil penalty for environmental contamination, discharge to state waters</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Travis County Code Ch. 448</span></td>
+      <td>Class C misdemeanor, up to <span class="red">$500 per day</span><br>Each day is a separate offense</td>
+      <td>OSSF violations in Travis County; daily fines accrue until corrected</td>
+    </tr>
+    <tr>
+      <td><span class="bold">30 TAC Chapter 213</span><br>(Edwards Aquifer)</td>
+      <td>Up to <span class="red">$10,000 per day</span></td>
+      <td>OSSF violations on the Edwards Aquifer Recharge or Contributing Zone (Hays, Comal, Travis, Bexar)</td>
+    </tr>
+    <tr>
+      <td><span class="bold">TCEQ Administrative Penalties</span></td>
+      <td>Documented cases: <span class="red">$8,500 to $22,500</span></td>
+      <td>Unpermitted systems, lapsed maintenance contracts, altered systems, setback violations</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Civil Litigation</span></td>
+      <td>Documented verdicts up to <span class="red">$760,769</span></td>
+      <td>Buyer discovers non-compliant septic; neighbor suffers sewage damage; non-disclosure at sale</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout callout-red" style="margin-top: 12px;">
+  <strong>The Exposed Homeowner</strong>
+  A homeowner without an active maintenance contract is exposed on every front: TCEQ fines for non-compliance, county enforcement actions, daily penalties that compound, liability to neighbors if the system fails and contaminates their property, blocked home sales when the county requires proof of a contract at closing, and potential criminal charges for repeat violations. A maintenance contract typically costs <span class="bold">$250 to $500 per year</span>. That is less than $1.50 a day to protect against thousands &mdash; or hundreds of thousands &mdash; in fines, lawsuits, and system replacement costs.
+</div>
+
+<div class="section-header green-header">References and Source Documents</div>
+
+<div style="font-size: 8pt; line-height: 1.5; margin-bottom: 10px;">
+<table style="width: 100%; font-size: 8pt; border-collapse: collapse;">
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; width: 30%; vertical-align: top;"><span class="bold">TCEQ FY2024 Enforcement Report</span></td>
+    <td style="padding: 3px 6px;"><a href="https://www.tceq.texas.gov/downloads/compliance/enforcement/actions-reports/aer/fy2024/2024-enforcement-report.pdf" style="color: #2aabe1;">PDF, tceq.texas.gov</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">Ortega Case (46670)</span></td>
+    <td style="padding: 3px 6px;"><a href="https://www.tceq.texas.gov/assets/public/comm_exec/agendas/comm/backup/Agendas/2019/04-24-2019/0937MLM.pdf" style="color: #2aabe1;">TCEQ Docket 2017-0937-MLM-E (PDF)</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">Dreamland Tank Town (61832)</span></td>
+    <td style="padding: 3px 6px;"><a href="https://www.tceq.texas.gov/downloads/agency/decisions/agendas/backup/2022/2022-0124-mlm-e.pdf" style="color: #2aabe1;">TCEQ Docket 2022-0124-MLM-E (PDF)</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">HPA Texas / Midlothian (62735)</span></td>
+    <td style="padding: 3px 6px;"><a href="https://www.tceq.texas.gov/downloads/agency/decisions/agendas/backup/2022/2022-0964-oss-e.pdf" style="color: #2aabe1;">TCEQ Docket 2022-0964-OSS-E (PDF)</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">Chaparral Property (58522)</span></td>
+    <td style="padding: 3px 6px;"><a href="https://www.tceq.texas.gov/downloads/agency/decisions/agendas/backup/2022/2022-0090-oss-e.pdf" style="color: #2aabe1;">TCEQ Docket 2022-0090-OSS-E (PDF)</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">Villas at Timberwood (Bexar)</span></td>
+    <td style="padding: 3px 6px;"><a href="https://www.ksat.com/news/2019/09/18/residents-suing-developer-home-builder-over-sewage-nightmare-in-far-north-bexar-county/" style="color: #2aabe1;">KSAT (2019)</a> | <a href="https://www.ksat.com/news/local/2024/01/24/homeowners-facing-septic-nightmare-celebrate-after-securing-2m-to-connect-to-saws-sewer-system/" style="color: #2aabe1;">KSAT Follow-Up (2024)</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">Pogue v. Williamson (Houston)</span></td>
+    <td style="padding: 3px 6px;"><a href="https://www.texascommerciallitigator.blog/2020/05/texas-homebuyers-beware-closing-document-language-may-render-seller-disclosure-statement-meaningless.html" style="color: #2aabe1;">TX Commercial Litigator Blog</a> | Case No. 01-17-00844-CV</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">Robicheaux v. Leisure Realtor</span></td>
+    <td style="padding: 3px 6px;"><a href="https://setexasrecord.com/stories/512533622-houston-homebuyers-allege-real-estate-company-failed-to-disclose-property-had-septic-system" style="color: #2aabe1;">SE Texas Record</a> | Harris County District Court (2018)</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">TX Health and Safety Code Ch. 366</span></td>
+    <td style="padding: 3px 6px;"><a href="https://statutes.capitol.texas.gov/Docs/HS/htm/HS.366.htm" style="color: #2aabe1;">statutes.capitol.texas.gov</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">TX Water Code Ch. 7 (Enforcement)</span></td>
+    <td style="padding: 3px 6px;"><a href="https://statutes.capitol.texas.gov/Docs/WA/htm/WA.7.htm" style="color: #2aabe1;">statutes.capitol.texas.gov</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">TCEQ Enforcement Process</span></td>
+    <td style="padding: 3px 6px;"><a href="https://www.tceq.texas.gov/compliance/enforcement/process.html" style="color: #2aabe1;">tceq.texas.gov/compliance/enforcement/process.html</a></td>
+  </tr>
+</table>
+</div>
+
+<div class="cta-box">
+  <div class="cta-headline">Don't Become a Case Study</div>
+  <div class="cta-sub">A maintenance contract with MAC Septic keeps you compliant, protects your property,<br>and costs less than $1.50 a day. Call today to get covered.</div>
+  <div class="cta-phone">512.737.8711</div>
+  <div class="cta-sub">macseptic.com | will@macseptic.com</div>
+</div>
+
+<div class="footer">
+  TCEQ Licensed Maintenance Provider | Nearly 30 years of industry experience | This document is for informational purposes and does not constitute legal advice. All cases cited from public records. For official regulatory guidance, contact TCEQ at 512-239-1000.
+</div>
+
+</body>
+</html>

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Texas Law Requires a Maintenance Contract - MAC Septic</title>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  @page {
+    size: letter;
+    margin: 0.6in 0.7in;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Albert Sans', 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #1a1a1a;
+    max-width: 8.5in;
+    margin: 0 auto;
+    padding: 0.5in 0.6in;
+  }
+
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #104b95;
+    padding-bottom: 12px;
+    margin-bottom: 18px;
+  }
+  .company-name {
+    font-size: 22pt;
+    font-weight: 800;
+    color: #104b95;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+  }
+  .tagline {
+    font-size: 9pt;
+    color: #555;
+    letter-spacing: 0.5px;
+  }
+  .doc-title {
+    font-size: 15pt;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-top: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .bold { font-weight: 700; }
+  .red { color: #b91c1c; font-weight: 700; }
+  .green { color: #104b95; font-weight: 700; }
+
+  .section-header {
+    font-size: 11pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 6px 12px;
+    margin-bottom: 10px;
+    margin-top: 16px;
+    border-radius: 3px;
+    color: white;
+  }
+  .green-header { background: #104b95; }
+  .red-header { background: #b91c1c; }
+  .amber-header { background: #da6833; }
+  .blue-header { background: #2aabe1; }
+
+  .callout {
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    font-size: 10.5pt;
+  }
+  .callout-green {
+    background: #e8f1fa;
+    border-left: 4px solid #104b95;
+  }
+  .callout-red {
+    background: #fef2f2;
+    border-left: 4px solid #b91c1c;
+  }
+  .callout-amber {
+    background: #fef3eb;
+    border-left: 4px solid #da6833;
+  }
+  .callout-blue {
+    background: #e6f7fc;
+    border-left: 4px solid #2aabe1;
+  }
+  .callout strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  /* Big stat callout */
+  .big-law {
+    background: #fef2f2;
+    border: 2px solid #b91c1c;
+    border-radius: 8px;
+    padding: 16px 20px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .big-law .law-text {
+    font-size: 14pt;
+    font-weight: 800;
+    color: #b91c1c;
+    margin-bottom: 6px;
+  }
+  .big-law .citation {
+    font-size: 10pt;
+    color: #666;
+  }
+
+  /* FAQ style */
+  .faq {
+    margin-bottom: 14px;
+  }
+  .faq-q {
+    font-weight: 700;
+    font-size: 11pt;
+    color: #104b95;
+    margin-bottom: 4px;
+    padding-left: 0;
+  }
+  .faq-a {
+    font-size: 10.5pt;
+    padding-left: 0;
+    margin-bottom: 12px;
+  }
+
+  /* Consequence table */
+  .consequence-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 14px 0;
+    font-size: 10pt;
+  }
+  .consequence-table th {
+    background: #b91c1c;
+    color: white;
+    padding: 7px 10px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 9.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .consequence-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  .consequence-table tr:nth-child(even) td {
+    background: #fafafa;
+  }
+
+  /* County table */
+  .county-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 14px 0;
+    font-size: 10pt;
+  }
+  .county-table th {
+    background: #104b95;
+    color: white;
+    padding: 7px 10px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 9.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .county-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  .county-table tr:nth-child(even) td {
+    background: #e8f1fa;
+  }
+
+  /* Two column */
+  .columns {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  .col { flex: 1; }
+
+  /* CTA */
+  .cta-box {
+    background: #104b95;
+    color: white;
+    border-radius: 8px;
+    padding: 16px 20px;
+    text-align: center;
+    margin-top: 18px;
+  }
+  .cta-box .cta-headline {
+    font-size: 14pt;
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+  .cta-box .cta-phone {
+    font-size: 18pt;
+    font-weight: 800;
+    margin: 6px 0;
+  }
+  .cta-box .cta-sub {
+    font-size: 10pt;
+    opacity: 0.9;
+  }
+
+  .footer {
+    margin-top: 14px;
+    padding-top: 8px;
+    text-align: center;
+    font-size: 8pt;
+    color: #777;
+  }
+
+  /* Requirement chain */
+  .chain {
+    margin: 10px 0 14px 0;
+  }
+  .chain-step {
+    margin-bottom: 12px;
+    padding-left: 0;
+  }
+  .chain-label {
+    font-weight: 700;
+    font-size: 10.5pt;
+    color: #104b95;
+    margin-bottom: 4px;
+  }
+  .chain-label .step-num {
+    background: #104b95;
+    color: white;
+    border-radius: 50%;
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    font-size: 9pt;
+    margin-right: 4px;
+  }
+  .chain-quote {
+    background: #f8f8f8;
+    border-left: 3px solid #104b95;
+    padding: 6px 10px;
+    font-size: 9.5pt;
+    font-style: italic;
+    color: #333;
+    margin: 4px 0;
+  }
+  .chain-note {
+    font-size: 9.5pt;
+    color: #555;
+    margin-top: 3px;
+    padding-left: 24px;
+  }
+
+  @media print {
+    body { padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="company-name" style="text-align: center;"><img src="mac-septic-icon-darkblue.png" alt="MAC Septic" style="max-width: 280px; height: auto; display: inline-block;"></div>
+  <div class="tagline">Nearly 30 Years of Experience &bull; TCEQ Licensed &bull; 512.737.8711</div>
+  <div class="doc-title">Does Texas Law Require a Maintenance Contract?</div>
+</div>
+
+<div class="big-law">
+  <div class="law-text">Yes. If you have an aerobic septic system, Texas state law requires you to have an active maintenance contract with a TCEQ-licensed provider.</div>
+  <div class="citation">30 Texas Administrative Code, Chapter 285, Subchapter H (&#167;285.90&ndash;285.91) &bull; Texas Health &amp; Safety Code, Chapter 366</div>
+</div>
+
+<!-- WHO DOES THIS APPLY TO -->
+<div class="section-header blue-header">Who Does This Apply To?</div>
+
+<div class="columns">
+  <div class="col">
+    <div class="callout callout-red" style="height: 100%;">
+      <strong>Contract REQUIRED by Law</strong>
+      &bull; All aerobic treatment systems<br>
+      &bull; Spray distribution systems<br>
+      &bull; Drip irrigation systems<br>
+      &bull; Surface application systems<br>
+      &bull; Non-standard treatment systems<br>
+      <span style="font-size: 9pt; color: #666; margin-top: 6px; display: block;">Applies to ALL systems &mdash; old and new. There is no grandfathering.</span>
+    </div>
+  </div>
+  <div class="col">
+    <div class="callout callout-green" style="height: 100%;">
+      <strong>Contract NOT Required</strong>
+      &bull; Conventional septic (gravity-fed)<br>
+      &bull; Standard leach field / drain field<br><br>
+      <span style="font-size: 9pt; color: #666;">Conventional systems should still be pumped every 3&ndash;5 years, but there is no legal requirement for a maintenance contract.</span>
+    </div>
+  </div>
+</div>
+
+<!-- FAQ -->
+<div class="section-header green-header">Common Questions</div>
+
+<div class="faq">
+  <div class="faq-q">Q: My system was installed 20 years ago. Does this still apply to me?</div>
+  <div class="faq-a"><span class="bold">Yes.</span> The maintenance contract requirement applies to every aerobic system in Texas, regardless of when it was installed. There is no grandfathering or exemption for older systems.</div>
+
+  <div class="faq-q">Q: Can I maintain the system myself instead of hiring a company?</div>
+  <div class="faq-a">TCEQ rules allow homeowner self-maintenance on single-family residences <span class="bold">after the first 2 years</span>. However, most Central Texas counties &mdash; including Travis, Hays, and Bexar &mdash; have adopted <span class="bold">stricter local rules</span> that require a licensed provider regardless. Check with your county.</div>
+
+  <div class="faq-q">Q: What does a maintenance visit include?</div>
+  <div class="faq-a">A licensed provider inspects all four compartments, tests disinfection (chlorine/UV), checks the aerator and pumps, tests alarms, inspects spray heads or drip lines, measures sludge levels, and files a report with the county. Visits are typically quarterly.</div>
+
+  <div class="faq-q">Q: How much does a maintenance contract cost?</div>
+  <div class="faq-a">Most providers in Central Texas charge <span class="bold">$250&ndash;$500 per year</span> for quarterly service. That's less than $1.50/day to protect a system that costs $15,000&ndash;$30,000+ to replace.</div>
+</div>
+
+<!-- WHAT HAPPENS WITHOUT A CONTRACT -->
+<div class="section-header red-header">What Happens If You Don't Have a Contract?</div>
+
+<table class="consequence-table">
+  <thead>
+    <tr>
+      <th style="width: 30%;">Consequence</th>
+      <th>Details</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="bold">Notice of Violation</span></td>
+      <td>The county sends a written notice. You typically have 30 days to get a contract in place.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Daily Fines</span></td>
+      <td>Counties can impose fines of <span class="red">$50&ndash;$200 per day</span> of non-compliance.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Home Sale Complications</span></td>
+      <td>Most counties now require proof of an active contract and a passing inspection at closing. A lapsed contract can <span class="red">delay or block your home sale</span>.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">TCEQ Penalties</span></td>
+      <td>For serious violations, TCEQ can impose penalties up to <span class="red">$10,000 per day</span> under Texas Water Code &#167;7.102.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">System Failure</span></td>
+      <td>Without regular maintenance, aerobic systems fail. A failed system means raw sewage on your property, health hazards, and a <span class="red">$15,000&ndash;$30,000+ replacement bill</span>.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- COUNTY ENFORCEMENT -->
+<div class="section-header amber-header">Your County Enforces This</div>
+
+<table class="county-table">
+  <thead>
+    <tr>
+      <th>County</th>
+      <th>Enforcement</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="bold">Travis</span></td>
+      <td>Aggressive</td>
+      <td>TNR actively enforces. Providers must report to county. Extra rules for Lake Travis/Austin watershed.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Hays</span></td>
+      <td>Aggressive</td>
+      <td>Edwards Aquifer Recharge Zone = stricter scrutiny. Has pursued fines against homeowners.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Bexar</span></td>
+      <td>Strict</td>
+      <td>Requires reporting every 4 months. SA Metro Health District inspects and cites.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Comal</span></td>
+      <td>Active</td>
+      <td>Sending notices for lapsed contracts. Proof required at permit and property transfer.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Guadalupe</span></td>
+      <td>Standard</td>
+      <td>Follows TCEQ baseline. Complaints trigger inspections.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Williamson</span></td>
+      <td>Active</td>
+      <td>Growing enforcement in unincorporated areas. Proof required for property sales.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Bastrop</span></td>
+      <td>Active</td>
+      <td>Environmental enforcement growing with county population.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- THE REQUIREMENT CHAIN -->
+<div class="section-header green-header">Where Exactly Does the Law Say This?</div>
+
+<div class="callout callout-amber" style="font-size: 9.5pt;">
+  <strong>What This Means in Plain English</strong>
+  Every aerobic system in Texas must have a maintenance contract (&sect;285.33(c)(3)). For the first 2 years, it must be with a licensed provider (&sect;285.7(c)). After 2 years, single-family homeowners can technically self-maintain (&sect;285.7(d)(4)) &mdash; but most Central Texas counties have adopted stricter local rules that require a licensed provider regardless. If your contract lapses, you have 30 days to get a new one (&sect;285.7(d)).
+</div>
+
+<div class="chain">
+  <div class="chain-step">
+    <div class="chain-label"><span class="step-num">1</span> &sect;285.7(a) &mdash; The Gateway</div>
+    <div class="chain-quote">&ldquo;Maintenance contract requirements for all on-site sewage facilities (OSSFs) are identified in &sect;285.91(12) of this title. The permit holder shall ensure that the OSSF is properly operated and maintained in accordance with this chapter.&rdquo;</div>
+  </div>
+
+  <div class="chain-step">
+    <div class="chain-label"><span class="step-num">2</span> &sect;285.33(c)(3) &mdash; The Requirement for Aerobic Systems</div>
+    <div class="chain-quote">&ldquo;Ongoing maintenance contracts are required for all proprietary treatment systems except those systems maintained by homeowners under the provisions of &sect;285.7(d)(4).&rdquo;</div>
+    <div class="chain-note">&ldquo;Proprietary treatment systems&rdquo; = aerobic units (Norweco, Fuji Clean, Clearstream, Jet, etc.). Every aerobic system sold in Texas is a proprietary treatment system.</div>
+  </div>
+
+  <div class="chain-step">
+    <div class="chain-label"><span class="step-num">3</span> &sect;285.7(d) &mdash; Contract Is Mandatory; Self-Maintenance Is the Exception</div>
+    <div class="chain-quote">&ldquo;If a maintenance contract is discontinued or terminated, the owner shall contract with another maintenance provider and provide the permitting authority with a copy of the new signed maintenance contract no later than 30 days after termination, unless the owner meets the requirements of paragraph (4).&rdquo;</div>
+  </div>
+
+  <div class="chain-step">
+    <div class="chain-label"><span class="step-num">4</span> &sect;285.7(d)(4) &mdash; The Self-Maintenance Exception (and Its Limits)</div>
+    <div class="chain-quote">&ldquo;At the end of the initial two-year service policy, the owner of an OSSF for a single family residence shall either maintain the system personally or obtain a new maintenance contract.&rdquo;</div>
+    <div class="chain-quote">&ldquo;An owner may not maintain an OSSF under the provisions of this section for commercial, speculative residential, or multifamily property.&rdquo;</div>
+  </div>
+
+  <div class="chain-step">
+    <div class="chain-label"><span class="step-num">5</span> &sect;285.7(c) &mdash; First 2 Years: No Self-Maintenance Allowed</div>
+    <div class="chain-quote">&ldquo;The initial two-year service policy shall be effective for two years from the date the OSSF is first used&hellip; the individual fulfilling the service policy shall be a maintenance provider or a maintenance technician working under the supervision of a maintenance provider.&rdquo;</div>
+  </div>
+</div>
+
+<!-- REFERENCES -->
+<div class="section-header blue-header">References &amp; Source Documents</div>
+
+<div style="font-size: 9pt; line-height: 1.6; margin-bottom: 12px;">
+
+<p style="margin-bottom: 8px;"><span class="bold">State Rules &amp; Statutes</span></p>
+<table style="width: 100%; font-size: 9pt; border-collapse: collapse; margin-bottom: 10px;">
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 4px 8px; width: 35%; vertical-align: top;"><span class="bold">30 TAC Chapter 285</span><br>On-Site Sewage Facilities</td>
+    <td style="padding: 4px 8px; vertical-align: top;">The primary TCEQ rule governing all OSSF systems in Texas. Sections cited: &sect;285.2 (Definitions), &sect;285.7 (Maintenance Requirements), &sect;285.33(c)(3) (Proprietary System Contracts), &sect;285.91(12) (Tables &mdash; contract/testing requirements by system type).<br>
+    <a href="https://newtools.cira.state.tx.us/upload/page/0983/docs/LandDevAndEmerg/30%20TAC%20Chapter%20285.pdf" style="color: #2aabe1;">Full Chapter PDF &rarr; newtools.cira.state.tx.us</a><br>
+    <a href="https://texreg.sos.state.tx.us/public/readtac$ext.ViewTAC?tac_view=4&ti=30&pt=1&ch=285" style="color: #2aabe1;">Online viewer &rarr; Texas Secretary of State (texreg.sos.state.tx.us)</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 4px 8px; vertical-align: top;"><span class="bold">Texas Health &amp; Safety Code, Chapter 366</span><br>On-Site Sewage Disposal Systems</td>
+    <td style="padding: 4px 8px; vertical-align: top;">The enabling statute that gives TCEQ rulemaking authority and grants counties enforcement power over OSSF. Section 366.0515 specifically addresses maintenance requirements.<br>
+    <a href="https://statutes.capitol.texas.gov/Docs/HS/htm/HS.366.htm" style="color: #2aabe1;">Full Chapter &rarr; statutes.capitol.texas.gov</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 4px 8px; vertical-align: top;"><span class="bold">Texas Water Code, Chapter 7</span><br>Enforcement &amp; Penalties</td>
+    <td style="padding: 4px 8px; vertical-align: top;">Section 7.102 establishes maximum administrative penalties (up to $25,000/day) for violations of environmental regulations including OSSF rules.<br>
+    <a href="https://statutes.capitol.texas.gov/Docs/WA/htm/WA.7.htm" style="color: #2aabe1;">Full Chapter &rarr; statutes.capitol.texas.gov</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 4px 8px; vertical-align: top;"><span class="bold">30 TAC Chapter 213</span><br>Edwards Aquifer Protection</td>
+    <td style="padding: 4px 8px; vertical-align: top;">Additional requirements for OSSF on the Edwards Aquifer Recharge and Contributing Zones (applies to parts of Hays, Comal, Travis, Bexar, and Williamson counties).<br>
+    <a href="https://texreg.sos.state.tx.us/public/readtac$ext.ViewTAC?tac_view=4&ti=30&pt=1&ch=213" style="color: #2aabe1;">Online viewer &rarr; texreg.sos.state.tx.us</a></td>
+  </tr>
+</table>
+
+<p style="margin-bottom: 8px;"><span class="bold">TCEQ Resources</span></p>
+<table style="width: 100%; font-size: 9pt; border-collapse: collapse; margin-bottom: 10px;">
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 4px 8px; width: 35%; vertical-align: top;">TCEQ OSSF Maintenance Page</td>
+    <td style="padding: 4px 8px;"><a href="https://www.tceq.texas.gov/permitting/ossf/ossfmaintenance.html" style="color: #2aabe1;">tceq.texas.gov/permitting/ossf/ossfmaintenance.html</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 4px 8px; vertical-align: top;">TCEQ OSSF Homeowner Info</td>
+    <td style="padding: 4px 8px;"><a href="https://www.tceq.texas.gov/permitting/ossf/ossfhomeowners.html" style="color: #2aabe1;">tceq.texas.gov/permitting/ossf/ossfhomeowners.html</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 4px 8px; vertical-align: top;">TCEQ Septic Basics</td>
+    <td style="padding: 4px 8px;"><a href="https://www.tceq.texas.gov/assistance/water/fyiossfs.html" style="color: #2aabe1;">tceq.texas.gov/assistance/water/fyiossfs.html</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 4px 8px; vertical-align: top;">TCEQ Enforcement Process</td>
+    <td style="padding: 4px 8px;"><a href="https://www.tceq.texas.gov/compliance/enforcement/process.html" style="color: #2aabe1;">tceq.texas.gov/compliance/enforcement/process.html</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 4px 8px; vertical-align: top;">TCEQ Main Phone</td>
+    <td style="padding: 4px 8px;">512-239-1000</td>
+  </tr>
+</table>
+</div>
+
+<!-- CTA -->
+<div class="cta-box">
+  <div class="cta-headline">Get Covered Today</div>
+  <div class="cta-sub">MAC Septic is a TCEQ-licensed maintenance provider serving Central Texas.<br>
+  We handle everything: inspections, testing, reporting to your county, and repairs.</div>
+  <div class="cta-phone">512.737.8711</div>
+  <div class="cta-sub">macseptic.com &bull; will@macseptic.com</div>
+</div>
+
+<div class="footer">
+  TCEQ Licensed Maintenance Provider &bull; Nearly 30 years of industry experience &bull; This document is for informational purposes and does not constitute legal advice. For official regulatory guidance, contact TCEQ or your county environmental health office.
+</div>
+
+</body>
+</html>

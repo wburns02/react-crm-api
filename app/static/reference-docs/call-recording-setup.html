@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Call Recording Setup - MAC Septic</title>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: letter; margin: 0.5in 0.6in; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Albert Sans', 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #1a1a1a;
+    max-width: 8.5in;
+    margin: 0 auto;
+    padding: 0.4in 0.5in;
+  }
+
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #104b95;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+  .company-name { text-align: center; }
+  .company-name img { max-width: 280px; height: auto; display: inline-block; }
+  .tagline { font-size: 9pt; color: #555; letter-spacing: 0.5px; margin-top: 4px; }
+  .doc-title {
+    font-size: 16pt; font-weight: 800; color: #104b95;
+    margin-top: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+  }
+  .doc-subtitle {
+    font-size: 10pt; color: #444; font-style: italic; margin-top: 3px;
+  }
+
+  .bold { font-weight: 700; }
+  .red { color: #b91c1c; font-weight: 700; }
+  .blue { color: #104b95; font-weight: 700; }
+  .orange { color: #da6833; font-weight: 700; }
+  .mono { font-family: 'Menlo', 'Consolas', monospace; font-size: 9pt; }
+
+  .section-header {
+    font-size: 12pt; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+    padding: 7px 12px; margin-bottom: 10px; margin-top: 18px; border-radius: 3px;
+    color: white;
+  }
+  .blue-header { background: #104b95; }
+  .orange-header { background: #da6833; }
+  .dark-header { background: #112a5c; }
+  .red-header { background: #b91c1c; }
+
+  .callout {
+    border-radius: 4px; padding: 10px 14px; margin-bottom: 14px; font-size: 10pt;
+  }
+  .callout-blue { background: #e8f1fa; border-left: 4px solid #104b95; }
+  .callout-orange { background: #fef3eb; border-left: 4px solid #da6833; }
+  .callout-red { background: #fef2f2; border-left: 4px solid #b91c1c; }
+  .callout-cyan { background: #e6f7fc; border-left: 4px solid #2aabe1; }
+  .callout-green { background: #ecfdf5; border-left: 4px solid #059669; }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 10.5pt; }
+
+  p { margin-bottom: 8px; }
+  ul, ol { padding-left: 22px; margin: 4px 0 10px 0; }
+  li { margin-bottom: 4px; }
+
+  /* Vendor comparison table */
+  .vendor-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 14px 0;
+    font-size: 9pt;
+  }
+  .vendor-table th {
+    background: #104b95;
+    color: white;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .vendor-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  .vendor-table tr:nth-child(even) td { background: #f9fafb; }
+  .vendor-table .recommended {
+    background: #fef3eb !important;
+  }
+  .vendor-table .recommended td {
+    background: #fef3eb !important;
+  }
+  .rec-badge {
+    display: inline-block;
+    background: #da6833;
+    color: white;
+    font-size: 7.5pt;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    margin-left: 4px;
+  }
+
+  /* Winner card */
+  .winner-card {
+    border: 2px solid #da6833;
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 12px 0 16px 0;
+    page-break-inside: avoid;
+  }
+  .winner-card-header {
+    background: #da6833;
+    color: white;
+    padding: 10px 14px;
+    font-weight: 800;
+    font-size: 13pt;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .winner-card-header .price {
+    font-size: 11pt;
+    background: rgba(255,255,255,0.2);
+    padding: 3px 10px;
+    border-radius: 12px;
+  }
+  .winner-card-body {
+    padding: 12px 16px;
+    background: #fff;
+  }
+  .winner-card-body h4 {
+    color: #104b95;
+    font-size: 10.5pt;
+    margin: 8px 0 4px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .winner-card-body h4:first-child { margin-top: 0; }
+
+  /* Runner-up cards */
+  .runner-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .runner-card-header {
+    background: #f3f4f6;
+    color: #104b95;
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 10.5pt;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+  }
+  .runner-card-header .rank {
+    background: #104b95;
+    color: white;
+    font-size: 8pt;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 800;
+  }
+  .runner-card-body {
+    padding: 8px 14px;
+    font-size: 9.5pt;
+  }
+
+  /* Checklist */
+  .checklist {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 8px 0 14px 0;
+    page-break-inside: avoid;
+  }
+  .checklist-item {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 6px;
+    font-size: 9.5pt;
+  }
+  .checklist-item .checkbox {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #104b95;
+    border-radius: 3px;
+    margin-right: 8px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+  .checklist-item .text { flex: 1; }
+  .checklist-item .text strong { color: #104b95; }
+
+  /* Script box */
+  .script {
+    background: #f8fafc;
+    border-left: 3px solid #2aabe1;
+    padding: 10px 14px;
+    margin: 8px 0;
+    font-size: 10pt;
+    font-style: italic;
+    color: #333;
+  }
+  .script::before { content: '"'; color: #2aabe1; font-size: 16pt; font-weight: 800; }
+  .script::after { content: '"'; color: #2aabe1; font-size: 16pt; font-weight: 800; }
+
+  /* Code block */
+  .code-block {
+    background: #1e293b;
+    color: #e2e8f0;
+    font-family: 'Menlo', 'Consolas', monospace;
+    font-size: 8.5pt;
+    padding: 12px 14px;
+    border-radius: 4px;
+    margin: 8px 0 12px 0;
+    overflow-x: auto;
+    line-height: 1.45;
+  }
+  .code-block .key { color: #7dd3fc; }
+  .code-block .str { color: #fcd34d; }
+  .code-block .cmt { color: #64748b; font-style: italic; }
+
+  /* Policy section */
+  .policy {
+    border: 1px solid #104b95;
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin: 6px 0 12px 0;
+    background: #f8fafc;
+    page-break-inside: avoid;
+  }
+  .policy-title {
+    font-weight: 800;
+    color: #104b95;
+    font-size: 10.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 3px;
+  }
+
+  .footer {
+    margin-top: 18px;
+    padding-top: 10px;
+    text-align: center;
+    font-size: 8pt;
+    color: #777;
+    border-top: 2px solid #104b95;
+  }
+
+  @media print {
+    body { padding: 0; }
+    .winner-card, .runner-card, .checklist, .policy, .callout { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="company-name"><img src="mac-septic-icon-darkblue.png" alt="MAC Septic"></div>
+  <div class="tagline">Nearly 30 Years of Experience &bull; TCEQ Licensed &bull; 512.737.8711</div>
+  <div class="doc-title">Call Recording Setup</div>
+  <div class="doc-subtitle">VoIP Selection, Compliance, Policy &amp; Training for Dannia's Outbound Campaign</div>
+</div>
+
+<div class="callout callout-blue">
+  <strong>Why We're Doing This</strong>
+  Dannia's outbound sales calls capture two legally significant moments: (1) the verbal "yes" to contract terms and (2) the auto-bill authorization. Recording those moments is our single best defense against TCPA complaints, credit card chargebacks, and "I never agreed to that" disputes. Texas is a one-party consent state (<span class="mono">Tex. Penal Code &sect; 16.02</span>), so recording is legal as long as one party &mdash; Dannia &mdash; knows. Best practice is still to announce recording at the top of every call. This document selects the tool, configures it, and trains Dannia.
+</div>
+
+<!-- SECTION 1: REQUIREMENTS -->
+<div class="section-header blue-header">Part 1 &mdash; Requirements Recap</div>
+
+<ul>
+  <li><span class="bold">VoIP softphone</span> on Dannia's computer &mdash; no physical desk phone.</li>
+  <li><span class="bold">Local Texas caller ID</span> &mdash; prefer 512 (Austin) or 210 (San Antonio).</li>
+  <li><span class="bold">Automatic call recording</span> with configurable opening announcement.</li>
+  <li><span class="bold">Cloud storage &ge; 2 years</span>, searchable by phone number, date, and customer name.</li>
+  <li><span class="bold">Webhook integration</span> to POST recording URL + call metadata to Mac Service Platform (FastAPI backend).</li>
+  <li><span class="bold">Compliance:</span> opt-out handling, DNC enforcement, call reason codes.</li>
+  <li><span class="bold">Power or preview dialer</span> to sustain 50&ndash;150 calls/day.</li>
+  <li><span class="bold">Call dispositions:</span> voicemail, not interested, callback, sold, DNC, wrong number.</li>
+  <li><span class="bold">Budget:</span> &lt; $200/user/month, ideally much less.</li>
+</ul>
+
+<!-- SECTION 2: VENDOR COMPARISON -->
+<div class="section-header dark-header">Part 2 &mdash; Vendor Comparison (2026 Pricing)</div>
+
+<table class="vendor-table">
+  <thead>
+    <tr>
+      <th style="width: 14%">Tool</th>
+      <th style="width: 16%">Recommended Plan</th>
+      <th style="width: 10%">Price / seat</th>
+      <th style="width: 10%">Power Dialer</th>
+      <th style="width: 10%">Auto Record</th>
+      <th style="width: 10%">Webhooks</th>
+      <th style="width: 30%">Verdict</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="recommended">
+      <td><span class="bold">JustCall</span><span class="rec-badge">Pick</span></td>
+      <td>Pro (annual)</td>
+      <td>$49/mo</td>
+      <td>Yes (Sales Dialer)</td>
+      <td>Yes</td>
+      <td>Robust (100+ events)</td>
+      <td>Best fit: single-seat friendly, solid dialer, clean webhook &amp; REST API for FastAPI, 512/210 numbers, 1&ndash;year retention on Pro, under half the budget.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Kixie</span></td>
+      <td>Professional + Unlimited Mins</td>
+      <td>~$95/mo</td>
+      <td>Yes (single-line PowerCall)</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Excellent dialer, Connection Boost helps TX answer rates, but pricing is opaque and HubSpot-centric.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Aircall</span></td>
+      <td>Professional</td>
+      <td>$50/mo <span class="red">(3-seat min)</span></td>
+      <td>Basic</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>3-license minimum = $150/mo floor even for solo Dannia. Only makes sense at 3 seats.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Dialpad</span></td>
+      <td>Ai Sales Center</td>
+      <td>~$95/mo</td>
+      <td>Yes</td>
+      <td>Yes + AI transcription</td>
+      <td>Yes</td>
+      <td>Great AI built-in but 2&times; the price of JustCall for similar dialing capability.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">RingCentral</span></td>
+      <td>RingCX + RingSense</td>
+      <td>~$125/mo</td>
+      <td>Yes (RingCX)</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>RingEX alone has no real sales dialer; you end up stacking RingCX + RingSense. Too heavy for a solo seat.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">CloudTalk</span></td>
+      <td>Expert</td>
+      <td>$50/mo <span class="red">(3-seat min)</span></td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>Good product, wrong minimum for 1-seat start.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">PhoneBurner</span></td>
+      <td>Professional</td>
+      <td>$165/mo</td>
+      <td>Yes (core product)</td>
+      <td>Yes</td>
+      <td>Yes (Open API)</td>
+      <td>Dialer-first, weak CRM. Overkill for 50&ndash;150/day; built for 300+/day outbound shops.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">CallRail</span></td>
+      <td>&mdash;</td>
+      <td>$50+/mo</td>
+      <td class="red">No</td>
+      <td>Inbound</td>
+      <td>Yes</td>
+      <td><span class="red">Wrong category.</span> Call tracking / ad attribution, not outbound sales. Skip.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout callout-orange">
+  <strong>Why JustCall Pro Wins</strong>
+  It's the only tool on the list that hits <em>every</em> requirement at a single-seat price under $60/month all-in: 512/210 local number ($2&ndash;5), auto-recording with configurable announcement, a real sales dialer (50&ndash;150/day is well within range), webhooks that deliver <span class="mono">call.recording.ready</span> with the MP3 URL directly to a FastAPI endpoint, 1-year cloud retention with search by phone/date/name, dispositions, and DNC list enforcement. No 3-seat minimum, no contact-center overhead, no AI tax.
+</div>
+
+<!-- SECTION 3: RECOMMENDATION -->
+<div class="section-header orange-header">Part 3 &mdash; Ranked Recommendation</div>
+
+<div class="winner-card">
+  <div class="winner-card-header">
+    <span>&#11088; #1 &mdash; JustCall Pro</span>
+    <span class="price">$49/user/mo + ~$10 number &amp; usage &asymp; $60/mo all-in</span>
+  </div>
+  <div class="winner-card-body">
+    <h4>What You Get</h4>
+    <ul>
+      <li>Softphone (web + desktop app + iOS/Android) &mdash; Dannia uses the browser or desktop app</li>
+      <li>Local 512 or 210 Texas number (&lt; $5/mo per DID)</li>
+      <li>Automatic call recording, both legs, configurable announcement</li>
+      <li>Sales Dialer (preview + auto) &mdash; hits 80&ndash;120 dials/hour easily</li>
+      <li>Call dispositions with custom reason codes</li>
+      <li>DNC list + one-click opt-out tagging</li>
+      <li>1-year cloud retention on Pro (upgrade to Business for unlimited if needed)</li>
+      <li>Search recordings by phone number, date, customer name, tag, disposition</li>
+      <li>100+ native integrations (HubSpot, Salesforce, Pipedrive) <span class="bold">plus</span> full webhook + REST API</li>
+      <li>SMS + MMS included (1,000 segments/month on Pro)</li>
+    </ul>
+
+    <h4>Why It Beats the Rest</h4>
+    <ul>
+      <li><span class="bold">Single-seat friendly.</span> No 3-license minimum. Start with Dannia, add seats as needed.</li>
+      <li><span class="bold">Webhook simplicity.</span> <span class="mono">call_completed</span> and <span class="mono">call_recording_saved</span> events deliver everything Mac Service Platform needs (caller ID, direction, duration, recording URL, disposition). No polling required.</li>
+      <li><span class="bold">Budget room.</span> At $60/mo solo or $150/mo for 3 seats, we're well under the $200/user ceiling. Room to upgrade to Business ($89) later for unlimited retention + AI call coaching.</li>
+      <li><span class="bold">Right-sized dialer.</span> PhoneBurner/Kixie PowerDialer are overkill for 50&ndash;150/day; JustCall's Sales Dialer is exactly sized for the use case.</li>
+    </ul>
+
+    <h4>Monthly Cost Breakdown</h4>
+    <ul>
+      <li>JustCall Pro (annual billing) &mdash; <span class="bold">$49.00</span></li>
+      <li>Local 512 DID &mdash; <span class="bold">~$3.00</span></li>
+      <li>Domestic minutes (~5,000/mo est.) &mdash; <span class="bold">~$5.00</span></li>
+      <li>SMS segments (within Pro cap) &mdash; <span class="bold">$0.00</span></li>
+      <li><span class="blue">TOTAL (Dannia solo):</span> <span class="bold">~$57&ndash;$60/month</span></li>
+      <li><span class="blue">TOTAL (3 seats):</span> <span class="bold">~$155/month</span></li>
+    </ul>
+  </div>
+</div>
+
+<div class="runner-card">
+  <div class="runner-card-header">
+    <span>Kixie Professional &mdash; if HubSpot is the primary CRM</span>
+    <span class="rank">#2</span>
+  </div>
+  <div class="runner-card-body">
+    ~$65/user/mo + $30 unlimited minutes add-on = ~$95/user/mo. Connection Boost feature boosts TX answer rates with matching local-presence caller IDs. Deeper HubSpot integration than JustCall. Downside: pricing is quote-only, and it's &sim;$35/mo more than JustCall for roughly the same feature set.
+  </div>
+</div>
+
+<div class="runner-card">
+  <div class="runner-card-header">
+    <span>Aircall Professional &mdash; only if committing to 3 seats from day one</span>
+    <span class="rank">#3</span>
+  </div>
+  <div class="runner-card-body">
+    $50/user/mo but forced 3-license minimum = $150/mo floor. Solid product, good Salesforce/HubSpot integrations, but the minimum kills it for a solo Dannia start. Revisit if the campaign scales to 3+ agents and we want a broader SMB ecosystem.
+  </div>
+</div>
+
+<div class="callout callout-red">
+  <strong>Avoid These</strong>
+  <ul style="margin-top: 4px;">
+    <li><span class="bold">CallRail</span> &mdash; wrong category (call tracking, not sales dialing).</li>
+    <li><span class="bold">RingCentral RingCX</span> &mdash; too heavy, too expensive, built for 50+ agent call centers.</li>
+    <li><span class="bold">PhoneBurner</span> &mdash; $165+/mo and weak CRM; justified only for pure outbound shops doing 300+ dials/day.</li>
+    <li><span class="bold">Dialpad Ai Sales Center</span> &mdash; nearly 2&times; JustCall's price for marginal AI uplift.</li>
+  </ul>
+</div>
+
+<!-- SECTION 4: SETUP CHECKLIST -->
+<div class="section-header blue-header">Part 4 &mdash; Setup Checklist</div>
+
+<div class="checklist">
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>1. Create JustCall account.</strong> Sign up at justcall.io, select Pro plan, annual billing, 1 seat. Use billing@macseptic.com as the admin email.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>2. Provision Texas number.</strong> Settings &rarr; Phone Numbers &rarr; Add Number &rarr; USA &rarr; Texas &rarr; search 512 (Austin). If no good 512 available, try 210 (San Antonio). Assign to Dannia.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>3. Set caller ID name.</strong> Submit "MAC SEPTIC" as the outbound Caller ID Name (CNAM). Propagation takes 24&ndash;72 hours but worth it for pickup rates.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>4. Enable automatic call recording.</strong> Settings &rarr; Call Recording &rarr; Automatic &rarr; Inbound + Outbound &rarr; Both Sides. Toggle <em>"Play announcement to the called party"</em> = ON.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>5. Upload recording announcement audio.</strong> Record a 6&ndash;8 second WAV or MP3 using the approved script (Part 5 below). Upload under Call Recording &rarr; Announcement Audio.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>6. Configure retention.</strong> Settings &rarr; Data &amp; Privacy &rarr; Recording Retention &rarr; set to "Keep forever" (or 730 days minimum). Pro plan includes 1 year; request extended retention via support ticket if needed.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>7. Create call dispositions.</strong> Settings &rarr; Dispositions &rarr; Add: <span class="mono">Sold</span>, <span class="mono">Voicemail</span>, <span class="mono">Callback</span>, <span class="mono">Not Interested</span>, <span class="mono">DNC Request</span>, <span class="mono">Wrong Number</span>, <span class="mono">No Answer</span>, <span class="mono">Busy</span>. Mark <span class="mono">Sold</span> as "Positive" and <span class="mono">DNC Request</span> + <span class="mono">Wrong Number</span> as "Remove from list".</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>8. Import DNC list.</strong> Settings &rarr; DNC &rarr; Upload CSV of known opt-outs. Enable "Block outbound calls to DNC numbers" + "Auto-add to DNC on disposition".</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>9. Team permissions.</strong> Create role "Agent" (Dannia) with: make/receive calls, view own recordings, set dispositions. Admin role for Will only (full access incl. delete).</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>10. Configure webhook integration.</strong> Settings &rarr; Integrations &rarr; Webhooks &rarr; Add Endpoint. URL: <span class="mono">https://react-crm-api-production.up.railway.app/api/v2/webhooks/justcall</span>. Events: <span class="mono">call_completed</span>, <span class="mono">call_recording_saved</span>, <span class="mono">sms_received</span>. Auth: HMAC signing with secret stored in Railway env var <span class="mono">JUSTCALL_WEBHOOK_SECRET</span>.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>11. Build the FastAPI receiver.</strong> Add <span class="mono">app/api/v2/webhooks/justcall.py</span> that verifies the HMAC signature, parses the payload, and writes to <span class="mono">call_log</span> (disposition, duration, recording URL) and <span class="mono">activity_log</span>. Migration: add <span class="mono">recording_url</span>, <span class="mono">recording_provider</span>, <span class="mono">disposition</span> columns to <span class="mono">call_log</span>.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>12. Install softphone.</strong> Dannia downloads JustCall Desktop for Windows/Mac. Sign in. Test microphone + speaker. Enable browser extension for click-to-call from the CRM.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>13. Dial 3 test calls.</strong> Dial Will's cell, then two personal numbers. Verify: (a) announcement plays, (b) recording appears in Activity within 2 minutes, (c) webhook lands in Mac Service Platform, (d) disposition saved correctly.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>14. Go live.</strong> Load Dannia's first contact list, start dialing.</span></div>
+</div>
+
+<!-- SECTION 5: ANNOUNCEMENT SCRIPT -->
+<div class="section-header orange-header">Part 5 &mdash; Recording Announcement Script</div>
+
+<p>Texas is one-party consent, so we are <em>not</em> legally required to announce recording. But announcing:</p>
+<ul>
+  <li>Eliminates any ambiguity in a future dispute or TCPA complaint.</li>
+  <li>Covers us if the prospect later moves to an all-party consent state.</li>
+  <li>Sets the professional tone &mdash; "this is a legitimate business" &mdash; which actually improves close rates.</li>
+</ul>
+
+<p class="bold">The announcement should be short, clear, and offered at the very start before Dannia starts talking. Keep it under 8 seconds so it doesn't burn pickup energy.</p>
+
+<div class="callout callout-green">
+  <strong>Approved Announcement &mdash; record this as the WAV file</strong>
+  <div class="script">This call may be recorded for quality and training purposes. Thank you.</div>
+  <p style="font-size: 9pt; margin-top: 6px; margin-bottom: 0;">6 seconds. Professional female voice. Neutral tone, no urgency. This satisfies one-party consent, sets expectations, and doesn't scare the prospect into hanging up.</p>
+</div>
+
+<div class="callout callout-blue">
+  <strong>If the Prospect Objects to Recording</strong>
+  Dannia's response: <span style="font-style: italic;">"Absolutely, I understand. The recording is just for our quality and training &mdash; nothing is shared outside MAC Septic. If you'd like, I can make a note to delete this call's recording as soon as we hang up. Would that work for you?"</span> Then set disposition <span class="mono">Callback</span> + tag <span class="mono">no-recording-requested</span>, and Will deletes the recording from JustCall within 24 hours.
+</div>
+
+<!-- SECTION 6: POLICY -->
+<div class="section-header dark-header">Part 6 &mdash; Recording Retention, Access &amp; Deletion Policy</div>
+
+<div class="policy">
+  <div class="policy-title">6.1 &mdash; Retention</div>
+  All call recordings are kept for a minimum of <span class="bold">two (2) years</span> from the call date. Recordings tied to a signed maintenance contract are kept for the full duration of the contract plus two additional years after cancellation. Recordings flagged with disposition <span class="mono">Sold</span> are flagged "hold forever" and cannot be auto-purged.
+</div>
+
+<div class="policy">
+  <div class="policy-title">6.2 &mdash; Access Control</div>
+  <ul>
+    <li><span class="bold">Agent (Dannia)</span> &mdash; can listen to her own recordings, cannot delete, cannot export.</li>
+    <li><span class="bold">Admin (Will Burns)</span> &mdash; full access, can delete on written request, can export for legal or dispute purposes.</li>
+    <li><span class="bold">No third parties</span> have access to recordings without a signed written release from the customer OR a valid legal process (subpoena, court order).</li>
+  </ul>
+</div>
+
+<div class="policy">
+  <div class="policy-title">6.3 &mdash; Customer Dispute or Chargeback</div>
+  If a customer disputes a charge or contract, the admin pulls the recording within 24 hours, exports to MP3 + WAV, and attaches to the dispute packet along with the signed contract PDF and the auto-bill authorization timestamp. The recording is the primary evidence for authenticating the verbal "yes."
+</div>
+
+<div class="policy">
+  <div class="policy-title">6.4 &mdash; Law Enforcement or Legal Process</div>
+  If MAC Septic receives a subpoena, search warrant, or court order for call recordings, the admin (Will Burns) reviews the document with counsel before releasing any audio. Never hand over recordings based on a verbal request. Always require written legal process. Preserve a copy of the request and the response for MAC Septic's legal files.
+</div>
+
+<div class="policy">
+  <div class="policy-title">6.5 &mdash; Customer Deletion Requests</div>
+  If a customer asks in writing for their call recording to be deleted, the admin deletes it within 30 days and sends written confirmation. Exception: if the recording is material to an active legal dispute or fraud investigation, we may retain it under legal hold and inform the customer of that hold. Texas does not currently have a consumer "right to be forgotten" for business records, but we honor reasonable requests as a matter of customer respect.
+</div>
+
+<div class="policy">
+  <div class="policy-title">6.6 &mdash; Sensitive Information Redaction</div>
+  If a call captured credit card, Social Security, or driver's license numbers (even though our call script is designed to prevent this), the admin flags the recording for PCI redaction. We manually mute or truncate the sensitive portion of the audio before the recording is archived long-term. Keep the original flagged version in a locked admin-only folder for no more than 90 days.
+</div>
+
+<div class="policy">
+  <div class="policy-title">6.7 &mdash; Annual Audit</div>
+  Once per year, the admin reviews the JustCall recording archive, verifies retention settings match policy, purges any recordings older than the retention window (except "hold forever" flagged), and exports a summary report to the MAC Septic compliance folder.
+</div>
+
+<!-- SECTION 7: WEBHOOK / INTEGRATION -->
+<div class="section-header blue-header">Part 7 &mdash; FastAPI Webhook Receiver</div>
+
+<p>JustCall POSTs to our endpoint on every call completion and recording ready event. The receiver must:</p>
+<ol>
+  <li>Verify the HMAC-SHA256 signature header against <span class="mono">JUSTCALL_WEBHOOK_SECRET</span>.</li>
+  <li>Parse the JSON payload (event type, call SID, from/to, direction, duration, disposition, recording URL).</li>
+  <li>Insert or update <span class="mono">call_log</span> row matched by <span class="mono">external_call_id</span>.</li>
+  <li>Write to <span class="mono">activity_log</span> so the CRM activity feed shows the call.</li>
+  <li>Return HTTP 200 within 3 seconds &mdash; JustCall retries on timeout.</li>
+</ol>
+
+<div class="code-block">
+<span class="cmt"># app/api/v2/webhooks/justcall.py</span>
+<span class="key">from</span> fastapi <span class="key">import</span> APIRouter, Request, HTTPException, Header
+<span class="key">import</span> hmac, hashlib, os
+<span class="key">from</span> app.database <span class="key">import</span> async_session_maker
+<span class="key">from</span> app.models <span class="key">import</span> CallLog, ActivityLog
+
+router = APIRouter(prefix=<span class="str">"/webhooks"</span>)
+SECRET = os.environ[<span class="str">"JUSTCALL_WEBHOOK_SECRET"</span>].encode()
+
+<span class="key">def</span> verify_signature(raw: bytes, sig: str) -> bool:
+    expected = hmac.new(SECRET, raw, hashlib.sha256).hexdigest()
+    <span class="key">return</span> hmac.compare_digest(expected, sig or <span class="str">""</span>)
+
+@router.post(<span class="str">"/justcall"</span>)
+<span class="key">async def</span> justcall_webhook(
+    request: Request,
+    x_justcall_signature: str = Header(<span class="key">None</span>),
+):
+    raw = <span class="key">await</span> request.body()
+    <span class="key">if not</span> verify_signature(raw, x_justcall_signature):
+        <span class="key">raise</span> HTTPException(401, <span class="str">"invalid signature"</span>)
+
+    payload = <span class="key">await</span> request.json()
+    event = payload.get(<span class="str">"event"</span>)
+    data = payload.get(<span class="str">"data"</span>, {})
+
+    <span class="key">async with</span> async_session_maker() <span class="key">as</span> db:
+        <span class="cmt"># upsert by external_call_id</span>
+        existing = <span class="key">await</span> db.scalars(
+            select(CallLog).where(CallLog.external_call_id == data[<span class="str">"call_sid"</span>])
+        )
+        row = existing.first() <span class="key">or</span> CallLog(external_call_id=data[<span class="str">"call_sid"</span>])
+        row.from_number = data[<span class="str">"from"</span>]
+        row.to_number = data[<span class="str">"to"</span>]
+        row.direction = data[<span class="str">"direction"</span>]
+        row.duration_seconds = data.get(<span class="str">"duration"</span>, 0)
+        row.disposition = data.get(<span class="str">"disposition"</span>)
+        <span class="key">if</span> event == <span class="str">"call_recording_saved"</span>:
+            row.recording_url = data[<span class="str">"recording_url"</span>]
+            row.recording_provider = <span class="str">"justcall"</span>
+        db.add(row)
+        <span class="key">await</span> db.commit()
+
+    <span class="key">return</span> {<span class="str">"ok"</span>: <span class="key">True</span>}
+</div>
+
+<p class="bold">Alembic migration:</p>
+<div class="code-block">
+<span class="cmt"># alembic revision -m "add recording fields to call_log"</span>
+op.add_column(<span class="str">"call_log"</span>, sa.Column(<span class="str">"external_call_id"</span>, sa.String(64), index=<span class="key">True</span>))
+op.add_column(<span class="str">"call_log"</span>, sa.Column(<span class="str">"recording_url"</span>, sa.Text))
+op.add_column(<span class="str">"call_log"</span>, sa.Column(<span class="str">"recording_provider"</span>, sa.String(32)))
+op.add_column(<span class="str">"call_log"</span>, sa.Column(<span class="str">"disposition"</span>, sa.String(32)))
+</div>
+
+<!-- SECTION 8: DANNIA TRAINING -->
+<div class="section-header orange-header">Part 8 &mdash; Dannia Training Checklist</div>
+
+<div class="checklist">
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>Before the first call.</strong> Open JustCall Desktop. Verify green mic indicator. Verify the REC badge is visible in the call controls panel. If REC is gray or missing, stop &mdash; contact Will immediately.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>Verifying recording is on during a call.</strong> Look for the red recording dot next to the call timer. If it's missing, say: "I apologize, can I call you right back in 30 seconds? I'm having a technical issue." Hang up, reconnect, redial, use the second call for the conversation.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>What to say if announcement doesn't play.</strong> Open the call with the script: <em>"Hi, this is Dannia with MAC Septic. Quick heads-up, this call may be recorded for quality and training purposes."</em> Then continue with the normal opener. This manually satisfies the one-party announcement policy.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>Tagging a call.</strong> After hang-up, JustCall prompts for disposition &mdash; always set one. Choose <span class="mono">Sold</span>, <span class="mono">Voicemail</span>, <span class="mono">Callback</span>, <span class="mono">Not Interested</span>, <span class="mono">DNC Request</span>, <span class="mono">Wrong Number</span>, <span class="mono">No Answer</span>, or <span class="mono">Busy</span>. Never leave blank.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>DNC handling.</strong> If the prospect says "take me off your list", "don't call me again", or "remove me" &mdash; apologize once, confirm removal, then set disposition <span class="mono">DNC Request</span>. This auto-adds their number to the DNC list and blocks all future calls. Do not argue or pitch after a DNC request.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>What to do if recording fails mid-call.</strong> If the red REC dot disappears mid-call, finish the call naturally &mdash; do NOT hang up on the prospect. After hang-up, flag the call in JustCall notes: "Recording dropped at [time]." Then text Will immediately with the call SID so he can check JustCall support for recovery.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>If a prospect asks "Are you recording me?"</strong> Honest answer: <em>"Yes, this call is being recorded for quality and training purposes. Is that okay with you?"</em> If they say no, offer to continue with recording disabled or schedule a callback. Set disposition <span class="mono">Callback</span> + tag <span class="mono">no-recording-requested</span> and text Will to delete the recording.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>Sensitive information.</strong> Never repeat credit card numbers aloud. Direct the prospect to the e-signature link for payment capture. If they insist on giving a card over the phone, pause recording using the REC &rarr; Pause button, take the card info, resume recording immediately after. Set call tag <span class="mono">pci-pause-used</span> for audit.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>End-of-day review.</strong> Dannia reviews the call log in JustCall, verifies every call has a disposition set, flags anything weird (dropped calls, missing recordings, complaints) for Will. Takes 5 minutes.</span></div>
+  <div class="checklist-item"><span class="checkbox"></span><span class="text"><strong>Weekly call review.</strong> Will pulls 3 random recordings per week for quality coaching. Focus on: opening energy, objection handling, close technique, recording announcement landing cleanly.</span></div>
+</div>
+
+<!-- SECTION 9: ROLLOUT -->
+<div class="section-header blue-header">Part 9 &mdash; Rollout Plan</div>
+
+<ol>
+  <li><span class="bold">Day 0.</span> Will creates JustCall account, provisions 512 number, uploads announcement audio, configures recording + retention + dispositions.</li>
+  <li><span class="bold">Day 1.</span> Will builds and deploys the <span class="mono">/webhooks/justcall</span> endpoint on Mac Service Platform. Tests with JustCall's webhook tester UI.</li>
+  <li><span class="bold">Day 2.</span> Will runs 5 test calls (to himself, personal contacts, and one intentionally-rejected "no consent" test). Verifies recordings land, webhooks fire, dispositions save, DNC blocks a subsequent call.</li>
+  <li><span class="bold">Day 3.</span> Dannia training session (30 minutes) walking through this document's Part 8.</li>
+  <li><span class="bold">Day 4.</span> Dannia's first live shift &mdash; small list (20 contacts) to confirm everything works under real load.</li>
+  <li><span class="bold">Week 2.</span> Scale to full daily volume (50&ndash;150 calls). Will reviews the first week's recordings for coaching and any technical gaps.</li>
+  <li><span class="bold">Month 2.</span> Decision point: upgrade to JustCall Business ($89/seat) if we want unlimited retention + AI coaching, or stay on Pro.</li>
+</ol>
+
+<div class="callout callout-orange">
+  <strong>Quick Reference &mdash; Daily Dannia Commands</strong>
+  <ul style="margin-top: 4px;">
+    <li><span class="bold">Start:</span> Open JustCall Desktop &rarr; confirm green mic + visible REC badge &rarr; start dialer.</li>
+    <li><span class="bold">During call:</span> watch for red REC dot &mdash; if missing, apologize, hang up, redial.</li>
+    <li><span class="bold">After call:</span> set disposition. Always.</li>
+    <li><span class="bold">If DNC:</span> disposition = DNC Request. Do not argue. Move on.</li>
+    <li><span class="bold">End of day:</span> verify every call has a disposition. Flag anything weird for Will.</li>
+  </ul>
+</div>
+
+<div class="footer">
+  MAC Septic &bull; Nearly 30 Years of Experience &bull; TCEQ Licensed &bull; 512.737.8711 &bull; macseptic.com<br>
+  Call Recording Setup &bull; Document version 1.0 &bull; Prepared for Dannia's outbound campaign &bull; Confidential &mdash; internal use only
+</div>
+
+</body>
+</html>

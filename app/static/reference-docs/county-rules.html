@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>County OSSF Rules - MAC Septic</title>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  @page {
+    size: letter;
+    margin: 0.5in 0.6in;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Albert Sans', 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 10pt;
+    line-height: 1.45;
+    color: #1a1a1a;
+    max-width: 8.5in;
+    margin: 0 auto;
+    padding: 0.4in 0.5in;
+  }
+
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #104b95;
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+  .company-name {
+    font-size: 22pt;
+    font-weight: 800;
+    color: #104b95;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+  }
+  .tagline {
+    font-size: 9pt;
+    color: #555;
+    letter-spacing: 0.5px;
+  }
+  .doc-title {
+    font-size: 14pt;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .bold { font-weight: 700; }
+  .red { color: #b91c1c; font-weight: 700; }
+  .green { color: #104b95; font-weight: 700; }
+
+  .section-header {
+    font-size: 10.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 5px 10px;
+    margin-bottom: 8px;
+    margin-top: 14px;
+    border-radius: 3px;
+    color: white;
+  }
+  .green-header { background: #104b95; }
+  .red-header { background: #b91c1c; }
+  .amber-header { background: #da6833; }
+  .blue-header { background: #2aabe1; }
+
+  .callout {
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    font-size: 9.5pt;
+  }
+  .callout-green { background: #e8f1fa; border-left: 4px solid #104b95; }
+  .callout-red { background: #fef2f2; border-left: 4px solid #b91c1c; }
+  .callout-amber { background: #fef3eb; border-left: 4px solid #da6833; }
+  .callout-blue { background: #e6f7fc; border-left: 4px solid #2aabe1; }
+  .callout strong { display: block; margin-bottom: 3px; }
+
+  /* County cards */
+  .county-card {
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .county-card-header {
+    padding: 7px 12px;
+    font-weight: 700;
+    font-size: 11pt;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .county-card-header .county-phone {
+    font-size: 9pt;
+    font-weight: 400;
+    opacity: 0.9;
+  }
+  .county-card-body {
+    padding: 10px 12px;
+    font-size: 9.5pt;
+  }
+  .county-card-body ul {
+    padding-left: 16px;
+    margin: 4px 0;
+  }
+  .county-card-body ul li {
+    margin-bottom: 4px;
+  }
+
+  /* Enforcement level badges */
+  .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-aggressive { background: #fef2f2; color: #b91c1c; border: 1px solid #b91c1c; }
+  .badge-strict { background: #fef3eb; color: #92400e; border: 1px solid #da6833; }
+  .badge-active { background: #e6f7fc; color: #2aabe1; border: 1px solid #2aabe1; }
+  .badge-standard { background: #f3f4f6; color: #374151; border: 1px solid #9ca3af; }
+
+  /* Key difference highlight */
+  .key-diff {
+    background: #fef2f2;
+    border-left: 3px solid #b91c1c;
+    padding: 4px 8px;
+    margin: 6px 0;
+    font-size: 9pt;
+    font-weight: 600;
+  }
+
+  /* Comparison table */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 12px 0;
+    font-size: 8.5pt;
+  }
+  .compare-table th {
+    background: #104b95;
+    color: white;
+    padding: 5px 6px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .compare-table td {
+    padding: 5px 6px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  .compare-table tr:nth-child(even) td {
+    background: #f9fafb;
+  }
+  .compare-table .yes { color: #b91c1c; font-weight: 700; }
+  .compare-table .no { color: #104b95; font-weight: 700; }
+
+  .cta-box {
+    background: #104b95;
+    color: white;
+    border-radius: 8px;
+    padding: 14px 18px;
+    text-align: center;
+    margin-top: 14px;
+  }
+  .cta-box .cta-headline { font-size: 13pt; font-weight: 800; margin-bottom: 4px; }
+  .cta-box .cta-phone { font-size: 16pt; font-weight: 800; margin: 4px 0; }
+  .cta-box .cta-sub { font-size: 9pt; opacity: 0.9; }
+
+  .footer {
+    margin-top: 10px;
+    padding-top: 6px;
+    text-align: center;
+    font-size: 7.5pt;
+    color: #777;
+  }
+
+  @media print {
+    body { padding: 0; }
+    .county-card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="company-name" style="text-align: center;"><img src="mac-septic-icon-darkblue.png" alt="MAC Septic" style="max-width: 280px; height: auto; display: inline-block;"></div>
+  <div class="tagline">Nearly 30 Years of Experience &bull; TCEQ Licensed &bull; 512.737.8711</div>
+  <div class="doc-title">County-by-County Septic Rules for Central Texas</div>
+</div>
+
+<div class="callout callout-amber">
+  <strong>Why County Rules Matter</strong>
+  TCEQ sets the <span class="bold">minimum</span> standards for aerobic septic systems statewide (30 TAC Chapter 285). But your county acts as the local enforcer and can &mdash; and often does &mdash; adopt <span class="bold">stricter rules</span>. That means your obligations depend on where you live. Here's what each county requires beyond the state baseline.
+</div>
+
+<!-- QUICK COMPARISON TABLE -->
+<div class="section-header green-header">At a Glance</div>
+
+<table class="compare-table">
+  <thead>
+    <tr>
+      <th>Requirement</th>
+      <th>TCEQ Baseline</th>
+      <th>Travis</th>
+      <th>Hays</th>
+      <th>Bexar</th>
+      <th>Comal</th>
+      <th>Guadalupe</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="bold">Can you self-maintain?</span></td>
+      <td>Yes (after 2 yrs)</td>
+      <td class="yes">No</td>
+      <td class="yes">No</td>
+      <td class="yes">No</td>
+      <td class="no">Yes</td>
+      <td class="no">Yes*</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Reporting frequency</span></td>
+      <td>Every 4 months</td>
+      <td>Every 4 months</td>
+      <td>Every 4 months</td>
+      <td>Every 4 months</td>
+      <td>Every 4 months</td>
+      <td>Every 4 months</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Enforcement level</span></td>
+      <td>&mdash;</td>
+      <td><span class="badge badge-aggressive">Aggressive</span></td>
+      <td><span class="badge badge-aggressive">Aggressive</span></td>
+      <td><span class="badge badge-strict">Strict</span></td>
+      <td><span class="badge badge-active">Active</span></td>
+      <td><span class="badge badge-standard">Standard</span></td>
+    </tr>
+    <tr>
+      <td><span class="bold">Special zone rules</span></td>
+      <td>&mdash;</td>
+      <td>LCRA lake zone</td>
+      <td>Edwards Aquifer</td>
+      <td>SARA certified</td>
+      <td>Two-strike rule</td>
+      <td>1-acre min lot</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- TRAVIS COUNTY -->
+<div class="county-card">
+  <div class="county-card-header" style="background: #b91c1c;">
+    <span>Travis County &mdash; Transportation &amp; Natural Resources (TNR)</span>
+    <span class="county-phone">512-854-9383</span>
+  </div>
+  <div class="county-card-body">
+    <div class="key-diff">Self-maintenance: PROHIBITED &bull; Reporting: EVERY 4 MONTHS &bull; Governed by: Travis County Code Chapter 448</div>
+    <ul>
+      <li><span class="bold">Licensed provider required</span> &mdash; Travis County effectively prohibits homeowner self-maintenance on aerobic systems. You must have a contract with a licensed maintenance provider at all times.</li>
+      <li><span class="bold">Reporting every 4 months</span> &mdash; Providers must submit maintenance reports to the county at least once every 4 months. Reports submitted via the county's online portal.</li>
+      <li><span class="bold">Recorded affidavit</span> &mdash; An "Affidavit to the Public for OSSF Requiring Maintenance" is filed with the county, notifying future property owners of the maintenance obligation.</li>
+      <li><span class="bold">LCRA lake zone</span> &mdash; Properties within 2,000 feet of Lake Travis fall under LCRA jurisdiction (not Travis County). LCRA has its own separate OSSF rules and permitting. Contact: 512-578-3216.</li>
+      <li><span class="bold">Enforcement</span> &mdash; Daily inspection fees accrue until violations are corrected. Referral to County Attorney for civil penalties and/or criminal charges.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- HAYS COUNTY -->
+<div class="county-card">
+  <div class="county-card-header" style="background: #b91c1c;">
+    <span>Hays County &mdash; Development Services</span>
+    <span class="county-phone">512-393-2150</span>
+  </div>
+  <div class="county-card-body">
+    <div class="key-diff">Self-maintenance: PROHIBITED &bull; Reporting: EVERY 4 MONTHS &bull; Edwards Aquifer Protection Plan may be required</div>
+    <ul>
+      <li><span class="bold">Licensed provider required</span> &mdash; Hays County requires ongoing maintenance with a licensed provider for all aerobic/advanced treatment systems. The self-maintenance exception does not apply here.</li>
+      <li><span class="bold">Reporting every 4 months</span> &mdash; Providers submit maintenance reports at least once every 4 months with a specific inspection form format.</li>
+      <li><span class="bold">Edwards Aquifer Recharge Zone</span> &mdash; Properties on the recharge or contributing zone must provide proof of an Edwards Aquifer Protection Plan (30 TAC Chapter 213 requirements layered on top of Chapter 285).</li>
+      <li><span class="bold">All lot sizes</span> &mdash; A permit is required for all OSSF regardless of lot or acreage size.</li>
+      <li><span class="bold">Enforcement</span> &mdash; Hays County has pursued fines against homeowners with failed or unmaintained systems. Complaints: 512-393-2150, option 3.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- BEXAR COUNTY -->
+<div class="county-card">
+  <div class="county-card-header" style="background: #da6833;">
+    <span>Bexar County &mdash; Environmental Services</span>
+    <span class="county-phone">210-335-6700</span>
+  </div>
+  <div class="county-card-body">
+    <div class="key-diff">Self-maintenance: EFFECTIVELY PROHIBITED &bull; Reporting: EVERY 4 MONTHS &bull; SARA-certified providers</div>
+    <ul>
+      <li><span class="bold">Continuous service contract required</span> &mdash; Homeowners must maintain a service contract with a licensed provider and submit it to Bexar County. The language is mandatory, not optional.</li>
+      <li><span class="bold">Reporting every 4 months</span> &mdash; Providers must submit maintenance reports to Bexar County Post Construction at least once every 4 months.</li>
+      <li><span class="bold">SARA certification</span> &mdash; Maintenance provider certification must be approved by the San Antonio River Authority (SARA).</li>
+      <li><span class="bold">Lapse penalty</span> &mdash; If maintenance lapses for over 1 year or quarterly reports are not received, a violation letter is sent and a <span class="red">renewal permit with engineer certification</span> is required to bring the site back into compliance.</li>
+      <li><span class="bold">Conventional systems</span> &mdash; Must renew every 5 years via tank pumping receipt + $30 fee.</li>
+      <li><span class="bold">Seven violation categories</span> &mdash; Including expired permits, expired contracts, illegal discharge (most serious), inadequate capacity, unpermitted systems.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- COMAL COUNTY -->
+<div class="county-card">
+  <div class="county-card-header" style="background: #2aabe1;">
+    <span>Comal County &mdash; Environmental Health</span>
+    <span class="county-phone">830-608-2090</span>
+  </div>
+  <div class="county-card-body">
+    <div class="key-diff">Self-maintenance: ALLOWED (single-family) &bull; Reporting: EVERY 4 MONTHS &bull; Two-strike rule</div>
+    <ul>
+      <li><span class="bold">Homeowner self-maintenance allowed</span> &mdash; Single-family dwelling owners may self-maintain with no training requirement, no mandatory reports, and no notification to the county. Commercial properties cannot self-maintain.</li>
+      <li><span class="bold">Reporting every 4 months</span> &mdash; Licensed providers submit testing reports to the county at least once every 4 months, with annual provider registration required.</li>
+      <li><span class="bold">Two-strike rule</span> &mdash; If you receive <span class="red">two violations within 3 years</span>, you lose the self-maintenance privilege and must enter a mandatory licensed maintenance contract within 10 days.</li>
+      <li><span class="bold">10-day cure period</span> &mdash; After a violation notice, you have 10 days to correct it or enter a licensed contract.</li>
+      <li><span class="bold">Property transfer</span> &mdash; OSSF permit must be transferred to the buyer. $150 reinspection fee if system fails or is not ready.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- GUADALUPE COUNTY -->
+<div class="county-card">
+  <div class="county-card-header" style="background: #6b7280;">
+    <span>Guadalupe County &mdash; Environmental Health</span>
+    <span class="county-phone">830-303-8858</span>
+  </div>
+  <div class="county-card-body">
+    <div class="key-diff">Self-maintenance: NOT PROHIBITED &bull; Reporting: EVERY 4 MONTHS (TCEQ baseline) &bull; 1-acre minimum lot size</div>
+    <ul>
+      <li><span class="bold">Follows TCEQ baseline</span> &mdash; Maintenance frequency matches the state standard (every 4 months). No published prohibition on homeowner self-maintenance.</li>
+      <li><span class="bold">1-acre minimum lot size</span> &mdash; New OSSF installations require a minimum of 1 acre (exceeds TCEQ's 0.5-acre minimum). Lots subdivided before January 1, 1998 may be grandfathered.</li>
+      <li><span class="bold">License to Operate</span> &mdash; A county-issued License to Operate is required before using any OSSF.</li>
+      <li><span class="bold">Connecting to existing systems</span> &mdash; A permit is required even to connect into an existing OSSF (not just new installations).</li>
+      <li><span class="bold">30-day decision</span> &mdash; County must approve or deny permit applications within 30 days of receipt.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- BOTTOM LINE -->
+<div class="callout callout-red">
+  <strong>The Bottom Line for Homeowners</strong>
+  If you live in <span class="bold">Travis, Hays, or Bexar County</span>, you cannot legally self-maintain your aerobic system &mdash; you need a licensed provider, period. In <span class="bold">Comal County</span>, you can self-maintain but two violations and you lose that right. In <span class="bold">Guadalupe County</span>, requirements track the state baseline. Regardless of county, a professional maintenance contract is the safest way to stay compliant, protect your system, and avoid fines.
+</div>
+
+<!-- REFERENCES -->
+<div class="section-header green-header">References &amp; Source Documents</div>
+
+<div style="font-size: 8.5pt; line-height: 1.5; margin-bottom: 10px;">
+
+<p style="margin-bottom: 6px;"><span class="bold">County OSSF Programs &amp; Rules</span></p>
+<table style="width: 100%; font-size: 8.5pt; border-collapse: collapse; margin-bottom: 8px;">
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; width: 22%; vertical-align: top;"><span class="bold">Travis County</span></td>
+    <td style="padding: 3px 6px; vertical-align: top;">
+      Travis County Code Chapter 448 &mdash; Rules for On-Site Sewage Facilities (effective Feb 23, 2015; renumbered from Ch. 48 on June 1, 2018)<br>
+      <a href="https://www.traviscountytx.gov/tnr/permits/chapter-48" style="color: #2aabe1;">County OSSF page &rarr; traviscountytx.gov</a> &bull;
+      <a href="https://online.encodeplus.com/regs/traviscounty-tx/doc-viewer.aspx?secid=3411" style="color: #2aabe1;">Full code text &rarr; EncodeEplus viewer</a><br>
+      LCRA On-Site Sewage Program (Lake Travis zone): <a href="https://www.lcra.org/water/permits-contracts/on-site-sewage/" style="color: #2aabe1;">lcra.org</a> &bull; 512-578-3216
+    </td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">Hays County</span></td>
+    <td style="padding: 3px 6px; vertical-align: top;">
+      Order Adopting Rules for Hays County, Texas for OSSF (governed by TX Health &amp; Safety Code Ch. 366)<br>
+      <a href="https://www.hayscountytx.gov/on-site-sewage-facilities" style="color: #2aabe1;">County OSSF page &rarr; hayscountytx.gov</a> &bull;
+      <a href="https://www.hayscountytx.gov/development-services-documents-and-forms" style="color: #2aabe1;">Documents &amp; forms</a><br>
+      Development Services: 512-393-2150 (option 3 for complaints)
+    </td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">Bexar County</span></td>
+    <td style="padding: 3px 6px; vertical-align: top;">
+      Bexar County Environmental Services &mdash; OSSF Permitting and Enforcement<br>
+      <a href="https://www.bexar.org/3218/On-Site-Sewage-Facilities" style="color: #2aabe1;">County OSSF page &rarr; bexar.org</a> &bull;
+      <a href="https://www.bexar.org/3213/Environmental-Services" style="color: #2aabe1;">Environmental Services dept</a><br>
+      Environmental Services: 210-335-6700
+    </td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">Comal County</span></td>
+    <td style="padding: 3px 6px; vertical-align: top;">
+      Comal County Engineer's Office &mdash; Environmental Health / OSSF Program<br>
+      <a href="https://cceo.org/environmental/ossf" style="color: #2aabe1;">OSSF page &rarr; cceo.org</a> &bull;
+      <a href="https://www.comalcounty.gov/274/Environmental-Health" style="color: #2aabe1;">Environmental Health &rarr; comalcounty.gov</a> &bull;
+      <a href="https://cceo.org/environmental/environenforce" style="color: #2aabe1;">Enforcement page</a><br>
+      Environmental Health: 830-608-2090
+    </td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;"><span class="bold">Guadalupe County</span></td>
+    <td style="padding: 3px 6px; vertical-align: top;">
+      Guadalupe County On-Site Sewage Facilities Order<br>
+      <a href="https://www.guadalupetx.gov/page/eh.ossf" style="color: #2aabe1;">OSSF page &rarr; guadalupetx.gov</a> &bull;
+      <a href="https://www.guadalupetx.gov/upload/page/0267/docs/Frequently%20Asked%20Questions-OSSF%204-8-25.pdf" style="color: #2aabe1;">FAQ (PDF)</a> &bull;
+      <a href="https://www.guadalupetx.gov/upload/page/0267/PROCESS_OSSF%20Permit%205APR24.pdf" style="color: #2aabe1;">Permit process (PDF)</a><br>
+      Environmental Health: 830-303-8858 &bull; permits@guadalupetx.gov
+    </td>
+  </tr>
+</table>
+
+<p style="margin-bottom: 6px;"><span class="bold">State Rules &amp; Statutes</span></p>
+<table style="width: 100%; font-size: 8.5pt; border-collapse: collapse; margin-bottom: 8px;">
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; width: 22%; vertical-align: top;">30 TAC Chapter 285</td>
+    <td style="padding: 3px 6px;">TCEQ On-Site Sewage Facilities rules &mdash;
+      <a href="https://newtools.cira.state.tx.us/upload/page/0983/docs/LandDevAndEmerg/30%20TAC%20Chapter%20285.pdf" style="color: #2aabe1;">Full PDF</a> &bull;
+      <a href="https://texreg.sos.state.tx.us/public/readtac$ext.ViewTAC?tac_view=4&ti=30&pt=1&ch=285" style="color: #2aabe1;">Online viewer</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;">TX Health &amp; Safety Code Ch. 366</td>
+    <td style="padding: 3px 6px;">On-Site Sewage Disposal Systems statute &mdash;
+      <a href="https://statutes.capitol.texas.gov/Docs/HS/htm/HS.366.htm" style="color: #2aabe1;">statutes.capitol.texas.gov</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;">TX Water Code Ch. 7</td>
+    <td style="padding: 3px 6px;">Enforcement &amp; penalties (&sect;7.102 max penalties) &mdash;
+      <a href="https://statutes.capitol.texas.gov/Docs/WA/htm/WA.7.htm" style="color: #2aabe1;">statutes.capitol.texas.gov</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;">30 TAC Chapter 213</td>
+    <td style="padding: 3px 6px;">Edwards Aquifer Protection (Hays, Comal, Travis, Bexar) &mdash;
+      <a href="https://texreg.sos.state.tx.us/public/readtac$ext.ViewTAC?tac_view=4&ti=30&pt=1&ch=213" style="color: #2aabe1;">Online viewer</a></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #e5e7eb;">
+    <td style="padding: 3px 6px; vertical-align: top;">TCEQ OSSF Maintenance</td>
+    <td style="padding: 3px 6px;"><a href="https://www.tceq.texas.gov/permitting/ossf/ossfmaintenance.html" style="color: #2aabe1;">tceq.texas.gov/permitting/ossf/ossfmaintenance.html</a></td>
+  </tr>
+</table>
+</div>
+
+<!-- CTA -->
+<div class="cta-box">
+  <div class="cta-headline">MAC Septic Covers All 5 Counties</div>
+  <div class="cta-sub">We handle inspections, testing, county reporting, and repairs.<br>One contract keeps you legal &mdash; no matter which county you're in.</div>
+  <div class="cta-phone">512.737.8711</div>
+  <div class="cta-sub">macseptic.com &bull; will@macseptic.com</div>
+</div>
+
+<div class="footer">
+  TCEQ Licensed Maintenance Provider &bull; Nearly 30 years of industry experience &bull; This document is for informational purposes and does not constitute legal advice. County rules are subject to change. Contact your county environmental health office for the most current requirements.
+</div>
+
+</body>
+</html>

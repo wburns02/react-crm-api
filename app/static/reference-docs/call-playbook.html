@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Outbound Call Playbook - MAC Septic</title>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: letter; margin: 0.5in 0.6in; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Albert Sans', 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #1a1a1a;
+    max-width: 8.5in;
+    margin: 0 auto;
+    padding: 0.4in 0.5in;
+  }
+
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #104b95;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+  .company-name { text-align: center; }
+  .company-name img { max-width: 280px; height: auto; display: inline-block; }
+  .tagline { font-size: 9pt; color: #555; letter-spacing: 0.5px; margin-top: 4px; }
+  .doc-title {
+    font-size: 16pt; font-weight: 800; color: #104b95;
+    margin-top: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+  }
+  .doc-subtitle {
+    font-size: 10pt; color: #444; font-style: italic; margin-top: 3px;
+  }
+
+  .bold { font-weight: 700; }
+  .red { color: #b91c1c; font-weight: 700; }
+  .blue { color: #104b95; font-weight: 700; }
+  .orange { color: #da6833; font-weight: 700; }
+
+  .section-header {
+    font-size: 12pt; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+    padding: 7px 12px; margin-bottom: 10px; margin-top: 18px; border-radius: 3px;
+    color: white;
+  }
+  .blue-header { background: #104b95; }
+  .orange-header { background: #da6833; }
+  .dark-header { background: #112a5c; }
+  .red-header { background: #b91c1c; }
+
+  .callout {
+    border-radius: 4px; padding: 10px 14px; margin-bottom: 14px; font-size: 10pt;
+  }
+  .callout-blue { background: #e8f1fa; border-left: 4px solid #104b95; }
+  .callout-orange { background: #fef3eb; border-left: 4px solid #da6833; }
+  .callout-red { background: #fef2f2; border-left: 4px solid #b91c1c; }
+  .callout-cyan { background: #e6f7fc; border-left: 4px solid #2aabe1; }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 10.5pt; }
+
+  /* Tier cards */
+  .tier-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .tier-card-header {
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 11pt;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .tier-card-header .tag {
+    font-size: 8.5pt;
+    font-weight: 500;
+    background: rgba(255,255,255,0.25);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .tier-card-body {
+    padding: 10px 14px;
+    font-size: 10pt;
+  }
+  .tier-card-body ul {
+    padding-left: 18px;
+    margin: 0;
+  }
+  .tier-card-body ul li {
+    margin-bottom: 5px;
+  }
+
+  /* Warning list */
+  .never-do {
+    background: #fef2f2;
+    border: 2px solid #b91c1c;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 10px 0;
+  }
+  .never-do strong {
+    color: #b91c1c;
+    display: block;
+    margin-bottom: 6px;
+    font-size: 11pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .never-do ul {
+    padding-left: 18px;
+    margin: 0;
+    font-size: 9.5pt;
+  }
+  .never-do li {
+    margin-bottom: 3px;
+  }
+
+  /* Flow steps */
+  .flow-step {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+    align-items: flex-start;
+  }
+  .flow-step .step-num {
+    background: #104b95;
+    color: white;
+    font-weight: 800;
+    font-size: 11pt;
+    border-radius: 50%;
+    min-width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .flow-step .step-content {
+    flex: 1;
+    padding-top: 3px;
+  }
+  .flow-step .step-title {
+    font-weight: 700;
+    color: #104b95;
+    font-size: 10.5pt;
+  }
+  .flow-step .step-detail {
+    font-size: 9.5pt;
+    color: #444;
+    margin-top: 2px;
+  }
+
+  /* Script box */
+  .script {
+    background: #f8fafc;
+    border-left: 3px solid #2aabe1;
+    padding: 8px 12px;
+    margin: 6px 0;
+    font-size: 9.5pt;
+    font-style: italic;
+    color: #333;
+  }
+  .script::before { content: '"'; color: #2aabe1; font-size: 14pt; font-weight: 800; }
+  .script::after { content: '"'; color: #2aabe1; font-size: 14pt; font-weight: 800; }
+
+  /* Payment providers */
+  .provider-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 12px 0;
+    font-size: 9.5pt;
+  }
+  .provider-table th {
+    background: #104b95;
+    color: white;
+    padding: 6px 10px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .provider-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  .provider-table tr:nth-child(even) td { background: #f9fafb; }
+  .recommended {
+    background: #e8f1fa !important;
+  }
+  .rec-badge {
+    display: inline-block;
+    background: #104b95;
+    color: white;
+    font-size: 7.5pt;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    margin-left: 4px;
+  }
+
+  .footer {
+    margin-top: 18px;
+    padding-top: 10px;
+    text-align: center;
+    font-size: 8pt;
+    color: #777;
+    border-top: 2px solid #104b95;
+  }
+
+  @media print {
+    body { padding: 0; }
+    .tier-card, .flow-step, .callout { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="company-name"><img src="mac-septic-icon-darkblue.png" alt="MAC Septic"></div>
+  <div class="tagline">Nearly 30 Years of Experience &bull; TCEQ Licensed &bull; 512.737.8711</div>
+  <div class="doc-title">Outbound Call Playbook</div>
+  <div class="doc-subtitle">Data Collection, Payment Handling &amp; Call Flow for Dannia</div>
+</div>
+
+<div class="callout callout-blue">
+  <strong>What This Playbook Covers</strong>
+  The complete data collection checklist for outbound maintenance contract calls, how to handle credit card information safely (PCI compliant), and the step-by-step call flow from opening to close. Built to close contracts in 8&ndash;12 minutes while staying fully compliant with TCPA, Texas No-Call, and PCI DSS rules.<br><br>
+  <span class="bold">Standard pricing:</span> $99 first visit + $29/month ongoing ($348/year, 3 visits). If the customer balks at the $99, Dannia can waive it &mdash; see Part 5 for the script.
+</div>
+
+<!-- SECTION 1: INFO TO GATHER -->
+<div class="section-header blue-header">Part 1 &mdash; Information to Gather on the Call</div>
+
+<p style="margin-bottom: 10px; font-size: 10pt;">
+  Organize the call into three tiers. <span class="bold">Tier 1</span> gets qualified before the pitch, <span class="bold">Tier 2</span> is captured in the moment of the close, and <span class="bold">Tier 3</span> is filled in after the yes to reduce friction on the commitment moment.
+</p>
+
+<!-- TIER 1 -->
+<div class="tier-card">
+  <div class="tier-card-header" style="background: #104b95;">
+    <span>TIER 1 &mdash; Qualification &amp; Scheduling</span>
+    <span class="tag">Get BEFORE the close</span>
+  </div>
+  <div class="tier-card-body">
+    <ul>
+      <li><span class="bold">Full legal name</span> (as it appears on deed, for contract + county reporting)</li>
+      <li><span class="bold">Service/property address</span></li>
+      <li><span class="bold">Billing address</span> (if different from service address)</li>
+      <li><span class="bold">Primary phone + email</span></li>
+      <li><span class="bold">System manufacturer</span> &mdash; Norweco, Fuji Clean, Clearstream, Jet, Hoot, Aqua-Safe, etc.<br><span style="font-size: 9pt; color: #666;">Tells you what specific talking points and warranties apply.</span></li>
+      <li><span class="bold">System type &amp; approximate age</span> &mdash; Spray vs drip, roughly how old is the system?</li>
+      <li><span class="bold">Last service date</span> &mdash; <em>"When was the last time somebody looked at your system?"</em></li>
+      <li><span class="bold">Previous maintenance provider</span> (if any) &mdash; helps MAC transition the file and know what to expect</li>
+      <li><span class="bold">County</span> &mdash; should already be on the list, but confirm for reporting requirements</li>
+      <li><span class="bold">Current problems</span> &mdash; Alarm going off? Odor? Standing water? Slow drains?</li>
+      <li><span class="bold">Gate code or access instructions</span> &mdash; critical for field scheduling</li>
+      <li><span class="bold">Dogs on property?</span> &mdash; safety for the tech</li>
+    </ul>
+  </div>
+</div>
+
+<!-- TIER 2 -->
+<div class="tier-card">
+  <div class="tier-card-header" style="background: #da6833;">
+    <span>TIER 2 &mdash; The &ldquo;Yes&rdquo; Moment</span>
+    <span class="tag">Get DURING the close</span>
+  </div>
+  <div class="tier-card-body">
+    <ul>
+      <li><span class="bold">Verbal confirmation of contract terms</span> &mdash; recap the full deal so there's no ambiguity:
+        <div class="script">So just to confirm: your first visit is $99, and after that it's just $29 a month which covers 3 visits a year. No charge today &mdash; the $99 is billed after your first visit, then the $29 a month kicks in. Auto-renews annually unless you call us 30 days before the renewal date. Does that sound good?</div>
+      </li>
+      <li><span class="bold">Verbal consent to auto-bill</span> &mdash; get this on the recording:
+        <div class="script">And you're authorizing us to charge $99 after your first visit, and then $29 a month going forward &mdash; correct?</div>
+      </li>
+      <li><span class="bold">Explicit &ldquo;yes&rdquo;</span> &mdash; a recorded verbal yes is your single best legal protection against chargebacks</li>
+      <li><span class="bold">Preferred day-of-week/time window</span> for visits</li>
+      <li><span class="bold">Preferred contact method</span> (call, text, email) for visit reminders and follow-up</li>
+    </ul>
+  </div>
+</div>
+
+<!-- TIER 3 -->
+<div class="tier-card">
+  <div class="tier-card-header" style="background: #2aabe1;">
+    <span>TIER 3 &mdash; Post-Close Data Entry</span>
+    <span class="tag">Get AFTER the yes</span>
+  </div>
+  <div class="tier-card-body">
+    <ul>
+      <li><span class="bold">TCEQ permit number</span> &mdash; usually on their original permit paperwork; can be looked up later from county records</li>
+      <li><span class="bold">Secondary contact</span> &mdash; spouse, property manager, or alternate</li>
+      <li><span class="bold">Attribution</span> &mdash; <em>"Just curious, how did you hear about MAC Septic?"</em> (for marketing ROI tracking)</li>
+      <li><span class="bold">Home warranty info</span> &mdash; some warranties cover septic repairs</li>
+      <li><span class="bold">Referral source</span> &mdash; credit to whoever sent them (internal tracking for referral rewards)</li>
+      <li><span class="bold">Send the contract via e-signature link</span> while the customer is still on the phone</li>
+    </ul>
+  </div>
+</div>
+
+<!-- WHAT NOT TO ASK -->
+<div class="never-do">
+  <strong>What NOT to Ask on the Call</strong>
+  <ul>
+    <li><span class="bold">Social Security Number</span> &mdash; Never. Ever. No legitimate reason for a septic service to ask.</li>
+    <li><span class="bold">Date of birth</span> &mdash; Creates financial-data exposure (GLBA) with no business purpose</li>
+    <li><span class="bold">Bank account / routing number</span> &mdash; unless they explicitly want to pay by ACH</li>
+    <li><span class="bold">Anything that feels invasive</span> &mdash; keep the call feeling light. If you don't need it for the service, don't ask.</li>
+  </ul>
+</div>
+
+<!-- SECTION 2: CREDIT CARDS -->
+<div class="section-header orange-header">Part 2 &mdash; Credit Card Handling (PCI Compliance)</div>
+
+<div class="callout callout-red">
+  <strong>The Non-Negotiable Rule</strong>
+  MAC Septic must <span class="red">NEVER</span> touch or store raw credit card numbers. If we ever store a raw card number in our systems, we're on the hook for full PCI DSS compliance (SAQ-D), annual audits, and potentially catastrophic liability if there's a breach. Use a tokenization provider and let them handle the risk.
+</div>
+
+<!-- The Recommendation -->
+<h3 style="color: #104b95; font-size: 12pt; margin-top: 14px; margin-bottom: 8px;">The Recommendation: Stripe <span class="rec-badge">RECOMMENDED</span></h3>
+
+<p style="margin-bottom: 10px; font-size: 10pt;">
+  Stripe tokenizes the card on their PCI-compliant servers and gives MAC Septic a safe token (like <code style="background: #f3f4f6; padding: 1px 4px; border-radius: 3px;">cus_N4xyz123</code>) to reference instead of the raw card number. MAC Septic stays at <span class="bold">SAQ-A compliance</span> &mdash; the lowest PCI tier &mdash; which is essentially a yearly self-attestation that says &ldquo;we don't touch raw card data.&rdquo;
+</p>
+
+<h4 style="color: #104b95; font-size: 11pt; margin-top: 12px; margin-bottom: 6px;">How It Works During the Call</h4>
+
+<div class="flow-step">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <div class="step-title">Get the verbal commitment</div>
+    <div class="step-detail">Customer says yes to the contract terms and the auto-bill authorization.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <div class="step-title">Tell them you're texting a secure link</div>
+    <div class="step-detail"><em>&ldquo;I'm going to text you a secure link right now. Tap it and enter your card &mdash; it'll take 30 seconds. I'll stay on the line.&rdquo;</em></div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <div class="step-title">Send the Stripe Payment Link</div>
+    <div class="step-detail">Generate a Stripe Payment Link or Checkout Session (one click in Stripe dashboard or automated through Mac Service Platform). Text it to the customer's phone.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <div class="step-title">Customer taps the link on their phone</div>
+    <div class="step-detail">They land on Stripe's PCI-compliant form, enter their card, and submit. Stripe tokenizes it immediately.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">5</div>
+  <div class="step-content">
+    <div class="step-title">Webhook fires to Mac Service Platform</div>
+    <div class="step-detail">Customer record gets the Stripe customer ID attached automatically. Dannia sees &ldquo;Payment Method Added&rdquo; on her screen.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">6</div>
+  <div class="step-content">
+    <div class="step-title">Confirm with the customer</div>
+    <div class="step-detail"><em>&ldquo;Perfect, I see it came through. You're all set &mdash; $99 after your first visit, then $29 a month. We'll have somebody out there within two weeks.&rdquo;</em></div>
+  </div>
+</div>
+
+<h4 style="color: #104b95; font-size: 11pt; margin-top: 14px; margin-bottom: 6px;">Why Stripe Specifically</h4>
+<ul style="padding-left: 20px; font-size: 9.5pt; margin-bottom: 12px;">
+  <li style="margin-bottom: 4px;"><span class="bold">Built-in recurring billing</span> &mdash; set up off-session charges with a couple of API calls</li>
+  <li style="margin-bottom: 4px;"><span class="bold">Card Updater service</span> &mdash; when a customer's card expires or gets replaced, Stripe automatically updates the token behind the scenes via Visa/Mastercard Account Updater. You don't lose revenue to expired cards.</li>
+  <li style="margin-bottom: 4px;"><span class="bold">Dispute handling</span> &mdash; Stripe's dashboard handles chargebacks with evidence submission and a higher success rate than traditional merchant services</li>
+  <li style="margin-bottom: 4px;"><span class="bold">SAQ-A compliance</span> &mdash; the easiest PCI tier. Stripe handles everything; MAC Septic signs an annual self-attestation.</li>
+  <li style="margin-bottom: 4px;"><span class="bold">Cost:</span> 2.9% + $0.30 per successful transaction. On the $99 first visit: ~$3.17. On $29/month recurring: ~$1.14/month ($13.70/year).</li>
+  <li style="margin-bottom: 4px;"><span class="bold">Mac Service Platform integration</span> &mdash; almost certainly already supported; verify before choosing anything else</li>
+</ul>
+
+<h4 style="color: #104b95; font-size: 11pt; margin-top: 14px; margin-bottom: 6px;">Alternatives (Acceptable but Not Preferred)</h4>
+<table class="provider-table">
+  <thead>
+    <tr>
+      <th>Provider</th>
+      <th>Best For</th>
+      <th>Fees</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="recommended">
+      <td><span class="bold">Stripe</span> <span class="rec-badge">REC</span></td>
+      <td>Recurring billing, phone sales, dev-friendly</td>
+      <td>2.9% + $0.30</td>
+      <td>Best recurring billing tools, card updater, dispute handling</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Square</span></td>
+      <td>Mixed in-person + phone work</td>
+      <td>2.6% + $0.10 in-person<br>3.5% + $0.15 keyed</td>
+      <td>Good if techs also take cards in the field. Invoices allow ACH at 1%.</td>
+    </tr>
+    <tr>
+      <td><span class="bold">QuickBooks Payments</span></td>
+      <td>Already using QuickBooks Online</td>
+      <td>2.9% + $0.25 swiped<br>3.4% + $0.25 keyed</td>
+      <td>One-stop shop for accounting + payments; less flexible than Stripe</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Authorize.net</span></td>
+      <td>Legacy enterprise setups</td>
+      <td>$25/mo + transaction fees</td>
+      <td>Older, more complex; not recommended for new setups</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- WHAT DANNIA MUST NEVER DO -->
+<div class="never-do">
+  <strong>What Dannia Must NEVER Do with Credit Cards</strong>
+  <ul>
+    <li>Write down the card number on paper &mdash; not even &ldquo;just for a second&rdquo;</li>
+    <li>Type it into an Excel spreadsheet, a note-taking app, or any CRM field that isn't a tokenized payment field</li>
+    <li>Email the card number to herself or anyone else</li>
+    <li>Store it in call notes or a &ldquo;contacts&rdquo; app</li>
+    <li>Repeat the card number back to the customer loudly enough that a coworker could hear (yes, this is an actual PCI violation)</li>
+    <li>Photograph or screenshot a card for &ldquo;records&rdquo;</li>
+    <li>Text or DM the card number via any messaging app</li>
+  </ul>
+</div>
+
+<div class="callout callout-cyan">
+  <strong>The One Exception: Older Customers Who Won't Tap a Link</strong>
+  If a customer absolutely refuses to tap a link on their phone (happens occasionally with older customers), Dannia can use Stripe's <span class="bold">Virtual Terminal</span>. She enters the card into Stripe's secure form on her end, Stripe tokenizes it, and she never writes it down. Still SAQ-A compliant. This should be the rare exception, not the default.
+</div>
+
+<!-- SECTION 3: FULL CALL FLOW -->
+<div class="section-header dark-header">Part 3 &mdash; The Full Call Flow</div>
+
+<p style="margin-bottom: 12px; font-size: 10pt;">
+  Target call length: <span class="bold">8&ndash;12 minutes</span> from dial to close. The sequence below is designed to close the contract, capture payment, and deliver a signed agreement before Dannia hangs up.
+</p>
+
+<div class="flow-step">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <div class="step-title">Opening &amp; Qualification</div>
+    <div class="step-detail">Confirm you're speaking with the homeowner. Qualify they have an aerobic system. Reference the county-specific enforcement angle.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <div class="step-title">Pitch &amp; Objection Handling</div>
+    <div class="step-detail">Explain the TCEQ requirement. Offer the contract tiers. Handle common objections (already have a provider, too expensive, need to think about it).</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <div class="step-title">Verbal Yes</div>
+    <div class="step-detail">Customer agrees to move forward with a plan. This is the commit moment.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <div class="step-title">Gather Tier 1 Info</div>
+    <div class="step-detail">Name, address, email, phone, system type, access details, dogs, preferred time windows.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">5</div>
+  <div class="step-content">
+    <div class="step-title">Recap Contract Terms Verbally (Tier 2)</div>
+    <div class="step-detail">Get the recorded &ldquo;yes&rdquo; to terms and auto-bill authorization. This is your legal protection.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">6</div>
+  <div class="step-content">
+    <div class="step-title">Text the Stripe Payment Link</div>
+    <div class="step-detail">Customer adds their card on Stripe's secure form. Dannia sees confirmation on her screen.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">7</div>
+  <div class="step-content">
+    <div class="step-title">Send the E-Signature Contract Link</div>
+    <div class="step-detail">Customer signs the contract while still on the phone. Both parties get a timestamped PDF.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">8</div>
+  <div class="step-content">
+    <div class="step-title">Welcome Confirmation &amp; First Visit Scheduling</div>
+    <div class="step-detail">Confirm their first visit is booked within 14 days. Mention the 7-day and 1-day reminder notifications.</div>
+  </div>
+</div>
+<div class="flow-step">
+  <div class="step-num">9</div>
+  <div class="step-content">
+    <div class="step-title">End Call &mdash; Capture Tier 3 Info</div>
+    <div class="step-detail">After hanging up, Dannia enters attribution, secondary contacts, referral source, and any other post-close data into Mac Service Platform.</div>
+  </div>
+</div>
+
+<!-- SECTION 4: HOW DID YOU GET MY NUMBER -->
+<div class="section-header orange-header">Part 4 &mdash; &ldquo;How Did You Get My Number?&rdquo;</div>
+
+<div class="callout callout-blue">
+  <strong>Key Principle</strong>
+  County permit data is legitimately public record. There is nothing shady about using it. Don't be evasive &mdash; owning the answer confidently builds trust. Don't over-explain &mdash; a short clear answer followed by a redirect back to value beats a long defensive justification. The irritated caller who respects your honest answer is far more likely to convert later than someone you tried to dodge.
+</div>
+
+<p style="margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">The Standard Answer:</p>
+<div class="script">We work with public county records. Aerobic septic systems are permitted through the county, and that information is publicly available. We use it to reach out to homeowners who might need maintenance services.</div>
+
+<p style="margin-top: 12px; margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">If They Push for More Detail:</p>
+<div class="script">If you're outside city limits you're almost certainly on a septic system. We cross-reference a few public databases to find homeowners who might need help with their system and give them a call. Nothing fancy, just trying to reach the right people.</div>
+
+<div class="callout callout-amber" style="margin-top: 12px;">
+  <strong>Why This Works</strong>
+  A lot of people just want to know they're not on some sketchy list. Once they hear &ldquo;public county records&rdquo; they relax. Keep it simple, keep it honest, then redirect: <em>&ldquo;So &mdash; when was the last time someone looked at your system?&rdquo;</em>
+</div>
+
+<!-- SECTION 5: PRICING OBJECTIONS -->
+<div class="section-header red-header">Part 5 &mdash; Price Objection: Waiving the $99</div>
+
+<p style="margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">&ldquo;Why Am I Being Charged $99? No One Else Does That.&rdquo;</p>
+
+<div class="callout callout-blue">
+  <strong>Key Principle</strong>
+  Don't get defensive. The $99 is easy to justify &mdash; it's a real visit with real work. Validate their question, explain what they're getting, and anchor against the cost of not doing it. If they're still not sold after the justification, <em>then</em> you play the waiver card below.
+</div>
+
+<p style="margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">The Standard Answer:</p>
+<div class="script">That's a fair question. The $99 covers a full on-site inspection &mdash; we check all four compartments, test your chlorine levels, inspect your aerator and pumps, check your spray heads, and measure your sludge levels. Most companies charge $150 to $250 for that same visit as a standalone service call. We roll it in at $99 because it's the starting point for your maintenance plan, not a one-off.</div>
+
+<p style="margin-top: 12px; margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">If They Say &ldquo;Other Companies Don't Charge for the First Visit&rdquo;:</p>
+<div class="script">Some companies will waive the first visit, but then you're paying $400, $500 a year for the same three visits. We keep the monthly at $29 &mdash; that's $348 a year &mdash; which is below what most providers charge. The $99 just covers the cost of getting a tech out to your property the first time to actually see what's going on with your system.</div>
+
+<p style="margin-top: 12px; margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">The Anchor:</p>
+<div class="script">And honestly, if that first visit catches something early &mdash; a failing aerator, a clogged spray head &mdash; that $99 just saved you thousands. A full system replacement runs $15,000 to $30,000. We're talking about less than one percent of that to know where you stand.</div>
+
+<div style="margin-top: 16px; margin-bottom: 16px; padding: 10px 14px; background: #fef3eb; border-left: 4px solid #da6833; border-radius: 4px; font-size: 10pt;">
+  <strong style="display: block; margin-bottom: 4px; color: #da6833;">If They're Still Not Convinced &mdash; Play the Waiver</strong>
+  The justification above should handle most pushback. But if the customer is clearly stuck on the $99 and you're about to lose them, move to the waiver script below. The goal is to close the deal &mdash; $29/month with no $99 is better than no customer at all.
+</div>
+
+<div class="callout callout-blue">
+  <strong>The Play</strong>
+  The $99 first visit fee exists so Dannia has something to give away. If the customer hesitates on price, waiving the $99 makes it feel like they negotiated a deal. This costs MAC almost nothing &mdash; the real revenue is the $29/month recurring &mdash; but it gets the customer past the commitment hurdle.
+</div>
+
+<p style="margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">When to Use It:</p>
+<ul style="padding-left: 20px; font-size: 10pt; margin-bottom: 12px;">
+  <li style="margin-bottom: 4px;">Customer says <em>&ldquo;that's a lot&rdquo;</em> or <em>&ldquo;I need to think about it&rdquo;</em> after hearing the pricing</li>
+  <li style="margin-bottom: 4px;">Any hesitation after the pitch &mdash; not an outright &ldquo;no,&rdquo; just friction</li>
+  <li style="margin-bottom: 4px;"><span class="red">Do NOT lead with the waiver.</span> Always pitch $99 + $29/month first. The waiver only works as a concession.</li>
+</ul>
+
+<p style="margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">The Script:</p>
+<div class="script">Tell you what &mdash; let me waive that $99 first visit fee. You'd just be at $29 a month, and we'll get somebody out there within the next two weeks to do a full inspection. No cost to get started. Fair enough?</div>
+
+<p style="margin-top: 12px; margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #da6833;">If They Still Hesitate:</p>
+<div class="script">That's less than a dollar a day to keep your system running and stay compliant with the county. And if we find anything on that first visit, you'll know about it before it turns into a $15,000 problem.</div>
+
+<div class="callout callout-amber" style="margin-top: 12px;">
+  <strong>Why This Works</strong>
+  The customer feels like they won something. Dannia didn't drop the price &mdash; she removed a fee, which feels different psychologically. The $29/month is the real number. The $99 was always the negotiating chip.
+</div>
+
+<!-- SECTION 6: REPAIR CREDIT PLAN UPSELL -->
+<div class="section-header orange-header">Part 6 &mdash; The Repair Credit Plan Upsell ($20/month)</div>
+
+<div class="callout callout-blue">
+  <strong>The Play</strong>
+  After the customer has said yes to the maintenance plan and the payment method is captured, offer the optional <span class="bold">Repair Credit Plan</span> &mdash; an extra $20/month that builds up as service credit toward future repairs, parts, and pump-outs. Most aerobic systems will need a $300&ndash;$800 repair within the first 5 years. This makes that hit feel manageable instead of catastrophic.
+</div>
+
+<p style="margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">When to Offer:</p>
+<ul style="padding-left: 20px; font-size: 10pt; margin-bottom: 12px;">
+  <li style="margin-bottom: 4px;"><span class="bold">After</span> the maintenance plan close (verbal yes + Stripe payment confirmed)</li>
+  <li style="margin-bottom: 4px;"><span class="bold">Before</span> sending the e-signature contract &mdash; if they say yes, they sign both documents at once</li>
+  <li style="margin-bottom: 4px;">Skip it if the customer fought hard on the $99 or seemed reluctant. Don't push someone who's already on the edge.</li>
+</ul>
+
+<p style="margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">The Pitch:</p>
+<div class="script">One last thing &mdash; a lot of our customers add what we call the Repair Credit Plan. It's an extra $20 a month that builds up as credit on your account. So if your aerator goes out a year from now, you've already got $240 banked toward that repair. It's optional, but most folks add it because aerobic systems always need something eventually, and this way it doesn't hit you all at once. Want me to add that?</div>
+
+<p style="margin-top: 12px; margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">If They Ask &ldquo;What If I Never Need a Repair?&rdquo;:</p>
+<div class="script">Then your credit just keeps rolling over. It doesn't expire. And when you do eventually need a pump-out &mdash; everyone needs one every 3 to 5 years &mdash; that credit covers it. You're not losing the money, you're just pre-paying for stuff you're going to need anyway.</div>
+
+<p style="margin-top: 12px; margin-bottom: 8px; font-size: 10.5pt; font-weight: 700; color: #104b95;">If They Ask &ldquo;Can I Get a Refund If I Cancel?&rdquo;:</p>
+<div class="script">If you ever cancel, you've got 90 days to use up whatever credit you have on the account &mdash; we can do a pump-out, parts, whatever you need. After 90 days the credit goes away. It's not refundable in cash, but it's yours to use on any service we offer.</div>
+
+<div class="callout callout-amber" style="margin-top: 12px;">
+  <strong>Why This Works</strong>
+  Customers think about repairs as &ldquo;sudden disasters.&rdquo; The Repair Credit Plan turns it into a known monthly cost. Even a 25% attach rate on $20/month is meaningful recurring revenue, and customers who add it churn less because they've got a balance they don't want to lose.
+</div>
+
+<div class="callout callout-blue" style="margin-top: 14px;">
+  <strong>The Golden Rule of the Close</strong>
+  Don't end the call until <span class="bold">(1)</span> the verbal yes is recorded, <span class="bold">(2)</span> the Stripe payment method is confirmed on Dannia's screen, and <span class="bold">(3)</span> the e-signature contract has been signed by the customer. If any of these three pieces are missing, the customer will &ldquo;think about it&rdquo; and you'll lose the sale. Lock it in while they're still on the phone.
+</div>
+
+<div class="footer">
+  MAC Septic &bull; 512.737.8711 &bull; macseptic.com &bull; will@macseptic.com<br>
+  INTERNAL DOCUMENT &mdash; Call Playbook v1 &bull; For Dannia &amp; outbound sales team &bull; Review quarterly
+</div>
+
+</body>
+</html>

@@ -1,0 +1,154 @@
+SEPTIC SYSTEM MAINTENANCE AGREEMENT
+MAC Septic Services | TCEQ Licensed Maintenance Provider
+512.737.8711 | macseptic.com | will@macseptic.com
+
+========================================
+CUSTOMER & PROPERTY INFORMATION
+========================================
+
+Customer Name: ________________________
+Phone: ________________________
+Email: ________________________
+Service Address: ________________________
+Billing Address (if different): ________________________
+County: ________________________
+System Type: ________________________
+Manufacturer: ________________________
+TCEQ Permit #: ________________________
+Gate Code / Access Instructions: ________________________
+
+
+========================================
+1. SCOPE OF SERVICE
+========================================
+
+MAC Septic Services ("Provider") agrees to provide three (3) maintenance visits per year to the property listed above. Each visit includes:
+
+- Inspection of all treatment compartments (trash tank, aerobic chamber, pump tank, chlorination)
+- Testing of disinfection system (chlorine residual or UV output)
+- Inspection and testing of aerator, pumps, floats, and alarms
+- Inspection of spray heads, drip lines, or other distribution components
+- Sludge level measurement
+- Minor adjustments, cleaning, and chlorine tablet replenishment
+- Filing of maintenance report with the applicable county authority
+
+Visits are scheduled approximately every four (4) months. Provider will contact Customer at least seven (7) days before each visit to confirm scheduling.
+
+
+========================================
+2. PRICING & PAYMENT
+========================================
+
+$29/month
+
+Monthly billing covers 3 maintenance visits per year ($348/year). No upfront cost -- monthly billing begins the month following your first visit.
+
+Payment is processed automatically via credit or debit card through Stripe, a PCI-compliant payment processor. Customer authorizes Provider to charge the card on file according to the selected pricing option above. Monthly charges are billed on the same date each month.
+
+If a scheduled payment fails, Provider will attempt to process the charge up to two (2) additional times over seven (7) days. If payment cannot be collected, Provider will contact Customer to resolve. Services may be suspended after 30 days of non-payment.
+
+
+========================================
+3. EXCLUSIONS
+========================================
+
+This agreement covers routine maintenance only. The following are NOT included and will be quoted separately:
+
+- Pump-outs (sludge removal / tank pumping)
+- Parts replacement (aerators, pumps, floats, timers, control panels)
+- Repairs to spray heads, drip lines, or distribution systems
+- Emergency service calls outside of scheduled visits
+- System modifications, upgrades, or replacements
+- Damage caused by third parties, flooding, power surges, or acts of nature
+
+Provider will notify Customer of any recommended repairs discovered during a maintenance visit and provide a written estimate before performing additional work.
+
+
+========================================
+4. TERM & RENEWAL
+========================================
+
+This agreement is effective on the date signed below and continues for an initial term of twelve (12) months.
+
+This agreement automatically renews for successive 12-month terms unless either party provides written notice of cancellation at least thirty (30) days before the renewal date. Written notice may be delivered by email, US mail, or phone call to the Provider.
+
+Customer may cancel at any time with 30 days' notice. If Customer cancels mid-term, monthly billing stops at the end of the 30-day notice period. There is no cancellation fee and no refund for the current billing cycle.
+
+
+========================================
+5. TCEQ COMPLIANCE & COUNTY REPORTING
+========================================
+
+Provider is a TCEQ-licensed maintenance provider and will maintain this contract on file as required by 30 Texas Administrative Code, Chapter 285.
+
+Customer authorizes Provider to:
+
+- File maintenance reports with the applicable county environmental health office after each visit
+- Report system status, test results, and any deficiencies to the county as required by local ordinance
+- Act as the maintenance provider of record for the property's OSSF permit
+
+If Customer has an existing maintenance contract with another provider, Customer is responsible for terminating that agreement. Only one provider may be the maintenance provider of record for a given OSSF permit.
+
+
+========================================
+6. PROPERTY ACCESS
+========================================
+
+Customer agrees to provide reasonable access to the property and septic system for all scheduled visits. If access is not available at the scheduled time (locked gate, blocked access, aggressive animals not secured), the visit will be rescheduled at no additional charge, but Provider is not responsible for compliance lapses due to missed visits caused by access issues.
+
+
+========================================
+7. LIMITATION OF LIABILITY
+========================================
+
+Provider's total liability under this agreement shall not exceed the total fees paid by Customer in the twelve (12) months preceding the claim. Provider is not liable for:
+
+- Pre-existing system defects or damage not caused by Provider
+- System failures resulting from Customer modifications, misuse, or neglect
+- Consequential, incidental, or indirect damages
+- Delays caused by weather, supply chain issues, or circumstances beyond Provider's control
+
+
+========================================
+8. GOVERNING LAW & DISPUTES
+========================================
+
+This agreement is governed by the laws of the State of Texas. Any disputes shall be resolved in the courts of Travis County, Texas. Both parties agree to attempt good-faith resolution before pursuing legal action.
+
+
+========================================
+9. ELECTRONIC SIGNATURE
+========================================
+
+Both parties agree that this agreement may be executed electronically in accordance with the Texas Uniform Electronic Transactions Act (Tex. Bus. & Com. Code Ch. 322). An electronic signature has the same legal effect as an ink signature. Each party will receive a timestamped copy of the signed agreement.
+
+
+========================================
+10. ENTIRE AGREEMENT
+========================================
+
+This document constitutes the entire agreement between Customer and Provider regarding septic system maintenance services at the property listed above. Any amendments must be in writing and signed by both parties. This agreement supersedes all prior verbal or written representations.
+
+
+========================================
+SIGNATURES
+========================================
+
+CUSTOMER:
+
+Signature: ________________________  Date: ____________
+
+Printed Name: ________________________
+
+
+MAC SEPTIC SERVICES:
+
+Signature: ________________________  Date: ____________
+
+Printed Name & Title: ________________________
+
+
+========================================
+Questions? Call 512.737.8711 or email will@macseptic.com
+MAC Septic Services | TCEQ Licensed | Serving Central Texas
+Contract v1 | April 2026

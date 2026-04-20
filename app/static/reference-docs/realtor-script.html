@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real Estate Agent Conversation Guide - MAC Septic</title>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: letter; margin: 0.5in 0.6in; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Albert Sans', 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #1a1a1a;
+    max-width: 8.5in;
+    margin: 0 auto;
+    padding: 0.4in 0.5in;
+  }
+
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #104b95;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+  .company-name { text-align: center; }
+  .company-name img { max-width: 280px; height: auto; display: inline-block; }
+  .tagline { font-size: 9pt; color: #555; letter-spacing: 0.5px; margin-top: 4px; }
+  .doc-title {
+    font-size: 16pt; font-weight: 800; color: #104b95;
+    margin-top: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+  }
+  .doc-subtitle {
+    font-size: 10pt; color: #444; font-style: italic; margin-top: 3px;
+  }
+
+  .bold { font-weight: 700; }
+  .red { color: #b91c1c; font-weight: 700; }
+  .blue { color: #104b95; font-weight: 700; }
+  .orange { color: #da6833; font-weight: 700; }
+
+  .section-header {
+    font-size: 12pt; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+    padding: 7px 12px; margin-bottom: 10px; margin-top: 18px; border-radius: 3px;
+    color: white;
+  }
+  .blue-header { background: #104b95; }
+  .orange-header { background: #da6833; }
+  .dark-header { background: #112a5c; }
+  .cyan-header { background: #2aabe1; }
+
+  .callout {
+    border-radius: 4px; padding: 10px 14px; margin-bottom: 14px; font-size: 10pt;
+  }
+  .callout-blue { background: #e8f1fa; border-left: 4px solid #104b95; }
+  .callout-orange { background: #fef3eb; border-left: 4px solid #da6833; }
+  .callout-cyan { background: #e6f7fc; border-left: 4px solid #2aabe1; }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 10.5pt; }
+
+  .script {
+    background: #f8fafc;
+    border-left: 3px solid #2aabe1;
+    padding: 8px 12px;
+    margin: 6px 0 10px 0;
+    font-size: 10pt;
+    font-style: italic;
+    color: #333;
+  }
+  .script::before { content: '"'; color: #2aabe1; font-size: 14pt; font-weight: 800; }
+  .script::after { content: '"'; color: #2aabe1; font-size: 14pt; font-weight: 800; }
+
+  .talking-point {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #104b95;
+    margin-top: 12px;
+    margin-bottom: 4px;
+  }
+
+  /* Coverage card */
+  .coverage-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin: 10px 0 14px 0;
+  }
+  .state-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .state-card-header {
+    background: #104b95;
+    color: white;
+    padding: 6px 10px;
+    font-weight: 800;
+    font-size: 10.5pt;
+    letter-spacing: 0.5px;
+  }
+  .state-card-body {
+    padding: 8px 12px;
+    font-size: 9.5pt;
+  }
+  .state-card-body ul {
+    padding-left: 16px;
+    margin: 0;
+  }
+  .state-card-body li {
+    margin-bottom: 3px;
+  }
+  .state-card-body .target {
+    background: #fef3eb;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: 700;
+    color: #da6833;
+  }
+
+  /* Pricing table */
+  .pricing-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 14px 0;
+    font-size: 10pt;
+  }
+  .pricing-table th {
+    background: #104b95;
+    color: white;
+    padding: 6px 10px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .pricing-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  .pricing-table tr:nth-child(even) td { background: #f9fafb; }
+  .pricing-table .price {
+    font-weight: 800;
+    color: #104b95;
+    font-size: 11pt;
+    white-space: nowrap;
+  }
+
+  /* Inspection checklist */
+  .checklist {
+    list-style: none;
+    padding-left: 0;
+  }
+  .checklist li {
+    padding: 6px 0 6px 28px;
+    position: relative;
+    font-size: 10pt;
+    border-bottom: 1px dashed #e5e7eb;
+  }
+  .checklist li::before {
+    content: '✓';
+    position: absolute;
+    left: 4px;
+    top: 6px;
+    color: #104b95;
+    font-weight: 800;
+    font-size: 12pt;
+  }
+  .checklist li:last-child { border-bottom: none; }
+
+  /* Process flow */
+  .process-flow {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    margin: 12px 0;
+    align-items: stretch;
+  }
+  .process-step {
+    background: #e8f1fa;
+    border: 2px solid #104b95;
+    border-radius: 6px;
+    padding: 8px 6px;
+    text-align: center;
+    font-size: 9pt;
+    font-weight: 700;
+    color: #104b95;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .process-step .step-num {
+    background: #104b95;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    font-size: 9pt;
+    margin: 0 auto 4px auto;
+  }
+
+  /* Disclaimer card */
+  .disclaimer-card {
+    border: 1.5px solid #da6833;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    background: #fffaf5;
+    page-break-inside: avoid;
+  }
+  .disclaimer-card .disc-title {
+    font-weight: 800;
+    color: #da6833;
+    font-size: 11pt;
+    margin-bottom: 4px;
+  }
+  .disclaimer-card .disc-detail {
+    font-size: 9.5pt;
+    margin-bottom: 6px;
+  }
+  .disclaimer-card .disc-fee {
+    font-size: 9pt;
+    font-weight: 700;
+    color: #b91c1c;
+  }
+
+  .footer {
+    margin-top: 18px;
+    padding-top: 10px;
+    text-align: center;
+    font-size: 8pt;
+    color: #777;
+    border-top: 2px solid #104b95;
+  }
+
+  @media print {
+    body { padding: 0; }
+    .callout, .state-card, .disclaimer-card, .process-flow { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="company-name"><img src="mac-septic-icon-darkblue.png" alt="MAC Septic"></div>
+  <div class="tagline">Nearly 30 Years of Experience &bull; TCEQ Licensed &bull; 512.737.8711</div>
+  <div class="doc-title">Real Estate Agent Conversation Guide</div>
+  <div class="doc-subtitle">How to introduce MAC Septic to realtors and earn the inspection referral</div>
+</div>
+
+<div class="callout callout-blue">
+  <strong>What This Guide Is For</strong>
+  Real estate agents are a high-value referral channel. Every home with a septic system that changes hands needs a pre-sale inspection &mdash; and the agent picks who does it. This guide gives Dannia a natural, conversational way to introduce MAC Septic, explain the inspection process, and become the agent's go-to provider. The goal is <span class="bold">3&ndash;6 real estate inspections per week per agent relationship</span>.
+</div>
+
+<!-- SECTION 1: OPENING -->
+<div class="section-header blue-header">Part 1 &mdash; Opening the Conversation</div>
+
+<p style="margin-bottom: 8px; font-size: 10pt;">
+  Real estate agents are busy and get pitched constantly. Lead with curiosity, not a sales pitch. The first goal is to find out if they currently work with a septic inspector and whether they're happy with them.
+</p>
+
+<div class="talking-point">The Opener:</div>
+<div class="script">Hi, this is Dannia with MAC Septic Services. I'm not selling you anything &mdash; I'm just calling to introduce us. Do you have a minute? We do real estate septic inspections in the Nashville area, and I wanted to see who you usually work with for those when one of your listings has a septic system.</div>
+
+<div class="talking-point">If They Say They Already Have Someone:</div>
+<div class="script">That's great. Most agents already have someone. I just like to introduce us as a backup &mdash; sometimes inspectors get booked out a week or two when you've got a tight closing. Can I send you our info so you've got us on file if you ever need a quick turnaround?</div>
+
+<div class="talking-point">If They Say They Don't Have a Regular Inspector:</div>
+<div class="script">Perfect, then I'd love to tell you a little about us. Two minutes &mdash; just want to make sure when you do have a listing with a septic system, you know who to call.</div>
+
+<div class="callout callout-cyan">
+  <strong>The Mindset</strong>
+  Don't ask for the business on the first call. Ask to be the backup. The vast majority of agents already have an inspector &mdash; but those relationships break down constantly (slow scheduling, sloppy reports, missed appointments). When the regular guy lets them down, they remember whoever they liked the most from their last intro call.
+</div>
+
+<!-- SECTION 2: ABOUT MAC SEPTIC -->
+<div class="section-header dark-header">Part 2 &mdash; About MAC Septic (The Story)</div>
+
+<p style="margin-bottom: 10px; font-size: 10pt;">
+  Agents make decisions based on trust. Lead with the company's story, not the technical specs. The story is short, true, and differentiates MAC from generic competitors.
+</p>
+
+<div class="talking-point">The Background Pitch:</div>
+<div class="script">MAC Septic has been in business for almost 30 years. The owner started the company with one philosophy &mdash; world-class customer experience for septic. That sounds funny because septic isn't exactly glamorous, but he meant transparent pricing, real communication, on-time scheduling, and only using the highest-quality parts. His sons bought the business from him a few years back, and they're expanding it across the country. We're already in three states.</div>
+
+<div class="talking-point">Why This Matters to a Realtor:</div>
+<div class="script">For you, that translates to one thing: when I send a tech to your listing, your seller and your buyer both have a clean, professional experience. No surprise charges, no missed appointments, no half-finished reports. That's what I want you to associate with us.</div>
+
+<!-- SECTION 3: COVERAGE AREA -->
+<div class="section-header cyan-header">Part 3 &mdash; Service Coverage</div>
+
+<p style="margin-bottom: 8px; font-size: 10pt;">
+  Agents only care about coverage in their market. Lead with their market, mention the others briefly to establish credibility.
+</p>
+
+<div class="coverage-grid">
+  <div class="state-card">
+    <div class="state-card-header">Tennessee</div>
+    <div class="state-card-body">
+      <ul>
+        <li><span class="target">Nashville</span> area</li>
+        <li>Columbia</li>
+      </ul>
+    </div>
+  </div>
+  <div class="state-card">
+    <div class="state-card-header">South Carolina</div>
+    <div class="state-card-body">
+      <ul>
+        <li>Columbia</li>
+        <li>Rock Hill</li>
+      </ul>
+    </div>
+  </div>
+  <div class="state-card">
+    <div class="state-card-header">Texas</div>
+    <div class="state-card-body">
+      <ul>
+        <li>San Marcos</li>
+        <li>Central Texas</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="talking-point">Coverage Pitch (Tennessee Agent):</div>
+<div class="script">We work two zones. Our core area is south Nashville down through Columbia and about 25 to 30 miles further south &mdash; that's where you get our standard flat pricing and the fastest scheduling. We also cover a wider practical area that includes most of greater Nashville and the surrounding counties, but pricing on those goes up a bit to cover the extra drive time, fuel, and crew hours. And when you've got a tight closing, we can often do same-day or next-day inside the core zone. Anything outside both zones, just call us and we'll put a quote together.</div>
+
+<div class="callout callout-orange">
+  <strong>Coverage Zones &mdash; Quick Reference</strong>
+  <span class="bold">Core Service Area (standard pricing &amp; fastest turnaround):</span> South Nashville &rarr; Columbia &rarr; ~25&ndash;30 miles south of Columbia. Same-day / next-day often available.<br>
+  <span class="bold">Practical Service Area (travel uplift applies):</span> Greater Nashville and surrounding counties outside the core zone.<br>
+  <span class="bold">Outside both zones:</span> Case-by-case quote. Always quote, never assume.
+</div>
+
+<p style="margin-top: 14px; margin-bottom: 6px; font-size: 10pt; color: #555;">
+  <span class="bold">For the agent on the call:</span> if they ask whether you cover their specific town, the answer is almost always &ldquo;yes &mdash; let me check whether it's in the core zone or whether there's a travel uplift, and I'll send you a quote either way.&rdquo; Don't say no on the phone unless you're sure.
+</p>
+
+<!-- SECTION 4: THE SERVICE -->
+<div class="section-header blue-header">Part 4 &mdash; What a Real Estate Inspection Looks Like</div>
+
+<p style="margin-bottom: 8px; font-size: 10pt;">
+  Most agents don't actually know what's inside a septic inspection. Walk them through it so they sound smart to their buyer.
+</p>
+
+<div class="talking-point">The Walk-Through:</div>
+<div class="script">Every real estate inspection includes a pump-out &mdash; that's mandatory because you can't actually inspect the inside of the tank with sewage in it. Once it's pumped, the tech goes in and checks four things: the walls and floors of the tank for cracks, the ceiling of the tank for root intrusion (which is huge because if you catch it early you can save the system), the pump itself, and the distribution to the field. Then we write up a detailed inspection report &mdash; not just a pass/fail. We tell you exactly what condition the system is in, point out anything we found, and if there's an issue we tell you what it'll take to fix it. Your client and the lender both get a clear picture of what they're walking into.</div>
+
+<div class="talking-point">Why the Pump-Out Actually Matters (the part most people get wrong):</div>
+<div class="script">Here's something most homeowners and even some agents don't realize &mdash; the tank is <em>supposed</em> to have water and effluent in it. That's not the problem. The problem is the scum layer on top and the solids on the bottom. Those are what cause the failures. When the solids build up, they push out into the pump chamber and the drain field, which is what kills the pump and clogs the field. A pump replacement runs $3,000 to $5,000. A field replacement runs $5,000 to $7,000. So the pump-out isn't just &ldquo;cleaning the tank&rdquo; &mdash; it's removing the exact stuff that destroys the most expensive parts of the system.</div>
+
+<div class="callout callout-orange">
+  <strong>The 30-Second Education</strong>
+  This is the single best thing Dannia can teach an agent. Most agents have never been told this. Once they understand it, they explain it to every client themselves &mdash; and you've turned them into a referral engine. They'll say <em>&ldquo;you have to get it pumped because the scum and solids will destroy your pump and field &mdash; that's a $3K&ndash;$5K pump or a $5K&ndash;$7K field, all to avoid an $825 inspection.&rdquo;</em> That's MAC's pitch coming out of the agent's mouth.
+</div>
+
+<div class="talking-point">The Detailed Report Pitch:</div>
+<div class="script">A lot of inspectors hand you a one-line letter that says &ldquo;system functional.&rdquo; That doesn't help anybody. Our reports include direct feedback on the actual state of the system, photos when relevant, and clear recommendations for any repairs we found &mdash; with rough costs so your client isn't blindsided. If the system is great, we say so. If something needs attention, you find out before closing, not after.</div>
+
+<div class="talking-point">Why It's Worth It (For the Buyer):</div>
+<div class="script">The whole point is your buyer's peace of mind. They walk into that house knowing the septic system is good for the next 3 to 5 years before they need to think about it again. That's a huge stress reducer at closing.</div>
+
+<p style="margin-top: 14px; font-weight: 700; font-size: 10.5pt; color: #104b95;">What Gets Inspected:</p>
+<ul class="checklist">
+  <li><span class="bold">Tank walls and floors</span> &mdash; checking for cracks that lead to leaks or groundwater intrusion</li>
+  <li><span class="bold">Tank ceiling</span> &mdash; checking for root intrusion (cheap to fix early, expensive to fix late)</li>
+  <li><span class="bold">Pump and floats</span> &mdash; making sure the pump runs and the floats trigger correctly</li>
+  <li><span class="bold">Drain field / distribution</span> &mdash; verifying effluent is being distributed evenly to the field</li>
+  <li><span class="bold">Detailed inspection report</span> &mdash; full written feedback on system condition, photos, and resolution recommendations with rough costs if anything needs attention</li>
+  <li><span class="bold">Delivered to the payer</span> &mdash; agent, buyer, or seller, whoever paid the invoice</li>
+</ul>
+
+<!-- SECTION 5: PRICING -->
+<div class="section-header orange-header">Part 5 &mdash; Pricing (Be Direct, Be Clear)</div>
+
+<div class="callout callout-orange">
+  <strong>The MAC Pricing Promise</strong>
+  No hidden fees. Two flat numbers. The only time anything else gets added is in the rare disclaimer cases below &mdash; and Dannia tells the agent about those upfront, every time. This is what separates MAC from competitors who give a low quote and then hit the seller with surprise charges at closing.
+</div>
+
+<p style="margin-bottom: 4px; font-size: 10.5pt; font-weight: 700; color: #104b95;">Standard Real Estate Inspection</p>
+<table class="pricing-table">
+  <thead>
+    <tr>
+      <th style="width: 50%;">Service</th>
+      <th style="width: 25%;">Price</th>
+      <th style="width: 25%;">Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="bold">Pump-Out</span> (up to 1,000 gallons)</td>
+      <td class="price">$625</td>
+      <td>Required before inspection</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Real Estate Inspection</span></td>
+      <td class="price">$200</td>
+      <td>Performed after the pump-out</td>
+    </tr>
+    <tr style="background: #e8f1fa;">
+      <td><span class="bold">Total Standard Cost</span></td>
+      <td class="price" style="color: #da6833;">$825</td>
+      <td>Flat, no hidden fees</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="talking-point">The Pricing Pitch:</div>
+<div class="script">It's $625 for the pump-out and $200 for the inspection itself &mdash; so $825 total. That's a flat number. There are no hidden fees and no surprises at closing. The only time anything changes is if we run into one of two specific situations on-site, and I'd rather tell you about those now so we're never in a position where I'm calling you mid-close with bad news.</div>
+
+<p style="margin-top: 16px; margin-bottom: 4px; font-size: 10.5pt; font-weight: 700; color: #104b95;">Additional Services &amp; Add-Ons</p>
+<p style="font-size: 9.5pt; color: #555; margin-bottom: 8px;">If the inspection or repair turns up something extra, here's what add-ons typically run. Dannia should reference these when relevant but doesn't need to walk an agent through every line item on the intro call.</p>
+<table class="pricing-table">
+  <thead>
+    <tr>
+      <th style="width: 50%;">Service / Item</th>
+      <th style="width: 20%;">Price</th>
+      <th style="width: 30%;">When It Applies</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="bold">Hourly Labor</span></td>
+      <td class="price">$150/hr</td>
+      <td>Digging, cement-solid removal, extended labor</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Hourly Labor</span> &mdash; Night/Weekend/Holiday</td>
+      <td class="price">$225/hr</td>
+      <td>After-hours or holiday emergency work</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Half-Day Mini-X</span></td>
+      <td class="price">$350</td>
+      <td>Mini-excavator on-site (uncovering buried tanks, larger digs)</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Riser &mdash; 24&Prime; (6&Prime; rise)</span></td>
+      <td class="price">$92</td>
+      <td>Bring tank lid up to grade for easier future access</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Riser &mdash; 24&Prime; (12&Prime; rise)</span></td>
+      <td class="price">$160</td>
+      <td>Same as above, deeper tanks</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Riser &mdash; 24&Prime; Adapter Ring</span></td>
+      <td class="price">$68</td>
+      <td>Adapter for installing risers on existing tank lids</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Riser &mdash; 24&Prime; Lid (Standard)</span></td>
+      <td class="price">$76</td>
+      <td>Standard lid for the riser column</td>
+    </tr>
+    <tr>
+      <td><span class="bold">Riser &mdash; 24&Prime; Lid (Heavy Duty)</span></td>
+      <td class="price">$156</td>
+      <td>Drive-over rated, recommended for high-traffic areas</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout callout-cyan" style="margin-top: 8px;">
+  <strong>The Riser Upsell Opportunity</strong>
+  Most pre-sale inspections expose buried tank lids. Suggesting risers to the agent is a real win &mdash; the buyer never has to dig again, and the agent looks like they delivered extra value. A standard riser + lid runs $168&ndash;$248 installed. A small ask, big future convenience.
+</div>
+
+<!-- SECTION 6: DISCLAIMERS -->
+<div class="section-header orange-header">Part 6 &mdash; The Two Disclaimers (Less Than 5% of Jobs)</div>
+
+<p style="margin-bottom: 8px; font-size: 10pt;">
+  Be upfront about the rare extra-fee situations. Telling the agent about them BEFORE the job builds massive trust. Surprising them WITH the bill destroys the relationship.
+</p>
+
+<div class="disclaimer-card">
+  <div class="disc-title">1. Lid Access &mdash; Buried Tank</div>
+  <div class="disc-detail">If the septic tank lid is buried under landscaping, dirt, concrete, or pavers, the tech has to dig it out before the pump-out can happen. We can usually find it with a probe in a few minutes &mdash; but if there's serious digging involved, that's billed by the hour.</div>
+  <div class="disc-fee">Fee: $150/hour for digging</div>
+</div>
+
+<div class="disclaimer-card">
+  <div class="disc-title">2. Cement Solids &mdash; Heavily Compacted Sludge</div>
+  <div class="disc-detail">When a tank hasn't been pumped in 10+ years, or if the homeowner has been using additives like Rid-X, the solids at the bottom can get as hard as cement. It just takes longer to break up and remove. Same hourly rate.</div>
+  <div class="disc-fee">Fee: $150/hour for extended pump time</div>
+</div>
+
+<div class="talking-point">How to Pitch the Disclaimers:</div>
+<div class="script">There are two situations where a job runs over the flat rate, and they hit less than 5% of the homes we touch. One is if the tank lid is buried and we have to dig &mdash; that's $150 an hour for the digging. The other is if the sludge has gotten really hard, which happens when a tank hasn't been pumped in a long time. Same rate. The reason I'm telling you upfront, before we ever schedule, is so you're not surprised. We can't stop a job mid-dig and wait hours for a callback &mdash; the tech has to keep moving &mdash; but you'll already know these situations are possible because we're talking about them right now. Anything outside the standard $825 gets itemized clearly on the invoice.</div>
+
+<div class="callout callout-blue">
+  <strong>Why This Builds Trust</strong>
+  Most septic companies don't mention edge cases until the bill arrives. Agents have been burned by this. Telling them upfront &mdash; with a number, in plain English &mdash; flips the dynamic. The agent already knew the disclaimers were possible before they ever booked the job, so when one comes up the invoice isn't a fight, it's an expectation. You become the inspector they trust precisely because you led with the uncomfortable part.
+</div>
+
+<!-- SECTION 7: THE PROCESS -->
+<div class="section-header dark-header">Part 7 &mdash; How the Process Works (End to End)</div>
+
+<p style="margin-bottom: 8px; font-size: 10pt;">
+  Show the agent the whole pipeline so they know exactly what happens when they refer a job.
+</p>
+
+<div class="process-flow">
+  <div class="process-step">
+    <div class="step-num">1</div>
+    Agent or<br>Customer Calls
+  </div>
+  <div class="process-step">
+    <div class="step-num">2</div>
+    Inspection<br>Scheduled
+  </div>
+  <div class="process-step">
+    <div class="step-num">3</div>
+    Pump-Out +<br>Inspection
+  </div>
+  <div class="process-step">
+    <div class="step-num">4</div>
+    Inspection<br>Letter Written
+  </div>
+  <div class="process-step">
+    <div class="step-num">5</div>
+    Invoice Sent<br>for Payment
+  </div>
+  <div class="process-step">
+    <div class="step-num">6</div>
+    Letter Sent<br>to Payer
+  </div>
+</div>
+
+<div class="talking-point">The Process Pitch:</div>
+<div class="script">The flow is really simple. You call us, or your client calls us &mdash; whoever's easier. We get on the schedule, usually within 3 to 5 business days. Tech goes out, pumps the tank, inspects everything, comes back to the office. We write up the inspection letter, send the invoice to whoever's paying, and as soon as that's paid, the letter goes to the same person. That's it. You don't have to chase anybody.</div>
+
+<div class="callout callout-cyan">
+  <strong>One Important Detail</strong>
+  The inspection letter goes to the person who paid for the inspection. So if the seller pays, it goes to the seller. If the buyer pays, it goes to the buyer. If the agent pays and bills it back, it goes to the agent. Be explicit about this on the call so there's no confusion at closing.
+</div>
+
+<!-- SECTION 8: CLOSING -->
+<div class="section-header blue-header">Part 8 &mdash; Closing the Conversation</div>
+
+<p style="margin-bottom: 8px; font-size: 10pt;">
+  Don't ask for a commitment. Ask to send a one-pager and to follow up in a few weeks. Building a referral relationship takes 3&ndash;5 touches, not one.
+</p>
+
+<div class="talking-point">The Soft Close:</div>
+<div class="script">I really appreciate you taking a couple minutes. Can I send you a one-page summary of what we just talked about? That way it's in your inbox when you need it. And do you mind if I check back in a few weeks just to see if anything's come up where I can help?</div>
+
+<div class="talking-point">If They Have a Listing With a Septic System Right Now:</div>
+<div class="script">Actually &mdash; do you have anything on the market right now with a septic system? I'd love to put a quote together for you while we're talking, just so you know what to tell your seller. It's no obligation. I can have it in your inbox in 10 minutes.</div>
+
+<div class="talking-point">Always Ask For:</div>
+<ul style="padding-left: 20px; font-size: 10pt; margin-bottom: 10px;">
+  <li style="margin-bottom: 4px;">Their <span class="bold">preferred email</span> for the one-pager and quotes</li>
+  <li style="margin-bottom: 4px;">Their <span class="bold">cell phone</span> for fast turnaround on hot listings</li>
+  <li style="margin-bottom: 4px;">Permission to <span class="bold">follow up in 2&ndash;4 weeks</span></li>
+  <li style="margin-bottom: 4px;">If they say they're happy with their current inspector: ask <span class="bold">who they use</span> &mdash; helps us know who we're up against in this market</li>
+</ul>
+
+<!-- THE GOLDEN RULES -->
+<div class="callout callout-blue" style="margin-top: 14px;">
+  <strong>The Golden Rules of Realtor Calls</strong>
+  <span class="bold">(1)</span> Don't pitch &mdash; introduce. <span class="bold">(2)</span> Ask to be the backup, not the primary. <span class="bold">(3)</span> Lead with the disclaimers, not the bill. <span class="bold">(4)</span> Promise an inspection letter in their inbox before they hang up if they have an active listing. <span class="bold">(5)</span> Always confirm a follow-up window before ending the call &mdash; the relationship is built over months, not minutes.
+</div>
+
+<div class="footer">
+  MAC Septic &bull; 512.737.8711 &bull; macseptic.com &bull; will@macseptic.com<br>
+  INTERNAL DOCUMENT &mdash; Realtor Conversation Guide v1 &bull; For Dannia &amp; outbound team &bull; Review quarterly
+</div>
+
+</body>
+</html>
