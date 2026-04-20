@@ -1,0 +1,21 @@
+{
+  "docs_dir": "/home/will/mac-septic-docs",
+  "documents": [
+    {"slug": "call-playbook", "file": "call-playbook.html", "title": "Call Playbook", "category": "Playbooks", "description": "Step-by-step guide for handling inbound customer calls", "file_type": "html"},
+    {"slug": "call-recording-setup", "file": "call-recording-setup.html", "title": "Call Recording Setup", "category": "Playbooks", "description": "How to configure call recording systems", "file_type": "html"},
+    {"slug": "maintenance-contract", "file": "maintenance-contract.html", "title": "Maintenance Contract", "category": "Contracts", "description": "Standard aerobic maintenance agreement template", "file_type": "html"},
+    {"slug": "maintenance-contract-waived", "file": "maintenance-contract-waived.html", "title": "Maintenance Contract (Waived Fee)", "category": "Contracts", "description": "Maintenance agreement with waived inspection fee", "file_type": "html"},
+    {"slug": "contract-template", "file": "contract-template.txt", "title": "Contract Template (Text)", "category": "Contracts", "description": "Plain-text version of the standard contract", "file_type": "text"},
+    {"slug": "contract-template-waived", "file": "contract-template-waived.txt", "title": "Contract Template - Waived (Text)", "category": "Contracts", "description": "Plain-text contract with waived inspection fee", "file_type": "text"},
+    {"slug": "repair-credit-plan-addendum", "file": "repair-credit-plan-addendum.html", "title": "Repair Credit Plan Addendum", "category": "Contracts", "description": "Addendum for $20/mo repair credit plan", "file_type": "html"},
+    {"slug": "repair-credit-plan-addendum-txt", "file": "repair-credit-plan-addendum.txt", "title": "Repair Credit Plan Addendum (Text)", "category": "Contracts", "description": "Plain-text version of repair credit plan addendum", "file_type": "text"},
+    {"slug": "county-rules", "file": "county-rules.html", "title": "County Rules", "category": "Regulations", "description": "County-specific septic regulations and compliance rules", "file_type": "html"},
+    {"slug": "tceq-requirement", "file": "tceq-requirement.html", "title": "TCEQ Requirements", "category": "Regulations", "description": "Texas Commission on Environmental Quality septic regulations", "file_type": "html"},
+    {"slug": "aerobic-dos-and-donts", "file": "aerobic-dos-and-donts.html", "title": "Aerobic System Dos & Don'ts", "category": "Regulations", "description": "Guidelines for aerobic septic system maintenance", "file_type": "html"},
+    {"slug": "realtor-script", "file": "realtor-script.html", "title": "Realtor Sales Script", "category": "Sales", "description": "Phone script for outbound calls to realtors", "file_type": "html"},
+    {"slug": "realtor-one-pager", "file": "realtor-one-pager.html", "title": "Realtor One-Pager", "category": "Sales", "description": "Leave-behind summary for realtor meetings", "file_type": "html"},
+    {"slug": "real-consequences", "file": "real-consequences.html", "title": "Real Consequences", "category": "Sales", "description": "Educational content on consequences of neglecting septic systems", "file_type": "html"},
+    {"slug": "why-pump-out", "file": "why-pump-out.html", "title": "Why Pump Out?", "category": "Sales", "description": "Customer education: why regular pump-outs matter", "file_type": "html"},
+    {"slug": "dump-stations", "file": "dump-stations.html", "title": "Dump Station Locations", "category": "Operations", "description": "Approved dump station locations for service trucks", "file_type": "html"}
+  ]
+}

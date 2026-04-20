@@ -136,6 +136,8 @@ from app.api.v2 import (
     # Live Chat (real implementation in live_chat.py, mounted in main.py)
     # Document Center
     documents,
+    # Reference Docs (static septic docs served from disk)
+    reference_docs,
     # Tank Size Estimation (Nashville)
     tank_estimation,
     # InvoiceHome Import (one-time migration)
@@ -374,6 +376,9 @@ api_router.include_router(custom_reports.router, prefix="/reports/custom", tags=
 
 # Document Center
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
+
+# Reference Docs (static septic docs from disk)
+api_router.include_router(reference_docs.router, prefix="/reference-docs", tags=["reference-docs"])
 
 # Live Chat — real implementation in live_chat.py, mounted directly in main.py
 # (stub chat.py removed — it was overriding the real endpoints)
