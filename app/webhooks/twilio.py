@@ -369,15 +369,29 @@ async def handle_voice_status(
     }
 
     async with async_session_maker() as db:
-        # Find by caller_number match on recent calls (CallSid not stored as column)
-        # Find most recent ringing call log
-        result = await db.execute(
-            select(CallLog)
-            .where(CallLog.external_system == "twilio", CallLog.call_disposition == "ringing")
-            .order_by(CallLog.created_at.desc())
-            .limit(1)
-        )
-        call_log = result.scalar_one_or_none()
+        # Match by CallSid (stored in ringcentral_call_id for now). Fall back to
+        # the legacy "most recent ringing twilio row" lookup if not found, to
+        # stay compatible with inbound calls which previously used that path.
+        call_log = None
+        if call_sid:
+            result = await db.execute(
+                select(CallLog).where(
+                    CallLog.external_system == "twilio",
+                    CallLog.ringcentral_call_id == call_sid,
+                ).limit(1)
+            )
+            call_log = result.scalar_one_or_none()
+        if call_log is None:
+            result = await db.execute(
+                select(CallLog)
+                .where(
+                    CallLog.external_system == "twilio",
+                    CallLog.call_disposition == "ringing",
+                )
+                .order_by(CallLog.created_at.desc())
+                .limit(1)
+            )
+            call_log = result.scalar_one_or_none()
 
         if call_log:
             call_log.call_disposition = disposition_map.get(call_status, call_status)
@@ -419,14 +433,26 @@ async def handle_recording_status(
     logger.info("Recording status callback", extra={"call_sid": call_sid, "duration": recording_duration})
 
     async with async_session_maker() as db:
-        # Find the most recent call log with twilio external_system
-        result = await db.execute(
-            select(CallLog)
-            .where(CallLog.external_system == "twilio")
-            .order_by(CallLog.created_at.desc())
-            .limit(1)
-        )
-        call_log = result.scalar_one_or_none()
+        # Match by CallSid (stored in ringcentral_call_id) so the recording
+        # attaches to the correct call even when many calls are happening
+        # concurrently. Falls back to most-recent-twilio for legacy inbound.
+        call_log = None
+        if call_sid:
+            result = await db.execute(
+                select(CallLog).where(
+                    CallLog.external_system == "twilio",
+                    CallLog.ringcentral_call_id == call_sid,
+                ).limit(1)
+            )
+            call_log = result.scalar_one_or_none()
+        if call_log is None:
+            result = await db.execute(
+                select(CallLog)
+                .where(CallLog.external_system == "twilio")
+                .order_by(CallLog.created_at.desc())
+                .limit(1)
+            )
+            call_log = result.scalar_one_or_none()
 
         if call_log:
             call_log.recording_url = recording_url

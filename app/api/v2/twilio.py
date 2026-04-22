@@ -130,12 +130,24 @@ async def twilio_voice_webhook(request: Request):
     """TwiML webhook — Twilio calls this when the browser SDK initiates a call.
 
     No auth required (Twilio calls this directly).
-    Reads 'To' from form data, returns TwiML XML.
-    Optionally injects <Start><Stream> for Google STT live transcription.
+    - Creates a CallLog row at call start, attributed to the CRM user identified
+      by the Voice SDK token's identity (email or numeric id, sent in 'From')
+    - Enables dual-channel recording so the Call Library populates
+    - Wires status + recording callbacks so subsequent webhooks can update
+      this exact row by CallSid
+    - Optionally injects <Start><Stream> for Google STT live transcription
     """
+    from datetime import date as _date, datetime as _dt
+    from sqlalchemy import select as _select
+    from app.database import async_session_maker as _session_maker
+    from app.models.call_log import CallLog as _CallLog
+    from app.models.user import User as _User
+    import uuid as _uuid
+
     form = await request.form()
     to_number = form.get("To", "")
     call_sid = form.get("CallSid", "")
+    from_identity = form.get("From", "")  # e.g. "client:dannia@macseptic.com"
 
     if not to_number:
         logger.warning("Twilio voice webhook called without To number")
@@ -143,6 +155,68 @@ async def twilio_voice_webhook(request: Request):
             content="<Response><Say>No destination number provided.</Say></Response>",
             media_type="application/xml",
         )
+
+    # Resolve the CRM user from the Voice SDK identity. Token is created in
+    # /token with identity = current_user.email or str(current_user.id), so the
+    # 'From' header on the TwiML POST will be "client:<identity>".
+    user_id_str = "1"  # fallback: treat as Will
+    identity = from_identity.replace("client:", "").strip() if from_identity else ""
+    if identity and call_sid:
+        try:
+            async with _session_maker() as db:
+                if "@" in identity:
+                    res = await db.execute(
+                        _select(_User).where(_User.email == identity).limit(1)
+                    )
+                else:
+                    try:
+                        res = await db.execute(
+                            _select(_User).where(_User.id == int(identity)).limit(1)
+                        )
+                    except ValueError:
+                        res = None
+                user = res.scalar_one_or_none() if res is not None else None
+                if user is not None:
+                    user_id_str = str(user.id)
+        except Exception as e:
+            logger.warning("Voice SDK identity lookup failed: %s", e)
+
+    # Insert a CallLog row for this outbound call so the Call Library and
+    # downstream reporting can see it. Idempotent: skip if a row already exists
+    # for this CallSid (Twilio retries in some failure modes).
+    if call_sid:
+        try:
+            async with _session_maker() as db:
+                existing = await db.execute(
+                    _select(_CallLog).where(
+                        _CallLog.ringcentral_call_id == call_sid,
+                        _CallLog.external_system == "twilio",
+                    ).limit(1)
+                )
+                if existing.scalar_one_or_none() is None:
+                    now = _dt.utcnow()
+                    db.add(_CallLog(
+                        id=_uuid.uuid4(),
+                        ringcentral_call_id=call_sid,
+                        caller_number=settings.TWILIO_PHONE_NUMBER or "",
+                        called_number=str(to_number),
+                        user_id=user_id_str,
+                        direction="outbound",
+                        call_type="voice",
+                        call_disposition="ringing",
+                        call_date=now.date(),
+                        call_time=now.time(),
+                        duration_seconds=0,
+                        external_system="twilio",
+                    ))
+                    await db.commit()
+                    logger.info(
+                        "Created outbound CallLog",
+                        extra={"call_sid": call_sid, "user_id": user_id_str},
+                    )
+        except Exception as e:
+            # Never block the call on a logging failure.
+            logger.error("Failed to insert outbound CallLog: %s", e, exc_info=True)
 
     logger.info(f"Twilio browser voice webhook: dialing {to_number}")
     response = VoiceResponse()
@@ -161,6 +235,24 @@ async def twilio_voice_webhook(request: Request):
         stream.parameter(name="called_number", value=called_number)
         logger.info("Injected media stream: %s (caller=%s, called=%s)", stream_url, caller_number, called_number)
 
-    dial = response.dial(caller_id=settings.TWILIO_PHONE_NUMBER)
+    # Build absolute callback URLs so Twilio can update the CallLog as the call
+    # progresses (status) and when a recording becomes available.
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
+    base = f"{proto}://{host}" if host else ""
+    voice_status_url = f"{base}/webhooks/twilio/voice-status" if base else None
+    recording_status_url = f"{base}/webhooks/twilio/recording-status" if base else None
+
+    dial_kwargs = {"caller_id": settings.TWILIO_PHONE_NUMBER}
+    if voice_status_url:
+        dial_kwargs["action"] = voice_status_url
+        dial_kwargs["method"] = "POST"
+    # Enable dual-channel recording so the Call Library has audio to play back.
+    dial_kwargs["record"] = "record-from-answer-dual"
+    if recording_status_url:
+        dial_kwargs["recording_status_callback"] = recording_status_url
+        dial_kwargs["recording_status_callback_method"] = "POST"
+
+    dial = response.dial(**dial_kwargs)
     dial.number(str(to_number))
     return Response(content=str(response), media_type="application/xml")
