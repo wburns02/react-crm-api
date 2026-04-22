@@ -157,6 +157,14 @@ from app.models.property_lookup import PropertyLookup
 # Email Marketing Lists
 from app.models.email_list import EmailList, EmailSubscriber
 
+# Outbound Dialer persistence
+from app.models.outbound_campaign import (
+    OutboundCampaign,
+    OutboundCampaignContact,
+    OutboundCallAttempt,
+    OutboundCallback,
+)
+
 # HR Module (feature-flagged; models registered so SQLite test DB creates them)
 from app.hr.shared.models import HrAuditLog, HrRoleAssignment  # noqa: F401
 from app.hr.workflow.models import (  # noqa: F401
@@ -347,4 +355,9 @@ __all__ = [
     # Email Marketing Lists
     "EmailList",
     "EmailSubscriber",
+    # Outbound Dialer persistence
+    "OutboundCampaign",
+    "OutboundCampaignContact",
+    "OutboundCallAttempt",
+    "OutboundCallback",
 ]

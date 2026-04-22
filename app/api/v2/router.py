@@ -29,6 +29,7 @@ from app.api.v2 import (
     notifications,
     calls,
     call_dispositions,
+    outbound_campaigns,
     dump_sites,
     # Phase 1: AI Infrastructure
     ai,
@@ -208,6 +209,7 @@ api_router.include_router(inventory.router, prefix="/inventory", tags=["inventor
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(calls.router, prefix="/calls", tags=["calls"])
 api_router.include_router(call_dispositions.router, prefix="/call-dispositions", tags=["call-dispositions"])
+api_router.include_router(outbound_campaigns.router, prefix="/outbound-campaigns", tags=["outbound-campaigns"])
 
 # Phase 1: AI Infrastructure
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
