@@ -18,8 +18,12 @@ careers_router = APIRouter(prefix="/careers", tags=["careers-public"])
 
 
 @careers_router.get("/jobs.xml", response_class=Response)
+@careers_router.get("/indeed-feed.xml", response_class=Response)
 async def jobs_feed(request: Request, db: DbSession) -> Response:
     reqs = await list_requisitions(db, status="open")
+    # Respect per-requisition publish_to_indeed opt-out.  Older rows default
+    # to true (see migration 105).
+    reqs = [r for r in reqs if getattr(r, "publish_to_indeed", True)]
     base_url = str(request.base_url).rstrip("/")
     xml = build_indeed_xml(base_url, reqs)
     return Response(content=xml, media_type="application/xml")

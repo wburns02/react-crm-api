@@ -27,6 +27,7 @@ class RequisitionIn(BaseModel):
     status: Status = "draft"
     hiring_manager_id: int | None = None
     onboarding_template_id: UUIDStr | None = None
+    publish_to_indeed: bool = True
 
 
 class RequisitionOut(BaseModel):
@@ -47,6 +48,7 @@ class RequisitionOut(BaseModel):
     closed_at: datetime | None
     hiring_manager_id: int | None
     onboarding_template_id: UUIDStr | None
+    publish_to_indeed: bool
     created_at: datetime
 
 
@@ -63,6 +65,7 @@ class RequisitionPatch(BaseModel):
     status: Status | None = None
     hiring_manager_id: int | None = None
     onboarding_template_id: UUIDStr | None = None
+    publish_to_indeed: bool | None = None
 
 
 class RequisitionWithCountsOut(RequisitionOut):

@@ -1558,6 +1558,7 @@ from app.hr.router import hr_router
 from app.hr.esign.router import esign_public_router
 from app.hr.careers.router import careers_router
 from app.hr.recruiting.public_apply import public_apply_router
+from app.hr.recruiting.indeed_webhook import indeed_webhook_router
 
 if hr_module_enabled():
     app.include_router(hr_router, prefix="/api/v2")
@@ -1570,6 +1571,9 @@ if hr_module_enabled():
     # Public SSR careers pages mount at /careers (no /api/v2 prefix) so they
     # are indexable by search engines and shareable as friendly URLs.
     app.include_router(careers_router)
+    # Indeed Apply webhook.  User-facing path is POST /hr/indeed-apply
+    # (no /api/v2 prefix so Indeed can hit it as a root URL).
+    app.include_router(indeed_webhook_router)
     # Plan 3: hire → onboarding spawn is called inline from
     # application_services.transition_stage; import the module so the file
     # loads at startup (using `importlib` to avoid shadowing `app` — the

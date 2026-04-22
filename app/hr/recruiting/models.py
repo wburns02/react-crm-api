@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -40,6 +41,9 @@ class HrRequisition(Base):
         UUID(as_uuid=True), ForeignKey("hr_workflow_templates.id"), nullable=True
     )
     created_by = Column(Integer, ForeignKey("api_users.id"), nullable=True)
+    publish_to_indeed = Column(
+        Boolean, nullable=False, server_default=func.true()
+    )
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, onupdate=func.now(), nullable=True)
 
