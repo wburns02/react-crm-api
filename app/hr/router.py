@@ -8,6 +8,7 @@ from app.hr.fsa.router import fsa_router
 from app.hr.employees.router import employees_router
 from app.hr.esign.router import esign_admin_router
 from app.hr.onboarding.router import onboarding_admin_router
+from app.hr.payroll.router import payroll_router as hr_payroll_router
 from app.hr.recruiting.applicant_router import applicants_router
 from app.hr.recruiting.application_router import applications_router
 from app.hr.recruiting.router import recruiting_router
@@ -30,6 +31,7 @@ hr_router.include_router(fsa_router)
 hr_router.include_router(cobra_router)
 hr_router.include_router(aca_router)
 hr_router.include_router(benefit_settings_router)
+hr_router.include_router(hr_payroll_router)
 
 
 @hr_router.get("/health")
