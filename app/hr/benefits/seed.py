@@ -15,11 +15,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.hr.benefits.models import (
+    HrBenefitAccountStructure,
+    HrBenefitCarrierIntegration,
     HrBenefitEnrollment,
     HrBenefitEoiRequest,
     HrBenefitEvent,
     HrBenefitHistory,
     HrBenefitPlan,
+    HrBenefitScheduledDeduction,
 )
 
 
@@ -266,4 +269,123 @@ async def seed_benefits_demo(db: AsyncSession) -> dict:
         "events": events_created,
         "history": history_created,
         "eoi": eoi_created,
+    }
+
+
+async def seed_integrations_and_deductions(db: AsyncSession) -> dict:
+    """Seed carrier integrations + account structures + scheduled deductions."""
+    existing = (
+        await db.execute(select(HrBenefitCarrierIntegration).limit(1))
+    ).scalar_one_or_none()
+    if existing is not None:
+        return {"seeded": False, "reason": "integrations already present"}
+
+    carriers = [
+        {
+            "carrier": "Blue Shield",
+            "state": "California",
+            "enrollment_types": "Medical, COBRA enrollments",
+            "integration_status": "active",
+            "form_forwarding_enabled": True,
+            "plan_year": 2026,
+            "is_upcoming": False,
+        },
+        {
+            "carrier": "MetLife",
+            "state": "California",
+            "enrollment_types": "Dental, Vision, Life, AD&D, Vol Life, Vol AD&D, STD, LTD, CI, COBRA enrollments",
+            "integration_status": "active",
+            "form_forwarding_enabled": True,
+            "plan_year": 2026,
+            "is_upcoming": False,
+        },
+        {
+            "carrier": "Transamerica",
+            "state": "California",
+            "enrollment_types": "Hospital, Accident, Cancer",
+            "integration_status": "active",
+            "form_forwarding_enabled": False,
+            "plan_year": 2026,
+            "is_upcoming": False,
+        },
+    ]
+    integrations_created = 0
+    for row in carriers:
+        db.add(HrBenefitCarrierIntegration(**row))
+        integrations_created += 1
+
+    # Account structure — one default classification per active carrier.
+    structure_created = 0
+    structures = [
+        {
+            "carrier": "Blue Shield",
+            "class_type": "Employee class",
+            "employee_group": "Full-time salaried",
+            "plan_name": "Platinum Full PPO 250/15",
+            "enrollment_tier": "Employee only",
+            "class_value": "Class 1",
+            "count_of_employees": 14,
+            "group_rules": "hire_date < '2025-01-01' AND department != 'Seasonal'",
+        },
+        {
+            "carrier": "MetLife",
+            "class_type": "Employee class",
+            "employee_group": "All eligible",
+            "plan_name": "DentalGuard Preferred High",
+            "enrollment_tier": "Employee + Family",
+            "class_value": "Class 1",
+            "count_of_employees": 16,
+            "group_rules": "is_active = true",
+        },
+    ]
+    for row in structures:
+        db.add(HrBenefitAccountStructure(**row))
+        structure_created += 1
+
+    # Future scheduled deductions — pull from the enrollments we already
+    # seeded; take the first 12 active medical rows + 4 dental rows and mix
+    # in a few discrepancies so the UI shows the warning banner.
+    enrollments = (
+        await db.execute(
+            select(HrBenefitEnrollment)
+            .where(HrBenefitEnrollment.status == "active")
+            .limit(20)
+        )
+    ).scalars().all()
+    today = date.today()
+    eff = today.replace(day=1) + timedelta(days=35)
+    eff = eff.replace(day=1)
+    deductions_created = 0
+    discrepancies = {2, 5, 9}  # indices to intentionally introduce drift
+    for idx, e in enumerate(enrollments):
+        ee_r = Decimal(e.monthly_deduction or 0)
+        er_r = Decimal(e.monthly_cost or 0) - ee_r
+        taxable_r = ee_r + er_r
+        ee_p = ee_r if idx not in discrepancies else (ee_r + Decimal("25.00"))
+        er_p = er_r if idx not in discrepancies else (er_r - Decimal("10.00"))
+        taxable_p = taxable_r if idx not in discrepancies else (taxable_r + Decimal("15.00"))
+        db.add(
+            HrBenefitScheduledDeduction(
+                employee_id=e.employee_id,
+                employee_name=e.employee_name,
+                benefit_type=e.benefit_type,
+                plan_name=e.plan_name,
+                effective_date=eff,
+                auto_manage=idx % 4 != 0,  # most auto-managed
+                ee_rippling=ee_r,
+                ee_in_payroll=ee_p,
+                er_rippling=er_r,
+                er_in_payroll=er_p,
+                taxable_rippling=taxable_r,
+                taxable_in_payroll=taxable_p,
+            )
+        )
+        deductions_created += 1
+
+    await db.commit()
+    return {
+        "seeded": True,
+        "integrations": integrations_created,
+        "structures": structure_created,
+        "scheduled_deductions": deductions_created,
     }

@@ -63,6 +63,66 @@ class HistoryOut(BaseModel):
     is_terminated: bool
 
 
+class CarrierIntegrationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUIDStr
+    carrier: str
+    state: str | None
+    enrollment_types: str | None
+    integration_status: str
+    form_forwarding_enabled: bool
+    plan_year: int | None
+    is_upcoming: bool
+
+
+class AccountStructureOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUIDStr
+    carrier: str
+    class_type: str | None
+    employee_group: str | None
+    plan_name: str | None
+    enrollment_tier: str | None
+    class_value: str | None
+    count_of_employees: int
+    group_rules: str | None
+
+
+class AccountStructureIn(BaseModel):
+    carrier: str
+    class_type: str | None = None
+    employee_group: str | None = None
+    plan_name: str | None = None
+    enrollment_tier: str | None = None
+    class_value: str | None = None
+    count_of_employees: int = 0
+    group_rules: str | None = None
+
+
+class ScheduledDeductionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUIDStr
+    employee_id: UUIDStr | None
+    employee_name: str
+    benefit_type: str
+    plan_name: str | None
+    effective_date: date | None
+    auto_manage: bool
+    ee_rippling: Decimal | None
+    ee_in_payroll: Decimal | None
+    er_rippling: Decimal | None
+    er_in_payroll: Decimal | None
+    taxable_rippling: Decimal | None
+    taxable_in_payroll: Decimal | None
+
+
+class ScheduledDeductionPatch(BaseModel):
+    auto_manage: bool | None = None
+    ee_in_payroll: Decimal | None = None
+    er_in_payroll: Decimal | None = None
+    taxable_in_payroll: Decimal | None = None
+
+
 class BenefitsOverviewOut(BaseModel):
     total_enrollments: int
     active_enrollments: int

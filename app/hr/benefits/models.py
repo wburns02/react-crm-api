@@ -84,6 +84,55 @@ class HrBenefitEoiRequest(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
+class HrBenefitCarrierIntegration(Base):
+    __tablename__ = "hr_benefit_carrier_integrations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    carrier = Column(String(128), nullable=False)
+    state = Column(String(64), nullable=True)
+    enrollment_types = Column(String(512), nullable=True)
+    integration_status = Column(String(32), nullable=False, default="inactive")
+    form_forwarding_enabled = Column(Boolean, nullable=False, server_default=func.false())
+    plan_year = Column(Integer, nullable=True)
+    is_upcoming = Column(Boolean, nullable=False, server_default=func.false())
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class HrBenefitAccountStructure(Base):
+    __tablename__ = "hr_benefit_account_structures"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    carrier = Column(String(128), nullable=False)
+    class_type = Column(String(64), nullable=True)
+    employee_group = Column(String(128), nullable=True)
+    plan_name = Column(String(200), nullable=True)
+    enrollment_tier = Column(String(64), nullable=True)
+    class_value = Column(String(128), nullable=True)
+    count_of_employees = Column(Integer, nullable=False, default=0)
+    group_rules = Column(String(512), nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class HrBenefitScheduledDeduction(Base):
+    __tablename__ = "hr_benefit_scheduled_deductions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("technicians.id"), nullable=True)
+    employee_name = Column(String(200), nullable=False)
+    benefit_type = Column(String(32), nullable=False, default="medical")
+    plan_name = Column(String(200), nullable=True)
+    effective_date = Column(Date, nullable=True)
+    auto_manage = Column(Boolean, nullable=False, server_default=func.false())
+    ee_rippling = Column(Numeric(10, 2), nullable=True)
+    ee_in_payroll = Column(Numeric(10, 2), nullable=True)
+    er_rippling = Column(Numeric(10, 2), nullable=True)
+    er_in_payroll = Column(Numeric(10, 2), nullable=True)
+    taxable_rippling = Column(Numeric(10, 2), nullable=True)
+    taxable_in_payroll = Column(Numeric(10, 2), nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, nullable=True)
+
+
 class HrBenefitHistory(Base):
     __tablename__ = "hr_benefit_history"
 
