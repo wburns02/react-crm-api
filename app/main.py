@@ -2521,9 +2521,9 @@ async def run_hr_migrations():
 async def run_benefits_migration():
     """Apply benefits migration 108 + seed demo data.
 
-    DB is already at 107.  We stamp to 107 and upgrade head so only the new
-    benefits migration runs, skipping the earlier ones that already touched
-    their tables.  Then we invoke the seed helper.
+    If the benefits tables already exist (from an earlier partial run),
+    just stamp alembic at 108 and run the seed helper.  Otherwise stamp at
+    107 and upgrade head.
     """
     from sqlalchemy import text
     from app.database import async_session_maker
@@ -2541,37 +2541,45 @@ async def run_benefits_migration():
                 results["version_before"] = None
             try:
                 row = await session.execute(
-                    text("SELECT to_regclass('public.hr_benefit_enrollments') IS NOT NULL")
+                    text(
+                        "SELECT to_regclass('public.hr_benefit_enrollments') IS NOT NULL"
+                    )
                 )
                 results["table_exists_before"] = bool(row.scalar())
             except Exception:
                 results["table_exists_before"] = None
 
         os.chdir("/app")
+        stamp_target = "108" if results.get("table_exists_before") else "107"
         proc = subprocess.run(
-            ["alembic", "stamp", "107"],
+            ["alembic", "stamp", stamp_target],
             capture_output=True,
             text=True,
             timeout=60,
         )
         results["stamp"] = proc.returncode == 0
+        results["stamp_target"] = stamp_target
         if proc.stderr:
             results["stamp_stderr"] = proc.stderr[-1000:]
 
-        proc = subprocess.run(
-            ["alembic", "upgrade", "head"],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        results["upgrade"] = proc.returncode == 0
-        if proc.stdout:
-            results["upgrade_stdout"] = proc.stdout[-2000:]
-        if proc.stderr:
-            results["upgrade_stderr"] = proc.stderr[-2000:]
+        if stamp_target == "107":
+            proc = subprocess.run(
+                ["alembic", "upgrade", "head"],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            results["upgrade"] = proc.returncode == 0
+            if proc.stdout:
+                results["upgrade_stdout"] = proc.stdout[-2000:]
+            if proc.stderr:
+                results["upgrade_stderr"] = proc.stderr[-2000:]
+        else:
+            # Tables already exist, no upgrade needed.
+            results["upgrade"] = True
+            results["upgrade_stdout"] = "skipped: tables already exist"
 
         if results["upgrade"]:
-            # Seed demo rows so the UI has content.
             from app.hr.benefits.seed import seed_benefits_demo
             async with async_session_maker() as session:
                 results["seed"] = await seed_benefits_demo(session)
