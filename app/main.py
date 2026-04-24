@@ -2684,6 +2684,73 @@ async def run_benefits_109_migration():
     return results
 
 
+@app.post("/health/db/migrate-fsa-110")
+async def run_fsa_110_migration():
+    """Apply migration 110 (FSA tables) + seed demo rows."""
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    import os, subprocess
+
+    results: dict = {"stamp": False, "upgrade": False, "seed": None, "errors": []}
+    try:
+        async with async_session_maker() as session:
+            try:
+                row = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["version_before"] = row.scalar_one_or_none()
+            except Exception:
+                results["version_before"] = None
+            try:
+                row = await session.execute(
+                    text("SELECT to_regclass('public.hr_fsa_plans') IS NOT NULL")
+                )
+                results["table_exists_before"] = bool(row.scalar())
+            except Exception:
+                results["table_exists_before"] = None
+
+        os.chdir("/app")
+        stamp_target = "110" if results.get("table_exists_before") else "109"
+        proc = subprocess.run(
+            ["alembic", "stamp", stamp_target],
+            capture_output=True, text=True, timeout=60,
+        )
+        results["stamp"] = proc.returncode == 0
+        results["stamp_target"] = stamp_target
+
+        if stamp_target == "109":
+            proc = subprocess.run(
+                ["alembic", "upgrade", "head"],
+                capture_output=True, text=True, timeout=300,
+            )
+            results["upgrade"] = proc.returncode == 0
+            if proc.stdout:
+                results["upgrade_stdout"] = proc.stdout[-2000:]
+            if proc.stderr:
+                results["upgrade_stderr"] = proc.stderr[-2000:]
+        else:
+            results["upgrade"] = True
+            results["upgrade_stdout"] = "skipped: tables already exist"
+
+        if results["upgrade"]:
+            from app.hr.fsa.seed import seed_fsa_demo
+            async with async_session_maker() as session:
+                results["seed"] = await seed_fsa_demo(session)
+
+        async with async_session_maker() as session:
+            try:
+                row = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["version_after"] = row.scalar_one_or_none()
+            except Exception:
+                results["version_after"] = None
+            try:
+                row = await session.execute(text("SELECT count(*) FROM hr_fsa_transactions"))
+                results["transactions_count"] = row.scalar_one()
+            except Exception:
+                results["transactions_count"] = None
+    except Exception as e:
+        results["errors"].append(f"{type(e).__name__}: {e}")
+    return results
+
+
 @app.post("/health/db/seed-demo-requisition")
 async def seed_demo_requisition():
     """Seed a single demo requisition for smoke testing the public apply flow.

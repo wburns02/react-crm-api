@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.hr.benefits.router import benefits_router
 from app.hr.dashboard.router import overview_router
+from app.hr.fsa.router import fsa_router
 from app.hr.employees.router import employees_router
 from app.hr.esign.router import esign_admin_router
 from app.hr.onboarding.router import onboarding_admin_router
@@ -23,6 +24,7 @@ hr_router.include_router(employees_router)
 hr_router.include_router(onboarding_admin_router)
 hr_router.include_router(esign_admin_router)
 hr_router.include_router(benefits_router)
+hr_router.include_router(fsa_router)
 
 
 @hr_router.get("/health")
