@@ -2684,6 +2684,57 @@ async def run_benefits_109_migration():
     return results
 
 
+@app.post("/health/db/migrate-aca-112")
+async def run_aca_112_migration():
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    import os, subprocess
+    results: dict = {"stamp": False, "upgrade": False, "seed": None, "errors": []}
+    try:
+        async with async_session_maker() as session:
+            try:
+                row = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["version_before"] = row.scalar_one_or_none()
+            except Exception:
+                results["version_before"] = None
+            try:
+                row = await session.execute(text("SELECT to_regclass('public.hr_aca_filings') IS NOT NULL"))
+                results["table_exists_before"] = bool(row.scalar())
+            except Exception:
+                results["table_exists_before"] = None
+        os.chdir("/app")
+        stamp_target = "112" if results.get("table_exists_before") else "111"
+        proc = subprocess.run(["alembic", "stamp", stamp_target], capture_output=True, text=True, timeout=60)
+        results["stamp"] = proc.returncode == 0
+        results["stamp_target"] = stamp_target
+        if stamp_target == "111":
+            proc = subprocess.run(["alembic", "upgrade", "head"], capture_output=True, text=True, timeout=300)
+            results["upgrade"] = proc.returncode == 0
+            if proc.stdout: results["upgrade_stdout"] = proc.stdout[-2000:]
+            if proc.stderr: results["upgrade_stderr"] = proc.stderr[-2000:]
+        else:
+            results["upgrade"] = True
+            results["upgrade_stdout"] = "skipped"
+        if results["upgrade"]:
+            from app.hr.aca.seed import seed_aca_and_settings
+            async with async_session_maker() as session:
+                results["seed"] = await seed_aca_and_settings(session)
+        async with async_session_maker() as session:
+            try:
+                row = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["version_after"] = row.scalar_one_or_none()
+            except Exception:
+                results["version_after"] = None
+            try:
+                row = await session.execute(text("SELECT count(*) FROM hr_aca_filings"))
+                results["filings_count"] = row.scalar_one()
+            except Exception:
+                results["filings_count"] = None
+    except Exception as e:
+        results["errors"].append(f"{type(e).__name__}: {e}")
+    return results
+
+
 @app.post("/health/db/migrate-cobra-111")
 async def run_cobra_111_migration():
     from sqlalchemy import text
