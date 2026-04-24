@@ -2517,6 +2517,83 @@ async def run_hr_migrations():
     return results
 
 
+@app.post("/health/db/migrate-benefits")
+async def run_benefits_migration():
+    """Apply benefits migration 108 + seed demo data.
+
+    DB is already at 107.  We stamp to 107 and upgrade head so only the new
+    benefits migration runs, skipping the earlier ones that already touched
+    their tables.  Then we invoke the seed helper.
+    """
+    from sqlalchemy import text
+    from app.database import async_session_maker
+    import os
+    import subprocess
+
+    results: dict = {"stamp": False, "upgrade": False, "seed": None, "errors": []}
+
+    try:
+        async with async_session_maker() as session:
+            try:
+                row = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["version_before"] = row.scalar_one_or_none()
+            except Exception:
+                results["version_before"] = None
+            try:
+                row = await session.execute(
+                    text("SELECT to_regclass('public.hr_benefit_enrollments') IS NOT NULL")
+                )
+                results["table_exists_before"] = bool(row.scalar())
+            except Exception:
+                results["table_exists_before"] = None
+
+        os.chdir("/app")
+        proc = subprocess.run(
+            ["alembic", "stamp", "107"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        results["stamp"] = proc.returncode == 0
+        if proc.stderr:
+            results["stamp_stderr"] = proc.stderr[-1000:]
+
+        proc = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        results["upgrade"] = proc.returncode == 0
+        if proc.stdout:
+            results["upgrade_stdout"] = proc.stdout[-2000:]
+        if proc.stderr:
+            results["upgrade_stderr"] = proc.stderr[-2000:]
+
+        if results["upgrade"]:
+            # Seed demo rows so the UI has content.
+            from app.hr.benefits.seed import seed_benefits_demo
+            async with async_session_maker() as session:
+                results["seed"] = await seed_benefits_demo(session)
+
+        async with async_session_maker() as session:
+            try:
+                row = await session.execute(text("SELECT version_num FROM alembic_version"))
+                results["version_after"] = row.scalar_one_or_none()
+            except Exception:
+                results["version_after"] = None
+            try:
+                row = await session.execute(text("SELECT count(*) FROM hr_benefit_enrollments"))
+                results["enrollments_count"] = row.scalar_one()
+            except Exception as e:
+                results["enrollments_count"] = None
+                results["errors"].append(f"count failed: {e}")
+    except Exception as e:
+        results["errors"].append(f"{type(e).__name__}: {e}")
+
+    return results
+
+
 @app.post("/health/db/seed-demo-requisition")
 async def seed_demo_requisition():
     """Seed a single demo requisition for smoke testing the public apply flow.
