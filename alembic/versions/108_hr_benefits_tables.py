@@ -1,15 +1,15 @@
 """hr benefits tables — plans, enrollments, events, eoi requests
 
-Revision ID: 106
-Revises: 105
+Revision ID: 108
+Revises: 107
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
 
-revision = "106"
-down_revision = "105"
+revision = "108"
+down_revision = "107"
 branch_labels = None
 depends_on = None
 
