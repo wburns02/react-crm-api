@@ -1,7 +1,7 @@
 """Seed demo payroll data — pay runs across all 4 buckets + people status."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,7 @@ async def seed_payroll_demo(db: AsyncSession) -> dict:
         return {"seeded": False, "reason": "payroll already seeded"}
 
     today = date.today()
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
 
     # Upcoming (1 row needing approval, matching the action banner shape)
     db.add(HrPayRun(
