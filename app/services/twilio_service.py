@@ -62,11 +62,116 @@ class TwilioService:
                 "message": f"Connection failed: {e.msg}",
             }
 
+    # Area-code → market lookup. Drives smart caller-ID selection.
+    # Map covers MAC Septic's three operating regions.
+    _AREA_CODE_TO_MARKET: Dict[str, str] = {
+        # Nashville metro (615 = original, 629 = 2014 overlay)
+        "615": "TN_NASHVILLE", "629": "TN_NASHVILLE",
+        # South-of-Nashville: Maury, Marshall, Lewis, Hickman, Lawrence, Giles, Wayne, Perry counties
+        "931": "TN_COLUMBIA",
+        # Austin metro
+        "512": "TX_AUSTIN", "737": "TX_AUSTIN",
+        "254": "TX_AUSTIN",  # Killeen/Temple/Waco — closest to Austin in TX list
+        "830": "TX_AUSTIN",  # Hill Country / New Braunfels / Boerne
+        # Columbia SC + the Carolinas footprint
+        "803": "SC_COLUMBIA", "839": "SC_COLUMBIA",  # 839 is 803's overlay
+        "843": "SC_COLUMBIA", "854": "SC_COLUMBIA",  # Lowcountry / Charleston
+        "864": "SC_COLUMBIA",  # Upstate / Greenville
+    }
+
+    def _market_to_number(self, market: str) -> Optional[str]:
+        """Return the configured Twilio number for a given market, or None."""
+        return {
+            "TN_NASHVILLE": settings.TWILIO_PHONE_NUMBER_TN_NASHVILLE,
+            "TN_COLUMBIA": settings.TWILIO_PHONE_NUMBER_TN_COLUMBIA,
+            "TX_AUSTIN": settings.TWILIO_PHONE_NUMBER_TX_AUSTIN,
+            "SC_COLUMBIA": settings.TWILIO_PHONE_NUMBER_SC_COLUMBIA,
+        }.get(market)
+
+    def pick_caller_id(
+        self,
+        to_number: str,
+        market_override: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Choose the best caller-ID number for an outbound call.
+
+        Strategy:
+          1. If market_override is a specific market ("TN_NASHVILLE", "TX_AUSTIN", etc.) and
+             that market has a number configured, use it.
+          2. If market_override is a region ("TN", "TX", "SC"), pick the best sub-market
+             for that region based on the destination area code.
+          3. Otherwise (auto / None / "auto"): match destination area code to a market.
+          4. Fall back to TWILIO_PHONE_NUMBER if nothing matches.
+
+        Returns dict: {from_number, market, reason} so the caller can log/show what was picked.
+        """
+        to_formatted = self._format_phone(to_number)
+        # E.164 looks like +1NPANXXXXXX — area code is digits 2..5
+        digits = "".join(c for c in to_formatted if c.isdigit())
+        area_code = digits[1:4] if len(digits) >= 11 and digits.startswith("1") else digits[:3]
+
+        override = (market_override or "").strip().upper() or None
+
+        # Direct sub-market override
+        if override and override in {"TN_NASHVILLE", "TN_COLUMBIA", "TX_AUSTIN", "SC_COLUMBIA"}:
+            num = self._market_to_number(override)
+            if num:
+                return {"from_number": num, "market": override, "reason": "explicit-override"}
+
+        # Region-only override — narrow by area code within the region
+        if override in {"TN", "TX", "SC"}:
+            ac_market = self._AREA_CODE_TO_MARKET.get(area_code)
+            if ac_market and ac_market.startswith(override):
+                num = self._market_to_number(ac_market)
+                if num:
+                    return {"from_number": num, "market": ac_market, "reason": "region-area-code"}
+            # Region picked but area code doesn't match the region → use any number in that region
+            region_markets = {
+                "TN": ("TN_NASHVILLE", "TN_COLUMBIA"),
+                "TX": ("TX_AUSTIN",),
+                "SC": ("SC_COLUMBIA",),
+            }.get(override, ())
+            for m in region_markets:
+                num = self._market_to_number(m)
+                if num:
+                    return {"from_number": num, "market": m, "reason": "region-fallback"}
+
+        # Auto-route by destination area code
+        ac_market = self._AREA_CODE_TO_MARKET.get(area_code)
+        if ac_market:
+            num = self._market_to_number(ac_market)
+            if num:
+                return {"from_number": num, "market": ac_market, "reason": "auto-area-code"}
+
+        # Final fallback: global Twilio number
+        if self.phone_number:
+            return {"from_number": self.phone_number, "market": "DEFAULT", "reason": "fallback-default"}
+
+        return {"from_number": None, "market": None, "reason": "no-number-configured"}
+
+    def list_caller_ids(self) -> Dict[str, Any]:
+        """List configured caller IDs by market — for the dialer UI's picker."""
+        markets = []
+        for key, label, area_codes in [
+            ("TN_NASHVILLE", "Nashville TN (615/629)", "615, 629"),
+            ("TN_COLUMBIA", "Columbia TN (931)", "931"),
+            ("TX_AUSTIN", "Austin TX (512/737)", "512, 737, 254, 830"),
+            ("SC_COLUMBIA", "Columbia SC (803/843/864)", "803, 843, 864"),
+        ]:
+            num = self._market_to_number(key)
+            if num:
+                markets.append({"market": key, "label": label, "from_number": num, "area_codes": area_codes})
+        return {
+            "default": self.phone_number,
+            "markets": markets,
+        }
+
     async def make_call(
         self,
         to_number: str,
         from_number: Optional[str] = None,
         record: bool = True,
+        market_override: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Initiate an outbound call via Twilio.
 
@@ -75,18 +180,31 @@ class TwilioService:
 
         Args:
             to_number: Phone number to call
-            from_number: Optional caller ID (defaults to Twilio number)
+            from_number: Optional caller ID — if provided, used as-is and overrides smart routing.
             record: Whether to record the call
+            market_override: Optional "auto" | "TN" | "TX" | "SC" | specific market key
+                             ("TN_NASHVILLE", "TN_COLUMBIA", "TX_AUSTIN", "SC_COLUMBIA"). When
+                             from_number is None, this drives the smart caller-ID picker.
 
         Returns:
-            Call information including SID
+            Call information including SID, picked from_number, and the picker's reasoning.
         """
         if not self.client:
             return {"error": "Twilio not configured", "configured": False}
 
         try:
             to_formatted = self._format_phone(to_number)
-            from_formatted = from_number or self.phone_number
+            picker_reason = "explicit-from-number"
+            picked_market = None
+            if from_number:
+                from_formatted = from_number
+            else:
+                pick = self.pick_caller_id(to_number=to_number, market_override=market_override)
+                from_formatted = pick.get("from_number")
+                picked_market = pick.get("market")
+                picker_reason = pick.get("reason")
+                if not from_formatted:
+                    return {"error": "No caller ID configured for this destination", "configured": False}
 
             # Simple TwiML to connect the call
             twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -103,7 +221,10 @@ class TwilioService:
                 twiml=twiml,
             )
 
-            logger.info(f"Twilio call initiated: {call.sid}")
+            logger.info(
+                f"Twilio call initiated: {call.sid} from={from_formatted} to={to_formatted} "
+                f"market={picked_market} reason={picker_reason}"
+            )
 
             return {
                 "success": True,
@@ -112,6 +233,8 @@ class TwilioService:
                 "from_number": from_formatted,
                 "to_number": to_formatted,
                 "direction": "outbound",
+                "market": picked_market,
+                "picker_reason": picker_reason,
             }
 
         except TwilioRestException as e:

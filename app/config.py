@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     TWILIO_API_KEY_SID: str | None = None
     TWILIO_API_KEY_SECRET: str | None = None
     TWILIO_TWIML_APP_SID: str | None = None
+    # Market-specific caller IDs — used by smart-routing dialer.
+    # Set via Railway env vars. Auto-routing falls back to TWILIO_PHONE_NUMBER if unset.
+    TWILIO_PHONE_NUMBER_TN_NASHVILLE: str | None = None  # 615/629 area code (Nashville, Brentwood, Mt Juliet, Spring Hill north)
+    TWILIO_PHONE_NUMBER_TN_COLUMBIA: str | None = None   # 931 area code (Columbia, Maury, Marshall, Hickman, Lewis)
+    TWILIO_PHONE_NUMBER_TX_AUSTIN: str | None = None     # 512/737/254/830 area code (Austin metro)
+    TWILIO_PHONE_NUMBER_SC_COLUMBIA: str | None = None   # 803/843/864 area code (Columbia SC, Charleston, Greenville)
 
     # Email (Brevo - formerly Sendinblue)
     BREVO_API_KEY: str | None = None

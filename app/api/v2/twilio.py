@@ -27,15 +27,50 @@ twilio_service = TwilioService()
 
 class MakeCallRequest(BaseModel):
     to_number: str = Field(..., description="Phone number to call")
-    from_number: Optional[str] = Field(None, description="Caller ID (defaults to Twilio number)")
+    from_number: Optional[str] = Field(None, description="Caller ID. If set, overrides smart routing.")
     customer_id: Optional[str] = Field(None, description="Customer ID to link call to")
     record: bool = Field(True, description="Whether to record the call")
+    from_market: Optional[str] = Field(
+        None,
+        description=(
+            "Caller-ID market selector. 'auto' (or omitted) routes by destination area code. "
+            "Region values: 'TN', 'TX', 'SC'. Specific markets: 'TN_NASHVILLE', 'TN_COLUMBIA', "
+            "'TX_AUSTIN', 'SC_COLUMBIA'. Ignored if from_number is set."
+        ),
+    )
 
 
 @router.get("/status")
 async def get_twilio_status():
     """Get Twilio connection status."""
     return twilio_service.get_status()
+
+
+# Static routes BEFORE catch-all routes (per backend rules).
+@router.get("/numbers")
+async def list_twilio_numbers(current_user: CurrentUser):
+    """List configured Twilio caller-ID numbers grouped by market.
+
+    Used by the dialer UI to render the TN/TX/SC picker. Auto-routing reads the
+    same set when no override is provided.
+    """
+    return twilio_service.list_caller_ids()
+
+
+@router.post("/preview-caller-id")
+async def preview_caller_id(
+    request: MakeCallRequest,
+    current_user: CurrentUser,
+):
+    """Preview which caller ID smart routing would pick for a given destination.
+
+    Helpful for showing 'Will dial from X' before the agent clicks Call.
+    """
+    pick = twilio_service.pick_caller_id(
+        to_number=request.to_number,
+        market_override=request.from_market,
+    )
+    return pick
 
 
 @router.post("/call")
@@ -47,7 +82,8 @@ async def make_call(
     """Make an outbound call via Twilio.
 
     Unlike RingCentral RingOut, Twilio makes a direct call to the destination
-    without ringing your phone first.
+    without ringing your phone first. Caller ID is auto-routed by destination
+    area code unless `from_number` or `from_market` is provided.
     """
     if not twilio_service.is_configured:
         raise HTTPException(
@@ -59,6 +95,7 @@ async def make_call(
         to_number=request.to_number,
         from_number=request.from_number,
         record=request.record,
+        market_override=request.from_market,
     )
 
     if result.get("error"):
