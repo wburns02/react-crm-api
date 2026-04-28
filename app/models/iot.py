@@ -171,8 +171,16 @@ class IoTAlert(Base):
     )
 
     device = relationship("IoTDevice", back_populates="alerts")
-    acknowledged_by = relationship("User", foreign_keys=[acknowledged_by_user_id])
-    work_order = relationship("WorkOrder", foreign_keys=[work_order_id])
+    acknowledged_by = relationship(
+        "User",
+        primaryjoin="IoTAlert.acknowledged_by_user_id == User.id",
+        foreign_keys="[IoTAlert.acknowledged_by_user_id]",
+    )
+    work_order = relationship(
+        "WorkOrder",
+        primaryjoin="IoTAlert.work_order_id == WorkOrder.id",
+        foreign_keys="[IoTAlert.work_order_id]",
+    )
 
 
 class IoTFirmwareVersion(Base):
