@@ -134,9 +134,21 @@ async def get_prospect_queue(limit: int = 50) -> list[dict]:
 
 # ── Twilio Call Initiation ─────────────────────────────────────────
 
-def initiate_call(to_number: str, callback_url: str) -> Optional[str]:
+def initiate_call(
+    to_number: str,
+    callback_url: str,
+    *,
+    prospect: dict | None = None,
+    quote: dict | None = None,
+) -> Optional[str]:
     """
-    Place an outbound call via Twilio.
+    Place an outbound call via Twilio with AMD detection.
+
+    When VOICE_AGENT_ENGINE == "pipecat", uses AsyncAmd + DetectMessageEnd so
+    the answer/voicemail decision is delivered via the AMD callback URL while
+    the call still rings, and schedules a greeting prerender so Sarah's first
+    line is ready by the time the WebSocket connects.
+
     Returns the call SID on success.
     """
     if not TWILIO_AVAILABLE:
@@ -155,20 +167,61 @@ def initiate_call(to_number: str, callback_url: str) -> Optional[str]:
     try:
         client = TwilioClient(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
 
-        call = client.calls.create(
-            to=to_number,
-            from_=from_number,
-            url=callback_url,  # TwiML endpoint that starts media stream
-            status_callback=callback_url.replace("/voice", "/status"),
-            status_callback_event=["initiated", "ringing", "answered", "completed"],
-            machine_detection="Enable",  # AMD for voicemail detection
-            machine_detection_timeout=5,
-            record=True,
-            recording_channels="dual",
-            timeout=30,  # Ring for 30 seconds max
-        )
+        create_kwargs = {
+            "to": to_number,
+            "from_": from_number,
+            "url": callback_url,  # TwiML endpoint that starts media stream
+            "status_callback": callback_url.replace("/voice", "/status"),
+            "status_callback_event": ["initiated", "ringing", "answered", "completed"],
+            "record": True,
+            "recording_channels": "dual",
+            "timeout": 30,  # Ring for 30 seconds max
+        }
+
+        if settings.VOICE_AGENT_ENGINE == "pipecat":
+            # AsyncAmd lets the call connect immediately; AMD result is POSTed
+            # to async_amd_status_callback shortly after answer.
+            create_kwargs["machine_detection"] = "DetectMessageEnd"
+            create_kwargs["async_amd"] = "true"
+            if settings.OUTBOUND_AGENT_AMD_CALLBACK:
+                create_kwargs["async_amd_status_callback"] = settings.OUTBOUND_AGENT_AMD_CALLBACK
+                create_kwargs["async_amd_status_callback_method"] = "POST"
+        else:
+            # Legacy synchronous AMD — Twilio waits to determine human/machine
+            # before hitting the voice webhook with AnsweredBy populated.
+            create_kwargs["machine_detection"] = "Enable"
+            create_kwargs["machine_detection_timeout"] = 5
+
+        call = client.calls.create(**create_kwargs)
 
         logger.info(f"Outbound call initiated: {call.sid} -> {to_number}")
+
+        # Schedule greeting prerender so Sarah's first line is buffered before
+        # the WS connects. Only meaningful for the pipecat engine, which knows
+        # how to look up the buffer keyed by call_sid.
+        if (
+            settings.VOICE_AGENT_ENGINE == "pipecat"
+            and prospect
+            and quote
+        ):
+            try:
+                from app.services.voice_agent.greeting_prerender import prerender_greeting
+                asyncio.create_task(prerender_greeting(call.sid, prospect, quote))
+            except RuntimeError:
+                # No running event loop — caller is sync without a loop.
+                # Greeting will fall back to live LLM/TTS at WS connect time.
+                logger.debug(
+                    "No running event loop; skipping greeting prerender for %s",
+                    call.sid,
+                )
+            except Exception as exc:
+                # Prerender is best-effort — never block dialing on it.
+                logger.warning(
+                    "Failed to schedule greeting prerender for %s: %s",
+                    call.sid,
+                    exc,
+                )
+
         return call.sid
 
     except Exception as e:
@@ -273,7 +326,7 @@ async def _dialer_loop(queue: list[dict]):
             if not phone.startswith("+"):
                 phone = "+1" + phone.replace("-", "").replace("(", "").replace(")", "").replace(" ", "")
 
-            call_sid = initiate_call(phone, callback_url)
+            call_sid = initiate_call(phone, callback_url, prospect=prospect, quote=quote)
 
             if call_sid:
                 campaign.current_call_sid = call_sid
