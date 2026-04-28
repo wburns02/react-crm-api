@@ -175,10 +175,10 @@ Decision matrix locked during brainstorming:
 - Uses `paho-mqtt` async client. Single subscriber for v1; horizontal scaling via shared subscriptions when fleet exceeds ~5K devices.
 
 ### Database
-- **Existing PostgreSQL on Railway** (CRM database) — extend with **TimescaleDB extension** for telemetry hypertable. Already a Postgres extension, no new database.
+- **Existing PostgreSQL on Railway** (CRM database) — extended with new `iot_*` tables. v1 uses **plain Postgres with btree index on `(device_id, time DESC)`** for telemetry; at ~7M rows/year (10K devices × 2 events/day) Postgres performs fine without partitioning. **Migration path to TimescaleDB hypertable is documented as a scale-trigger** when row count exceeds ~50M or query performance degrades — Timescale's `create_hypertable()` works on existing tables in-place.
 - New tables (Alembic migration):
   - `iot_devices` — device registry (id, serial, public_key, customer_id, site_address, install_type, firmware_version, last_seen_at, created_at, archived_at)
-  - `iot_telemetry` — time-series readings (Timescale hypertable, partitioned by `time`; columns: device_id, sensor_type, value_numeric, value_text, raw_payload JSONB)
+  - `iot_telemetry` — time-series readings (plain table, btree on `(device_id, time DESC)`; columns: device_id, sensor_type, time, value_numeric, value_text, raw_payload JSONB)
   - `iot_alerts` — fired alerts (id, device_id, alert_type, severity, fired_at, resolved_at, resolution_note, work_order_id FK)
   - `iot_firmware_versions` — firmware release registry (version, signed_image_url, signature, target_install_types, released_at)
   - `iot_device_bindings` — audit log of device-to-customer pairing events

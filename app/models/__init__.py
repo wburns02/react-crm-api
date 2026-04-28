@@ -165,6 +165,16 @@ from app.models.outbound_campaign import (
     OutboundCallback,
 )
 
+# IoT — septic system monitor
+from app.models.iot import (
+    IoTDevice,
+    IoTTelemetry,
+    IoTAlert,
+    IoTFirmwareVersion,
+    IoTDeviceBinding,
+    IoTAlertRule,
+)
+
 # HR Module (feature-flagged; models registered so SQLite test DB creates them)
 from app.hr.shared.models import HrAuditLog, HrRoleAssignment  # noqa: F401
 from app.hr.workflow.models import (  # noqa: F401
@@ -360,4 +370,11 @@ __all__ = [
     "OutboundCampaignContact",
     "OutboundCallAttempt",
     "OutboundCallback",
+    # IoT — septic system monitor
+    "IoTDevice",
+    "IoTTelemetry",
+    "IoTAlert",
+    "IoTFirmwareVersion",
+    "IoTDeviceBinding",
+    "IoTAlertRule",
 ]
