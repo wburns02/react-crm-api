@@ -401,6 +401,10 @@ api_router.include_router(invoicehome_import.router, prefix="/admin", tags=["adm
 
 # AI Outbound Sales Agent
 api_router.include_router(outbound_agent.router, tags=["outbound-agent"])
+# Pipecat-based voice agent (Phase 6) — WebSocket handler + Twilio AMD webhook
+from app.api.v2 import voice_agent_ws, voice_agent_amd
+api_router.include_router(voice_agent_ws.router, tags=["outbound-agent"])
+api_router.include_router(voice_agent_amd.router, tags=["outbound-agent"])
 
 # Real SMS Inbox endpoint(s) — must be registered BEFORE the sms stubs router
 # so that /sms/conversations resolves to the real handler.
