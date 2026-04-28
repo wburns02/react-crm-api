@@ -140,19 +140,32 @@ async def list_sms_conversations(
             a.last_message_at                               AS last_message_at,
             lm.last_content                                 AS last_content,
             lm.last_direction                               AS last_direction,
-            COALESCE(c_by_id.id, c_by_phone.id)             AS customer_id,
-            COALESCE(c_by_id.first_name, c_by_phone.first_name) AS first_name,
-            COALESCE(c_by_id.last_name,  c_by_phone.last_name)  AS last_name
+            cust.id                                         AS customer_id,
+            cust.first_name                                 AS first_name,
+            cust.last_name                                  AS last_name
         FROM agg a
         JOIN last_msg lm ON lm.other_phone = a.other_phone
-        LEFT JOIN customers c_by_id    ON c_by_id.id = lm.last_customer_id
-        LEFT JOIN customers c_by_phone ON c_by_id.id IS NULL
-                                       AND c_by_phone.phone = a.other_phone
+        LEFT JOIN LATERAL (
+            -- Pick at most ONE customer per phone:
+            --   1. If the latest message has a customer_id, prefer that record.
+            --   2. Otherwise fall back to the first customer whose phone matches
+            --      (deterministic by id to avoid row duplication).
+            SELECT c.id, c.first_name, c.last_name
+            FROM customers c
+            WHERE c.id = lm.last_customer_id
+            UNION ALL
+            SELECT c.id, c.first_name, c.last_name
+            FROM customers c
+            WHERE lm.last_customer_id IS NULL
+              AND c.phone = a.other_phone
+            ORDER BY 1
+            LIMIT 1
+        ) cust ON TRUE
         WHERE
             (CAST(:search AS TEXT) IS NULL)
             OR a.other_phone ILIKE '%' || CAST(:search AS TEXT) || '%'
-            OR COALESCE(c_by_id.first_name, c_by_phone.first_name, '') ILIKE '%' || CAST(:search AS TEXT) || '%'
-            OR COALESCE(c_by_id.last_name,  c_by_phone.last_name,  '') ILIKE '%' || CAST(:search AS TEXT) || '%'
+            OR COALESCE(cust.first_name, '') ILIKE '%' || CAST(:search AS TEXT) || '%'
+            OR COALESCE(cust.last_name,  '') ILIKE '%' || CAST(:search AS TEXT) || '%'
             OR lm.last_content ILIKE '%' || CAST(:search AS TEXT) || '%'
         ORDER BY a.last_message_at DESC NULLS LAST
         LIMIT :limit OFFSET :offset
