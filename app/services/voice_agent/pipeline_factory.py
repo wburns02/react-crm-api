@@ -72,7 +72,12 @@ def build_pipeline(*, session, websocket, context_aggregator_pair) -> Pipeline:
             audio_out_enabled=True,
             add_wav_header=False,
             vad_analyzer=SileroVADAnalyzer(),
-            serializer=TwilioFrameSerializer(stream_sid=session.stream_sid),
+            serializer=TwilioFrameSerializer(
+                stream_sid=session.stream_sid,
+                call_sid=session.call_sid,
+                account_sid=settings.TWILIO_ACCOUNT_SID,
+                auth_token=settings.TWILIO_AUTH_TOKEN,
+            ),
         ),
     )
 

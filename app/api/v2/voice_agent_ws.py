@@ -150,6 +150,7 @@ async def voice_stream(websocket: WebSocket):
     except Exception as exc:
         logger.exception(f"[VoiceWS:{short_sid}] pipeline error: {exc}")
     finally:
+        session.ended = True
         _capture_transcript(context, session)
         await _persist_call_log(session)
         voice_agent_amd.cleanup(call_sid)
@@ -183,6 +184,7 @@ async def _run_voicemail_branch(
     except Exception as exc:
         logger.exception(f"[VoiceWS:{short_sid}] voicemail send error: {exc}")
     finally:
+        session.ended = True
         # Voicemail counts as a completed disposition.
         session.disposition = "voicemail_left"
         session.disposition_notes = "Voicemail flow — AMD detected machine"

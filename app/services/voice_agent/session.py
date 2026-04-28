@@ -58,6 +58,9 @@ class OutboundAgentSession:
         self.disposition_notes: str = ""
         self.hallucinations_log: list[dict] = []
         self.amd_result: str | None = None
+        # Set True by the WS handler when the pipeline finishes; campaign_dialer
+        # polls this to decide when to dial the next prospect.
+        self.ended: bool = False
 
         self.system_prompt = render_system_prompt(self._build_prospect_context())
         self.tools = AGENT_TOOLS  # passed to AnthropicLLMService

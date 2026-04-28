@@ -335,6 +335,9 @@ async def _dialer_loop(queue: list[dict]):
             call_sid = initiate_call(phone, callback_url, prospect=prospect, quote=quote)
 
             if call_sid:
+                # Also key pending data by call_sid so the Pipecat WS handler
+                # (which only knows call_sid from Twilio) can find prospect/quote.
+                _pending_calls[call_sid] = {"prospect": prospect, "quote": quote}
                 campaign.current_call_sid = call_sid
                 campaign.calls_made += 1
                 campaign.calls_today += 1
