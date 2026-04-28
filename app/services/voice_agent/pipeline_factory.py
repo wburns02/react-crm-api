@@ -99,11 +99,16 @@ def build_pipeline(*, session, websocket, context_aggregator_pair) -> Pipeline:
     # handler synchronously when the model emits a tool_use block.
     _register_tools(llm, session)
 
+    # Output PCM directly at 8kHz to match Twilio Media Streams. Pipecat's
+    # TwilioFrameSerializer converts PCM samples to μ-law without an extra
+    # resample. Asking Cartesia for 24kHz then downsampling to 8kHz μ-law was
+    # producing the "extremely distorted" audio reported on test call #3.
     tts = CartesiaTTSService(
         api_key=settings.CARTESIA_API_KEY,
         voice_id=settings.CARTESIA_VOICE_ID or "",
         model="sonic-2",
-        sample_rate=24000,
+        sample_rate=8000,
+        encoding="pcm_s16le",
     )
 
     pipeline = Pipeline(
