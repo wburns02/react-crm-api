@@ -78,6 +78,10 @@ class CallLog(Base):
     topics = Column(JSON, nullable=True)  # List of topic strings
     analyzed_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Voice agent (Pipecat) fields
+    hallucinations = Column(JSON, nullable=True)  # list[dict{original, rewritten, pattern}]
+    amd_result = Column(String(20), nullable=True)  # human | machine_end_beep | unknown
+
     # Relationships
     customer = relationship("Customer", foreign_keys=[customer_id], lazy="noload")
 

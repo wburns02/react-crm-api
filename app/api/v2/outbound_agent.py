@@ -270,7 +270,12 @@ async def twilio_voice_webhook(request: Request):
 
         # Start a media stream so we can use Cartesia TTS for the voicemail
         ws_host = request.headers.get("host", "react-crm-api-production.up.railway.app")
-        ws_url = f"wss://{ws_host}/ws/outbound-agent/{call_sid}"
+        ws_path = (
+            f"/api/v2/outbound-agent/voice/stream"
+            if settings.VOICE_AGENT_ENGINE == "pipecat"
+            else f"/ws/outbound-agent/{call_sid}"
+        )
+        ws_url = f"wss://{ws_host}{ws_path}"
 
         twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>'
@@ -299,7 +304,12 @@ async def twilio_voice_webhook(request: Request):
     # Human answered — start media stream for AI conversation
     # Build the WebSocket URL for media streams
     ws_host = request.headers.get("host", "react-crm-api-production.up.railway.app")
-    ws_url = f"wss://{ws_host}/ws/outbound-agent/{call_sid}"
+    ws_path = (
+        f"/api/v2/outbound-agent/voice/stream"
+        if settings.VOICE_AGENT_ENGINE == "pipecat"
+        else f"/ws/outbound-agent/{call_sid}"
+    )
+    ws_url = f"wss://{ws_host}{ws_path}"
 
     twiml = (
         '<?xml version="1.0" encoding="UTF-8"?>'

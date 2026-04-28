@@ -31,6 +31,7 @@ class Customer(Base):
     # Status
     is_active = Column(Boolean, default=True)
     is_archived = Column(Boolean, default=False, server_default="false", index=True)
+    is_test_prospect = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
 
     # Lead/Sales tracking (stored as varchar in Flask DB)
     lead_source = Column(String(50), default="unknown")
