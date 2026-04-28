@@ -3,11 +3,24 @@
 Service import paths are verified against installed pipecat-ai 0.0.108. See
 ``app/services/voice_agent/_pipecat_imports.md`` for the discovery log.
 
-The factory only assembles the core processor list (transport in -> STT -> LLM
--> TTS -> transport out). Anthropic context wiring (system prompt, tools,
-prompt-caching) is layered on by the session module in Phase 4.2 and the WS
-handler in Phase 6.1; this keeps Phase 4.1 narrowly focused on a smoke-testable
-construction path.
+The factory builds the full processor graph including the user/assistant
+context aggregators that bracket the LLM. The caller (``voice_agent_ws``)
+owns the ``LLMContext`` + ``LLMContextAggregatorPair`` — that lets the same
+factory be reused with a non-WebSocket transport in tests / eval rigs.
+
+Pipeline order (Pipecat 0.0.108 standard for STT → LLM → TTS over Twilio):
+
+    transport.input()
+        → stt
+        → context_aggregator_pair.user()
+        → llm
+        → tts
+        → transport.output()
+        → context_aggregator_pair.assistant()
+
+The user aggregator accumulates the user's spoken turn into the context
+*before* the LLM runs; the assistant aggregator captures the LLM response
+back into the context *after* TTS, so the next turn sees the full history.
 """
 from app.config import settings
 
@@ -24,23 +37,18 @@ from pipecat.transports.websocket.fastapi import (
 )
 
 
-def build_pipeline(*, session, websocket) -> Pipeline:
+def build_pipeline(*, session, websocket, context_aggregator_pair) -> Pipeline:
     """Build a Pipecat Pipeline for an outbound MAC Septic agent call.
 
-    ``session`` is an ``OutboundAgentSession`` (see ``voice_agent.session``).
-    It must expose:
-        - ``stream_sid: str`` — Twilio Media Stream SID (for the serializer)
-        - ``system_prompt: str`` — rendered system prompt (consumed downstream
-          by the session/WS handler when wiring the LLM context)
-        - ``tools: list[dict]`` — Anthropic tool schemas (likewise wired
-          downstream)
-
-    ``websocket`` is the live FastAPI WebSocket connection from Twilio's Media
-    Streams.
-
-    The returned ``Pipeline`` has no LLM context yet — that is attached by the
-    session/WS handler before the pipeline is started. Phase 4.1's contract is
-    only that the processor graph constructs cleanly.
+    Args:
+      session: ``OutboundAgentSession`` (see ``voice_agent.session``). Must
+        expose ``stream_sid``, ``system_prompt``, and ``tools``. The system
+        prompt + tools are owned by the caller via ``context_aggregator_pair``.
+      websocket: live FastAPI WebSocket from Twilio Media Streams.
+      context_aggregator_pair: ``LLMContextAggregatorPair`` built in
+        ``voice_agent_ws`` from a seeded ``LLMContext`` (system prompt +
+        tools). Its ``.user()`` and ``.assistant()`` processors bracket the
+        LLM in the pipeline so multi-turn history is preserved.
     """
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
@@ -78,9 +86,11 @@ def build_pipeline(*, session, websocket) -> Pipeline:
         [
             transport.input(),
             stt,
+            context_aggregator_pair.user(),
             llm,
             tts,
             transport.output(),
+            context_aggregator_pair.assistant(),
         ]
     )
     return pipeline

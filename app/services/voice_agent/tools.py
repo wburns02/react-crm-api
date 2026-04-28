@@ -3,8 +3,17 @@
 The schema is the single source of truth for what tools the LLM can call.
 The adapter delegates to OutboundAgentSession._handle_tool_call which contains
 the existing, tested implementations (Twilio SMS, work order creation, etc.).
+
+``AGENT_TOOLS`` is the human-readable Anthropic-shaped definition list. The
+canonical Pipecat representation is built by ``get_tools_schema()`` below,
+which Pipecat 0.0.108's ``LLMContext`` accepts directly. Anthropic's adapter
+inside Pipecat takes care of cache-control markers on system + tools at send
+time (see ``pipecat.adapters.services.anthropic_adapter``).
 """
 from typing import Any
+
+from pipecat.adapters.schemas.function_schema import FunctionSchema
+from pipecat.adapters.schemas.tools_schema import ToolsSchema
 
 
 AGENT_TOOLS: list[dict[str, Any]] = [
@@ -100,6 +109,33 @@ AGENT_TOOLS: list[dict[str, Any]] = [
         },
     },
 ]
+
+
+def _build_function_schemas() -> list[FunctionSchema]:
+    """Translate AGENT_TOOLS dicts into Pipecat ``FunctionSchema`` instances."""
+    schemas: list[FunctionSchema] = []
+    for t in AGENT_TOOLS:
+        input_schema = t.get("input_schema") or {}
+        schemas.append(
+            FunctionSchema(
+                name=t["name"],
+                description=t["description"],
+                properties=input_schema.get("properties", {}),
+                required=input_schema.get("required", []),
+            )
+        )
+    return schemas
+
+
+def get_tools_schema() -> ToolsSchema:
+    """Return AGENT_TOOLS as a Pipecat ``ToolsSchema``.
+
+    Pipecat 0.0.108's universal ``LLMContext`` requires a ``ToolsSchema``
+    (or ``NOT_GIVEN``) — raw dict lists are not accepted. The Anthropic LLM
+    service adapter converts the schema into Anthropic-shaped tool dicts and
+    applies prompt-cache markers at send time.
+    """
+    return ToolsSchema(standard_tools=_build_function_schemas())
 
 
 async def handle_tool_call(session, name: str, tool_id: str, args: dict) -> dict:

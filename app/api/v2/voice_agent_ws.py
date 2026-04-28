@@ -9,12 +9,15 @@ Selected via campaign_dialer when settings.VOICE_AGENT_ENGINE == "pipecat".
 Pipecat 0.0.108 notes (verified at implementation time):
 
 - ``AnthropicLLMService.create_context_aggregator(...)`` is DEPRECATED in 0.0.99+.
-  The replacement is the universal ``LLMContext`` plus
-  ``LLMContextAggregatorPair`` from
+  We use the universal ``LLMContext`` plus ``LLMContextAggregatorPair`` from
   ``pipecat.processors.aggregators.llm_response_universal``. The pair exposes
   ``.user()`` and ``.assistant()`` processors that bracket the LLM in the
-  pipeline. ``LLMContext.set_tools`` requires a ``ToolsSchema`` (not a raw
-  dict list) — use ``NOT_GIVEN`` to skip.
+  pipeline so multi-turn history is preserved. ``LLMContext`` accepts a
+  ``ToolsSchema`` (built natively in ``voice_agent.tools.get_tools_schema``).
+- The Anthropic LLM service inside Pipecat applies cache_control markers on
+  the most recent user messages automatically (see
+  ``pipecat.adapters.services.anthropic_adapter._with_cache_control_markers``)
+  — we don't need to set them ourselves on the system prompt.
 - ``PipelineTask`` exposes ``queue_frame`` / ``queue_frames`` (not
   ``push_frame``) for injecting frames into the pipeline.
 - ``OutputAudioRawFrame`` is the right frame for raw output audio injection.
@@ -193,28 +196,18 @@ async def _run_human_branch(
 ) -> None:
     """Build and run the Pipecat pipeline for a human-answered call."""
     short_sid = call_sid[:8]
-    pipeline = build_pipeline(session=session, websocket=websocket)
 
-    # Wire the universal LLM context (system prompt + tools w/ prompt cache).
-    # NOTE: Phase 4.2's session pre-renders system_prompt + tools but does NOT
-    # build the context — the WS handler owns that so the same session class
-    # could be re-used in a future test harness without a websocket.
+    # Build the universal LLM context (system prompt + native ToolsSchema)
+    # and the aggregator pair that brackets the LLM in the pipeline. Done
+    # here (not inside build_pipeline) so the same factory can be reused by
+    # a non-WebSocket eval harness later.
     context_pair = _build_context_pair(session)
 
-    if context_pair is not None:
-        # Splice user/assistant aggregators around the LLM. We can't reach into
-        # the existing Pipeline's processor list cleanly, so we rebuild it.
-        # build_pipeline returns a Pipeline whose processors live on
-        # ``Pipeline._processors`` (private). To stay forward-compatible, the
-        # cleanest approach is to construct the pipeline here with the
-        # aggregators inline. For Phase 6.1 we rely on the LLMService
-        # accepting the context via LLMContextFrame at runtime — see the TODO.
-        #
-        # TODO(phase-7): refactor pipeline_factory to accept the
-        # LLMContextAggregatorPair so the full processor graph (including
-        # user/assistant aggregators) is built in one place. For now the
-        # aggregator pair is owned by the WS handler and pushed into the task.
-        pass
+    pipeline = build_pipeline(
+        session=session,
+        websocket=websocket,
+        context_aggregator_pair=context_pair,
+    )
 
     task = PipelineTask(
         pipeline,
@@ -236,96 +229,29 @@ async def _run_human_branch(
     else:
         logger.info(f"[VoiceWS:{short_sid}] no prerendered greeting available")
 
-    # Push the initial LLM context so the model has the system prompt + tools
-    # the moment Pipecat asks it to respond. Done via LLMContextFrame so the
-    # AnthropicLLMService receives the universal context (see file docstring).
-    if context_pair is not None:
-        try:
-            from pipecat.frames.frames import LLMContextFrame
-            await task.queue_frame(LLMContextFrame(context_pair.user().context))
-        except Exception as exc:
-            logger.warning(
-                f"[VoiceWS:{short_sid}] could not seed LLMContextFrame: {exc}"
-            )
-
     await runner.run(task)
 
 
 def _build_context_pair(session: OutboundAgentSession):
     """Construct an LLMContext + LLMContextAggregatorPair seeded from the session.
 
-    Returns None if the universal context API is unavailable for any reason
-    (we'd rather run a degraded pipeline than crash the call).
+    The system prompt is added as a plain system message — the Anthropic
+    adapter inside Pipecat applies cache_control markers automatically on the
+    most recent user messages at send time, so we don't need to mark the
+    system prompt by hand.
     """
-    try:
-        from pipecat.adapters.schemas.tools_schema import ToolsSchema
-        from pipecat.processors.aggregators.llm_context import LLMContext
-        from pipecat.processors.aggregators.llm_response_universal import (
-            LLMContextAggregatorPair,
-        )
-    except ImportError as exc:
-        logger.warning(f"[VoiceWS] universal LLMContext unavailable: {exc}")
-        return None
+    from pipecat.processors.aggregators.llm_context import LLMContext
+    from pipecat.processors.aggregators.llm_response_universal import (
+        LLMContextAggregatorPair,
+    )
 
-    # System prompt is injected as a system message with cache_control so
-    # Anthropic prompt-caches the rendered template across the call's turns.
-    # Tools are passed via ToolsSchema; the AnthropicLLMService applies its
-    # own cache_control marker on the last tool when it sends the request.
-    system_messages = [
-        {
-            "role": "system",
-            "content": [
-                {
-                    "type": "text",
-                    "text": session.system_prompt,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-        }
-    ]
+    from app.services.voice_agent.tools import get_tools_schema
 
-    try:
-        tools_schema = _coerce_tools_to_schema(session.tools, ToolsSchema)
-    except Exception as exc:
-        logger.warning(
-            f"[VoiceWS] failed to build ToolsSchema, proceeding without tools: {exc}"
-        )
-        tools_schema = None
-
-    try:
-        if tools_schema is not None:
-            context = LLMContext(messages=system_messages, tools=tools_schema)
-        else:
-            context = LLMContext(messages=system_messages)
-    except Exception as exc:
-        logger.warning(f"[VoiceWS] LLMContext construction failed: {exc}")
-        return None
-
+    context = LLMContext(
+        messages=[{"role": "system", "content": session.system_prompt}],
+        tools=get_tools_schema(),
+    )
     return LLMContextAggregatorPair(context)
-
-
-def _coerce_tools_to_schema(tools, ToolsSchema):
-    """Best-effort coercion of the legacy AGENT_TOOLS list into a ToolsSchema.
-
-    Phase 1.2 stored tools as raw Anthropic-style dicts. The universal
-    LLMContext needs a ``ToolsSchema`` instance. If ToolsSchema exposes a
-    ``from_anthropic`` / ``from_dict`` helper we use it; otherwise we try the
-    constructor with ``standard_tools`` keyword (the documented field on
-    0.0.108) and fall back to None on any failure.
-    """
-    if not tools:
-        return None
-    if hasattr(ToolsSchema, "from_anthropic_tools"):
-        return ToolsSchema.from_anthropic_tools(tools)
-    if hasattr(ToolsSchema, "from_dict"):
-        return ToolsSchema.from_dict({"tools": tools})
-    # Final fallback: Anthropic's tool dict shape is close enough that the
-    # default ToolsSchema(...) constructor may accept a ``standard_tools``
-    # kwarg. If not, the caller catches and proceeds without tools.
-    try:
-        return ToolsSchema(standard_tools=tools)
-    except TypeError:
-        return ToolsSchema(tools=tools)
 
 
 # ── Audio helpers ───────────────────────────────────────────────────────
