@@ -211,7 +211,7 @@ async def _run_bridge_loop() -> None:
             client_kwargs = {
                 "hostname": cfg["host"],
                 "port": cfg["port"],
-                "client_id": cfg["client_id"],
+                "identifier": cfg["client_id"],
                 "tls_context": tls_ctx,
             }
             if cfg["username"]:
