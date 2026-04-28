@@ -111,17 +111,16 @@ async def voice_stream(websocket: WebSocket):
     )
     active_sessions[call_sid] = session
 
-    # Wait briefly for AMD result. Twilio fires AsyncAmd ~3.5s after answer.
-    amd_event = voice_agent_amd.register(call_sid)
-    try:
-        await asyncio.wait_for(amd_event.wait(), timeout=4.0)
-    except asyncio.TimeoutError:
-        pass
-    amd_result = voice_agent_amd.get_result(call_sid) or "unknown"
-    session.amd_result = amd_result
-    logger.info(f"[VoiceWS:{short_sid}] AMD={amd_result}")
+    # Don't BLOCK on AMD — Twilio's AsyncAmd takes ~3.5s and on test calls #1-#4
+    # frequently returned `unknown` anyway, costing 4s of dead air for nothing.
+    # Register so the AMD callback can still set `session.amd_result` later, but
+    # proceed with the conversation immediately. If Twilio retroactively decides
+    # this was a machine, we'll see it in the call_logs.amd_result column.
+    voice_agent_amd.register(call_sid)
+    session.amd_result = voice_agent_amd.get_result(call_sid) or "pending"
+    logger.info(f"[VoiceWS:{short_sid}] AMD={session.amd_result} (not waiting)")
 
-    if amd_result.startswith("machine"):
+    if session.amd_result.startswith("machine"):
         await _run_voicemail_branch(
             websocket=websocket,
             session=session,
