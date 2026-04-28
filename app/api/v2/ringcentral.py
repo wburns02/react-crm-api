@@ -1561,6 +1561,37 @@ async def update_call(
     return call_log_to_response(call)
 
 
+@router.patch("/calls/by-sid/{sid}")
+async def update_call_by_sid(
+    sid: str,
+    request: UpdateCallLogRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update a CallLog row by external SID (Twilio CallSid or RingCentral call ID).
+
+    The CRM stores Twilio CallSids in `ringcentral_call_id` (universal external-ID slot).
+    The PowerDialer only has the SID, not the internal UUID — this endpoint bridges that gap.
+    """
+    result = await db.execute(
+        select(CallLog).where(CallLog.ringcentral_call_id == sid).limit(1)
+    )
+    call_log = result.scalar_one_or_none()
+    if not call_log:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No call log found for SID {sid}",
+        )
+
+    update_data = request.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(call_log, key, value)
+
+    await db.commit()
+    await db.refresh(call_log)
+    return call_log_to_response(call_log)
+
+
 @router.post("/calls/{call_id}/transcribe")
 async def transcribe_call(
     call_id: str,
