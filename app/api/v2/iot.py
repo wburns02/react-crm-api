@@ -1,441 +1,619 @@
-"""
-IoT Integration API Endpoints
+"""IoT API — septic system monitor (Watchful).
 
-Connected equipment and predictive maintenance:
-- Device management
-- Telemetry data
-- Alerts and rules
-- Equipment health scoring
-"""
+Real implementation per spec: docs/superpowers/specs/2026-04-27-iot-monitor-design.md.
 
-from fastapi import APIRouter, HTTPException
-from datetime import datetime
-from pydantic import BaseModel, Field
+Endpoints (all under /api/v2/iot):
+- Device CRUD + bind/unbind
+- Telemetry query
+- Alert list / acknowledge / resolve
+- Firmware release / dispatch / signed download
+- Alert rules CRUD
+- Dashboard stats
+"""
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from uuid import uuid4
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, func, and_, or_, desc, update
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import DbSession, CurrentUser
+from app.models.iot import (
+    IoTDevice,
+    IoTTelemetry,
+    IoTAlert,
+    IoTFirmwareVersion,
+    IoTDeviceBinding,
+    IoTAlertRule,
+)
+from app.schemas.iot import (
+    IoTDeviceCreate,
+    IoTDeviceBindRequest,
+    IoTDeviceUnbindRequest,
+    IoTDeviceUpdate,
+    IoTDeviceRead,
+    IoTDeviceDetail,
+    IoTTelemetryRead,
+    IoTAlertRead,
+    IoTAlertAck,
+    IoTAlertResolve,
+    IoTFirmwareCreate,
+    IoTFirmwareRead,
+    IoTFirmwareDispatch,
+    IoTAlertRuleCreate,
+    IoTAlertRuleRead,
+    IoTDeviceBindingRead,
+    IoTDashboardStats,
+)
 
 
 router = APIRouter()
 
 
-# =============================================================================
-# Pydantic Schemas
-# =============================================================================
+# ---------- Dashboard stats (static-route-first per backend rules) ----------
 
-
-class Device(BaseModel):
-    """Connected IoT device."""
-
-    id: str
-    device_type: str  # thermostat, water_heater, septic_monitor, hvac
-    provider: str  # ecobee, nest, custom
-    name: str
-    customer_id: str
-    equipment_id: Optional[str] = None
-    serial_number: Optional[str] = None
-    is_online: bool = True
-    is_active: bool = True
-    last_reading_at: Optional[str] = None
-    firmware_version: Optional[str] = None
-    metadata: dict = Field(default_factory=dict)
-    created_at: str
-
-
-class DeviceReading(BaseModel):
-    """Device telemetry reading."""
-
-    id: str
-    device_id: str
-    timestamp: str
-    metrics: dict  # temperature, humidity, level, etc.
-
-
-class DeviceAlert(BaseModel):
-    """Device alert."""
-
-    id: str
-    device_id: str
-    device_name: str
-    alert_type: str
-    severity: str  # info, warning, critical
-    message: str
-    acknowledged: bool = False
-    acknowledged_at: Optional[str] = None
-    created_at: str
-
-
-class AlertRule(BaseModel):
-    """Alert rule definition."""
-
-    id: str
-    name: str
-    device_type: Optional[str] = None
-    condition: dict  # metric, operator, threshold
-    severity: str
-    notification_channels: list[str] = Field(default_factory=list)
-    is_active: bool = True
-    created_at: str
-
-
-class EquipmentHealth(BaseModel):
-    """Equipment health score."""
-
-    equipment_id: str
-    equipment_type: str
-    customer_id: str
-    health_score: float
-    risk_level: str  # low, medium, high, critical
-    last_reading: Optional[dict] = None
-    trends: dict = Field(default_factory=dict)
-    issues: list[str] = Field(default_factory=list)
-    recommendations: list[str] = Field(default_factory=list)
-    next_maintenance_date: Optional[str] = None
-
-
-class MaintenanceRecommendation(BaseModel):
-    """Maintenance recommendation."""
-
-    id: str
-    equipment_id: str
-    equipment_type: str
-    customer_id: str
-    customer_name: str
-    priority: str  # low, medium, high, urgent
-    issue: str
-    recommendation: str
-    estimated_cost: Optional[float] = None
-    status: str  # pending, scheduled, declined
-    created_at: str
-
-
-class IoTProviderConnection(BaseModel):
-    """IoT provider connection."""
-
-    provider: str
-    connected: bool
-    account_name: Optional[str] = None
-    device_count: int = 0
-    last_sync: Optional[str] = None
-
-
-# =============================================================================
-# Device Endpoints - Not in sidebar nav, returns empty (no DB model yet)
-# =============================================================================
-
-
-@router.get("/devices")
-async def get_devices(
+@router.get("/dashboard/stats", response_model=IoTDashboardStats)
+async def get_dashboard_stats(
     db: DbSession,
     current_user: CurrentUser,
-    customer_id: Optional[str] = None,
-) -> dict:
-    """Get all connected devices. Returns empty - IoT not yet implemented."""
-    return {"devices": []}
+) -> IoTDashboardStats:
+    """Aggregate counts for the IoT dashboard cards."""
+    online_threshold = datetime.now(timezone.utc) - timedelta(hours=36)
+
+    total_q = select(func.count(IoTDevice.id)).where(IoTDevice.archived_at.is_(None))
+    total = (await db.execute(total_q)).scalar() or 0
+
+    online_q = select(func.count(IoTDevice.id)).where(
+        and_(
+            IoTDevice.archived_at.is_(None),
+            IoTDevice.last_seen_at.is_not(None),
+            IoTDevice.last_seen_at >= online_threshold,
+        )
+    )
+    online = (await db.execute(online_q)).scalar() or 0
+    offline = total - online
+
+    open_alerts_q = select(IoTAlert).where(IoTAlert.status == "open")
+    open_alerts = (await db.execute(open_alerts_q)).scalars().all()
+
+    critical = sum(1 for a in open_alerts if a.severity == "critical")
+    high = sum(1 for a in open_alerts if a.severity == "high")
+    warnings = sum(1 for a in open_alerts if a.severity in ("medium", "low"))
+
+    maintenance_due = sum(
+        1
+        for a in open_alerts
+        if a.alert_type
+        in (
+            "pump_short_cycle",
+            "pump_degradation",
+            "tank_high_level",
+            "low_battery",
+        )
+    )
+
+    return IoTDashboardStats(
+        total_devices=total,
+        online=online,
+        offline=offline,
+        warnings=warnings + high,
+        critical=critical,
+        active_alerts=len(open_alerts),
+        maintenance_due=maintenance_due,
+    )
 
 
-@router.get("/devices/{device_id}")
+# ---------- Devices ----------
+
+@router.get("/devices", response_model=list[IoTDeviceRead])
+async def list_devices(
+    db: DbSession,
+    current_user: CurrentUser,
+    customer_id: Optional[UUID] = None,
+    install_type: Optional[str] = None,
+    archived: bool = False,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> list[IoTDeviceRead]:
+    """List IoT devices, optionally filtered by customer or install type."""
+    q = select(IoTDevice).order_by(desc(IoTDevice.created_at))
+    if not archived:
+        q = q.where(IoTDevice.archived_at.is_(None))
+    if customer_id:
+        q = q.where(IoTDevice.customer_id == customer_id)
+    if install_type:
+        q = q.where(IoTDevice.install_type == install_type)
+    q = q.limit(limit).offset(offset)
+
+    result = await db.execute(q)
+    devices = result.scalars().all()
+    return [IoTDeviceRead.model_validate(d) for d in devices]
+
+
+@router.post("/devices", response_model=IoTDeviceRead, status_code=201)
+async def create_device(
+    payload: IoTDeviceCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> IoTDeviceRead:
+    """Register a manufactured device (admin endpoint — called by provisioning script)."""
+    existing_q = select(IoTDevice).where(IoTDevice.serial == payload.serial)
+    existing = (await db.execute(existing_q)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail="Device serial already registered")
+
+    import uuid as _uuid
+    device = IoTDevice(
+        id=_uuid.uuid4(),
+        serial=payload.serial,
+        public_key=payload.public_key,
+        hardware_revision=payload.hardware_revision,
+        firmware_version=payload.firmware_version,
+        notes=payload.notes,
+        manufactured_at=payload.manufactured_at,
+    )
+    db.add(device)
+    await db.commit()
+    await db.refresh(device)
+    return IoTDeviceRead.model_validate(device)
+
+
+@router.get("/devices/{device_id}", response_model=IoTDeviceDetail)
 async def get_device(
+    device_id: UUID,
     db: DbSession,
     current_user: CurrentUser,
-    device_id: str,
-) -> dict:
-    """Get single device."""
-    raise HTTPException(status_code=404, detail="Device not found")
+) -> IoTDeviceDetail:
+    """Get device detail with recent telemetry + open alerts + bindings."""
+    q = select(IoTDevice).where(IoTDevice.id == device_id)
+    device = (await db.execute(q)).scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
 
-
-@router.get("/devices/{device_id}/telemetry")
-async def get_device_telemetry(
-    db: DbSession,
-    current_user: CurrentUser,
-    device_id: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    resolution: str = "hour",
-    metrics: Optional[str] = None,
-) -> dict:
-    """Get device telemetry readings. Returns empty - IoT not yet implemented."""
-    return {"readings": []}
-
-
-@router.get("/devices/{device_id}/latest")
-async def get_latest_reading(
-    db: DbSession,
-    current_user: CurrentUser,
-    device_id: str,
-) -> dict:
-    """Get latest reading for a device. Returns empty - IoT not yet implemented."""
-    return {"reading": None}
-
-
-@router.post("/devices")
-async def connect_device(
-    db: DbSession,
-    current_user: CurrentUser,
-    device_type: str,
-    provider: str,
-    name: str,
-    customer_id: str,
-    equipment_id: Optional[str] = None,
-) -> dict:
-    """Connect a new device."""
-    device = Device(
-        id=f"dev-{uuid4().hex[:8]}",
-        device_type=device_type,
-        provider=provider,
-        name=name,
-        customer_id=customer_id,
-        equipment_id=equipment_id,
-        created_at=datetime.utcnow().isoformat(),
+    telemetry_q = (
+        select(IoTTelemetry)
+        .where(IoTTelemetry.device_id == device_id)
+        .order_by(desc(IoTTelemetry.time))
+        .limit(50)
     )
-    return {"device": device.model_dump()}
+    telemetry = (await db.execute(telemetry_q)).scalars().all()
+
+    alerts_q = (
+        select(IoTAlert)
+        .where(and_(IoTAlert.device_id == device_id, IoTAlert.status != "resolved"))
+        .order_by(desc(IoTAlert.fired_at))
+    )
+    alerts = (await db.execute(alerts_q)).scalars().all()
+
+    bindings_q = (
+        select(IoTDeviceBinding)
+        .where(IoTDeviceBinding.device_id == device_id)
+        .order_by(desc(IoTDeviceBinding.bound_at))
+    )
+    bindings = (await db.execute(bindings_q)).scalars().all()
+
+    return IoTDeviceDetail(
+        **IoTDeviceRead.model_validate(device).model_dump(),
+        recent_telemetry=[IoTTelemetryRead.model_validate(t) for t in telemetry],
+        open_alerts=[IoTAlertRead.model_validate(a) for a in alerts],
+        bindings=[IoTDeviceBindingRead.model_validate(b) for b in bindings],
+    )
 
 
-@router.patch("/devices/{device_id}")
+@router.patch("/devices/{device_id}", response_model=IoTDeviceRead)
 async def update_device(
+    device_id: UUID,
+    payload: IoTDeviceUpdate,
     db: DbSession,
     current_user: CurrentUser,
-    device_id: str,
-    name: Optional[str] = None,
-    is_active: Optional[bool] = None,
-) -> dict:
-    """Update device settings."""
-    raise HTTPException(status_code=404, detail="Device not found")
+) -> IoTDeviceRead:
+    q = select(IoTDevice).where(IoTDevice.id == device_id)
+    device = (await db.execute(q)).scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    if payload.firmware_version is not None:
+        device.firmware_version = payload.firmware_version
+    if payload.notes is not None:
+        device.notes = payload.notes
+    if payload.archived is True:
+        device.archived_at = datetime.now(timezone.utc)
+    elif payload.archived is False:
+        device.archived_at = None
+
+    await db.commit()
+    await db.refresh(device)
+    return IoTDeviceRead.model_validate(device)
 
 
-@router.delete("/devices/{device_id}")
-async def disconnect_device(
+@router.post("/devices/{device_id}/bind", response_model=IoTDeviceBindingRead)
+async def bind_device(
+    device_id: UUID,
+    payload: IoTDeviceBindRequest,
     db: DbSession,
     current_user: CurrentUser,
-    device_id: str,
-) -> dict:
-    """Disconnect a device."""
-    return {"success": True}
+) -> IoTDeviceBindingRead:
+    """Pair a device to a customer + install site (tech action)."""
+    device_q = select(IoTDevice).where(IoTDevice.id == device_id)
+    device = (await db.execute(device_q)).scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    if device.customer_id and device.customer_id != UUID(str(payload.customer_id)):
+        raise HTTPException(
+            status_code=409,
+            detail="Device already bound to another customer; unbind first",
+        )
+
+    import uuid as _uuid
+    binding = IoTDeviceBinding(
+        id=_uuid.uuid4(),
+        device_id=device_id,
+        customer_id=UUID(str(payload.customer_id)),
+        install_type=payload.install_type,
+        site_address=payload.site_address,
+        notes=payload.notes,
+        bound_by_user_id=current_user.id,
+    )
+    db.add(binding)
+
+    device.customer_id = UUID(str(payload.customer_id))
+    device.install_type = payload.install_type
+    if payload.site_address:
+        device.site_address = payload.site_address
+
+    await db.commit()
+    await db.refresh(binding)
+    return IoTDeviceBindingRead.model_validate(binding)
 
 
-# =============================================================================
-# Alert Endpoints
-# =============================================================================
-
-
-@router.get("/alerts")
-async def get_device_alerts(
+@router.post("/devices/{device_id}/unbind", response_model=IoTDeviceBindingRead)
+async def unbind_device(
+    device_id: UUID,
+    payload: IoTDeviceUnbindRequest,
     db: DbSession,
     current_user: CurrentUser,
-    acknowledged: Optional[bool] = None,
+) -> IoTDeviceBindingRead:
+    binding_q = (
+        select(IoTDeviceBinding)
+        .where(
+            and_(
+                IoTDeviceBinding.device_id == device_id,
+                IoTDeviceBinding.unbound_at.is_(None),
+            )
+        )
+        .order_by(desc(IoTDeviceBinding.bound_at))
+    )
+    binding = (await db.execute(binding_q)).scalar_one_or_none()
+    if not binding:
+        raise HTTPException(status_code=404, detail="No active binding for device")
+
+    binding.unbound_at = datetime.now(timezone.utc)
+    binding.unbound_by_user_id = current_user.id
+    binding.unbind_reason = payload.unbind_reason
+
+    device_q = select(IoTDevice).where(IoTDevice.id == device_id)
+    device = (await db.execute(device_q)).scalar_one_or_none()
+    if device:
+        device.customer_id = None
+
+    await db.commit()
+    await db.refresh(binding)
+    return IoTDeviceBindingRead.model_validate(binding)
+
+
+# ---------- Telemetry ----------
+
+@router.get("/telemetry", response_model=list[IoTTelemetryRead])
+async def query_telemetry(
+    db: DbSession,
+    current_user: CurrentUser,
+    device_id: Optional[UUID] = None,
+    sensor_type: Optional[str] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    limit: int = Query(100, ge=1, le=10000),
+) -> list[IoTTelemetryRead]:
+    q = select(IoTTelemetry).order_by(desc(IoTTelemetry.time))
+    if device_id:
+        q = q.where(IoTTelemetry.device_id == device_id)
+    if sensor_type:
+        q = q.where(IoTTelemetry.sensor_type == sensor_type)
+    if start_time:
+        q = q.where(IoTTelemetry.time >= start_time)
+    if end_time:
+        q = q.where(IoTTelemetry.time <= end_time)
+    q = q.limit(limit)
+
+    result = await db.execute(q)
+    return [IoTTelemetryRead.model_validate(t) for t in result.scalars().all()]
+
+
+# ---------- Alerts ----------
+
+@router.get("/alerts", response_model=list[IoTAlertRead])
+async def list_alerts(
+    db: DbSession,
+    current_user: CurrentUser,
+    device_id: Optional[UUID] = None,
+    status: Optional[str] = None,
     severity: Optional[str] = None,
-) -> dict:
-    """Get device alerts. Returns empty - IoT not yet implemented."""
-    return {"alerts": []}
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> list[IoTAlertRead]:
+    q = select(IoTAlert).order_by(desc(IoTAlert.fired_at))
+    if device_id:
+        q = q.where(IoTAlert.device_id == device_id)
+    if status:
+        q = q.where(IoTAlert.status == status)
+    if severity:
+        q = q.where(IoTAlert.severity == severity)
+    q = q.limit(limit).offset(offset)
+    result = await db.execute(q)
+    return [IoTAlertRead.model_validate(a) for a in result.scalars().all()]
 
 
-@router.post("/alerts/{alert_id}/acknowledge")
+@router.post("/alerts/{alert_id}/acknowledge", response_model=IoTAlertRead)
 async def acknowledge_alert(
+    alert_id: UUID,
+    payload: IoTAlertAck,
     db: DbSession,
     current_user: CurrentUser,
-    alert_id: str,
-) -> dict:
-    """Acknowledge an alert."""
-    alert = DeviceAlert(
-        id=alert_id,
-        device_id="dev-001",
-        device_name="Device",
-        alert_type="acknowledged",
-        severity="info",
-        message="Alert acknowledged",
-        acknowledged=True,
-        acknowledged_at=datetime.utcnow().isoformat(),
-        created_at=datetime.utcnow().isoformat(),
+) -> IoTAlertRead:
+    q = select(IoTAlert).where(IoTAlert.id == alert_id)
+    alert = (await db.execute(q)).scalar_one_or_none()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    if alert.status == "resolved":
+        raise HTTPException(status_code=409, detail="Alert already resolved")
+
+    alert.status = "acknowledged"
+    alert.acknowledged_at = datetime.now(timezone.utc)
+    alert.acknowledged_by_user_id = current_user.id
+    if payload.resolution_note:
+        alert.resolution_note = payload.resolution_note
+
+    await db.commit()
+    await db.refresh(alert)
+    return IoTAlertRead.model_validate(alert)
+
+
+@router.post("/alerts/{alert_id}/resolve", response_model=IoTAlertRead)
+async def resolve_alert(
+    alert_id: UUID,
+    payload: IoTAlertResolve,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> IoTAlertRead:
+    q = select(IoTAlert).where(IoTAlert.id == alert_id)
+    alert = (await db.execute(q)).scalar_one_or_none()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    alert.status = "resolved"
+    alert.resolved_at = datetime.now(timezone.utc)
+    if alert.acknowledged_at is None:
+        alert.acknowledged_at = alert.resolved_at
+        alert.acknowledged_by_user_id = current_user.id
+    if payload.resolution_note:
+        alert.resolution_note = payload.resolution_note
+    if payload.work_order_id:
+        alert.work_order_id = UUID(str(payload.work_order_id))
+
+    await db.commit()
+    await db.refresh(alert)
+    return IoTAlertRead.model_validate(alert)
+
+
+# ---------- Firmware ----------
+
+@router.get("/firmware", response_model=list[IoTFirmwareRead])
+async def list_firmware(
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = Query(50, ge=1, le=200),
+) -> list[IoTFirmwareRead]:
+    q = (
+        select(IoTFirmwareVersion)
+        .order_by(desc(IoTFirmwareVersion.released_at))
+        .limit(limit)
     )
-    return {"alert": alert.model_dump()}
+    result = await db.execute(q)
+    return [IoTFirmwareRead.model_validate(f) for f in result.scalars().all()]
 
 
-@router.get("/alerts/rules")
-async def get_alert_rules(
+@router.post("/firmware", response_model=IoTFirmwareRead, status_code=201)
+async def release_firmware(
+    payload: IoTFirmwareCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> IoTFirmwareRead:
+    existing_q = select(IoTFirmwareVersion).where(
+        IoTFirmwareVersion.version == payload.version
+    )
+    if (await db.execute(existing_q)).scalar_one_or_none():
+        raise HTTPException(
+            status_code=409, detail="Firmware version already released"
+        )
+
+    import uuid as _uuid
+    fw = IoTFirmwareVersion(
+        id=_uuid.uuid4(),
+        version=payload.version,
+        signed_image_url=payload.signed_image_url,
+        signature=payload.signature,
+        image_sha256=payload.image_sha256,
+        target_install_types=payload.target_install_types,
+        min_hardware_revision=payload.min_hardware_revision,
+        release_notes=payload.release_notes,
+        released_by_user_id=current_user.id,
+    )
+    db.add(fw)
+    await db.commit()
+    await db.refresh(fw)
+    return IoTFirmwareRead.model_validate(fw)
+
+
+@router.post("/firmware/{version}/dispatch")
+async def dispatch_firmware(
+    version: str,
+    payload: IoTFirmwareDispatch,
     db: DbSession,
     current_user: CurrentUser,
 ) -> dict:
-    """Get alert rules. Returns empty - IoT not yet implemented."""
-    return {"rules": []}
+    """Trigger an OTA rollout — publishes manifest via MQTT to target device set.
+
+    v1: enqueues a list of (device_id, version) into the bridge command queue.
+    The actual MQTT publish happens in the bridge service (Phase 3).
+    """
+    fw_q = select(IoTFirmwareVersion).where(IoTFirmwareVersion.version == version)
+    fw = (await db.execute(fw_q)).scalar_one_or_none()
+    if not fw:
+        raise HTTPException(status_code=404, detail="Firmware version not found")
+
+    devices_q = select(IoTDevice).where(IoTDevice.archived_at.is_(None))
+    if payload.target_device_ids:
+        ids = [UUID(str(d)) for d in payload.target_device_ids]
+        devices_q = devices_q.where(IoTDevice.id.in_(ids))
+    elif payload.target_install_types:
+        devices_q = devices_q.where(
+            IoTDevice.install_type.in_(payload.target_install_types)
+        )
+    elif not payload.target_all:
+        raise HTTPException(
+            status_code=400,
+            detail="Specify target_device_ids, target_install_types, or target_all=true",
+        )
+
+    devices = (await db.execute(devices_q)).scalars().all()
+    target_count = len(devices)
+
+    return {
+        "firmware_version": version,
+        "target_count": target_count,
+        "device_ids": [str(d.id) for d in devices],
+        "status": "queued",
+        "note": (
+            "Manifest publish handled by MQTT bridge (Phase 3). "
+            "v1 returns target list; bridge consumes from its own dispatch table in Phase 3."
+        ),
+    }
 
 
-@router.post("/alerts/rules")
+# ---------- Alert rules ----------
+
+@router.get("/alerts/rules", response_model=list[IoTAlertRuleRead])
+async def list_alert_rules(
+    db: DbSession,
+    current_user: CurrentUser,
+    active_only: bool = True,
+) -> list[IoTAlertRuleRead]:
+    q = select(IoTAlertRule).order_by(IoTAlertRule.name)
+    if active_only:
+        q = q.where(IoTAlertRule.active.is_(True))
+    result = await db.execute(q)
+    return [IoTAlertRuleRead.model_validate(r) for r in result.scalars().all()]
+
+
+@router.post("/alerts/rules", response_model=IoTAlertRuleRead, status_code=201)
 async def create_alert_rule(
+    payload: IoTAlertRuleCreate,
     db: DbSession,
     current_user: CurrentUser,
-    name: str,
-    condition: dict,
-    severity: str,
-    device_type: Optional[str] = None,
-) -> dict:
-    """Create an alert rule."""
-    rule = AlertRule(
-        id=f"rule-{uuid4().hex[:8]}",
-        name=name,
-        device_type=device_type,
-        condition=condition,
-        severity=severity,
-        created_at=datetime.utcnow().isoformat(),
+) -> IoTAlertRuleRead:
+    import uuid as _uuid
+    rule = IoTAlertRule(
+        id=_uuid.uuid4(),
+        name=payload.name,
+        description=payload.description,
+        rule_type=payload.rule_type,
+        sensor_type=payload.sensor_type,
+        alert_type=payload.alert_type,
+        severity=payload.severity,
+        config=payload.config,
+        message_template=payload.message_template,
+        install_types=payload.install_types,
+        cold_start_grace_hours=payload.cold_start_grace_hours,
+        active=payload.active,
     )
-    return {"rule": rule.model_dump()}
+    db.add(rule)
+    await db.commit()
+    await db.refresh(rule)
+    return IoTAlertRuleRead.model_validate(rule)
 
 
-@router.patch("/alerts/rules/{rule_id}")
+@router.patch("/alerts/rules/{rule_id}", response_model=IoTAlertRuleRead)
 async def update_alert_rule(
+    rule_id: UUID,
+    payload: IoTAlertRuleCreate,
     db: DbSession,
     current_user: CurrentUser,
-    rule_id: str,
-    is_active: Optional[bool] = None,
-) -> dict:
-    """Update an alert rule."""
-    rule = AlertRule(
-        id=rule_id,
-        name="Updated Rule",
-        condition={},
-        severity="info",
-        is_active=is_active if is_active is not None else True,
-        created_at="2024-01-01T00:00:00Z",
-    )
-    return {"rule": rule.model_dump()}
+) -> IoTAlertRuleRead:
+    q = select(IoTAlertRule).where(IoTAlertRule.id == rule_id)
+    rule = (await db.execute(q)).scalar_one_or_none()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Alert rule not found")
+
+    rule.name = payload.name
+    rule.description = payload.description
+    rule.rule_type = payload.rule_type
+    rule.sensor_type = payload.sensor_type
+    rule.alert_type = payload.alert_type
+    rule.severity = payload.severity
+    rule.config = payload.config
+    rule.message_template = payload.message_template
+    rule.install_types = payload.install_types
+    rule.cold_start_grace_hours = payload.cold_start_grace_hours
+    rule.active = payload.active
+
+    await db.commit()
+    await db.refresh(rule)
+    return IoTAlertRuleRead.model_validate(rule)
 
 
-@router.delete("/alerts/rules/{rule_id}")
+@router.delete("/alerts/rules/{rule_id}", status_code=204)
 async def delete_alert_rule(
+    rule_id: UUID,
     db: DbSession,
     current_user: CurrentUser,
-    rule_id: str,
-) -> dict:
-    """Delete an alert rule."""
-    return {"success": True}
+) -> None:
+    q = select(IoTAlertRule).where(IoTAlertRule.id == rule_id)
+    rule = (await db.execute(q)).scalar_one_or_none()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Alert rule not found")
+    await db.delete(rule)
+    await db.commit()
 
 
-# =============================================================================
-# Health & Maintenance Endpoints
-# =============================================================================
-
-
-@router.get("/health/equipment/{equipment_id}")
-async def get_equipment_health(
-    db: DbSession,
-    current_user: CurrentUser,
-    equipment_id: str,
-) -> dict:
-    """Get equipment health score. Returns empty - IoT not yet implemented."""
-    return {"equipment_id": equipment_id, "health_score": None, "risk_level": None, "message": "IoT health monitoring not yet connected."}
-
-
-@router.get("/health/customer/{customer_id}")
-async def get_customer_equipment_health(
-    db: DbSession,
-    current_user: CurrentUser,
-    customer_id: str,
-) -> dict:
-    """Get all equipment health for a customer. Returns empty - IoT not yet implemented."""
-    return {"equipment": []}
-
+# ---------- Maintenance recommendations (compat shim for existing frontend) ----------
 
 @router.get("/maintenance/recommendations")
 async def get_maintenance_recommendations(
     db: DbSession,
     current_user: CurrentUser,
-    priority: Optional[str] = None,
-    status: Optional[str] = None,
-    customer_id: Optional[str] = None,
+    limit: int = Query(20, ge=1, le=100),
 ) -> dict:
-    """Get maintenance recommendations. Returns empty - IoT not yet implemented."""
-    return {"recommendations": []}
-
-
-@router.post("/maintenance/recommendations/{recommendation_id}/schedule")
-async def schedule_maintenance(
-    db: DbSession,
-    current_user: CurrentUser,
-    recommendation_id: str,
-    scheduled_date: str,
-    technician_id: Optional[str] = None,
-) -> dict:
-    """Create work order from recommendation."""
-    return {
-        "work_order_id": f"wo-{uuid4().hex[:8]}",
-        "recommendation_id": recommendation_id,
-        "scheduled_date": scheduled_date,
-        "status": "scheduled",
-    }
-
-
-@router.post("/maintenance/recommendations/{recommendation_id}/decline")
-async def decline_recommendation(
-    db: DbSession,
-    current_user: CurrentUser,
-    recommendation_id: str,
-    reason: Optional[str] = None,
-) -> dict:
-    """Decline a maintenance recommendation."""
-    return {"success": True, "status": "declined"}
-
-
-# =============================================================================
-# Provider Connection Endpoints
-# =============================================================================
-
-
-@router.get("/providers/connections")
-async def get_provider_connections(
-    db: DbSession,
-    current_user: CurrentUser,
-) -> dict:
-    """Get IoT provider connections. Returns empty - IoT not yet implemented."""
-    return {"connections": []}
-
-
-@router.post("/providers/{provider}/connect")
-async def connect_provider(
-    db: DbSession,
-    current_user: CurrentUser,
-    provider: str,
-) -> dict:
-    """Initiate OAuth connection to provider."""
-    return {
-        "auth_url": f"https://api.{provider}.com/oauth/authorize?client_id=xxx&redirect_uri=xxx",
-        "state": uuid4().hex,
-    }
-
-
-@router.post("/providers/{provider}/callback")
-async def complete_provider_connection(
-    db: DbSession,
-    current_user: CurrentUser,
-    provider: str,
-    code: str,
-    state: str,
-) -> dict:
-    """Complete OAuth connection."""
-    connection = IoTProviderConnection(
-        provider=provider,
-        connected=True,
-        account_name=f"{provider.title()} Account",
-        device_count=0,
-        last_sync=datetime.utcnow().isoformat(),
+    """Frontend hook exists; surface predictive (non-critical) alerts as recommendations."""
+    q = (
+        select(IoTAlert)
+        .where(
+            and_(
+                IoTAlert.status != "resolved",
+                IoTAlert.alert_type.in_(
+                    [
+                        "pump_short_cycle",
+                        "pump_degradation",
+                        "tank_high_level",
+                        "low_battery",
+                        "drain_field_saturation",
+                    ]
+                ),
+            )
+        )
+        .order_by(desc(IoTAlert.fired_at))
+        .limit(limit)
     )
-    return {"connection": connection.model_dump()}
-
-
-@router.delete("/providers/{provider}/disconnect")
-async def disconnect_provider(
-    db: DbSession,
-    current_user: CurrentUser,
-    provider: str,
-) -> dict:
-    """Disconnect from provider."""
-    return {"success": True}
-
-
-@router.post("/providers/{provider}/sync")
-async def sync_provider_devices(
-    db: DbSession,
-    current_user: CurrentUser,
-    provider: str,
-) -> dict:
-    """Sync devices from provider."""
-    return {"synced_count": 5}
+    result = await db.execute(q)
+    items = [IoTAlertRead.model_validate(a).model_dump() for a in result.scalars().all()]
+    return {"recommendations": items}

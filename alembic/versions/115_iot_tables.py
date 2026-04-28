@@ -157,8 +157,8 @@ def upgrade() -> None:
         sa.Column("acknowledged_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "acknowledged_by_user_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            sa.Integer(),
+            sa.ForeignKey("api_users.id", ondelete="SET NULL"),
             nullable=True,
         ),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
@@ -206,8 +206,8 @@ def upgrade() -> None:
         ),
         sa.Column(
             "released_by_user_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            sa.Integer(),
+            sa.ForeignKey("api_users.id", ondelete="SET NULL"),
             nullable=True,
         ),
     )
@@ -246,15 +246,15 @@ def upgrade() -> None:
         ),
         sa.Column(
             "bound_by_user_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            sa.Integer(),
+            sa.ForeignKey("api_users.id", ondelete="SET NULL"),
             nullable=True,
         ),
         sa.Column("unbound_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "unbound_by_user_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            sa.Integer(),
+            sa.ForeignKey("api_users.id", ondelete="SET NULL"),
             nullable=True,
         ),
         sa.Column("unbind_reason", sa.String(255), nullable=True),

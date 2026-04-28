@@ -111,7 +111,7 @@ class IoTAlertRead(BaseModel):
     trigger_payload: Optional[dict[str, Any]] = None
     fired_at: datetime
     acknowledged_at: Optional[datetime] = None
-    acknowledged_by_user_id: Optional[UUIDStr] = None
+    acknowledged_by_user_id: Optional[int] = None
     resolved_at: Optional[datetime] = None
     resolution_note: Optional[str] = None
     work_order_id: Optional[UUIDStr] = None
@@ -149,7 +149,7 @@ class IoTFirmwareRead(BaseModel):
     min_hardware_revision: Optional[str] = None
     release_notes: Optional[str] = None
     released_at: datetime
-    released_by_user_id: Optional[UUIDStr] = None
+    released_by_user_id: Optional[int] = None
 
 
 class IoTFirmwareDispatch(BaseModel):
@@ -201,9 +201,9 @@ class IoTDeviceBindingRead(BaseModel):
     site_address: Optional[dict[str, Any]] = None
     notes: Optional[str] = None
     bound_at: datetime
-    bound_by_user_id: Optional[UUIDStr] = None
+    bound_by_user_id: Optional[int] = None
     unbound_at: Optional[datetime] = None
-    unbound_by_user_id: Optional[UUIDStr] = None
+    unbound_by_user_id: Optional[int] = None
     unbind_reason: Optional[str] = None
 
 

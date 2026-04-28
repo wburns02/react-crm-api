@@ -155,8 +155,8 @@ class IoTAlert(Base):
     fired_at = Column(DateTime(timezone=True), nullable=False, index=True)
     acknowledged_at = Column(DateTime(timezone=True), nullable=True)
     acknowledged_by_user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        Integer,
+        ForeignKey("api_users.id", ondelete="SET NULL"),
         nullable=True,
     )
     resolved_at = Column(DateTime(timezone=True), nullable=True)
@@ -190,8 +190,8 @@ class IoTFirmwareVersion(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     released_by_user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        Integer,
+        ForeignKey("api_users.id", ondelete="SET NULL"),
         nullable=True,
     )
 
@@ -221,14 +221,14 @@ class IoTDeviceBinding(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     bound_by_user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        Integer,
+        ForeignKey("api_users.id", ondelete="SET NULL"),
         nullable=True,
     )
     unbound_at = Column(DateTime(timezone=True), nullable=True)
     unbound_by_user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        Integer,
+        ForeignKey("api_users.id", ondelete="SET NULL"),
         nullable=True,
     )
     unbind_reason = Column(String(255), nullable=True)
