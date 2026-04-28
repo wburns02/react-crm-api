@@ -149,11 +149,11 @@ async def list_sms_conversations(
         LEFT JOIN customers c_by_phone ON c_by_id.id IS NULL
                                        AND c_by_phone.phone = a.other_phone
         WHERE
-            (:search IS NULL)
-            OR a.other_phone ILIKE '%' || :search || '%'
-            OR COALESCE(c_by_id.first_name, c_by_phone.first_name, '') ILIKE '%' || :search || '%'
-            OR COALESCE(c_by_id.last_name,  c_by_phone.last_name,  '') ILIKE '%' || :search || '%'
-            OR lm.last_content ILIKE '%' || :search || '%'
+            (CAST(:search AS TEXT) IS NULL)
+            OR a.other_phone ILIKE '%' || CAST(:search AS TEXT) || '%'
+            OR COALESCE(c_by_id.first_name, c_by_phone.first_name, '') ILIKE '%' || CAST(:search AS TEXT) || '%'
+            OR COALESCE(c_by_id.last_name,  c_by_phone.last_name,  '') ILIKE '%' || CAST(:search AS TEXT) || '%'
+            OR lm.last_content ILIKE '%' || CAST(:search AS TEXT) || '%'
         ORDER BY a.last_message_at DESC NULLS LAST
         LIMIT :limit OFFSET :offset
         """
