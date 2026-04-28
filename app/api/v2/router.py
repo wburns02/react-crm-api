@@ -145,6 +145,8 @@ from app.api.v2 import (
     invoicehome_import,
     # AI Outbound Sales Agent
     outbound_agent,
+    # SMS Inbox (real /sms/conversations implementation)
+    sms,
 )
 
 # Phase 25: Enterprise Customer Success Platform
@@ -399,6 +401,10 @@ api_router.include_router(invoicehome_import.router, prefix="/admin", tags=["adm
 
 # AI Outbound Sales Agent
 api_router.include_router(outbound_agent.router, tags=["outbound-agent"])
+
+# Real SMS Inbox endpoint(s) — must be registered BEFORE the sms stubs router
+# so that /sms/conversations resolves to the real handler.
+api_router.include_router(sms.router, prefix="/sms", tags=["sms"])
 
 # Stub endpoints: empty responses for routes the frontend calls but aren't implemented yet.
 # Each stub returns X-Stub: true header. Replace with real implementations as needed.

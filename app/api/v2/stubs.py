@@ -24,11 +24,8 @@ async def sms_templates(response: Response, current_user: CurrentUser):
     return {"items": [], "total": 0}
 
 
-@sms_router.get("/conversations")
-async def sms_conversations(response: Response, current_user: CurrentUser):
-    """Return empty SMS conversations list (stub)."""
-    response.headers["X-Stub"] = "true"
-    return {"items": [], "total": 0}
+# /sms/conversations is now implemented in app/api/v2/sms.py (real endpoint).
+# Stub removed; the real router is mounted with the same /sms prefix in router.py.
 
 
 @sms_router.get("/stats")
