@@ -159,6 +159,10 @@ class Settings(BaseSettings):
     OUTBOUND_AGENT_ENABLED: bool = False
     OUTBOUND_AGENT_FROM_NUMBER: str | None = None  # Twilio number to call from
     OUTBOUND_AGENT_TRANSFER_NUMBER: str = "+16153452544"  # MAC Septic office
+    # Voice agent engine selection: "legacy" (hand-rolled) or "pipecat" (new Pipecat-based)
+    VOICE_AGENT_ENGINE: str = "legacy"
+    # Twilio AsyncAmd webhook URL — set per-environment in Railway
+    OUTBOUND_AGENT_AMD_CALLBACK: str | None = None
 
     # Local AI Server (for vLLM on RTX 5090)
     AI_SERVER_URL: str = "http://localhost:8000"
