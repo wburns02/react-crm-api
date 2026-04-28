@@ -19,7 +19,7 @@ from datetime import datetime, date
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request, Response, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request, Response, Depends, Body
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from app.config import settings
@@ -129,9 +129,13 @@ async def seed_test_prospects():
 # ── Campaign Management Endpoints ──────────────────────────────────
 
 @router.post("/campaign/start")
-async def api_start_campaign():
-    """Start the outbound calling campaign."""
-    result = await start_campaign()
+async def api_start_campaign(payload: dict | None = Body(default=None)):
+    """Start the outbound calling campaign.
+
+    Optional JSON body: `{"is_test": true}` to filter the queue to test prospects only.
+    """
+    is_test = bool(payload.get("is_test")) if isinstance(payload, dict) else False
+    result = await start_campaign(is_test=is_test)
     return result
 
 

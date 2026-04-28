@@ -233,8 +233,12 @@ def initiate_call(
 
 # ── Campaign Runner ────────────────────────────────────────────────
 
-async def start_campaign():
-    """Start the outbound campaign dialer."""
+async def start_campaign(is_test: bool = False):
+    """Start the outbound campaign dialer.
+
+    `is_test=True` filters the queue to customers with `is_test_prospect=true`,
+    so test campaigns hit only seeded test rows (e.g., Will's cell).
+    """
     if campaign.running:
         return {"error": "Campaign already running"}
 
@@ -247,7 +251,7 @@ async def start_campaign():
     campaign.last_error = None
 
     # Get initial queue
-    queue = await get_prospect_queue()
+    queue = await get_prospect_queue(is_test=is_test)
     campaign.queue_depth = len(queue)
 
     if not queue:
