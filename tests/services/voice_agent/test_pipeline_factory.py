@@ -7,13 +7,16 @@ async def test_build_pipeline_returns_pipecat_pipeline(mocker):
     # Mock all external service constructors so we don't need real API keys
     mocker.patch("app.services.voice_agent.pipeline_factory.CartesiaTTSService")
     mocker.patch("app.services.voice_agent.pipeline_factory.DeepgramSTTService")
-    mocker.patch("app.services.voice_agent.pipeline_factory.AnthropicLLMService")
+    mock_llm_cls = mocker.patch(
+        "app.services.voice_agent.pipeline_factory.AnthropicLLMService"
+    )
     mocker.patch("app.services.voice_agent.pipeline_factory.SileroVADAnalyzer")
     mocker.patch("app.services.voice_agent.pipeline_factory.FastAPIWebsocketTransport")
     mocker.patch("app.services.voice_agent.pipeline_factory.FastAPIWebsocketParams")
     mocker.patch("app.services.voice_agent.pipeline_factory.TwilioFrameSerializer")
 
     from app.services.voice_agent import pipeline_factory
+    from app.services.voice_agent.tools import get_tools_schema
 
     fake_session = mocker.MagicMock()
     fake_session.system_prompt = "system"
@@ -34,6 +37,17 @@ async def test_build_pipeline_returns_pipecat_pipeline(mocker):
     # whole point of the Phase 6.1-fix change.
     fake_pair.user.assert_called_once()
     fake_pair.assistant.assert_called_once()
+
+    # Phase 6.1-fix-2: every tool in the schema must be registered with the LLM
+    # service so Pipecat can dispatch tool_use blocks back to the session.
+    expected_tool_count = len(get_tools_schema().standard_tools)
+    mock_llm_instance = mock_llm_cls.return_value
+    assert mock_llm_instance.register_function.call_count == expected_tool_count
+    registered_names = {
+        call.args[0] for call in mock_llm_instance.register_function.call_args_list
+    }
+    expected_names = {fs.name for fs in get_tools_schema().standard_tools}
+    assert registered_names == expected_names
 
 
 def test_get_tools_schema_returns_native_pipecat_schema():

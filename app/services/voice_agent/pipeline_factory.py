@@ -21,6 +21,20 @@ Pipeline order (Pipecat 0.0.108 standard for STT → LLM → TTS over Twilio):
 The user aggregator accumulates the user's spoken turn into the context
 *before* the LLM runs; the assistant aggregator captures the LLM response
 back into the context *after* TTS, so the next turn sees the full history.
+
+Tool dispatch (Phase 6.1-fix-2): we register every tool name in
+``get_tools_schema().standard_tools`` against the AnthropicLLMService here
+so that when the model emits a ``tool_use`` block the pipeline routes it
+back to ``session._handle_tool_call``. Without this registration Pipecat
+would sit waiting for a FunctionCallResultFrame that never arrives.
+
+API discovery against pipecat 0.0.108 (recorded 2026-04-28):
+  - ``AnthropicLLMService.register_function(function_name, handler, ...)``
+    accepts ``None`` as ``function_name`` for a catch-all handler. We register
+    each tool by name explicitly so ``has_function`` works for telemetry.
+  - The handler receives a ``FunctionCallParams`` dataclass exposing
+    ``function_name: str``, ``tool_call_id: str``, ``arguments: Mapping``,
+    ``llm``, ``context``, ``result_callback``.
 """
 from app.config import settings
 
@@ -44,6 +58,7 @@ def build_pipeline(*, session, websocket, context_aggregator_pair) -> Pipeline:
       session: ``OutboundAgentSession`` (see ``voice_agent.session``). Must
         expose ``stream_sid``, ``system_prompt``, and ``tools``. The system
         prompt + tools are owned by the caller via ``context_aggregator_pair``.
+        Tool dispatch is wired here against ``session._handle_tool_call``.
       websocket: live FastAPI WebSocket from Twilio Media Streams.
       context_aggregator_pair: ``LLMContextAggregatorPair`` built in
         ``voice_agent_ws`` from a seeded ``LLMContext`` (system prompt +
@@ -75,6 +90,10 @@ def build_pipeline(*, session, websocket, context_aggregator_pair) -> Pipeline:
         model="claude-sonnet-4-6",
     )
 
+    # Wire tool dispatch BEFORE the pipeline runs — Pipecat invokes the
+    # handler synchronously when the model emits a tool_use block.
+    _register_tools(llm, session)
+
     tts = CartesiaTTSService(
         api_key=settings.CARTESIA_API_KEY,
         voice_id=settings.CARTESIA_VOICE_ID or "",
@@ -94,3 +113,36 @@ def build_pipeline(*, session, websocket, context_aggregator_pair) -> Pipeline:
         ]
     )
     return pipeline
+
+
+def _register_tools(llm, session) -> None:
+    """Register every tool in ``get_tools_schema()`` with the LLM service.
+
+    Each handler forwards to ``session._handle_tool_call`` (which delegates
+    to the legacy helper for actual side effects: Twilio SMS, work order
+    creation, transfer flagging) and then invokes ``result_callback`` with
+    the tool result so Pipecat can splice a ``FunctionCallResultFrame``
+    into the conversation.
+    """
+    from app.services.voice_agent.tools import get_tools_schema
+
+    schema = get_tools_schema()
+    tool_names = [fs.name for fs in schema.standard_tools]
+
+    async def _handler(params):
+        # ``params`` is a ``pipecat.services.llm_service.FunctionCallParams``
+        # dataclass — fields verified against 0.0.108. ``arguments`` is a
+        # ``Mapping`` so we coerce to dict for the legacy helper.
+        try:
+            args = dict(params.arguments or {})
+        except Exception:
+            args = {}
+        result = await session._handle_tool_call(
+            params.function_name,
+            params.tool_call_id,
+            args,
+        )
+        await params.result_callback(result)
+
+    for name in tool_names:
+        llm.register_function(name, _handler)

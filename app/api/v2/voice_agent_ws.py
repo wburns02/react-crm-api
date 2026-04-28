@@ -44,6 +44,7 @@ from app.services.campaign_dialer import (
 from app.services.voice_agent import greeting_prerender, voicemail
 from app.services.voice_agent.pipeline_factory import build_pipeline
 from app.services.voice_agent.session import OutboundAgentSession
+from app.services.voice_agent.greeting_prerender import render_text as render_greeting_text
 
 # Pipecat 0.0.108 imports — verified against installed package.
 from pipecat.frames.frames import OutputAudioRawFrame
@@ -131,17 +132,25 @@ async def voice_stream(websocket: WebSocket):
         return
 
     # Human (or unknown — proceed cautiously).
+    #
+    # We build the LLMContext up here (instead of inside _run_human_branch) so
+    # that whatever happens during the run — including a mid-call exception —
+    # the finally block can still call _capture_transcript(context, session)
+    # before _persist_call_log writes the call_logs row.
+    context = _build_context(session, prospect, quote)
     try:
         await _run_human_branch(
             websocket=websocket,
             session=session,
             call_sid=call_sid,
+            context=context,
         )
     except WebSocketDisconnect:
         logger.info(f"[VoiceWS:{short_sid}] websocket disconnected")
     except Exception as exc:
         logger.exception(f"[VoiceWS:{short_sid}] pipeline error: {exc}")
     finally:
+        _capture_transcript(context, session)
         await _persist_call_log(session)
         voice_agent_amd.cleanup(call_sid)
         active_sessions.pop(call_sid, None)
@@ -193,15 +202,20 @@ async def _run_human_branch(
     websocket: WebSocket,
     session: OutboundAgentSession,
     call_sid: str,
+    context,
 ) -> None:
-    """Build and run the Pipecat pipeline for a human-answered call."""
+    """Build and run the Pipecat pipeline for a human-answered call.
+
+    ``context`` is the seeded ``LLMContext`` (system prompt + greeting + tools).
+    The caller owns it so transcript capture can read messages off of it after
+    the pipeline ends.
+    """
     short_sid = call_sid[:8]
 
-    # Build the universal LLM context (system prompt + native ToolsSchema)
-    # and the aggregator pair that brackets the LLM in the pipeline. Done
+    # Build the aggregator pair that brackets the LLM in the pipeline. Done
     # here (not inside build_pipeline) so the same factory can be reused by
     # a non-WebSocket eval harness later.
-    context_pair = _build_context_pair(session)
+    context_pair = _build_aggregator_pair(context)
 
     pipeline = build_pipeline(
         session=session,
@@ -232,8 +246,15 @@ async def _run_human_branch(
     await runner.run(task)
 
 
-def _build_context_pair(session: OutboundAgentSession):
-    """Construct an LLMContext + LLMContextAggregatorPair seeded from the session.
+def _build_context(session: OutboundAgentSession, prospect: dict, quote: dict):
+    """Construct an LLMContext seeded with system prompt + prerendered greeting.
+
+    Phase 6.1-fix-2: the prerendered greeting plays as audio out, but the LLM
+    has no idea it just spoke unless we put the greeting text on the context
+    as an assistant message. Without this, when the user replies "yeah I have
+    a question," the LLM sees only ``[system, user_reply]`` and may not connect
+    to the quote follow-up framing. Seeding the greeting as the first
+    assistant turn keeps the multi-turn framing intact.
 
     The system prompt is added as a plain system message — the Anthropic
     adapter inside Pipecat applies cache_control markers automatically on the
@@ -241,17 +262,98 @@ def _build_context_pair(session: OutboundAgentSession):
     system prompt by hand.
     """
     from pipecat.processors.aggregators.llm_context import LLMContext
+
+    from app.services.voice_agent.tools import get_tools_schema
+
+    greeting_text = render_greeting_text(prospect, quote)
+    return LLMContext(
+        messages=[
+            {"role": "system", "content": session.system_prompt},
+            {"role": "assistant", "content": greeting_text},
+        ],
+        tools=get_tools_schema(),
+    )
+
+
+def _build_aggregator_pair(context):
+    """Wrap the seeded ``LLMContext`` in an ``LLMContextAggregatorPair``.
+
+    Split out from context construction so transcript capture can read off
+    the same ``LLMContext`` instance the aggregators are appending to.
+    """
     from pipecat.processors.aggregators.llm_response_universal import (
         LLMContextAggregatorPair,
     )
 
-    from app.services.voice_agent.tools import get_tools_schema
-
-    context = LLMContext(
-        messages=[{"role": "system", "content": session.system_prompt}],
-        tools=get_tools_schema(),
-    )
     return LLMContextAggregatorPair(context)
+
+
+def _capture_transcript(context, session: OutboundAgentSession) -> None:
+    """Copy LLMContext messages onto the legacy session.transcript list.
+
+    The legacy ``_persist_call`` reads ``session.transcript`` (a list of dicts
+    with ``speaker``/``text``/``timestamp`` keys) and renders a timestamped
+    transcript block before writing it to ``call_logs.transcription``. Pipecat
+    owns the conversation now and never populates that list, so we pull
+    ``LLMContext.get_messages()`` and translate it into the legacy shape.
+
+    Anthropic content can be either a string (textual turn) or a list of
+    content blocks (when tool_use blocks are mixed in) — we extract the
+    ``text`` blocks only. System messages are skipped.
+    """
+    if context is None or session is None:
+        return
+    try:
+        messages = list(context.get_messages() or [])
+    except Exception as exc:
+        logger.warning(f"[VoiceWS] transcript capture: get_messages failed: {exc}")
+        return
+
+    legacy = getattr(session, "_legacy_helpers", None)
+    if legacy is None:
+        return
+
+    transcript: list[dict] = []
+    started_iso = None
+    try:
+        started_iso = legacy.started_at.isoformat()
+    except Exception:
+        pass
+
+    for msg in messages:
+        try:
+            role = msg.get("role") if isinstance(msg, dict) else None
+        except Exception:
+            role = None
+        if not role or role == "system":
+            continue
+        speaker = "agent" if role == "assistant" else "customer"
+
+        content = msg.get("content", "") if isinstance(msg, dict) else ""
+        text = ""
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            chunks = []
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "text" and block.get("text"):
+                    chunks.append(block["text"])
+            text = " ".join(chunks).strip()
+        if not text:
+            continue
+        transcript.append(
+            {
+                "speaker": speaker,
+                "text": text,
+                # Best-effort timestamp — every line lands at started_at.
+                # _persist_call falls back to "[??:??]" gracefully if absent.
+                "timestamp": started_iso or "",
+            }
+        )
+
+    legacy.transcript = transcript
 
 
 # ── Audio helpers ───────────────────────────────────────────────────────
@@ -317,12 +419,12 @@ async def _persist_call_log(session: OutboundAgentSession) -> None:
     Then we patch the freshly-inserted row to add hallucinations + amd_result
     (columns that the legacy persister doesn't know about).
 
-    TODO(phase-7): pull the real conversation transcript out of the Pipecat
-    LLMContext (or via TranscriptProcessor in the pipeline) and write it onto
-    legacy.transcript before calling _persist_call. For Phase 6.1 the
-    transcript will be empty because the Pipecat session never populated the
-    legacy helper's ``transcript`` list. This is a known gap — Phase 7 wires
-    the transcript processor and unblocks it.
+    Phase 6.1-fix-2: ``_capture_transcript(context, session)`` is invoked
+    from the WebSocket finally block before this function runs, so
+    ``legacy.transcript`` is populated from the LLMContext and the
+    persisted ``call_logs.transcription`` is non-empty for human-branch
+    calls. (Phase 7 may swap to a TranscriptProcessor for richer turn-level
+    timing — for now the system+assistant+user message log is sufficient.)
     """
     short_sid = session.call_sid[:8]
 
