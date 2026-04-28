@@ -70,7 +70,7 @@ active_sessions: dict[str, "OutboundAgentSession"] = {}
 
 # ── Queue Management ───────────────────────────────────────────────
 
-async def get_prospect_queue(limit: int = 50) -> list[dict]:
+async def get_prospect_queue(limit: int = 50, *, is_test: bool = False) -> list[dict]:
     """
     Get prospects with outstanding quotes, sorted by value and age.
 
@@ -80,6 +80,7 @@ async def get_prospect_queue(limit: int = 50) -> list[dict]:
     - Customer has phone number
     - Not marked DNC
     - Max 3 call attempts
+    - is_test_prospect matches `is_test` arg (False for real campaigns)
     """
     async with async_session_maker() as db:
         # Subquery: quotes that are sent but not converted
@@ -92,6 +93,7 @@ async def get_prospect_queue(limit: int = 50) -> list[dict]:
                 Customer.phone.isnot(None),
                 Customer.phone != "",
                 Customer.is_active == True,
+                Customer.is_test_prospect == is_test,
             )
             .order_by(desc(Quote.total), Quote.sent_at.asc())
             .limit(limit)
