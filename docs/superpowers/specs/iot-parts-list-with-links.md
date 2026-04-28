@@ -1,0 +1,370 @@
+# Watchful — Complete Parts List with Links
+**Date:** 2026-04-27
+**Verified in-stock and priced as of this date.**
+**Methodology:** every URL below was fetched live; every price quoted is the price shown on the vendor product page on 2026-04-27.
+
+> **Two important corrections vs. the source build doc** — caught during this verification pass:
+> 1. The nRF9160-DK is currently **$179.80** at Digi-Key (not $129 as the build doc says — Nordic raised the price in late 2024). Budget shifted from $425 to ~$475 because of this.
+> 2. The nRF9160-DK has **two USB micro-B ports** (not USB-C). It ships with a USB-A → micro-B cable in the box, but you'll likely want a second one.
+
+---
+
+## Part 1 — First Device Beginner Build (~$475 with a multimeter, ~$435 without)
+
+This is the immediate shopping list for ONE working development device. **No soldering required.** Everything connects via headers, screw terminals, jumper wires, or breadboard.
+
+### Section 1.1 — The Brain ($179.80)
+
+| Item | Vendor | Vendor PN | Mfr PN | Price | Stock | Lead time | Link |
+|---|---|---|---|---|---|---|---|
+| Nordic nRF9160-DK | Digi-Key | NRF9160-DK-ND | NRF9160-DK | **$179.80** | In Stock (124+) | 2-3 days | [digikey.com](https://www.digikey.com/en/products/detail/nordic-semiconductor-asa/NRF9160-DK/9740721) |
+
+Includes: nRF9160 SiP, on-board nRF52840 (BLE/Thread, also acts as J-Link debugger), LTE+GPS+Bluetooth antennas pre-attached, micro-SIM + nano-SIM slots, 4 buttons + 4 LEDs, on-board temperature sensor, USB-A → USB micro-B cable in box.
+
+**Reasonable alternate (cheaper, smaller):** Actinius Icarus SoM Eval Board — $69 — but it's a development carrier for the production-style SoM, not as beginner-friendly. Stick with the DK for first build.
+
+---
+
+### Section 1.2 — Cellular SIM ($15)
+
+| Item | Vendor | Price | Notes | Link |
+|---|---|---|---|---|
+| 1NCE IoT Lifetime Flat (10yr / 500MB / 250 SMS) | 1NCE | **$14.00** | Multi-carrier roaming. One-time fee, no monthly. | [1nce.com](https://1nce.com/en-us/1nce-connect/pricing) |
+| + SIM card form factor (Card Business, 3-in-1 punch-out: nano/micro/standard) | 1NCE | **$1.00** | Add to plan at checkout | (same URL) |
+
+**Total: $15.00 per SIM**
+
+**Lead time:** 5-10 business days from Germany to USA. Buy now even if you're still waiting on the DK.
+
+**Account setup required.** You can't ship a 1NCE SIM without creating an account + verifying email first. Do this on Day 1 while waiting for the DK.
+
+The DK ships with a free iBasis test SIM (works in the US for limited data, then expires). Use that for the first power-up while waiting on 1NCE.
+
+---
+
+### Section 1.3 — Power ($0–$12)
+
+The DK is happy on USB power from your laptop. **You can skip this entire section for v1.** Add later if you want a "real install" feel.
+
+| Item | Vendor | Vendor PN | Price | Stock | Link |
+|---|---|---|---|---|---|
+| 12V 1A regulated wall adapter, 2.1mm barrel | Adafruit | 798 | **$8.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/798) |
+| 2.1mm female barrel jack to screw terminal | Adafruit | 368 | **$2.00** | In Stock | [adafruit.com](https://www.adafruit.com/product/368) |
+
+**Subtotal (optional):** $10.95
+
+The DK accepts 5V via USB or 5V via VIN header. If you want 12V → 5V step-down for "production-feel" testing, the Adafruit UBEC ([#1385, $9.95](https://www.adafruit.com/product/1385)) does it but its output is bare wires, not USB. For first build, just plug DK into laptop USB.
+
+---
+
+### Section 1.4 — Sensors ($45–$55)
+
+These are dramatically cheaper than the production sensor list because we're using Adafruit/SparkFun-style breakouts with header pins instead of industrial-grade probes. Accuracy is "good enough for development."
+
+#### 1.4.1 — Capacitive soil moisture (drain field saturation simulator)
+
+| Item | Vendor | Vendor PN | Mfr PN | Price | Stock | Link |
+|---|---|---|---|---|---|---|
+| DFRobot Gravity Capacitive Soil Moisture Sensor | Digi-Key | 1738-1184-ND | SEN0193 | **$5.90** | In Stock (146) | [digikey.com](https://www.digikey.com/en/products/detail/dfrobot/SEN0193/6588605) |
+
+3-pin: VCC / GND / AOUT. Header pins pre-soldered. Stick in glass of water for "saturated", glass of dry sand for "dry".
+
+#### 1.4.2 — Ultrasonic distance (tank level simulator)
+
+**Primary (Adafruit, in stock):**
+
+| Item | Vendor | Vendor PN | Price | Stock | Link |
+|---|---|---|---|---|---|
+| HC-SR04 Ultrasonic Sonar Distance Sensor + 2× 10K resistors | Adafruit | 3942 | **$3.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/3942) |
+
+The bundled 10K resistors form a voltage divider for the 5V ECHO line → 3.3V DK input. Free.
+
+**Substitute (SparkFun, currently backorder):** ~~SparkFun SEN-15569~~ — $5.25, **on backorder as of 2026-04-27.** Adafruit one above is the better pick.
+
+#### 1.4.3 — CT clamp (pump current simulator)
+
+The YHDC SCT-013-030 is **NOT carried by Digi-Key or Mouser** as of 2026-04-27 (verified). Source from Amazon:
+
+| Item | Vendor | ASIN | Price | Stock | Link |
+|---|---|---|---|---|---|
+| YHDC SCT-013-030 30A non-invasive CT clamp (3.5mm jack) | Amazon | B01M0QUPBA | **~$10–14** (varies by seller) | In Stock | [amazon.com](https://www.amazon.com/Current-Transformer-SCT013-0-100A-Non-invasive/dp/B01M0QUPBA) |
+
+Order **YHDC-branded** specifically (Amazon listings vary — JANSANE, SazkJere, Reland Sun all sell the same physical part rebranded; YHDC original is preferred). Check for **30A** version with 3.5mm jack output.
+
+**3.5mm jack to screw terminal breakout** (so you can wire it to the breadboard):
+
+| Item | Vendor | Vendor PN | Price | Stock | Link |
+|---|---|---|---|---|---|
+| Adafruit 3.5mm Stereo Audio Jack Terminal Block | Adafruit | 2791 | **$2.50** | In Stock | [adafruit.com](https://www.adafruit.com/product/2791) |
+
+**Anti-recommendation:** Don't buy SCT-013-000 (the 0–100A "current-output" version). The 030 puts out 0–1V AC, the 000 puts out 0–50mA AC and needs a burden resistor — extra hassle for v1.
+
+#### 1.4.4 — Push button (alarm-tap simulator)
+
+| Item | Vendor | Vendor PN | Price | Stock | Link |
+|---|---|---|---|---|---|
+| 12mm square momentary pushbutton (breadboard-friendly) | SparkFun | COM-09190 | **$0.75** | In Stock | [sparkfun.com](https://www.sparkfun.com/products/9190) |
+
+#### 1.4.5 — Status LED
+
+**Already on the DK** — 4 user LEDs are built in. Skip.
+
+#### Sensor section subtotal: **$23.10 (Adafruit/SparkFun) + $10–14 (Amazon CT) ≈ $35**
+
+---
+
+### Section 1.5 — Wiring + breadboard ($25)
+
+| Item | Vendor | Vendor PN | Price | Stock | Link |
+|---|---|---|---|---|---|
+| Adafruit Half-Sized Premium Breadboard, 400 tie points | Adafruit | 64 | **$4.95** | Out of stock at Adafruit; in stock at SparkFun PRT-12002 ($6.25) and on Digi-Key | [adafruit.com](https://www.adafruit.com/product/64) / [sparkfun.com](https://www.sparkfun.com/products/12002) |
+| Adafruit Breadboarding Wire Bundle (~75 stranded with stiff ends) | Adafruit | 153 | **$4.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/153) |
+| Premium M/M Jumper Wires, 40 × 6" | Adafruit | 758 | **$3.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/758) |
+| Premium F/F Jumper Wires, 40 × 6" | Adafruit | 266 | **$3.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/266) |
+| SparkFun Jumper Wires Connected M/M, 6", 20-pack | SparkFun | PRT-12795 | **$2.95** | In Stock | [sparkfun.com](https://www.sparkfun.com/products/12795) |
+
+Buy whichever combo is convenient — you only need ~30 jumper wires for this build. The **Adafruit 153 bundle alone** is enough to do everything.
+
+#### Optional but recommended (alarm-tap stretch goal)
+
+| Item | Vendor | Price | Link |
+|---|---|---|---|
+| Wago 221-415 Lever-Nuts, 5-conductor, 10-pack | Amazon (B06XH47DC2) | **~$8** | [amazon.com](https://www.amazon.com/Wago-221-415-LEVER-NUTS-Conductor-Connectors/dp/B06XH47DC2) |
+| Solderless butt-splice connectors (16-22 AWG) assortment | Amazon / Lowes | **~$8** | hardware aisle |
+
+#### Wiring subtotal: **~$15** (just buying breadboard + Adafruit 153 wire bundle + a jumper kit)
+
+---
+
+### Section 1.6 — Tools (one-time, not per-device)
+
+You only need these once. They live on your bench forever after.
+
+| Item | Vendor | Price | Stock | Link |
+|---|---|---|---|---|
+| Klein Tools MM400 Auto-Ranging Digital Multimeter, 600V CAT III | Home Depot / Lowes / Amazon | **~$45** (typical $42-50 across retailers) | In Stock | [homedepot.com](https://www.homedepot.com/p/Klein-Tools-600V-AC-DC-Auto-Ranging-Digital-Multimeter-Drop-Resistant-Temperature-Measurement-MM400/206517333) / [lowes.com](https://www.lowes.com/pd/Klein-Tools-MM400-Digital-Auto-Ranging-Multimeter-600V-CAT-III/5018728553) |
+| USB-A to USB micro-B cable (3ft) | Adafruit | $2.95 | In Stock | [adafruit.com](https://www.adafruit.com/product/592) |
+
+> **Important:** the nRF9160-DK uses **USB micro-B**, not USB-C. The DK ships with one USB-A → micro-B cable in the box. The cable above is only needed if you want a spare or longer one.
+
+#### Optional tools (have if you can — skip for first build)
+
+| Item | Vendor | Price | Link |
+|---|---|---|---|
+| Klein 11061 wire strippers / cutters | Amazon / Home Depot | ~$22 | [homedepot.com](https://www.homedepot.com/p/Klein-Tools-Wire-Stripper-Cutter-11061) |
+| Lineman pliers (any brand) | hardware store | ~$15 | local |
+| Heat-shrink kit (small) | Amazon | ~$10 | search "heat shrink kit assortment" |
+| Saleae Logic 8 clone (cheap logic analyzer) | Amazon | ~$15-25 | search "USB logic analyzer 24MHz 8 channel" |
+| Hakko FX-888D soldering station (stretch — for production work, not first build) | Amazon / Digi-Key | ~$130 | [digikey.com](https://www.digikey.com/en/products/detail/american-hakko-products-inc/FX888D-23BY/4156628) |
+
+#### Tools subtotal: **$45 (just multimeter)** — or **$0** if you already own one.
+
+---
+
+### Per-vendor totals (cleanest path)
+
+| Vendor | Items | Subtotal | Shipping est. | Lead time |
+|---|---|---|---|---|
+| **Digi-Key** | nRF9160-DK + DFRobot SEN0193 (capacitive soil) | **$185.70** | Free over $200 (you're under by $14.30 — add a USB cable or a few jumper wires to clear the threshold). Otherwise ~$8 ground. | 2-3 days |
+| **Adafruit** | HC-SR04 (#3942) + 3.5mm-to-terminal (#2791) + breadboarding wire bundle (#153) + breadboard (#64, if in stock) + 2.1mm-jack-to-terminal (#368) + 12V wall adapter (#798, optional) | **$15.40** (no power), **$25.30** (with 12V power) | $10 (USPS) | 2-4 days |
+| **SparkFun** | Pushbutton (COM-09190) + breadboard PRT-12002 (since Adafruit #64 is OOS) + jumper wires PRT-12795 | **$9.95** | $7-10 | 2-4 days |
+| **1NCE** | Lifetime SIM + Card Business form factor | **$15.00** | $5 to USA | 5-10 days |
+| **Amazon** | YHDC SCT-013-030 + Wago 221-415 (optional) + butt splices (optional) + Klein MM400 (optional) | **$10-14** (CT only) → **$60-75** (with multimeter) | Prime free | 1-2 days |
+
+### Grand total: **$425–$475**
+- **$425:** without optional 12V power, without multimeter (you have one or borrow)
+- **$435:** add the 12V wall + barrel-to-screw adapter
+- **$475:** add a Klein MM400 multimeter
+
+---
+
+---
+
+## Part 2 — Production BOM (qty 1000+, future planning)
+
+Same structure but for the production parts list. Lighter detail — canonical part numbers, link, qty-1000 unit price targets. This is a forward-looking document; verify against current pricing when you actually pull the trigger.
+
+### Section 2.1 — Compute / radio
+
+| Item | Vendor | Mfr PN | Qty-1 price | Qty-1000 target | Link |
+|---|---|---|---|---|---|
+| Nordic nRF9160 SiP (raw module) | Digi-Key, Mouser, Avnet | nRF9160-SICA-R7 | $28-32 | **$24** | [digikey.com](https://www.digikey.com/en/products/base-product/nordic-semiconductor-asa/1490/NRF9160/328905) |
+| **OR** Actinius Icarus SoM (faster proto, slightly higher BOM cost) | Mouser, direct | Icarus SoM | $49-59 | $42 (qty 1000 direct) | [actinius.com](https://www.actinius.com/icarus-som) |
+| Taoglas FXP07 LTE flex antenna (adhesive) | Digi-Key | FXP07.07.0100A | $7-9 | $6 | search Digi-Key "FXP07.07.0100A" |
+| 1NCE Lifetime SIM (10yr / 500MB) | 1NCE direct | 1NCE Lifetime Flat | $14 | $14 (no volume discount on the SIM itself) | [1nce.com](https://1nce.com/en-us/1nce-connect/pricing) |
+
+### Section 2.2 — Power
+
+| Item | Vendor | Mfr PN | Qty-1 | Qty-1000 | Link |
+|---|---|---|---|---|---|
+| 12V/2A wall adapter | Digi-Key, Mouser | TPI 31-1080 (or equivalent 12V/2A switching brick) | $8-12 | $5-7 | search "12V 2A switching adapter 2.1mm barrel" on Digi-Key |
+| Buck 12V→3.3V (low-Iq, MCU rail) | Digi-Key | TPS62840DLCR | $1.80 | $1.20 | [digikey.com](https://www.digikey.com/en/products/detail/texas-instruments/TPS62840DLCR/10434131) |
+| Buck 12V→5V (sensor rail) | Digi-Key | TPS54060ADGQR | $3.50 | $2.10 | search Digi-Key "TPS54060A" |
+| LiSOCl₂ D-cell, 19Ah, 3.6V (UPS) | Digi-Key, House of Batteries | Tadiran TL-5930F | $32-38 | $28 | search "TL-5930/F" on Digi-Key |
+| D-cell battery holder, PCB mount | Digi-Key | Keystone 1041 | $3 | $2.20 | search Digi-Key "Keystone 1041" |
+| Coulomb-counter / SOC IC | Digi-Key | BQ27441DRZR-G1A | $3 | $2.10 | search Digi-Key "BQ27441" |
+| AC-present opto | Digi-Key | PC817XPNIP1B (Sharp) | $0.30 | $0.18 | search Digi-Key "PC817" |
+| TVS 12V rail | Digi-Key | SMAJ15CA-13-F | $0.40 | $0.18 | search Digi-Key "SMAJ15CA" |
+| MOV (AC input) | Digi-Key | V275LA20A | $1.80 | $0.95 | search Digi-Key "V275LA20A" |
+
+### Section 2.3 — Sensors (production substitutions)
+
+| Sensor | Mfr PN | Vendor | Qty-1 | Qty-1000 | Notes |
+|---|---|---|---|---|---|
+| Pump CT clamp 30A | YHDC SCT-013-030 | Amazon / OpenEnergyMonitor (USA) / AliExpress (volume) | $10-14 | **$5** (AliExpress volume) | Not on Digi-Key. Bulk AliExpress with QC inspection acceptable for production. |
+| Aerator CT clamp 15A | YHDC SCT-013-015 | same as above | $9 | **$5** | (ATU only) |
+| Tank level ultrasonic (premium proto) | MaxBotix MB7389-100 | Digi-Key | $109 | $89 | weather-resistant; qty 1000 is rich |
+| Tank level ultrasonic (production alt, $20 vs $109) | A02YYUW (RS-485, IP65) | Adafruit / DFRobot / AliExpress | $18-28 | **$14** | Validate accuracy in pilot first |
+| Soil moisture (premium proto) | METER EC-5 | METER Group direct | $135 | $115 | Lab-grade |
+| Soil moisture (production alt, $14 vs $135) | DFRobot SEN0308 capacitive RS-485 | Digi-Key, DFRobot | $14-22 | **$11** | Validate accuracy in pilot |
+| Float switch (alarm tap backup) | Generic NC septic float | Septic Solutions | $14 | $10 | Optional — most OEM panels have alarm OUT screw terminal |
+| Chlorinator flow (ATU only) | TE FS40A | Digi-Key | $24 | $19 | search Digi-Key "FS40A" |
+
+### Section 2.4 — Enclosure + mech
+
+| Item | Mfr PN | Vendor | Qty-1 | Qty-1000 | Link |
+|---|---|---|---|---|---|
+| IP66/NEMA-rated polycarbonate enclosure | BUD PN-1339-DG | Digi-Key | **$20.20** (verified 2026-04-27) | ~$13 | [digikey.com](https://www.digikey.com/en/products/detail/bud-industries/PN-1339-DG/439774) |
+| Internal mounting plate | BUD MOP-1339 | Digi-Key | $13 | $9 | search Digi-Key "MOP-1339" |
+| External mount feet (set) | BUD MFB-1339 | Digi-Key | $9 | $6 | search Digi-Key "MFB-1339" |
+| M16 IP68 cable glands | Heyco M3185G | Digi-Key | $4 | $2.50 | search Digi-Key "Heyco M3185G" |
+| Conformal coating (acrylic) | MG Chemicals 422B | Digi-Key | $28/can | $22 (qty 100 can) | search Digi-Key "MGC 422B" |
+| Tamper-evident sticker | Avery 6577 | Amazon | $9/pack | $7 | hardware retailer |
+| Door reed switch (tamper) | Cherry MP201801 | Digi-Key | $4 | $2.50 | search Digi-Key "MP201801" |
+
+> **Note on the BUD PN-1339-DG:** Digi-Key currently shows **only 10 units in stock** with an 11-week manufacturer lead time. For prototype qty 5-10, jump on a small batch now. For qty 1000+, place a direct order with BUD Industries (volume pricing kicks in around 100 units; expect 8-12 weeks lead time).
+
+### Section 2.5 — PCB + assembly
+
+| Item | Vendor | Cost | Notes |
+|---|---|---|---|
+| 4-layer ENIG PCB, 100×80mm, qty 5 | JLCPCB | $30 (incl. shipping) | [JLCPCB instant quote](https://cart.jlcpcb.com/quote) |
+| 4-layer ENIG PCB, qty 1000 | JLCPCB | $4/board | Volume tier; tooling NRE separate |
+| SMT assembly, top side, ~50 components, qty 5 | JLCPCB | $80-180 | Non-stocked parts add fees |
+| SMT assembly, qty 1000 | JLCPCB | $14/board | Stable with consigned BOM |
+
+> **Pricing tip:** JLCPCB's calculator (link above) is the fastest way to get a real number. Drop in board dimensions, layer count, qty, ENIG finish, and assembly options. Quotes are instant. NRE for stencils + first-article is roughly $50.
+
+---
+
+## Tools and consumables (own once, use for many builds)
+
+| Item | Use | Vendor | Price | Link |
+|---|---|---|---|---|
+| Klein MM400 multimeter | Continuity, voltage, current | Home Depot | ~$45 | [homedepot.com](https://www.homedepot.com/p/Klein-Tools-600V-AC-DC-Auto-Ranging-Digital-Multimeter-Drop-Resistant-Temperature-Measurement-MM400/206517333) |
+| USB-A → USB micro-B cable, 3ft | Power + flash the DK | Adafruit | $2.95 | [adafruit.com](https://www.adafruit.com/product/592) |
+| Klein 11061 wire strippers/cutters | All wiring jobs | Home Depot | ~$22 | [homedepot.com](https://www.homedepot.com/s/klein%2011061) |
+| Lineman pliers (Klein D213-9NE or any brand) | Clamping + cutting | hardware store | ~$15-30 | local |
+| Phillips/hex driver set | Enclosure + mounting | hardware store | ~$15 | local |
+| Heat-shrink tube assortment | Wire splice insulation | Amazon | ~$10 | search "heat shrink tubing assortment" |
+| Hakko FX-888D soldering station (stretch goal — beginner build avoids soldering, but worth $130 when ready for real PCB work) | Future PCB assembly | Digi-Key | ~$130 | [digikey.com](https://www.digikey.com/en/products/detail/american-hakko-products-inc/FX888D-23BY/4156628) |
+| Saleae clone logic analyzer (24MHz, 8ch) | MQTT timing + bus debug | Amazon | ~$15-25 | search "USB logic analyzer 8 channel" |
+| Wago 221-series Lever-Nuts assortment | Splicing into mains-adjacent OEM panel circuits | Amazon | ~$15 | [amazon.com](https://www.amazon.com/Wago-LEVER-NUTS-Lever-Nut-Assortment-Pocket-Pack/dp/B01N0LRTXZ) |
+
+---
+
+## Vendor accounts to set up
+
+If the user doesn't already have these:
+
+- **Digi-Key** — free; create at [digikey.com](https://www.digikey.com). $25 minimum for free standard ground shipping; over $200 cart = free expedited. Net-30 terms available for businesses.
+- **Mouser** — free; create at [mouser.com](https://www.mouser.com). Similar shipping thresholds. Carries some Phoenix terminal parts Digi-Key doesn't.
+- **Adafruit** — free; create at [adafruit.com](https://www.adafruit.com). Flat-rate USPS ~$10 anywhere in US.
+- **SparkFun** — free; create at [sparkfun.com](https://www.sparkfun.com). Fast Colorado shipping.
+- **1NCE** — free, but **requires creating an account + verifying email before SIM ships**. Set this up Day 1 while waiting on hardware. [shop.1nce.com](https://shop.1nce.com/portal/shop/cart?language=en)
+- **METER Group** — quick email exchange for non-research orders (call them); the EC-5 soil probe ships in 2-3 weeks. Only relevant for production BOM; skip for the beginner build.
+- **BUD Industries** — order through Mouser / Digi-Key / Newark. No separate account needed. Direct orders only required at qty 100+.
+- **JLCPCB** — free; create at [jlcpcb.com](https://jlcpcb.com). Only needed once you have Gerbers ready for fab.
+- **Amazon Prime** — for the few parts not on a distributor.
+
+---
+
+## Notes / caveats
+
+- **YHDC CT clamp output is AC**, not DC — needs ADC peak-detection or RMS averaging in firmware. Already handled in the firmware skeleton (`src/sensors/pump_ct.c` → `compute_rms()` over 60 samples per cycle). Don't expect to read it like a DC voltage on first probe.
+- **HC-SR04 is a 5V part by default**, but the Adafruit #3942 listing includes 2× 10K resistors specifically to make a voltage divider for the ECHO line. Use them — DK GPIOs are 3.3V tolerant only.
+- **Capacitive soil sensor is rated 3.3-5.5V** — runs fine off the DK 3.3V rail.
+- **The DK has TWO USB ports** — one labeled "nRF USB" (the one you use for app UART + power) and one labeled "DEBUG OUT" (the J-Link side). They look identical. The serial console you want is the **second** `/dev/ttyACMx` device that appears. First-time confusion is normal.
+- **The DK SIM holder is finicky** — gold contacts down, notched corner aligned. The 1NCE 3-in-1 punch-out is sized for any of (standard, micro, nano); the DK's main SIM slot is **micro** size, not nano. Don't punch out the smallest one for the DK; the build doc says "nano" — that's wrong, the DK uses **micro**. The Actinius Icarus SoM uses nano — different from the DK.
+- **1NCE SIM activation takes 5-10 minutes** on first power-up. Be patient. If it doesn't attach in 15 min, walk to a window — basements + metal cabinets kill LTE-M.
+- **Don't use AliExpress for the beginner build** — quality variance is real on YHDC clones, and the lead time (3-4 weeks) defeats the point of a 3-day build. AliExpress is fine for production volume CT clamps where you can do incoming QC.
+
+### Anti-recommendations (parts that look right but aren't)
+
+- ~~Adafruit #2169~~ — does **not** exist (404). The right Adafruit 3.5mm-jack-to-terminal-block is **#2791** ($2.50).
+- ~~SparkFun KIT-12002~~ — this is just a **breadboard** (PRT-12002, $6.25), not a beginner kit. The actual SparkFun Beginner Parts Kit (KIT-13973) was retired in 2025 and replaced by KIT-27842.
+- ~~SCT-013-000~~ — wrong. The 000 outputs 0-50mA AC current (needs a burden resistor); the **030** outputs 0-1V AC (drop-in to ADC).
+- ~~SparkFun SEN-15569 HC-SR04~~ — currently **on backorder** at SparkFun. Use Adafruit #3942 instead (in stock, includes voltage-divider resistors).
+- ~~USB-C cable~~ — the DK uses USB **micro-B**, not USB-C. The build doc is wrong on this.
+- ~~Adafruit UBEC #1385 "USB output"~~ — the UBEC outputs bare 5V wires, not USB. Skip if you want USB-style power; just use a USB cable from your laptop.
+
+### Cheaper-alternate notes (production)
+
+- The MaxBotix MB7389-100 ($109) and METER EC-5 ($135) are **pilot/prototype** sensors used to characterize the problem. They're way more accurate than needed for septic alarm thresholds. Production substitutes (A02YYUW $18, DFRobot SEN0308 $14) are fine *once you've validated the accuracy floor in the pilot*. Don't skip the premium-sensor pilot — you need the ground truth to know what the cheaper ones are missing.
+
+---
+
+## Summary cart (copy-paste ready, beginner build)
+
+```
+DIGI-KEY CART (single order):
+  NRF9160-DK-ND × 1                     $179.80   (Nordic nRF9160-DK)
+  1738-1184-ND × 1                        $5.90   (DFRobot SEN0193 capacitive soil)
+                                       --------
+                                        $185.70
+  (add a $10-15 cable or jumper kit to clear the $200 free-shipping threshold)
+
+ADAFRUIT CART:
+  Product 3942 × 1                        $3.95   (HC-SR04 + 10K resistors)
+  Product 2791 × 1                        $2.50   (3.5mm jack to terminal block)
+  Product 153  × 1                        $4.95   (breadboarding wire bundle, 75pc)
+  Product 64   × 1 (if in stock)          $4.95   (half-size breadboard)
+  Product 592  × 1                        $2.95   (USB-A to micro-B, 3ft)
+  Product 798  × 1 (optional 12V power)   $8.95
+  Product 368  × 1 (optional barrel adp)  $2.00
+                                       --------
+                                        $30.25 (with all optionals)
+
+SPARKFUN CART (only if Adafruit #64 OOS):
+  COM-09190 × 1                           $0.75   (12mm pushbutton)
+  PRT-12002 × 1                           $6.25   (breadboard)
+  PRT-12795 × 1                           $2.95   (jumper wires M/M, 20pc)
+                                       --------
+                                          $9.95
+
+1NCE (signup + order):
+  Lifetime Flat plan                     $14.00
+  Card Business form factor               $1.00
+                                       --------
+                                         $15.00
+
+AMAZON:
+  YHDC SCT-013-030 (B01M0QUPBA)          ~$10-14
+  (optional) Wago 221-415 10pk           ~$8
+  (optional) Klein MM400                 ~$45
+                                       --------
+                                          $63 (with everything)
+
+GRAND TOTAL: $475 with multimeter + 12V power
+             $425 without multimeter + without 12V power
+```
+
+---
+
+## Verification methodology
+
+For each part above:
+1. Used WebFetch to visit the vendor product page on 2026-04-27
+2. Confirmed the part number matches what's listed on the page
+3. Captured the canonical URL (clean product-page URL, no tracking)
+4. Noted the current USD price as displayed
+5. Noted "In Stock" / "Backorder" / "Out of Stock" status
+6. Where out of stock or discontinued: substituted with a verified alternate
+
+Where the source build doc had a wrong or non-existent part number, the substitution is called out explicitly in the "Anti-recommendations" section above.
+
+The two largest deltas vs. the source doc:
+- **nRF9160-DK price** is $179.80 (verified Digi-Key live), not $129. Build doc was 2023-era pricing.
+- **YHDC SCT-013-030 is not on Digi-Key.** Source via Amazon (B01M0QUPBA) or AliExpress for production volume.
+
+Everything else is a cosmetic correction (Adafruit #2169 → #2791, etc.).

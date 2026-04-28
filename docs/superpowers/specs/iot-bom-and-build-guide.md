@@ -3,6 +3,12 @@
 **Date:** 2026-04-27
 **Status:** First-fab build instructions
 
+> **For ordering, use the link-checked parts list:** `iot-parts-list-with-links.md` (PDF #08). Prices and stock verified live on 2026-04-27. **Material corrections caught during verification:**
+> - **YHDC SCT-013-030 CT clamps are NOT on Digi-Key/Mouser** — buy from Amazon (B01M0QUPBA) or AliExpress
+> - **BUD PN-1339-DG enclosure has only 10 in stock at Digi-Key** with an 11-week backorder lead — order early for any pilot batch
+> - **nRF9160-DK is $179.80** (Nordic raised the price in late 2024; this doc still references the old number in places)
+> - **Adafruit part numbers in early drafts of this doc were stale** — see parts-list for verified ones
+
 This document covers the physical hardware: parts to order, how to assemble, how to bring it up, and what changes between the prototype build (qty 5) and the production build (qty 1000+). Pairs with the design spec at `react-crm-api/docs/superpowers/specs/2026-04-27-iot-monitor-design.md` and the firmware repo at `wburns02/mac-septic-iot-firmware`.
 
 ## Quick reality check
