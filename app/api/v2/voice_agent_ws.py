@@ -334,6 +334,19 @@ def _capture_transcript(context, session: OutboundAgentSession) -> None:
         content = msg.get("content", "") if isinstance(msg, dict) else ""
         text = ""
         if isinstance(content, str):
+            stripped = content.strip()
+            # Pipecat stores tool_result content as a JSON string under role="user".
+            # Filter those out so they don't render as customer turns.
+            if (
+                role == "user"
+                and stripped.startswith("{")
+                and stripped.endswith("}")
+            ):
+                try:
+                    json.loads(stripped)
+                    continue
+                except (json.JSONDecodeError, ValueError):
+                    pass
             text = content
         elif isinstance(content, list):
             chunks = []

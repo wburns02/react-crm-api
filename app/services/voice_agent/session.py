@@ -104,9 +104,18 @@ class OutboundAgentSession:
 
     def note_user_turn(self, text: str) -> None:
         self.last_user_speech_at = time.monotonic()
-        # Heuristic: any mention of audio/quality/delay/AI from the customer
-        triggers = ("delay", "voice quality", "audio", "robot", "are you ai", "are you a person")
-        if any(t in text.lower() for t in triggers):
+        # Heuristic: any mention of audio/quality/delay/scripted/AI from the customer
+        lowered = text.lower()
+        triggers = (
+            "delay", "delayed", "took.*second", "long.*wait",
+            "voice quality", "audio quality", "quality is",
+            "robot", "robotic", "sound.*robot",
+            "script", "scripted", "reading.*off",
+            "are you ai", "are you a real", "are you a person",
+            "not responding", "not listening",
+        )
+        import re as _re
+        if any(_re.search(t, lowered) for t in triggers):
             self.state.note_audio_quality_complaint()
 
     def tick(self) -> ForcedAction | None:
