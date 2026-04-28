@@ -1323,6 +1323,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start reminder scheduler: {e}")
 
+    # Start IoT MQTT bridge (gated by IOT_MQTT_ENABLED env var)
+    try:
+        from app.services.iot.mqtt_bridge import start_bridge as start_iot_bridge
+        await start_iot_bridge()
+    except Exception as e:
+        logger.warning(f"Failed to start IoT MQTT bridge: {e}")
+
     # Start Samsara feed poller background task
     try:
         from app.api.v2.samsara import start_feed_poller, stop_feed_poller
@@ -1447,6 +1454,11 @@ async def lifespan(app: FastAPI):
     _watchdog_task.cancel()
     stop_auto_sync()
     stop_reminder_scheduler()
+    try:
+        from app.services.iot.mqtt_bridge import stop_bridge as stop_iot_bridge
+        await stop_iot_bridge()
+    except Exception:
+        pass
     try:
         stop_feed_poller()
     except Exception:

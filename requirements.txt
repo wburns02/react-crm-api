@@ -94,6 +94,9 @@ pipecat-ai[anthropic,deepgram,cartesia,silero,twilio]>=0.0.50,<0.1.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
 
+# IoT MQTT bridge (Phase 3) — set IOT_MQTT_ENABLED=true to activate
+aiomqtt>=2.0.0
+
 # Force rebuild Wed, Jan 29, 2026 23:25:00 CST
 # Build trigger: 1769730300
 
