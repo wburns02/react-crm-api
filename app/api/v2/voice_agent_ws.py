@@ -47,7 +47,7 @@ from app.services.voice_agent.session import OutboundAgentSession
 from app.services.voice_agent.greeting_prerender import render_text as render_greeting_text
 
 # Pipecat 0.0.108 imports — verified against installed package.
-from pipecat.frames.frames import OutputAudioRawFrame
+from pipecat.frames.frames import OutputAudioRawFrame, TTSSpeakFrame
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 
@@ -231,18 +231,17 @@ async def _run_human_branch(
 
     runner = PipelineRunner()
 
-    # Inject prerendered greeting BEFORE the LLM kicks in. Twilio plays media
-    # frames in the order they arrive on the WS, so this is functionally a
-    # "say-this-first" hook.
-    greeting_audio = greeting_prerender.take_buffer(call_sid)
-    if greeting_audio:
-        await _push_audio_into_pipeline(task, greeting_audio)
-        logger.info(
-            f"[VoiceWS:{short_sid}] queued prerendered greeting "
-            f"({len(greeting_audio)} bytes)"
-        )
-    else:
-        logger.info(f"[VoiceWS:{short_sid}] no prerendered greeting available")
+    # Have Sarah greet first via Pipecat's TTSSpeakFrame, which sends the text
+    # straight to the TTS service (Cartesia WebSocket — faster than the REST
+    # prerender we were trying before). `append_to_context=True` adds the
+    # greeting to the LLM context so multi-turn history stays coherent.
+    greeting_text = render_greeting_text(prospect, quote)
+    await task.queue_frames([TTSSpeakFrame(text=greeting_text, append_to_context=True)])
+    logger.info(f"[VoiceWS:{short_sid}] queued greeting via TTSSpeakFrame: {greeting_text!r}")
+
+    # Discard any old prerender buffer (we no longer use it but leave the
+    # mechanism in place in case we want REST-prerender as a fallback later).
+    greeting_prerender.discard(call_sid)
 
     await runner.run(task)
 
