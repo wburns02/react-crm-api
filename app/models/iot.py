@@ -47,6 +47,8 @@ IoTAlertTypeEnum = ENUM(
     "missing_heartbeat",
     "low_battery",
     "tamper",
+    "air_pump_failure",
+    "air_pump_degradation",
     name="iot_alert_type",
     create_type=False,
 )

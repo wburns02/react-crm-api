@@ -23,6 +23,8 @@ AlertType = Literal[
     "missing_heartbeat",
     "low_battery",
     "tamper",
+    "air_pump_failure",
+    "air_pump_degradation",
 ]
 AlertStatus = Literal["open", "acknowledged", "resolved"]
 RuleType = Literal[
