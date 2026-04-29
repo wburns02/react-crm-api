@@ -110,21 +110,19 @@ def build_pipeline(*, session, websocket, context_aggregator_pair) -> Pipeline:
         model="sonic-2",
     )
 
-    # FillerProcessor masks LLM first-token latency: when the user stops
-    # speaking, it schedules a brief "Mhm…"/"One sec…" TTS to fire 400ms
-    # later UNLESS the bot already started talking. Sits between the user
-    # aggregator and the LLM so it can see UserStoppedSpeakingFrame as it
-    # flows downstream.
-    from app.services.voice_agent.filler_processor import FillerProcessor
-
-    filler = FillerProcessor(delay_ms=400)
-
+    # NOTE: FillerProcessor was wired in here at 2152dbd but the cancellation
+    # timing was wrong — it cancelled on BotStartedSpeakingFrame which fires
+    # AFTER the LLM has produced text, so fast LLM responses left a "Mhm…"
+    # playing after the real reply. Reverted. Prompt RULE 4 still asks the
+    # LLM to lead with a filler, which handles the common case naturally.
+    # If we re-introduce a pipeline-level filler, cancel on
+    # LLMFullResponseStartFrame (fires when the LLM begins streaming tokens)
+    # instead of BotStartedSpeakingFrame.
     pipeline = Pipeline(
         [
             transport.input(),
             stt,
             context_aggregator_pair.user(),
-            filler,
             llm,
             tts,
             transport.output(),
