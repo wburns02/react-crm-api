@@ -2136,6 +2136,50 @@ async def apply_negative_keywords(
         return {"success": False, "error": str(e)}
 
 
+class ApplyIpBlocksRequest(BaseModel):
+    ip_addresses: list[str]
+    campaign_ids: Optional[list[str]] = None
+    campaign_filter: Optional[str] = None
+
+
+@router.post("/ads/apply-ip-blocks")
+async def apply_ip_blocks(
+    current_user: CurrentUser,
+    body: ApplyIpBlocksRequest,
+) -> dict:
+    """Apply IP block negative criteria to Google Ads campaigns.
+
+    Body: {
+        "ip_addresses": ["69.243.200.144/32", ...],
+        "campaign_ids": ["21320890747", ...],   # optional
+        "campaign_filter": "Nashville"          # optional, ignored if campaign_ids set
+    }
+    """
+    ads = get_google_ads_service()
+    if not ads.is_configured():
+        return {"success": False, "error": "Google Ads not configured"}
+
+    if not body.ip_addresses:
+        return {"success": False, "error": "ip_addresses is required"}
+
+    if not body.campaign_ids and (not body.campaign_filter or not body.campaign_filter.strip()):
+        return {
+            "success": False,
+            "error": "Either campaign_ids or campaign_filter is required",
+        }
+
+    try:
+        result = await ads.apply_ip_blocks_to_campaigns(
+            ip_addresses=body.ip_addresses,
+            campaign_ids=body.campaign_ids,
+            campaign_filter=body.campaign_filter,
+        )
+        return result
+    except Exception as e:
+        logger.error("Apply IP blocks failed: %s", str(e))
+        return {"success": False, "error": str(e)}
+
+
 @router.post("/ads/remove-negative-keywords")
 async def remove_negative_keywords(
     current_user: CurrentUser,

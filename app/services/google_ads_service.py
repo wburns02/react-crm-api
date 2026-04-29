@@ -1957,6 +1957,142 @@ class GoogleAdsService:
             logger.error("Negative keyword application error: %s", str(e))
             return {"success": False, "error": str(e)}
 
+    # ─── CAMPAIGN-LEVEL IP BLOCK NEGATIVES ─────────────────────────────
+
+    async def apply_ip_blocks_to_campaigns(
+        self,
+        ip_addresses: list[str],
+        campaign_ids: list[str] | None = None,
+        campaign_filter: str | None = None,
+    ) -> dict:
+        """Apply IP block negative criteria to campaigns.
+
+        Args:
+            ip_addresses: List of IPv4/IPv6 addresses with CIDR (e.g.
+                "69.243.200.144/32",
+                "2600:1004:b0b0:9058:d82f:cb5d:9169:9758/128").
+            campaign_ids: Optional explicit list of Google Ads campaign IDs to
+                apply to. If provided, takes precedence over campaign_filter.
+            campaign_filter: Optional substring filter on campaign name (e.g.
+                "Nashville"). Only used if campaign_ids is None.
+
+        Returns dict with success, applied_count, campaigns_affected, errors.
+        """
+        if not self.is_configured():
+            return {"success": False, "error": "Google Ads not configured"}
+
+        # Validate IP list
+        ips = [ip.strip() for ip in (ip_addresses or []) if ip and ip.strip()]
+        if not ips:
+            return {"success": False, "error": "No ip_addresses provided"}
+
+        if not campaign_ids and (not campaign_filter or not campaign_filter.strip()):
+            return {
+                "success": False,
+                "error": "Either campaign_ids or campaign_filter is required",
+            }
+
+        customer_id = self._get_clean_customer_id()
+
+        # Resolve campaign resource names
+        if campaign_ids:
+            clean_cids = [str(c).strip() for c in campaign_ids if str(c).strip()]
+            if not clean_cids:
+                return {"success": False, "error": "No valid campaign_ids provided"}
+            campaigns = [
+                f"customers/{customer_id}/campaigns/{cid}" for cid in clean_cids
+            ]
+        else:
+            query = f"""
+                SELECT campaign.resource_name, campaign.name
+                FROM campaign
+                WHERE campaign.status = 'ENABLED'
+                    AND campaign.name LIKE '%{campaign_filter.strip()}%'
+            """
+            results = await self._execute_query(query)
+            if not results:
+                return {
+                    "success": False,
+                    "error": f"No campaigns found matching '{campaign_filter}'",
+                }
+            campaigns = [
+                r.get("campaign", {}).get("resourceName", "")
+                for r in results
+                if r.get("campaign", {}).get("resourceName")
+            ]
+            if not campaigns:
+                return {
+                    "success": False,
+                    "error": f"No campaigns found matching '{campaign_filter}'",
+                }
+
+        access_token = await self._refresh_access_token()
+        if not access_token:
+            return {"success": False, "error": "Failed to refresh token"}
+
+        url = f"{GOOGLE_ADS_BASE_URL}/customers/{customer_id}/googleAds:mutate"
+
+        operations = []
+        for campaign_rn in campaigns:
+            for ip in ips:
+                operations.append({
+                    "campaignCriterionOperation": {
+                        "create": {
+                            "campaign": campaign_rn,
+                            "negative": True,
+                            "ipBlock": {
+                                "ipAddress": ip,
+                            },
+                        }
+                    }
+                })
+
+        if not operations:
+            return {"success": False, "error": "No valid operations built"}
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    headers=self._get_headers(access_token),
+                    json={"mutateOperations": operations},
+                )
+                self._increment_ops()
+
+                if response.status_code in (200, 201):
+                    result = response.json()
+                    results_list = result.get("mutateOperationResponses", [])
+                    return {
+                        "success": True,
+                        "applied_count": len(results_list),
+                        "campaigns_affected": len(campaigns),
+                        "ip_count": len(ips),
+                        "errors": [],
+                    }
+                else:
+                    error_text = response.text[:1000]
+                    logger.error(
+                        "Failed to apply IP block negatives: %s %s",
+                        response.status_code,
+                        error_text,
+                    )
+                    return {
+                        "success": False,
+                        "applied_count": 0,
+                        "campaigns_affected": len(campaigns),
+                        "errors": [error_text],
+                        "status_code": response.status_code,
+                    }
+
+        except Exception as e:
+            logger.error("IP block application error: %s", str(e))
+            return {
+                "success": False,
+                "applied_count": 0,
+                "campaigns_affected": len(campaigns) if campaigns else 0,
+                "errors": [str(e)],
+            }
+
     async def remove_negative_keywords_from_campaigns(
         self, keywords: list[dict], campaign_filter: str
     ) -> dict:
