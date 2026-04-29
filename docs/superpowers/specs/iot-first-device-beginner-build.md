@@ -62,17 +62,19 @@ It's the same board the firmware skeleton at `wburns02/mac-septic-iot-firmware` 
 
 **For your first build, skip the 12V supply entirely. Power the DK from your laptop's USB-C port. Saves $20 and a step.**
 
-### Sensors ($135 for the beginner-friendly set)
+### Sensors ($45–55 for the beginner-friendly set)
 
 These are dramatically cheaper than the production sensor list because we're using Adafruit/SparkFun-style breakout boards with header pins instead of industrial-grade probes. Accuracy is "good enough for development."
 
-| Part | Digi-Key # | Why | Hookup |
+| Part | Vendor / # | Why | Hookup |
 |---|---|---|---|
-| YHDC SCT-013-030 CT clamp + 3.5mm jack adapter | 1597-1389-ND + Adafruit #2169 | "Pump current" simulation. Clip around any extension cord powering an appliance. | 3.5mm jack to 2-pin screw terminal. Plug CT into jack. Wire the two screw terminals to two DK header pins (analog input + GND). |
-| Capacitive soil moisture sensor (3-pin breakout) | DFRobot SEN0193 | "Drain field saturation" simulation. Stick in a glass of water, then a glass of dry sand. | 3 jumper wires: VCC→DK 3.3V, GND→DK GND, AOUT→any DK analog pin. |
-| HC-SR04 ultrasonic distance sensor (4-pin) | SparkFun SEN-15569 | "Tank level" simulation. Point at a wall, move it back and forth. | 4 jumper wires: VCC→5V, GND, TRIG→GPIO, ECHO→GPIO. The 5V output → 3.3V input on ECHO needs a voltage divider (two cheap resistors), or you can ignore for first test (DK input pins tolerate 5V briefly). |
+| YHDC SCT-013-030 CT clamp + 3.5mm jack adapter | Amazon B01M0QUPBA + Adafruit #2791 | "Pump current" simulation. Clip around any extension cord powering an appliance. | 3.5mm jack to 2-pin screw terminal. Plug CT into jack. Wire the two screw terminals to two DK header pins (analog input + GND). |
+| **Adafruit MPRLS pressure sensor (#3965)** | **Adafruit #3965** | **"ATU air compressor" pressure monitor. 0–25 PSI absolute, I²C. The actual primary differentiator for aerobic systems — pressure flatlines = pump failed = bacteria die in 24–48h.** Bench-test by blowing into the barb. | **4 jumper wires: VIN→3.3V, GND→GND, SDA→DK pin P0.30, SCL→DK pin P0.31. I²C 0x18.** |
+| HC-SR04 ultrasonic distance sensor (4-pin) | Adafruit #3942 | "Tank level" simulation. Point at a wall, move it back and forth. Bundle includes voltage-divider resistors. | 4 jumper wires: VCC→5V, GND, TRIG→GPIO, ECHO→GPIO via the included 10kΩ divider. |
 | 4-pin push button (alarm-tap simulator) | SparkFun COM-09190 | Press the button to "fire" an alarm. | 2 jumper wires + 2 header pins on the DK's GPIO. Internal pull-up enabled in firmware. |
 | 1× LED + 1× 220Ω resistor (status LED) | already on DK | The DK has 4 onboard LEDs — use those instead of an external one. | None — built in. |
+
+**Soil moisture probe replaced.** Earlier drafts used a DFRobot capacitive moisture probe to simulate drain field saturation. ATU air-line pressure (above) is a more direct failure signal — it tells you whether the air compressor is actually delivering air to the treatment tank. Soil saturation is still a valid sensor for conventional gravity systems' drain field health, but it's deferred to v2.
 
 ### Wiring + tools ($45)
 
@@ -242,13 +244,16 @@ This is the breadboard part. **No soldering.**
 - Power: jumper from DK's `VCC_3V3` pin (top-right header) to the breadboard's `+` rail
 - Ground: jumper from any DK `GND` to the breadboard's `−` rail
 
-### 4.2 Hook up the soil moisture sensor (capacitive, "drain field" simulator)
-The DFRobot SEN0193 has 3 pins: VCC, GND, AOUT.
-- VCC → breadboard `+` rail
+### 4.2 Hook up the air pressure sensor (MPRLS, "ATU compressor" monitor)
+The Adafruit MPRLS (#3965) has 4 pins: VIN, GND, SDA, SCL. **I²C, address 0x18.**
+- VIN → breadboard `+` rail (3.3V from the DK is fine)
 - GND → breadboard `−` rail
-- AOUT → DK pin `P0.13` (analog input AIN0)
+- SDA → DK pin `P0.30` (I²C SDA on TWI0)
+- SCL → DK pin `P0.31` (I²C SCL on TWI0)
 
-Stick the probe in a glass of water for "saturated" readings. Move it to dry air for "dry" readings.
+The sensor has a small barb fitting on the back. For bench testing: just blow gently into the barb to simulate ATU air-line pressure. The dashboard should show pressure spikes corresponding to your breaths. For real-tank install (later), T-fit into the air line between Hiblow pump and treatment tank diffuser using 1/4" silicone tubing.
+
+**Calibration** happens on first boot — firmware reads ambient pressure for 30 seconds before the air line is connected, stores it as the "zero gauge" reference.
 
 ### 4.3 Hook up the ultrasonic ("tank level" simulator)
 HC-SR04 has 4 pins: VCC, TRIG, ECHO, GND.

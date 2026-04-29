@@ -61,13 +61,17 @@ The DK accepts 5V via USB or 5V via VIN header. If you want 12V → 5V step-down
 
 These are dramatically cheaper than the production sensor list because we're using Adafruit/SparkFun-style breakouts with header pins instead of industrial-grade probes. Accuracy is "good enough for development."
 
-#### 1.4.1 — Capacitive soil moisture (drain field saturation simulator)
+#### 1.4.1 — ATU air pressure (Adafruit MPRLS — REPLACES soil moisture sensor)
 
 | Item | Vendor | Vendor PN | Mfr PN | Price | Stock | Link |
 |---|---|---|---|---|---|---|
-| DFRobot Gravity Capacitive Soil Moisture Sensor | Digi-Key | 1738-1184-ND | SEN0193 | **$5.90** | In Stock (146) | [digikey.com](https://www.digikey.com/en/products/detail/dfrobot/SEN0193/6588605) |
+| Adafruit MPRLS Ported Pressure Sensor Breakout (0–25 PSI) | Adafruit | 3965 | MPRLS-0025PA-NW (Honeywell) | **$14.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/3965) |
+| 1/4" Silicone tubing (12") | Amazon | various | — | **$3** | In Stock | [amazon.com search](https://www.amazon.com/s?k=1%2F4+inch+silicone+tubing+5+ft) |
+| 1/4" brass T-fitting (push-to-connect) | Home Depot / Lowes | various | — | **$3** | In Stock | local hardware store |
 
-3-pin: VCC / GND / AOUT. Header pins pre-soldered. Stick in glass of water for "saturated", glass of dry sand for "dry".
+**This replaces the original soil moisture probe** in earlier drafts. ATU air-line pressure is a much stronger primary signal than soil moisture for aerobic systems — pressure flatlines = bacteria die in 24-48h. Soil moisture is now an optional add-on for conventional gravity systems' drain field, deferred to v2.
+
+4-pin I²C: VIN (3.3V or 5V) / GND / SDA / SCL. Address 0x18. Pre-soldered headers. Bench test by blowing gently into the barb. Production install: T-fit into the air line between Hiblow pump and tank diffuser.
 
 #### 1.4.2 — Ultrasonic distance (tank level simulator)
 
@@ -165,7 +169,8 @@ You only need these once. They live on your bench forever after.
 
 | Vendor | Items | Subtotal | Shipping est. | Lead time |
 |---|---|---|---|---|
-| **Digi-Key** | nRF9160-DK + DFRobot SEN0193 (capacitive soil) | **$185.70** | Free over $200 (you're under by $14.30 — add a USB cable or a few jumper wires to clear the threshold). Otherwise ~$8 ground. | 2-3 days |
+| **Digi-Key** | nRF9160-DK | **$179.80** | Free over $200 (you're under — add a USB micro-B cable or jumper wires to clear). Otherwise ~$8 ground. | 2-3 days |
+| **Adafruit** | MPRLS pressure (#3965) + #2791 + #3942 + #266 + #758 + #153 + #64 + #239 | **~$50** | Free over $99, otherwise $5–10 standard. | 2-3 days |
 | **Adafruit** | HC-SR04 (#3942) + 3.5mm-to-terminal (#2791) + breadboarding wire bundle (#153) + breadboard (#64, if in stock) + 2.1mm-jack-to-terminal (#368) + 12V wall adapter (#798, optional) | **$15.40** (no power), **$25.30** (with 12V power) | $10 (USPS) | 2-4 days |
 | **SparkFun** | Pushbutton (COM-09190) + breadboard PRT-12002 (since Adafruit #64 is OOS) + jumper wires PRT-12795 | **$9.95** | $7-10 | 2-4 days |
 | **1NCE** | Lifetime SIM + Card Business form factor | **$15.00** | $5 to USA | 5-10 days |
@@ -283,7 +288,7 @@ If the user doesn't already have these:
 
 - **YHDC CT clamp output is AC**, not DC — needs ADC peak-detection or RMS averaging in firmware. Already handled in the firmware skeleton (`src/sensors/pump_ct.c` → `compute_rms()` over 60 samples per cycle). Don't expect to read it like a DC voltage on first probe.
 - **HC-SR04 is a 5V part by default**, but the Adafruit #3942 listing includes 2× 10K resistors specifically to make a voltage divider for the ECHO line. Use them — DK GPIOs are 3.3V tolerant only.
-- **Capacitive soil sensor is rated 3.3-5.5V** — runs fine off the DK 3.3V rail.
+- **MPRLS pressure sensor is rated 3.3V or 5V** — runs fine off the DK 3.3V rail. I²C address 0x18; if you ever add a second I²C device that conflicts, the MPRLS doesn't have an address-select pad (you'd need a TCA9548A I²C mux instead). Not a v1 concern.
 - **The DK has TWO USB ports** — one labeled "nRF USB" (the one you use for app UART + power) and one labeled "DEBUG OUT" (the J-Link side). They look identical. The serial console you want is the **second** `/dev/ttyACMx` device that appears. First-time confusion is normal.
 - **The DK SIM holder is finicky** — gold contacts down, notched corner aligned. The 1NCE 3-in-1 punch-out is sized for any of (standard, micro, nano); the DK's main SIM slot is **micro** size, not nano. Don't punch out the smallest one for the DK; the build doc says "nano" — that's wrong, the DK uses **micro**. The Actinius Icarus SoM uses nano — different from the DK.
 - **1NCE SIM activation takes 5-10 minutes** on first power-up. Be patient. If it doesn't attach in 15 min, walk to a window — basements + metal cabinets kill LTE-M.
@@ -309,7 +314,7 @@ If the user doesn't already have these:
 ```
 DIGI-KEY CART (single order):
   NRF9160-DK-ND × 1                     $179.80   (Nordic nRF9160-DK)
-  1738-1184-ND × 1                        $5.90   (DFRobot SEN0193 capacitive soil)
+  (Soil moisture sensor REMOVED — replaced with Adafruit MPRLS in cart 2)
                                        --------
                                         $185.70
   (add a $10-15 cable or jumper kit to clear the $200 free-shipping threshold)
