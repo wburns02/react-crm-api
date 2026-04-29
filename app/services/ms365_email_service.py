@@ -41,6 +41,27 @@ class MS365EmailService(MS365BaseService):
             return []
 
     @classmethod
+    async def get_message_by_id(cls, message_id: str) -> dict | None:
+        """Fetch a single email by Graph message ID, including the full body.
+
+        Used by the AI Interaction Analyzer worker to pull the full email
+        body for triage (the inbound_emails table only stores body_preview).
+        Returns the raw Graph message dict (keys: id, subject, body, from,
+        toRecipients, receivedDateTime), or None on failure.
+        """
+        if not cls.is_configured():
+            return None
+
+        try:
+            return await cls.graph_get(
+                f"/users/{settings.MS365_MONITORED_MAILBOX}/messages/{message_id}"
+                f"?$select=id,subject,body,bodyPreview,from,toRecipients,receivedDateTime",
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.error("Failed to fetch email %s: %s", message_id, e)
+            return None
+
+    @classmethod
     async def mark_as_read(cls, message_id: str) -> bool:
         """Mark an email as read in the monitored mailbox."""
         if not cls.is_configured():

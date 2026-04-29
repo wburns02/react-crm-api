@@ -218,6 +218,11 @@ class Settings(BaseSettings):
     OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
     OTEL_SERVICE_NAME: str = "react-crm-api"
 
+    # AI Interaction Analyzer (Stage 3)
+    AI_DAILY_BUDGET_USD: float = 25.00
+    DANNIA_OUTBOUND_CAMPAIGN_ID: str = "email-openers-spring-2026"
+    AI_BUDGET_ALERT_RECIPIENT: str = "willwalterburns@gmail.com"
+
     @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
         """
