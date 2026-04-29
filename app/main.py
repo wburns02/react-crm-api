@@ -34,6 +34,7 @@ from app.webhooks.brevo import brevo_webhook_router
 from app.api.v2.live_chat import router as live_chat_router
 from app.api.v2.call_transcript_ws import router as call_transcript_ws_router
 from app.api.v2.outbound_agent import media_ws_router as outbound_agent_ws_router
+from app.api.v2.ai_interactions import router as ai_interactions_router
 from app.config import settings
 from app.database import init_db
 from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
@@ -1563,6 +1564,11 @@ app.include_router(twilio_router, prefix="/webhooks/twilio", tags=["webhooks"])
 app.include_router(ringcentral_webhook_router, prefix="/webhooks/ringcentral", tags=["webhooks"])
 app.include_router(brevo_webhook_router, prefix="/webhooks/brevo", tags=["webhooks"])
 app.include_router(live_chat_router, prefix="/api/v2/chat", tags=["live-chat"])
+
+# AI Interaction Analyzer — read endpoints (Stage 4)
+# Routes inside this router declare their own /customers/... and /ai/... paths,
+# so we mount with the bare /api/v2 prefix.
+app.include_router(ai_interactions_router, prefix="/api/v2", tags=["ai-interactions"])
 
 # HR module (feature-flagged via HR_MODULE_ENABLED)
 from app.hr.feature_flag import hr_module_enabled
