@@ -147,10 +147,14 @@ class Settings(BaseSettings):
 
     # AI Services
     OPENAI_API_KEY: str | None = None
-    ANTHROPIC_API_KEY: str | None = None
+    # ANTHROPIC_API_KEY is required for the AI Interaction Analyzer
+    # (Stage 1 of the analyzer build). Empty/missing fails startup.
+    ANTHROPIC_API_KEY: str = ""
 
     # Outbound AI Agent
-    DEEPGRAM_API_KEY: str | None = None
+    # DEEPGRAM_API_KEY is required for call/voicemail transcription in the
+    # AI Interaction Analyzer pipeline. Empty/missing fails startup.
+    DEEPGRAM_API_KEY: str = ""
     ELEVENLABS_API_KEY: str | None = None  # Legacy — kept for fallback
     ELEVENLABS_VOICE_ID: str = "JBFqnCBsd6RMkjVDRZzb"
     CARTESIA_API_KEY: str | None = None
@@ -306,6 +310,19 @@ class Settings(BaseSettings):
                         name,
                         ", ".join(missing),
                     )
+
+        # AI Interaction Analyzer requires both keys at startup.
+        # Fail loud — these are not optional.
+        if not self.ANTHROPIC_API_KEY or not self.ANTHROPIC_API_KEY.strip():
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY is required. "
+                "Set it via Railway env vars (or .env in development)."
+            )
+        if not self.DEEPGRAM_API_KEY or not self.DEEPGRAM_API_KEY.strip():
+            raise RuntimeError(
+                "DEEPGRAM_API_KEY is required. "
+                "Set it via Railway env vars (or .env in development)."
+            )
 
         return self
 

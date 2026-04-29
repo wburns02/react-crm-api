@@ -175,6 +175,13 @@ from app.models.iot import (
     IoTAlertRule,
 )
 
+# AI Interaction Analyzer — unified cross-channel timeline
+from app.models.customer_interaction import (
+    CustomerInteraction,
+    InteractionActionItem,
+    InteractionAnalysisRun,
+)
+
 # HR Module (feature-flagged; models registered so SQLite test DB creates them)
 from app.hr.shared.models import HrAuditLog, HrRoleAssignment  # noqa: F401
 from app.hr.workflow.models import (  # noqa: F401
@@ -377,4 +384,8 @@ __all__ = [
     "IoTFirmwareVersion",
     "IoTDeviceBinding",
     "IoTAlertRule",
+    # AI Interaction Analyzer
+    "CustomerInteraction",
+    "InteractionActionItem",
+    "InteractionAnalysisRun",
 ]

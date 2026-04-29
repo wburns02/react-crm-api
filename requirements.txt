@@ -90,6 +90,13 @@ websockets>=12.0
 # Pipecat audio orchestration (replaces hand-rolled Twilio Media Streams loop)
 pipecat-ai[anthropic,deepgram,cartesia,silero,twilio]>=0.0.50,<0.1.0
 
+# Anthropic + Deepgram SDKs — direct deps so the AI Interaction Analyzer
+# is not at the mercy of pipecat's bundled versions on upgrade.
+anthropic>=0.39.0
+deepgram-sdk>=3.0.0
+# JSON Schema validation for prompt-tool-schema unit tests.
+jsonschema>=4.0.0
+
 # Web scraping for TDEC permit lookup
 beautifulsoup4>=4.12.0
 lxml>=5.0.0

@@ -1,3 +1,10 @@
+import os
+
+# Required-at-startup keys for the AI Interaction Analyzer (Stage 1).
+# Set BEFORE importing app.config / app.main so Settings validation passes.
+os.environ.setdefault("ANTHROPIC_API_KEY", "test-anthropic-key")
+os.environ.setdefault("DEEPGRAM_API_KEY", "test-deepgram-key")
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
