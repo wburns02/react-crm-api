@@ -181,6 +181,7 @@ from app.models.customer_interaction import (
     InteractionActionItem,
     InteractionAnalysisRun,
 )
+from app.models.interaction_insight import InteractionInsight
 
 # HR Module (feature-flagged; models registered so SQLite test DB creates them)
 from app.hr.shared.models import HrAuditLog, HrRoleAssignment  # noqa: F401
@@ -388,4 +389,5 @@ __all__ = [
     "CustomerInteraction",
     "InteractionActionItem",
     "InteractionAnalysisRun",
+    "InteractionInsight",
 ]

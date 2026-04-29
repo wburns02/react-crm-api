@@ -35,6 +35,7 @@ from app.api.v2.live_chat import router as live_chat_router
 from app.api.v2.call_transcript_ws import router as call_transcript_ws_router
 from app.api.v2.outbound_agent import media_ws_router as outbound_agent_ws_router
 from app.api.v2.ai_interactions import router as ai_interactions_router
+from app.api.v2.ai_insights import router as ai_insights_router
 from app.config import settings
 from app.database import init_db
 from app.api.v2.ringcentral import start_auto_sync, stop_auto_sync
@@ -48,6 +49,22 @@ from app.tasks.forms_sync import start_forms_sync, stop_forms_sync
 # from app.tasks.followup_scheduler import start_followup_scheduler, stop_followup_scheduler
 # from app.tasks.auto_dispatch import start_auto_dispatch, stop_auto_dispatch
 from app.tasks.marketing_report import start_marketing_report_scheduler, stop_marketing_report_scheduler
+from app.tasks.ai_strategy_scheduler import (
+    start_ai_strategy_scheduler,
+    stop_ai_strategy_scheduler,
+)
+from app.tasks.ai_rescore_scheduler import (
+    start_ai_rescore_scheduler,
+    stop_ai_rescore_scheduler,
+)
+from app.tasks.ai_budget_scheduler import (
+    start_ai_budget_scheduler,
+    stop_ai_budget_scheduler,
+)
+from app.tasks.ai_rc_poll_scheduler import (
+    start_ai_rc_poll_scheduler,
+    stop_ai_rc_poll_scheduler,
+)
 
 # Import all models to register them with SQLAlchemy metadata before init_db()
 from app.models import (
@@ -1370,6 +1387,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to start marketing report scheduler: {e}")
 
+    # AI Interaction Analyzer — Stage 5 schedulers
+    try:
+        start_ai_strategy_scheduler()
+    except Exception as e:
+        logger.warning(f"Failed to start AI strategy scheduler: {e}")
+    try:
+        start_ai_rescore_scheduler()
+    except Exception as e:
+        logger.warning(f"Failed to start AI rescore scheduler: {e}")
+    try:
+        start_ai_budget_scheduler()
+    except Exception as e:
+        logger.warning(f"Failed to start AI budget scheduler: {e}")
+    try:
+        start_ai_rc_poll_scheduler()
+    except Exception as e:
+        logger.warning(f"Failed to start AI RC poll scheduler: {e}")
+
     # HR cert-expiry daily SMS scheduler (gated by HR_MODULE_ENABLED).
     try:
         from app.hr.feature_flag import hr_module_enabled
@@ -1470,6 +1505,22 @@ async def lifespan(app: FastAPI):
     stop_bookings_sync()
     stop_forms_sync()
     stop_marketing_report_scheduler()
+    try:
+        stop_ai_strategy_scheduler()
+    except Exception:
+        pass
+    try:
+        stop_ai_rescore_scheduler()
+    except Exception:
+        pass
+    try:
+        stop_ai_budget_scheduler()
+    except Exception:
+        pass
+    try:
+        stop_ai_rc_poll_scheduler()
+    except Exception:
+        pass
     # stop_followup_scheduler()
     # stop_auto_dispatch()
 
@@ -1569,6 +1620,9 @@ app.include_router(live_chat_router, prefix="/api/v2/chat", tags=["live-chat"])
 # Routes inside this router declare their own /customers/... and /ai/... paths,
 # so we mount with the bare /api/v2 prefix.
 app.include_router(ai_interactions_router, prefix="/api/v2", tags=["ai-interactions"])
+
+# Weekly AI Insights (Tier 3 Opus strategist) — Stage 5
+app.include_router(ai_insights_router, prefix="/api/v2", tags=["ai-insights"])
 
 # HR module (feature-flagged via HR_MODULE_ENABLED)
 from app.hr.feature_flag import hr_module_enabled
