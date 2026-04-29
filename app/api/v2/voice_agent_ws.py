@@ -243,7 +243,40 @@ async def _run_human_branch(
     # mechanism in place in case we want REST-prerender as a fallback later).
     greeting_prerender.discard(call_sid)
 
-    await runner.run(task)
+    # Watcher: when session.should_end_call flips (set by goodbye-detector in
+    # review_assistant_message after a disposition is set), give Sarah's
+    # goodbye TTS time to finish playing and then cancel the pipeline. This
+    # is our enforcement layer because the LLM repeatedly fails to call
+    # end_call itself even when prompted.
+    async def _end_call_watcher():
+        try:
+            while True:
+                await asyncio.sleep(0.5)
+                if session.should_end_call:
+                    logger.info(
+                        f"[VoiceWS:{short_sid}] should_end_call=True — "
+                        f"waiting 2.5s for goodbye TTS, then cancelling pipeline"
+                    )
+                    await asyncio.sleep(2.5)
+                    try:
+                        await task.cancel()
+                    except Exception as exc:
+                        logger.warning(
+                            f"[VoiceWS:{short_sid}] task.cancel raised: {exc}"
+                        )
+                    return
+        except asyncio.CancelledError:
+            return
+
+    watcher = asyncio.create_task(_end_call_watcher())
+    try:
+        await runner.run(task)
+    finally:
+        watcher.cancel()
+        try:
+            await watcher
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 def _build_context(session: OutboundAgentSession, prospect: dict, quote: dict):

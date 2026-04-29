@@ -58,6 +58,10 @@ class OutboundAgentSession:
         self.disposition_notes: str = ""
         self.hallucinations_log: list[dict] = []
         self.amd_result: str | None = None
+        # Set by review_assistant_message when Sarah says goodbye after a
+        # disposition has been set. The WS handler polls this each tick and
+        # shuts the pipeline down when it flips True.
+        self.should_end_call: bool = False
         # Set True by the WS handler when the pipeline finishes; campaign_dialer
         # polls this to decide when to dial the next prospect.
         self.ended: bool = False
@@ -100,6 +104,27 @@ class OutboundAgentSession:
         result = self.guard.check(text=text, tool_calls=tool_calls)
         if result.hallucinations:
             self.hallucinations_log.extend(result.hallucinations)
+
+        # Detect goodbye-style closers. If Sarah is wrapping up AND we've
+        # already set a disposition, mark the session for auto-end-call so the
+        # WS handler shuts down the pipeline. The LLM repeatedly fails to
+        # call end_call itself even when prompted, so we enforce it here.
+        import re as _re
+        lowered = result.rewritten_text.lower()
+        goodbye_patterns = (
+            r"\b(have a (great|good) (day|one))\b",
+            r"\bbye\b",
+            r"\btake care\b",
+            r"\btalk to you (later|soon)\b",
+            r"\bgood talking with you\b",
+            r"\bappreciate (it|your time)\b",
+            r"\byou're all set\b",
+            r"\bthat's all (i|we) need(ed)?\b",
+            r"\bthanks (so much|again)\b",
+        )
+        said_goodbye = any(_re.search(p, lowered) for p in goodbye_patterns)
+        if said_goodbye and self.disposition:
+            self.should_end_call = True
         return result.rewritten_text
 
     def note_user_turn(self, text: str) -> None:

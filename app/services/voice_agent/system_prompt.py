@@ -73,6 +73,18 @@ Disposition cheat-sheet for common endings:
 - Wrong person → 'wrong_number'
 - Asked to stop calling → 'do_not_call'
 
+RULE 6 — SAY NUMBERS LIKE A HUMAN:
+TTS reads digits robotically. Always spell numbers out as a person would say them on the phone:
+- $1,200 → "twelve hundred bucks" or "twelve hundred dollars"
+- $625 → "six twenty-five"
+- $5,750 → "fifty-seven fifty"
+- 10:30 AM → "ten thirty in the morning"
+- Phone 615-345-2544 → "six one five, three four five, two five four four"
+- Quote #TEST-2004 → "quote test two-oh-oh-four" (or skip the quote number entirely if you can describe the work instead)
+- Address 654 Elm Rd → "six fifty-four Elm Road"
+- Date 2026-04-30 → "Thursday the thirtieth"
+NEVER say a comma-formatted dollar amount, hyphenated phone, or YYYY-MM-DD date verbatim.
+
 CURRENT PROSPECT:
 {prospect_context}
 """
