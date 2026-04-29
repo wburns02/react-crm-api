@@ -17,12 +17,13 @@ import uuid
 from datetime import date, datetime, timezone
 
 from app.database import async_session_maker
-from app.models.message import Message, MessageStatus
+from app.models.message import Message, MessageStatus, MessageType
 from app.models.call_log import CallLog
 from app.models.customer import Customer
 from app.models.work_order import WorkOrder
 from app.config import settings
 from app.security.twilio_validator import validate_twilio_signature
+from app.services.ai.queue import enqueue_interaction_analysis
 from app.services.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ twilio_router = APIRouter()
 @twilio_router.post("/incoming")
 async def handle_incoming_sms(
     request: Request,
+    background_tasks: BackgroundTasks,
     _signature_valid: bool = Depends(validate_twilio_signature),
 ):
     """
@@ -72,17 +74,21 @@ async def handle_incoming_sms(
             # Create incoming message record
             incoming = Message(
                 customer_id=last_message.customer_id,
-                type="sms",
+                message_type=MessageType.sms,
                 direction="inbound",
                 status=MessageStatus.received,
-                to_address=to_number,
-                from_address=from_number,
+                to_number=to_number,
+                from_number=from_number,
                 content=body,
-                twilio_sid=message_sid,
-                source="react",
+                external_id=message_sid,
             )
             db.add(incoming)
+            await db.flush()
+            incoming_id = incoming.id
             await db.commit()
+
+            # Enqueue analysis on the new inbound SMS row
+            background_tasks.add_task(enqueue_interaction_analysis, incoming_id, "sms")
 
             # Return TwiML response (empty = no auto-reply)
             return Response(
@@ -311,7 +317,7 @@ async def handle_incoming_voice(
         "open_work_orders": open_wo_data,
         "call_log_id": call_log_id,
     }
-    background_tasks.add_background_task(manager.broadcast_event, "incoming_call", ws_payload)
+    background_tasks.add_task(manager.broadcast_event, "incoming_call", ws_payload)
 
     # Return TwiML — dial forward number with recording + live transcription stream
     forward = settings.TWILIO_FORWARD_NUMBER
@@ -464,9 +470,8 @@ async def handle_recording_status(
             call_log.transcription_status = "pending"
             await db.commit()
 
-            # Kick off AI analysis in background
+            # Kick off AI analysis in background via the new analyzer queue
             if settings.VOICE_AI_ENABLED:
-                from app.services.call_analysis_service import analyze_call
-                background_tasks.add_background_task(analyze_call, str(call_log.id))
+                background_tasks.add_task(enqueue_interaction_analysis, call_log.id, "call")
 
     return {"status": "ok"}
