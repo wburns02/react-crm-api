@@ -11,7 +11,9 @@
 
 ## Part 1 — First Device Beginner Build (~$475 with a multimeter, ~$435 without)
 
-This is the immediate shopping list for ONE working development device. **No soldering required.** Everything connects via headers, screw terminals, jumper wires, or breadboard.
+This is the immediate shopping list for ONE working development device. **Soldered build** using the Adafruit Perma-Proto half-size PCB (same pin layout as a breadboard, but permanent). User pivoted away from the solderless path to invest in a real soldering setup that lasts decades and unlocks the rest of the project (real-tank cable splices, future custom PCB hand-assembly).
+
+> **Practice path:** spend 8-10 hours soldering on old Raspberry Pi GPIO headers / scrap boards / cheap LED practice kits before touching the DK. The soldering kit below pays for itself once you stop ruining $180 dev kits.
 
 ### Section 1.1 — The Brain ($179.80)
 
@@ -117,26 +119,33 @@ Order **YHDC-branded** specifically (Amazon listings vary — JANSANE, SazkJere,
 
 ---
 
-### Section 1.5 — Wiring + breadboard ($25)
+### Section 1.5 — Wiring + soldered protoboard ($35-40)
+
+**This build is now soldered, not breadboarded.** Same circuit as the prior breadboard plan — just permanent. The Adafruit Perma-Proto half-size board has the **same pin layout as a half-size breadboard**, so the wiring map from earlier transfers 1:1 — you solder into the holes instead of pressing jumpers in.
 
 | Item | Vendor | Vendor PN | Price | Stock | Link |
 |---|---|---|---|---|---|
-| Adafruit Half-Sized Premium Breadboard, 400 tie points | Adafruit | 64 | **$4.95** | Out of stock at Adafruit; in stock at SparkFun PRT-12002 ($6.25) and on Digi-Key | [adafruit.com](https://www.adafruit.com/product/64) / [sparkfun.com](https://www.sparkfun.com/products/12002) |
-| Adafruit Breadboarding Wire Bundle (~75 stranded with stiff ends) | Adafruit | 153 | **$4.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/153) |
-| Premium M/M Jumper Wires, 40 × 6" | Adafruit | 758 | **$3.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/758) |
-| Premium F/F Jumper Wires, 40 × 6" | Adafruit | 266 | **$3.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/266) |
-| SparkFun Jumper Wires Connected M/M, 6", 20-pack | SparkFun | PRT-12795 | **$2.95** | In Stock | [sparkfun.com](https://www.sparkfun.com/products/12795) |
+| **Adafruit Perma-Proto Half-Size Breadboard PCB** | Adafruit | 1609 | **$4.50** | In Stock | [adafruit.com](https://www.adafruit.com/product/1609) |
+| **Adafruit Hookup Wire Spool Set, 22 AWG, 6 colors × 75ft** | Adafruit | 1311 | **$15.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/1311) |
+| **Female 0.1" header sockets, 4-pin × 5 pack** (for sensor sockets on the Perma-Proto) | Adafruit | 598 | **$4.95** | In Stock | [adafruit.com](https://www.adafruit.com/product/598) |
+| **Heat-shrink tubing assortment (~150 pcs, multi-size)** | Amazon (B07RNVYCNN or similar) | — | **~$8** | Prime | [amazon.com search](https://www.amazon.com/s?k=heat+shrink+tubing+assortment+150+pieces) |
+| **Liquid electrical tape (small bottle)** — for any outdoor splice that needs reinforcement | Amazon / Home Depot | — | **~$8** | In Stock | local hardware |
 
-Buy whichever combo is convenient — you only need ~30 jumper wires for this build. The **Adafruit 153 bundle alone** is enough to do everything.
+#### Why Perma-Proto over a bare stripboard:
+1. Same row-pair layout as a breadboard, so pin maps from breadboard tutorials transfer
+2. Power and ground rails on each long edge — clean power distribution to all sensors
+3. Real PCB with through-plated holes — solder joints are reliable, not flaky like cheap perfboard
+4. Mounts cleanly into the IP65 enclosure later (4 mounting holes on the corners)
 
-#### Optional but recommended (alarm-tap stretch goal)
+#### Optional (for outdoor splices later, when you go to a real tank):
 
 | Item | Vendor | Price | Link |
 |---|---|---|---|
 | Wago 221-415 Lever-Nuts, 5-conductor, 10-pack | Amazon (B06XH47DC2) | **~$8** | [amazon.com](https://www.amazon.com/Wago-221-415-LEVER-NUTS-Conductor-Connectors/dp/B06XH47DC2) |
-| Solderless butt-splice connectors (16-22 AWG) assortment | Amazon / Lowes | **~$8** | hardware aisle |
 
-#### Wiring subtotal: **~$15** (just buying breadboard + Adafruit 153 wire bundle + a jumper kit)
+These are still useful for joining 18 AWG sensor cables to your soldered protoboard pigtails inside an outdoor junction box — soldering a connector is great, but field-replaceable splices belong on lever-nuts.
+
+#### Wiring subtotal: **~$33** (Perma-Proto + hookup wire kit + headers + heat shrink)
 
 ---
 
@@ -144,24 +153,53 @@ Buy whichever combo is convenient — you only need ~30 jumper wires for this bu
 
 You only need these once. They live on your bench forever after.
 
-| Item | Vendor | Price | Stock | Link |
+#### 1.6.1 — Soldering kit (NEW — primary path is now soldered)
+
+This kit is now part of the build. Practice on old Raspberry Pi GPIO headers / scrap boards before touching the DK. **Plan ~8-10 hours of practice on cheap perfboard joints before you touch the IoT components.** Good iron + practice is the difference between joints that look like volcanic islands vs joints that look like Hershey's Kisses.
+
+**Iron — pick ONE option:**
+
+| Item | Vendor | Price | Why | Link |
 |---|---|---|---|---|
-| Klein Tools MM400 Auto-Ranging Digital Multimeter, 600V CAT III | Home Depot / Lowes / Amazon | **~$45** (typical $42-50 across retailers) | In Stock | [homedepot.com](https://www.homedepot.com/p/Klein-Tools-600V-AC-DC-Auto-Ranging-Digital-Multimeter-Drop-Resistant-Temperature-Measurement-MM400/206517333) / [lowes.com](https://www.lowes.com/pd/Klein-Tools-MM400-Digital-Auto-Ranging-Multimeter-600V-CAT-III/5018728553) |
-| USB-A to USB micro-B cable (3ft) | Adafruit | $2.95 | In Stock | [adafruit.com](https://www.adafruit.com/product/592) |
+| **Hakko FX-888D Digital Soldering Station** (recommended for serious use) | Amazon / Digi-Key | **$110-115** | Industry-standard. Temp-controlled, lasts 20+ years, holds temp ±2°F. Drops the skill floor dramatically vs cheap pencil iron. | [digikey.com](https://www.digikey.com/en/products/detail/american-hakko-products-inc/FX888D-23BY/4156628) / [amazon.com](https://www.amazon.com/dp/B00ANZRT4M) |
+| **Pinecil V2** (budget alternative) | Pine64 store / Amazon | **$30** | Genuinely good. Smaller, USB-C powered. ~80% as good as Hakko at 30% the price. | [pine64.com](https://pine64.com/product/pinecil-smart-mini-portable-soldering-iron/) |
+| Pinecil PD power supply (only if going Pinecil route) | Amazon | $15-20 | Pinecil needs USB-C PD ≥45W to reach full temperature. | search "USB-C PD 65W power supply" |
 
-> **Important:** the nRF9160-DK uses **USB micro-B**, not USB-C. The DK ships with one USB-A → micro-B cable in the box. The cable above is only needed if you want a spare or longer one.
-
-#### Optional tools (have if you can — skip for first build)
+**Solder + flux + cleanup:**
 
 | Item | Vendor | Price | Link |
 |---|---|---|---|
-| Klein 11061 wire strippers / cutters | Amazon / Home Depot | ~$22 | [homedepot.com](https://www.homedepot.com/p/Klein-Tools-Wire-Stripper-Cutter-11061) |
-| Lineman pliers (any brand) | hardware store | ~$15 | local |
-| Heat-shrink kit (small) | Amazon | ~$10 | search "heat shrink kit assortment" |
-| Saleae Logic 8 clone (cheap logic analyzer) | Amazon | ~$15-25 | search "USB logic analyzer 24MHz 8 channel" |
-| Hakko FX-888D soldering station (stretch — for production work, not first build) | Amazon / Digi-Key | ~$130 | [digikey.com](https://www.digikey.com/en/products/detail/american-hakko-products-inc/FX888D-23BY/4156628) |
+| **Kester 60/40 Sn/Pb Leaded Solder, 0.031" diameter, 1/2 lb spool** (much easier for beginners than lead-free) | Amazon | **$15-18** | [amazon.com search](https://www.amazon.com/s?k=Kester+24-6040-0027+0.031+rosin+core) |
+| **Kester 951 No-Clean Flux Pen** (or MG Chemicals 8341) | Amazon / Digi-Key | **$7** | [digikey.com](https://www.digikey.com/en/products/detail/kester-solder/83-1000-0951/2444618) |
+| **Solder wick (3-pack, 0.075")** + **desoldering pump combo** | Amazon | **$10** | [amazon.com search](https://www.amazon.com/s?k=solder+wick+desoldering+pump+combo) |
+| **Hakko 599B Brass Sponge Tip Cleaner** (DO NOT use a wet sponge — shortens tip life dramatically) | Digi-Key / Amazon | **$7-8** | [digikey.com](https://www.digikey.com/en/products/detail/american-hakko-products-inc/599B-02/365334) |
 
-#### Tools subtotal: **$45 (just multimeter)** — or **$0** if you already own one.
+**Workspace:**
+
+| Item | Vendor | Price | Link |
+|---|---|---|---|
+| **SE MZ101B Helping Hands** with 4 alligator clips, magnifier glass, LED light | Amazon | **$25** | [amazon.com search](https://www.amazon.com/s?k=SE+MZ101B+helping+hands+magnifier) |
+| **Silicone heat-resistant work mat (large)** — protects your bench from burn marks + has component pockets | Amazon | **$13** | [amazon.com search](https://www.amazon.com/s?k=silicone+soldering+mat+heat+resistant) |
+| **Anti-static (ESD) wrist strap** (cheap insurance against zapping the DK) | Amazon | **$5-8** | [amazon.com search](https://www.amazon.com/s?k=anti+static+wrist+strap) |
+
+#### Soldering kit subtotal: **~$190** (Hakko path) or **~$110** (Pinecil path)
+
+#### 1.6.2 — Multimeter (recommended)
+
+| Item | Vendor | Price | Stock | Link |
+|---|---|---|---|---|
+| Klein Tools MM400 Auto-Ranging Digital Multimeter, 600V CAT III | Home Depot / Lowes / Amazon | **~$45** (typical $42-50) | In Stock | [homedepot.com](https://www.homedepot.com/p/Klein-Tools-600V-AC-DC-Auto-Ranging-Digital-Multimeter-Drop-Resistant-Temperature-Measurement-MM400/206517333) |
+
+#### 1.6.3 — Other (optional, skip if you have)
+
+| Item | Vendor | Price | Link |
+|---|---|---|---|
+| USB-A to USB micro-B cable (3ft) — DK uses **micro-B**, not USB-C; DK ships with one in box | Adafruit | $2.95 | [adafruit.com](https://www.adafruit.com/product/592) |
+| Klein 11061 wire strippers/cutters | Amazon / Home Depot | ~$22 | [homedepot.com](https://www.homedepot.com/p/Klein-Tools-Wire-Stripper-Cutter-11061) |
+| Lineman pliers | hardware store | ~$15 | local |
+| Saleae Logic 8 clone (cheap logic analyzer, optional debug) | Amazon | ~$15-25 | search "USB logic analyzer 24MHz 8 channel" |
+
+#### Tools subtotal: **~$235** (Hakko soldering kit + multimeter) or **~$155** (Pinecil + multimeter) — one-time, depreciate across many builds.
 
 ---
 
@@ -171,12 +209,19 @@ You only need these once. They live on your bench forever after.
 |---|---|---|---|---|
 | **Digi-Key** | nRF9160-DK | **$179.80** | Free over $200 (you're under — add a USB micro-B cable or jumper wires to clear). Otherwise ~$8 ground. | 2-3 days |
 | **Adafruit** | MPRLS pressure (#3965) + #2791 + #3942 + #266 + #758 + #153 + #64 + #239 | **~$50** | Free over $99, otherwise $5–10 standard. | 2-3 days |
-| **Adafruit** | HC-SR04 (#3942) + 3.5mm-to-terminal (#2791) + breadboarding wire bundle (#153) + breadboard (#64, if in stock) + 2.1mm-jack-to-terminal (#368) + 12V wall adapter (#798, optional) | **$15.40** (no power), **$25.30** (with 12V power) | $10 (USPS) | 2-4 days |
-| **SparkFun** | Pushbutton (COM-09190) + breadboard PRT-12002 (since Adafruit #64 is OOS) + jumper wires PRT-12795 | **$9.95** | $7-10 | 2-4 days |
+| **Adafruit** | MPRLS pressure (#3965) + HC-SR04 (#3942) + 3.5mm screw-terminal breakout (#2791) + Perma-Proto half-size (#1609) + hookup wire kit (#1311) + 4-pin female header sockets (#598) + 2.1mm-jack-to-terminal (#368, optional power) | **~$50** | Free over $99, otherwise $5-10 standard. | 2-3 days |
+| **SparkFun** | Pushbutton (COM-09190) | **$0.95** + shipping | $7-10 | 2-4 days |
 | **1NCE** | Lifetime SIM + Card Business form factor | **$15.00** | $5 to USA | 5-10 days |
-| **Amazon** | YHDC SCT-013-030 + Wago 221-415 (optional) + butt splices (optional) + Klein MM400 (optional) | **$10-14** (CT only) → **$60-75** (with multimeter) | Prime free | 1-2 days |
+| **Amazon** | YHDC SCT-013-030 + heat-shrink kit + liquid electrical tape + soldering kit (Hakko + Kester solder + flux + wick + helping hands + silicone mat + ESD strap) + Klein MM400 multimeter | **~$10-14** CT only → **~$240-260** (full soldering kit + CT + multimeter) | Prime free | 1-2 days |
 
-### Grand total: **$425–$475**
+### Grand total
+
+| Path | Build parts (one device) | Tools (one-time) | Total |
+|---|---|---|---|
+| **Hakko soldering path (recommended)** | ~$280 | ~$235 (Hakko + multimeter + accessories) | **~$515** |
+| **Pinecil budget path** | ~$280 | ~$155 (Pinecil + multimeter + accessories) | **~$435** |
+
+The tools depreciate across every build that comes after — by device 5, the per-device cost converges to ~$280. By device 50, the soldering kit has paid for itself many times over in saved JLCPCB SMT fees once you start hand-assembling protoboards.
 - **$425:** without optional 12V power, without multimeter (you have one or borrow)
 - **$435:** add the 12V wall + barrel-to-screw adapter
 - **$475:** add a Klein MM400 multimeter

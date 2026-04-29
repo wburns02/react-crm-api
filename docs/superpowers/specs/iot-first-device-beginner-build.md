@@ -1,10 +1,12 @@
-# Watchful — Your First Device (Beginner Build)
-**Version:** v0.1 — beginner-friendly, **no soldering required**
-**Time:** ~3–4 hours total (2 hours hands-on, plus 30 min for cellular activation + ~1 hour of waiting)
-**Cost:** ~$475 in parts, one-time (updated 2026-04-27 — Nordic raised the DK price)
-**Status:** This guide is for building **exactly one device** to validate the cloud pipeline end-to-end before committing to a custom PCB. Everything here uses plug-and-play parts you screw, plug, or jumper together.
+# Watchful — Your First Device (Soldered v0 Build)
+**Version:** v0.2 — soldered protoboard build (Adafruit Perma-Proto half-size)
+**Time:** ~6–8 hours total (~10-12 hours including practice + soldering kit setup)
+**Cost:** ~$435 (Pinecil iron) to ~$515 (Hakko station) — see PDF #08 for the link-checked parts list
+**Status:** This guide is for building **exactly one device** to validate the cloud pipeline end-to-end before committing to a custom PCB. Soldered build using Adafruit Perma-Proto (same layout as a half-size breadboard, but permanent). User pivoted from solderless to soldered on 2026-04-29.
 
-> **For ordering:** the canonical, link-checked parts list lives in `iot-parts-list-with-links.md` (PDF #08). Prices and part numbers are verified live as of 2026-04-27. **Use that doc as your shopping cart**; this guide explains the *what* and *why*.
+> **For ordering:** the canonical, link-checked parts list lives in `iot-parts-list-with-links.md` (PDF #08). Prices and part numbers are verified live. **Use that doc as your shopping cart**; this guide explains the *what* and *why*.
+
+> **Why soldered now:** A real iron + practice unlocks (1) reliable outdoor cable splices when you go to a real tank, (2) future custom PCB hand-assembly that drops per-device cost from ~$400 → ~$50, and (3) field repair on deployed devices. The breadboard skill doesn't carry forward; the soldering skill does.
 
 ---
 
@@ -76,20 +78,46 @@ These are dramatically cheaper than the production sensor list because we're usi
 
 **Soil moisture probe replaced.** Earlier drafts used a DFRobot capacitive moisture probe to simulate drain field saturation. ATU air-line pressure (above) is a more direct failure signal — it tells you whether the air compressor is actually delivering air to the treatment tank. Soil saturation is still a valid sensor for conventional gravity systems' drain field health, but it's deferred to v2.
 
-### Wiring + tools ($45)
+### Wiring + soldered protoboard ($35-40)
 
 | Part | Source | Why |
 |---|---|---|
-| Half-size breadboard + 65 jumper wires | SparkFun KIT-12002 | Your build surface. No solder needed. | $20 |
-| 2.1mm DC barrel-jack-to-terminal-block adapter | Adafruit #368 | Lets you plug the wall-wart in and grab 12V from screw terminals. | $3 |
-| 3.5mm-jack-to-screw-terminal breakout | Adafruit #2169 | Mates the CT clamp's 3.5mm jack to header pins. | $3 |
-| **Wire nuts (3M / Wago Lever-Nut 221-415)** | Lowes / Amazon | If you ever splice into a real OEM alarm circuit, use these instead of soldering. **Way more reliable than amateur solder joints.** | $10 |
-| **Solderless butt-splice connectors (16-22 AWG)** | Amazon / hardware store | For the optional alarm-tap splice. Squeeze with pliers. | $5 |
-| Multimeter (if you don't have one) | Klein MM400 or similar | $30–50, you'll use this every time you build something. | optional but recommended |
+| **Adafruit Perma-Proto Half-Size Breadboard PCB (#1609)** | Adafruit | Same pin layout as a half-size breadboard, but a real PCB you solder into. Reliable joints, clean power rails, mounts in the IP65 enclosure later. | $4.50 |
+| **Adafruit Hookup Wire Spool Set (#1311)** — 22 AWG, 6 colors, 75 ft each | Adafruit | One spool covers this whole project plus the next several. | $16 |
+| **Adafruit Female 0.1" Header Sockets, 4-pin × 5 (#598)** | Adafruit | Solder these into the Perma-Proto, then plug your sensors into them. Sensors stay reusable. | $5 |
+| **Heat-shrink tubing assortment** (~150 pcs, multi-size) | Amazon | Insulate every solder joint — this is non-optional for outdoor reliability later. | $8 |
+| **Adafruit 3.5mm-jack-to-screw-terminal breakout (#2791)** | Adafruit | Mates the CT clamp's 3.5mm jack to header pins. Solder header pins onto the bottom of the breakout, plug into the Perma-Proto. | $2.50 |
+| **Wago 221-415 Lever-Nuts (10-pack)** — for outdoor splices later | Amazon | Field-replaceable splices outdoors. Solder for permanent joints, lever-nuts for serviceable ones. | $8 |
 
-### Total: ~$475 (without optional 12V supply or multimeter)
+### Soldering kit (one-time, ~$190 Hakko or ~$110 Pinecil)
+
+See PDF #08 Section 1.6.1 for the full kit. Summary:
+
+| Item | Hakko path | Pinecil path |
+|---|---|---|
+| Iron | Hakko FX-888D ($110) | Pinecil V2 + USB-C PD supply ($50) |
+| Solder | Kester 60/40 leaded 0.031" 1/2 lb ($15) | Same |
+| Flux pen | Kester 951 ($7) | Same |
+| Wick + desolder pump | $10 | Same |
+| Brass tip cleaner | Hakko 599B ($7) | Same |
+| Helping hands w/ magnifier | SE MZ101B ($25) | Same |
+| Silicone heat-resistant mat | $13 | Same |
+| ESD wrist strap | $5-8 | Same |
+| **Subtotal** | **~$190** | **~$110** |
+
+### Total: ~$435 (Pinecil) to ~$515 (Hakko) including soldering kit + multimeter
 
 > Exact, link-checked totals are in `iot-parts-list-with-links.md` (PDF #08). That doc is the ordering source of truth — prices and stock are verified there.
+
+### Practice path before you touch the DK
+
+You said you have old Raspberry Pi gear — perfect. Sequence:
+
+1. **Bench setup.** Iron heats to 700°F (Hakko) or 350°C (Pinecil — same temp, different units). Wet a corner of the brass sponge. Tin the tip (touch a small amount of solder to a clean tip — it should flow and coat shiny silver).
+2. **Practice on RPi 40-pin GPIO headers** — solder 3-5 pins per header on a scrap RPi. Aim for "Hershey's Kiss" shaped joints — shiny, conical, completely covering both the pad and the pin. If joints look dull, gray, or volcanic-bumpy, that's a cold joint — reflow with more heat + flux.
+3. **Practice on the Perma-Proto power rails** — solder a length of wire along one of the long power rails. The hookup wire kit's 22 AWG is exactly right for this — strip 1/4 inch, tin the wire, place against the pad, touch iron + add solder. Should take ~1.5 seconds per joint.
+4. **Practice desoldering.** Heat a joint, suck with the desoldering pump (or wick it). You will mess up — every solderer does. Pulling joints back out is a skill in itself.
+5. **Plan ~8-10 hours of practice before touching the DK.** The DK has tiny SMD components on the back side; it'd be sad to flow paste onto your $180 board because of inexperience.
 
 ---
 
@@ -101,10 +129,10 @@ Before you start, here's what each step expects of you:
 |---|---|---|
 | Plugging USB cables | yes | Power + flash the DK |
 | Running shell commands (terminal/bash) | yes | Install toolchain, build firmware, run flash |
-| Reading a wiring diagram (like a Pi GPIO chart) | yes | Match jumper wires to header pins |
-| Pressing breadboard wires into holes | yes | Sensors connect via breadboard |
-| **Soldering** | **no** | We avoid it entirely with screw terminals + jumpers + wire nuts |
-| Using a multimeter (continuity, voltage check) | nice-to-have | Helps debug "why isn't this working" — borrow one if you don't have one |
+| Reading a wiring diagram (like a Pi GPIO chart) | yes | Match wire colors to header pins |
+| **Soldering through-hole pads** | **yes** | Sensors land on a Perma-Proto via soldered female headers; signal wires run from Perma-Proto to DK GPIO header pins (also soldered). Practice on old RPi GPIO headers first. |
+| Stripping 22 AWG hookup wire | yes | ~1/4" of insulation stripped per end; basic skill |
+| Using a multimeter (continuity check before powering up) | yes (newly required) | Confirms no shorts before applying power. Continuity mode beep = bad on power-to-ground. |
 
 ---
 
@@ -235,55 +263,72 @@ If the dashboard shows "offline" for now, that's expected. Step 4 fixes that.
 
 ---
 
-## Stage 4 — Wire up the sensors (Day 3, ~45 min)
+## Stage 4 — Solder the Perma-Proto + sensors (Day 3-4, ~2-3 hours)
 
-This is the breadboard part. **No soldering.**
+This is the soldered build. **Practice on RPi GPIO headers FIRST**, per the practice path above. Once you can make Hershey's-Kiss-shaped joints reliably, proceed.
 
-### 4.1 Prepare the breadboard
-- Place the breadboard next to the DK
-- Power: jumper from DK's `VCC_3V3` pin (top-right header) to the breadboard's `+` rail
-- Ground: jumper from any DK `GND` to the breadboard's `−` rail
+### 4.1 Plan the layout on the Perma-Proto
+The Adafruit Perma-Proto half-size has the same logical layout as a half-size breadboard:
+- Two long power rails along each long edge (one `+`, one `−`)
+- 30 columns of 5-tied holes in the center (rows a-e and f-j)
+- 4 mounting holes at the corners
+- Silkscreen labels for every column (1-30) and row (a-j) — same as a breadboard
 
-### 4.2 Hook up the air pressure sensor (MPRLS, "ATU compressor" monitor)
-The Adafruit MPRLS (#3965) has 4 pins: VIN, GND, SDA, SCL. **I²C, address 0x18.**
-- VIN → breadboard `+` rail (3.3V from the DK is fine)
-- GND → breadboard `−` rail
-- SDA → DK pin `P0.30` (I²C SDA on TWI0)
-- SCL → DK pin `P0.31` (I²C SCL on TWI0)
+Plan: solder female header sockets at specific columns to receive each sensor. Wire from sensor power pins to the `+` rail, ground pins to the `−` rail, signal pins to short hookup wires that run off the Perma-Proto to the DK's GPIO header.
 
-The sensor has a small barb fitting on the back. For bench testing: just blow gently into the barb to simulate ATU air-line pressure. The dashboard should show pressure spikes corresponding to your breaths. For real-tank install (later), T-fit into the air line between Hiblow pump and treatment tank diffuser using 1/4" silicone tubing.
+Suggested column assignments (by sensor):
+| Sensor | Perma-Proto columns | DK pins |
+|---|---|---|
+| MPRLS air pressure (4-pin) | 1-4 (rows a-d) | VIN→`+` rail, GND→`−` rail, SDA→P0.30, SCL→P0.31 |
+| HC-SR04 ultrasonic (4-pin) | 8-11 | VCC→`+` rail, GND→`−` rail, TRIG→P0.04, ECHO→P0.05 |
+| 3.5mm jack breakout for CT clamp (3 screw terminals) | 16-18 | tip→P0.14 (AIN1), sleeve→`−` rail |
+| Alarm pushbutton (4-pin) | 22-25 | one pin→P0.06, opposite pin→`−` rail |
 
-**Calibration** happens on first boot — firmware reads ambient pressure for 30 seconds before the air line is connected, stores it as the "zero gauge" reference.
+### 4.2 Solder female header sockets onto the Perma-Proto
+For each sensor (MPRLS, HC-SR04, button), solder a 4-pin female header (Adafruit #598) into the Perma-Proto holes you assigned. Iron temp 700°F. Touch iron to pin + pad simultaneously, count 1-2 seconds, add solder until joint shines, lift solder, lift iron. ~1.5 sec per pin.
 
-### 4.3 Hook up the ultrasonic ("tank level" simulator)
-HC-SR04 has 4 pins: VCC, TRIG, ECHO, GND.
-- VCC → breadboard `+` rail (the DK 3.3V is enough — don't use 5V here, the DK's input pins don't like 5V)
-- GND → `−` rail
-- TRIG → DK pin `P0.04`
-- ECHO → DK pin `P0.05`
+The 3.5mm jack breakout (#2791) — solder a 3-pin male header onto its underside, then plug it into the Perma-Proto via mating female headers. OR solder it permanently with hookup wire pigtails from each terminal.
 
-Point it at a wall to read distance. Move closer/farther to simulate tank level changing.
+### 4.3 Wire the power rails to the DK
+- Cut a ~3" red wire (22 AWG). Strip 1/4" from each end. Tin both ends (touch iron + small amount of solder to each stripped tip; should turn shiny silver).
+- Solder one end into the Perma-Proto's `+` rail (any column on the rail).
+- Solder the other end into a free hole on the DK's GPIO header — specifically the **VCC_3V3** pin. The DK headers may already be populated with male pins from the factory; if so, you can also solder to the back of the female header on the Perma-Proto and use a F/F jumper. Hookup-wire-direct is more permanent.
+- Repeat with a black wire from the Perma-Proto's `−` rail to a DK `GND` pin.
 
-### 4.4 Hook up the CT clamp ("pump current" simulator)
-- Clip the CT clamp around **one wire** of an extension cord (NOT both wires — only one. The white wire works fine. **Don't strip the cord — clip around it intact.**)
-- Plug the CT clamp's 3.5mm jack into the Adafruit 3.5mm-to-screw-terminal breakout
-- The breakout has 3 screw terminals (tip, ring, sleeve). For a YHDC SCT-013-030, only tip and sleeve carry signal.
-- Tip terminal → DK pin `P0.14` (analog AIN1)
-- Sleeve terminal → DK GND
-- Plug an appliance into the extension cord (lamp, coffee maker — anything 1A+). The CT outputs ~0.3V AC when current flows. Firmware reads peak-to-peak via ADC.
+### 4.4 Wire each sensor's signal pin
+For each non-power signal connection in the table above (e.g., MPRLS SDA → DK P0.30):
+- Cut hookup wire to the right length (~3-5" — keep slack but not loops)
+- Strip + tin both ends
+- Solder one end to the Perma-Proto column directly under the sensor's signal pin (the female header pin will be at the top of that column; the Perma-Proto's column ties 5 holes together; pick any free hole in that column)
+- Solder the other end to the DK header pin
+- Cover the bare wire+pad with a small piece of heat-shrink tubing (~1/4") and shrink with the iron's tip held nearby (don't touch — radiant heat is enough)
 
-### 4.5 Hook up the alarm button
-The pushbutton has 4 pins (two pairs that close when pressed).
-- One pin → DK pin `P0.06` (digital input)
-- Diagonally opposite pin → breadboard GND
-- Internal pull-up handles the rest (firmware sets `GPIO_PULL_UP`)
+### 4.5 The CT clamp + 3.5mm jack
+- The 3.5mm jack breakout (Adafruit #2791) has 3 screw terminals labeled tip / ring / sleeve. For a YHDC SCT-013-030: tip and sleeve carry the AC current signal; ring is unused.
+- After soldering the breakout's male header to its underside (or running a pigtail), wire:
+  - tip terminal → DK pin **P0.14** (AIN1, analog input)
+  - sleeve terminal → `−` rail (GND)
+- Plug the YHDC's 3.5mm jack into the breakout
+- Clip the CT around **one wire** (not both) of an extension cord. **Don't strip the cord — clip around it intact.** The white (neutral) wire works fine.
+- Plug an appliance into the extension cord (lamp, coffee maker — any 1A+ load). The CT outputs ~0.3V AC when current flows. Firmware reads peak-to-peak via ADC.
 
-When you press the button, P0.06 goes from HIGH to LOW. That's our "OEM alarm fired" event. Firmware will fire the immediate-publish path within a couple seconds.
+### 4.6 The alarm button
+4-pin tactile button: pins 1+2 are tied internally (one switch terminal), pins 3+4 are the other switch terminal. Diagonal pairs work; same-side pairs are shorted regardless of press state.
+- One switch terminal → DK pin **P0.06**
+- Diagonally opposite terminal → `−` rail (GND)
+- Firmware sets `GPIO_PULL_UP` on P0.06; pressing the button pulls it low. That's our "OEM alarm fired" event.
 
-### 4.6 Sanity check before powering up
-- Re-trace every wire by eye — particularly check: no DK pin connected directly to 5V, no power-rail-to-ground short
-- Use multimeter continuity mode (if you have one) to confirm no `+` ↔ `−` short
-- Smoke is bad. If you see any, unplug immediately.
+### 4.7 The MPRLS air-line plumbing
+- Push 12" of 1/4" silicone tubing onto the MPRLS's barb fitting on the back of the breakout.
+- For bench testing: blow gently into the free end of the tubing to simulate ATU air-line pressure. Dashboard should show pressure spikes.
+- For real-tank install (later, see PDF #09): T-fit the tubing into the existing ATU air line between Hiblow pump and treatment tank diffuser using a 1/4" brass T-fitting.
+- **Calibration** happens on firmware first boot — firmware reads ambient pressure for 30 seconds before the air line is connected, stores it as the "zero gauge" reference.
+
+### 4.8 Visual + multimeter sanity check before applying power
+- **Eyeball every joint.** Hershey's Kiss shape = good. Volcanic bumps, dull gray, missing solder, or solder bridges between adjacent pads = reflow it. A solder bridge between `+` and `−` will cook the DK in seconds.
+- **Multimeter, continuity mode.** Probe `+` rail to `−` rail — no beep is good (no short). Probe each signal pin to `+` and `−` separately — no beep is good (no short to power).
+- **Multimeter, voltage mode (DC, 20V range).** Power up via USB. Probe Perma-Proto `+` rail to `−` rail — should read 3.3V ± 0.1V. If you see anything else (0V, 5V, oscillating), disconnect and re-check.
+- **Smoke is bad.** Unplug immediately if you see any.
 
 ---
 
