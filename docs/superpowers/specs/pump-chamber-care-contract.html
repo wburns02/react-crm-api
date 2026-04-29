@@ -260,6 +260,34 @@
   </div>
 </div>
 
+<!-- TIER SELECTOR -->
+<div style="background: #f9fafb; border: 2px solid #104b95; border-radius: 6px; padding: 10px 14px; margin: 8px 0 12px 0;">
+  <div style="font-size: 10pt; font-weight: 800; color: #104b95; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;">Pump Chamber Care Tier (Selected at First Inspection)</div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+    <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+        <div style="width: 16px; height: 16px; border: 2px solid #104b95; border-radius: 3px; flex-shrink: 0;"></div>
+        <span style="font-size: 10.5pt; font-weight: 800; color: #104b95;">Standard &mdash; $149/mo</span>
+      </div>
+      <div style="font-size: 8.5pt; color: #555; padding-left: 24px; line-height: 1.4;">
+        Covers effluent pump replacement up to <span class="bold">$3,500 retail value</span>. Standard residential pumps (Goulds, Liberty, Zoeller, Little Giant).
+      </div>
+    </div>
+    <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+        <div style="width: 16px; height: 16px; border: 2px solid #104b95; border-radius: 3px; flex-shrink: 0;"></div>
+        <span style="font-size: 10.5pt; font-weight: 800; color: #104b95;">Grinder &mdash; $249/mo</span>
+      </div>
+      <div style="font-size: 8.5pt; color: #555; padding-left: 24px; line-height: 1.4;">
+        Covers grinder pump replacement up to <span class="bold">$8,000 retail value</span>. Required for systems with a grinder pump (homes below grade, low-pressure-pipe drain fields).
+      </div>
+    </div>
+  </div>
+  <div style="font-size: 8.5pt; color: #666; margin-top: 6px; font-style: italic;">
+    Tier is confirmed at the first quarterly inspection based on the installed pump make and model. If the installed pump exceeds the tier coverage cap, Customer pays the difference between the cap and the actual replacement cost.
+  </div>
+</div>
+
 <!-- ELIGIBILITY (NEW) -->
 <div class="iot-eligibility-box">
   <div class="iot-title">&#9888; Eligibility &mdash; Watchful Device Required</div>
@@ -295,8 +323,9 @@
 
   <p style="margin-top: 6px;"><span class="bold blue">Bundled Pump Replacement (1 every 5 years, included):</span></p>
   <ul>
-    <li>Full effluent pump replacement &mdash; <span class="bold">no additional charge</span> &mdash; like-for-like or comparable model up to a $1,500 retail equivalent</li>
-    <li>Scheduled at the 60-month milestone, OR earlier if Watchful telemetry indicates pump failure / overcurrent / dry-run before that mark</li>
+    <li>Full pump replacement &mdash; <span class="bold">no additional charge up to the tier coverage cap</span> ($3,500 Standard / $8,000 Grinder)</li>
+    <li>Like-for-like or comparable model; if the installed pump exceeds the tier cap (e.g., $9,200 commercial grinder under Grinder tier), Customer pays only the difference</li>
+    <li>Scheduled at the 60-month milestone, OR earlier if Watchful telemetry indicates pump failure / overcurrent / dry-run / stalled rotor before that mark</li>
     <li>Includes labor and standard fittings; non-standard plumbing modifications quoted separately</li>
   </ul>
 
@@ -323,13 +352,23 @@
 <div class="contract-section">
   <h3>2. Pricing &amp; Bundled Value</h3>
 
-  <div class="pricing-box">
-    <div class="price-main">$99/month &mdash; All Inclusive</div>
-    <div class="price-detail">
-      Quarterly inspections, pump-out every 3 years, pump replacement every 5 years, and 24/7 Watchful monitoring &mdash; all included. <span class="bold">No surprise bills. No out-of-pocket pump-out fees. No pump replacement fee at year 5.</span>
-      <br><br>
-      <span class="bold">Setup:</span> $349 Watchful device + $99 first-visit installation/inspection. Setup fees billed once at agreement start.
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0;">
+    <div class="pricing-box" style="background: #e8f1fa; border-color: #104b95;">
+      <div class="price-main" style="font-size: 13pt;">Standard &mdash; $149/mo</div>
+      <div class="price-detail">
+        Quarterly inspections, pump-out every 3 years, <span class="bold">pump replacement up to $3,500 every 5 years</span>, and 24/7 Watchful monitoring &mdash; all included.
+      </div>
     </div>
+    <div class="pricing-box" style="background: #fef3c7; border-color: #d97706;">
+      <div class="price-main" style="font-size: 13pt; color: #92400e;">Grinder &mdash; $249/mo</div>
+      <div class="price-detail" style="color: #78350f;">
+        All of the above, with <span class="bold">grinder pump replacement up to $8,000 every 5 years</span>. Required for grinder-pump systems.
+      </div>
+    </div>
+  </div>
+  <div style="font-size: 9pt; color: #555; margin: 6px 0 8px 0; padding: 8px 10px; background: #f9fafb; border-left: 3px solid #cbd5e1; border-radius: 3px;">
+    <span class="bold">Setup (one-time, both tiers):</span> $349 Watchful device + $99 first-visit installation/inspection &mdash; billed once at agreement start.
+    <span class="bold">No surprise bills. No out-of-pocket pump-out fees. No pump replacement fee at year 5</span> (within tier coverage cap).
   </div>
 
   <div class="benefit-grid">
@@ -346,7 +385,7 @@
     <div class="benefit-card">
       <div class="benefit-icon">&#128736;</div>
       <div class="benefit-title">Pump Replacement at Year 5</div>
-      <div class="benefit-desc">Up to $1,500 retail value &mdash; included</div>
+      <div class="benefit-desc">Up to $3,500 (Standard) or $8,000 (Grinder)</div>
     </div>
     <div class="benefit-card">
       <div class="benefit-icon">&#128225;</div>
@@ -397,11 +436,25 @@
     <div class="timeline-year milestone-replacement">
       <div class="ty-label">Year 5</div>
       <div class="ty-event">Pump Replaced</div>
-      <div class="ty-detail">Up to $1,500 pump installed at no charge</div>
+      <div class="ty-detail">Up to $3,500 Standard / $8,000 Grinder &mdash; included</div>
     </div>
   </div>
 
-  <p style="font-size: 9pt; color: #555; margin-top: 4px;">Total bundled retail value over 60 months: 20 inspections (~$1,500 at $75 each) + 1 pump-out ($625 standalone) + 1 pump replacement ($1,200&ndash;$1,500) + 60 months Watchful monitoring ($900) = <span class="bold">~$4,225&ndash;$4,525 retail value, paid as $99/month ($5,940)</span>. The $1,400-$1,700 difference covers emergency-response capacity, predictive analytics, and operating margin.</p>
+  <p style="font-size: 9pt; color: #555; margin-top: 4px;"><span class="bold">Total bundled retail value over 60 months:</span></p>
+  <table class="clawback-table" style="margin-top: 4px;">
+    <thead>
+      <tr><th>Bundled service</th><th>Standard tier</th><th>Grinder tier</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>20 quarterly inspections (@ $75)</td><td>$1,500</td><td>$1,500</td></tr>
+      <tr><td>1 pump-out (every 3 yr cycle)</td><td>$625</td><td>$625</td></tr>
+      <tr><td>1 pump replacement (every 5 yr)</td><td>$3,500</td><td>$8,000</td></tr>
+      <tr><td>60 mo of Watchful monitoring</td><td>$900</td><td>$900</td></tr>
+      <tr style="background: #f0fdf4 !important;"><td><span class="bold">Total retail value</span></td><td><span class="bold green">$6,525</span></td><td><span class="bold green">$11,025</span></td></tr>
+      <tr><td>Customer pays over 60 months</td><td>$8,940 ($149/mo)</td><td>$14,940 ($249/mo)</td></tr>
+      <tr><td>Operating + emergency-SLA margin</td><td>$2,415 (27%)</td><td>$3,915 (26%)</td></tr>
+    </tbody>
+  </table>
 </div>
 
 <!-- SECTION 4: TERM & CANCELLATION CLAWBACK -->
@@ -415,20 +468,22 @@
   <p><span class="bold blue">C. Cancellation During Initial Term.</span> Customer may cancel during the Initial Term with thirty (30) days' written notice. <span class="bold">Early cancellation fees apply per subsections D and E below.</span> Cancellation notice must be submitted via certified mail, email to contracts@macseptic.com, or through the customer portal.</p>
 
   <div class="callout callout-amber">
-    <strong>D. Pump Replacement Clawback (Linear Amortization)</strong>
-    If Customer cancels the Agreement before the end of the Initial Term <span class="bold">AND a bundled pump replacement has already been performed by Provider during the term</span>, Customer agrees to pay an early termination fee equal to the unamortized portion of that pump replacement, calculated as:
+    <strong>D. Pump Replacement Clawback (Linear Amortization, by Tier)</strong>
+    If Customer cancels the Agreement before the end of the Initial Term <span class="bold">AND a bundled pump replacement has already been performed by Provider during the term</span>, Customer agrees to pay an early termination fee equal to the unamortized portion of that pump replacement, calculated by tier:
     <div style="background: #fff; border: 1px solid #d97706; border-radius: 4px; padding: 6px 10px; margin: 6px 0; font-family: 'Courier New', monospace; font-size: 9pt;">
-      Clawback = $1,500 &times; (months_remaining_in_60_month_term / 60)
+      <span class="bold">Standard tier:</span> Clawback = $3,500 &times; (months_remaining_in_60_month_term / 60)<br>
+      <span class="bold">Grinder tier:</span>&nbsp; Clawback = $8,000 &times; (months_remaining_in_60_month_term / 60)
     </div>
     Where <span class="bold">months_remaining_in_60_month_term</span> is the number of full months remaining between the cancellation effective date and the end of the Initial Term.
   </div>
 
   <div class="callout callout-blue">
-    <strong>Worked Example</strong>
-    Customer signs Pump Chamber Care on January 1, 2027. The pump fails in month 14 (March 2028) and Provider replaces it under the bundle. Customer cancels in month 22 (October 2028). 60 - 22 = 38 months remain.
-    <span class="bold">Clawback owed:</span> $1,500 &times; (38 / 60) = <span class="green">$950.</span>
+    <strong>Worked Examples</strong>
+    <span class="bold">Standard tier:</span> Customer signs Standard Pump Chamber Care on January 1, 2027. Pump fails in month 14 (March 2028) and Provider replaces it under the bundle. Customer cancels in month 22 (October 2028). 60 &minus; 22 = 38 months remain. <span class="bold">Clawback owed:</span> $3,500 &times; (38 / 60) = <span class="green">$2,217.</span>
     <br><br>
-    If the same Customer had cancelled in month 50 instead, only 10 months would remain, and the clawback would be $1,500 &times; (10 / 60) = $250. The longer Customer remains after the replacement, the lower the clawback.
+    <span class="bold">Grinder tier:</span> Same scenario, but with a grinder system. <span class="bold">Clawback owed:</span> $8,000 &times; (38 / 60) = <span class="green">$5,067.</span>
+    <br><br>
+    If the same Standard-tier Customer had cancelled in month 50 instead, only 10 months would remain, and the clawback would be $3,500 &times; (10 / 60) = $583. <span class="bold">The longer Customer remains after the replacement, the lower the clawback.</span>
   </div>
 
   <p><span class="bold blue">E. Pump-Out Clawback (Linear, 36-month cycle).</span> If Customer cancels within 36 months of receiving a bundled pump-out, the unamortized portion of that pump-out is owed:</p>
@@ -462,7 +517,7 @@
     <li><span class="bold">Compacted solids removal:</span> $150/hour (10+ years of buildup, Rid-X residue)</li>
     <li><span class="bold">Additional pump-outs</span> beyond the included 3-year cycle: $625</li>
     <li><span class="bold">Drain field repairs</span> (field line replacement, distribution box, etc.): quoted</li>
-    <li><span class="bold">Pump replacement above $1,500 retail</span> (commercial-grade, custom-flow, etc.): customer pays the difference; bundled benefit covers up to $1,500</li>
+    <li><span class="bold">Pump replacement above tier coverage cap</span> ($3,500 Standard / $8,000 Grinder): Customer pays only the difference between the cap and the actual replacement cost. Example: a $9,200 commercial grinder install under Grinder tier &rarr; Customer pays $1,200.</li>
     <li><span class="bold">Real estate inspection report:</span> $825 (pump-out + written report for property transactions)</li>
     <li><span class="bold">After-hours / weekend / holiday emergency service:</span> $150 dispatch + standard hourly</li>
     <li><span class="bold">System modifications, upgrades, or replacements</span> not caused by routine wear (e.g., conversion to a different system type)</li>
@@ -480,7 +535,7 @@
   </div>
   <div class="callout callout-red">
     <strong>What Out-of-Pocket Looks Like Without Coverage</strong>
-    Replacement effluent pump (parts + labor): <span class="red">$1,200&ndash;$1,800.</span> Standalone pump-out: <span class="red">$625.</span> Drain field saturation from a stuck pump float: <span class="red">$4,000&ndash;$7,000+.</span> Aerobic bacteria reseed after 48hr air-pump failure: <span class="red">$800&ndash;$1,500.</span> Pump Chamber Care's $99/month replaces all of these surprise bills with a flat, predictable line item.
+    Standard effluent pump replacement (parts + labor): <span class="red">$3,500.</span> Grinder pump replacement: <span class="red">$8,000.</span> Standalone pump-out: <span class="red">$625.</span> Drain field saturation from a stuck pump float: <span class="red">$4,000&ndash;$7,000+.</span> Aerobic bacteria reseed after 48hr air-pump failure: <span class="red">$800&ndash;$1,500.</span> Pump Chamber Care replaces all of these surprise bills with a flat, predictable line item ($149 Standard / $249 Grinder per month).
   </div>
 </div>
 
@@ -548,7 +603,7 @@
 
 <div class="footer">
   MAC Septic Services &bull; 615.345.2544 &bull; macseptic.com &bull; will@macseptic.com<br>
-  TCEQ Licensed Maintenance Provider (TX) &bull; Tennessee &amp; Texas service areas &bull; Pump Chamber Care v0.1 Draft &bull; April 2026
+  TCEQ Licensed Maintenance Provider (TX) &bull; Tennessee &amp; Texas service areas &bull; Pump Chamber Care v0.2 Draft &bull; April 2026
 </div>
 
 </body>
