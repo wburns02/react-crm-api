@@ -90,10 +90,29 @@ class OutboundAgentSession:
         # Progress signals so time-hangup picks the right disposition
         if name == "book_appointment" and ok:
             self.state.note_progress_signal("appointment_booked")
+            # Auto-set disposition if the LLM didn't explicitly call set_disposition.
+            # Without this, the goodbye-detector + auto-end-call watcher never fires
+            # because it requires self.disposition to be set. Observed on call #9:
+            # booking succeeded, Sarah said "have a good one", but pipeline didn't
+            # close because no disposition was on the session.
+            if not self.disposition:
+                self.disposition = "appointment_set"
+                self.disposition_notes = (
+                    f"Auto-set after book_appointment succeeded "
+                    f"(work_order={result.get('work_order_number', '?')})"
+                )
         elif name == "create_callback" and ok:
             self.state.note_progress_signal("callback_discussed")
+            if not self.disposition:
+                self.disposition = "callback_requested"
+                self.disposition_notes = "Auto-set after create_callback succeeded"
         elif name == "transfer_call":
             self.state.note_progress_signal("transfer_mentioned")
+            if not self.disposition:
+                self.disposition = "transferred_to_sales"
+                self.disposition_notes = (
+                    f"Auto-set after transfer_call: {args.get('reason', '')}"
+                )
         elif name == "set_disposition":
             self.disposition = args.get("disposition")
             self.disposition_notes = args.get("notes", "")
