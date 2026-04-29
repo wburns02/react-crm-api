@@ -5,6 +5,7 @@ Runs every 5 minutes to fetch unread emails from monitored mailbox,
 match to customers, and create leads/service requests.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -32,6 +33,9 @@ async def poll_inbound_emails():
 
         from app.models.inbound_email import InboundEmail
         from app.models.customer import Customer
+        from app.services.ai.queue import enqueue_interaction_analysis
+
+        new_inbound_ids: list = []
 
         async with async_session_maker() as db:
             for email_data in emails:
@@ -67,11 +71,31 @@ async def poll_inbound_emails():
                     action_taken="matched_customer" if customer_id else "no_match",
                 )
                 db.add(inbound)
+                # Flush so inbound.id is populated; capture per-iteration to avoid
+                # closure-over-loop-variable bugs when scheduling tasks below.
+                await db.flush()
+                new_inbound_ids.append(inbound.id)
 
                 # Mark as read in mailbox
                 await MS365EmailService.mark_as_read(msg_id)
 
             await db.commit()
+
+        # Enqueue analysis AFTER commit so the row is durable when the worker
+        # tries to fetch it. Fire-and-forget via asyncio.create_task because
+        # the poller runs from APScheduler outside a FastAPI request, so
+        # request-scoped BackgroundTasks isn't available here.
+        for inbound_id in new_inbound_ids:
+            try:
+                asyncio.create_task(
+                    enqueue_interaction_analysis(inbound_id, "email")
+                )
+            except Exception as enqueue_err:
+                logger.error(
+                    "Email poller: failed to enqueue analysis for %s: %s",
+                    inbound_id,
+                    enqueue_err,
+                )
 
     except Exception as e:
         logger.error("Email poller error: %s", e)
