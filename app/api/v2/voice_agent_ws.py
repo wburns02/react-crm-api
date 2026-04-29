@@ -235,7 +235,7 @@ async def _run_human_branch(
     # straight to the TTS service (Cartesia WebSocket — faster than the REST
     # prerender we were trying before). `append_to_context=True` adds the
     # greeting to the LLM context so multi-turn history stays coherent.
-    greeting_text = render_greeting_text(prospect, quote)
+    greeting_text = render_greeting_text(session.prospect, session.quote)
     await task.queue_frames([TTSSpeakFrame(text=greeting_text, append_to_context=True)])
     logger.info(f"[VoiceWS:{short_sid}] queued greeting via TTSSpeakFrame: {greeting_text!r}")
 
