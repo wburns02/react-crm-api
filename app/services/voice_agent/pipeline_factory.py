@@ -110,11 +110,21 @@ def build_pipeline(*, session, websocket, context_aggregator_pair) -> Pipeline:
         model="sonic-2",
     )
 
+    # FillerProcessor masks LLM first-token latency: when the user stops
+    # speaking, it schedules a brief "Mhm…"/"One sec…" TTS to fire 400ms
+    # later UNLESS the bot already started talking. Sits between the user
+    # aggregator and the LLM so it can see UserStoppedSpeakingFrame as it
+    # flows downstream.
+    from app.services.voice_agent.filler_processor import FillerProcessor
+
+    filler = FillerProcessor(delay_ms=400)
+
     pipeline = Pipeline(
         [
             transport.input(),
             stt,
             context_aggregator_pair.user(),
+            filler,
             llm,
             tts,
             transport.output(),
