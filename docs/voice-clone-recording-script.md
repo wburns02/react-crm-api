@@ -2,7 +2,7 @@
 
 For Cartesia Professional Voice Clone (PVC). Target: 10–15 minutes of varied conversational audio that exercises every register the outbound agent will hit on real customer calls.
 
-**Persona note:** the script uses "Phil" as the agent name throughout, since it's your voice being cloned. If you'd rather the agent introduce itself as something else (Mike, Tom, etc.), just substitute as you read — the clone captures voice, not the name. We can also lean into "Phil, owner of MAC Septic" as the persona — owner-calling-personally tends to convert better than generic-scheduler, and it explains away the depth of domain knowledge.
+**Persona note:** the script uses "Phil" as the agent name throughout. Phil is the AI scheduling assistant for MAC Septic — not a real person, not an owner. If you'd rather use a different name (Mike, Tom, etc.), substitute as you read; the clone captures voice, not the name spoken.
 
 ## Recording setup
 
