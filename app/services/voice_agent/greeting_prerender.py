@@ -15,7 +15,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-_GREETING_TEMPLATE = "Hey {first_name}, this is Sarah from MAC Septic — got a sec?"
+_GREETING_TEMPLATE = "Hey {first_name}, this is Phil from MAC Septic — got a sec?"
 
 
 # call_sid -> raw audio bytes (μ-law 8kHz, ready to ship to Twilio)
