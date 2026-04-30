@@ -44,7 +44,7 @@ async def synthesize_voicemail_audio(prospect: dict, quote: dict) -> bytes | Non
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model_id": "sonic-2",
+                    "model_id": "sonic-3",
                     "transcript": text,
                     "voice": {"mode": "id", "id": settings.CARTESIA_VOICE_ID},
                     "output_format": {
