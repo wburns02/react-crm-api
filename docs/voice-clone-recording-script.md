@@ -24,7 +24,7 @@ For each section, the **register** is in italics — match that energy. Pause br
 ## Section 1 — Greetings & openings *(warm, professional, slightly upbeat)*
 
 1. "Hey James, this is Will from MAC Septic — got a sec?"
-2. "Hi, this is Will with MAC Septic Services. Is this a good time?"
+2. "Hi, this is Will with MAC Septic. Is this a good time?"
 3. "Hey, sorry to bother you. This is Will at MAC Septic following up on the quote we sent over."
 4. "Good morning, this is Will from MAC Septic. Just wanted to check in real quick."
 5. "Afternoon! Will from MAC Septic here. You got two minutes?"
