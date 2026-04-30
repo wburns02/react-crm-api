@@ -107,7 +107,10 @@ def build_pipeline(*, session, websocket, context_aggregator_pair) -> Pipeline:
     tts = CartesiaTTSService(
         api_key=settings.CARTESIA_API_KEY,
         voice_id=settings.CARTESIA_VOICE_ID or "",
-        model="sonic-2",
+        # sonic-3: better pacing/prosody/naturalness vs sonic-2, especially
+        # on numbers and money amounts. Cartesia is sunsetting `sonic` June
+        # 1, 2026 — sonic-3 is the recommended successor.
+        model="sonic-3",
     )
 
     # NOTE: FillerProcessor was wired in here at 2152dbd but the cancellation

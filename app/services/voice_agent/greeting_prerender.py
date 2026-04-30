@@ -51,7 +51,7 @@ async def prerender_greeting(call_sid: str, prospect: dict, quote: dict) -> None
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model_id": "sonic-2",
+                    "model_id": "sonic-3",
                     "transcript": text,
                     "voice": {"mode": "id", "id": settings.CARTESIA_VOICE_ID},
                     "output_format": {
