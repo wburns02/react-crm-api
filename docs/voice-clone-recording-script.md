@@ -2,7 +2,7 @@
 
 For Cartesia Professional Voice Clone (PVC). Target: 10–15 minutes of varied conversational audio that exercises every register the outbound agent will hit on real customer calls.
 
-**Persona note:** the script uses "Will" as the agent name throughout, since it's your voice being cloned. If you'd rather the agent introduce itself as something else (Mike, Tom, etc.), just substitute as you read — the clone captures voice, not the name. We can also lean into "Will, owner of MAC Septic" as the persona — owner-calling-personally tends to convert better than generic-scheduler, and it explains away the depth of domain knowledge.
+**Persona note:** the script uses "Phil" as the agent name throughout, since it's your voice being cloned. If you'd rather the agent introduce itself as something else (Mike, Tom, etc.), just substitute as you read — the clone captures voice, not the name. We can also lean into "Phil, owner of MAC Septic" as the persona — owner-calling-personally tends to convert better than generic-scheduler, and it explains away the depth of domain knowledge.
 
 ## Recording setup
 
@@ -23,12 +23,12 @@ For each section, the **register** is in italics — match that energy. Pause br
 
 ## Section 1 — Greetings & openings *(warm, professional, slightly upbeat)*
 
-1. "Hey James, this is Will from MAC Septic — got a sec?"
-2. "Hi, this is Will with MAC Septic. Is this a good time?"
+1. "Hey James, this is Phil from MAC Septic — got a sec?"
+2. "Hi, this is Phil with MAC Septic. Is this a good time?"
 3. "Hey, sorry to bother you. This is Will at MAC Septic following up on the quote we sent over."
-4. "Good morning, this is Will from MAC Septic. Just wanted to check in real quick."
+4. "Good morning, this is Phil from MAC Septic. Just wanted to check in real quick."
 5. "Afternoon! Will from MAC Septic here. You got two minutes?"
-6. "Hi Doug, this is Will — calling about that septic pumping estimate."
+6. "Hi Doug, this is Phil — calling about that septic pumping estimate."
 
 ---
 
@@ -184,7 +184,7 @@ This section is critical — the previous TTS sounded robotic on numbers.
 
 ## Section 12 — Voicemail messages *(slightly slower, clearer than a live call)*
 
-1. "Hey, this is Will from MAC Septic. Just following up on that estimate we sent. Give us a call back when you get a chance — six one five, three four five, two five four four. Thanks!"
+1. "Hey, this is Phil from MAC Septic. Just following up on that estimate we sent. Give us a call back when you get a chance — six one five, three four five, two five four four. Thanks!"
 2. "Hi Doug, Will from MAC Septic. Wanted to chat about scheduling that pumping. Try us at the office — six one five, three four five, two five four four. Have a good one."
 
 ---
