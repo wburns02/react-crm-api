@@ -25,9 +25,9 @@ For each section, the **register** is in italics — match that energy. Pause br
 
 1. "Hey James, this is Phil from MAC Septic — got a sec?"
 2. "Hi, this is Phil with MAC Septic. Is this a good time?"
-3. "Hey, sorry to bother you. This is Will at MAC Septic following up on the quote we sent over."
+3. "Hey, sorry to bother you. This is Phil at MAC Septic following up on the quote we sent over."
 4. "Good morning, this is Phil from MAC Septic. Just wanted to check in real quick."
-5. "Afternoon! Will from MAC Septic here. You got two minutes?"
+5. "Afternoon! Phil from MAC Septic here. You got two minutes?"
 6. "Hi Doug, this is Phil — calling about that septic pumping estimate."
 
 ---
@@ -185,7 +185,7 @@ This section is critical — the previous TTS sounded robotic on numbers.
 ## Section 12 — Voicemail messages *(slightly slower, clearer than a live call)*
 
 1. "Hey, this is Phil from MAC Septic. Just following up on that estimate we sent. Give us a call back when you get a chance — six one five, three four five, two five four four. Thanks!"
-2. "Hi Doug, Will from MAC Septic. Wanted to chat about scheduling that pumping. Try us at the office — six one five, three four five, two five four four. Have a good one."
+2. "Hi Doug, Phil from MAC Septic. Wanted to chat about scheduling that pumping. Try us at the office — six one five, three four five, two five four four. Have a good one."
 
 ---
 
