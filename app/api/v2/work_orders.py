@@ -2755,6 +2755,328 @@ async def generate_invoice_from_work_order(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Workorder Estimate Endpoints
+#
+# A workorder estimate is a Quote row with kind='wo_estimate' attached to a
+# specific work_order_id. It can be edited freely while in 'draft' or 'sent'
+# state, then converted into an Invoice (which is pushed to QuickBooks via
+# qbo_service.sync_invoice). Each work order has at most one ACTIVE
+# (status != 'converted') estimate at a time.
+# ──────────────────────────────────────────────────────────────────────────────
+
+from app.models.quote import Quote as _EstimateQuote
+from app.schemas.types import UUIDStr as _EstimateUUIDStr
+
+
+class _EstimateLineItem(BaseModel):
+    description: str = ""
+    qty: float = 0.0
+    unit_price: float = 0.0
+    line_total: Optional[float] = None
+
+
+class EstimateCreate(BaseModel):
+    line_items: Optional[List[_EstimateLineItem]] = None
+    notes: Optional[str] = None
+    tax_rate: Optional[float] = 0.0
+
+
+class EstimateUpdate(BaseModel):
+    line_items: Optional[List[_EstimateLineItem]] = None
+    tax_rate: Optional[float] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None  # only 'draft' or 'sent' allowed here
+
+
+class EstimateOut(BaseModel):
+    id: _EstimateUUIDStr
+    work_order_id: Optional[_EstimateUUIDStr] = None
+    customer_id: Optional[_EstimateUUIDStr] = None
+    kind: str
+    status: str
+    line_items: List[_EstimateLineItem] = Field(default_factory=list)
+    subtotal: float = 0.0
+    tax_rate: float = 0.0
+    tax: float = 0.0
+    total: float = 0.0
+    notes: Optional[str] = None
+    converted_to_invoice_id: Optional[_EstimateUUIDStr] = None
+    converted_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ConvertResult(BaseModel):
+    invoice_id: _EstimateUUIDStr
+    qbo_invoice_id: Optional[str] = None
+    qbo_pushed: bool
+
+
+def _normalize_line_items(raw_items) -> List[dict]:
+    """Coerce incoming line items to the canonical dict shape and
+    recompute line_total defensively as qty * unit_price."""
+    out: List[dict] = []
+    if not raw_items:
+        return out
+    for item in raw_items:
+        if isinstance(item, _EstimateLineItem):
+            data = item.model_dump()
+        elif isinstance(item, dict):
+            data = dict(item)
+        else:
+            continue
+        try:
+            qty = float(data.get("qty") or 0)
+        except (TypeError, ValueError):
+            qty = 0.0
+        try:
+            unit_price = float(data.get("unit_price") or 0)
+        except (TypeError, ValueError):
+            unit_price = 0.0
+        out.append(
+            {
+                "description": str(data.get("description") or ""),
+                "qty": qty,
+                "unit_price": unit_price,
+                "line_total": round(qty * unit_price, 2),
+            }
+        )
+    return out
+
+
+def _compute_estimate_totals(items: List[dict], tax_rate: float):
+    subtotal = sum(float(i.get("line_total") or 0) for i in items)
+    rate = float(tax_rate or 0)
+    tax = round(subtotal * rate / 100, 2) if rate else 0.0
+    total = round(subtotal + tax, 2)
+    return round(subtotal, 2), tax, total
+
+
+def _serialize_estimate(q: _EstimateQuote) -> EstimateOut:
+    return EstimateOut(
+        id=q.id,
+        work_order_id=q.work_order_id,
+        customer_id=q.customer_id,
+        kind=q.kind or "wo_estimate",
+        status=q.status or "draft",
+        line_items=_normalize_line_items(q.line_items or []),
+        subtotal=float(q.subtotal or 0),
+        tax_rate=float(q.tax_rate or 0),
+        tax=float(q.tax or 0),
+        total=float(q.total or 0),
+        notes=q.notes,
+        converted_to_invoice_id=q.converted_to_invoice_id,
+        converted_at=q.converted_at,
+        created_at=q.created_at,
+        updated_at=q.updated_at,
+    )
+
+
+async def _get_active_estimate(db, wo_id: str) -> Optional[_EstimateQuote]:
+    res = await db.execute(
+        select(_EstimateQuote).where(
+            _EstimateQuote.work_order_id == wo_id,
+            _EstimateQuote.kind == "wo_estimate",
+            _EstimateQuote.status != "converted",
+        )
+    )
+    return res.scalars().first()
+
+
+@router.get("/{wo_id}/estimate")
+async def get_workorder_estimate(
+    wo_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Return the active wo_estimate quote for this work order, or null."""
+    est = await _get_active_estimate(db, wo_id)
+    if not est:
+        return None
+    return _serialize_estimate(est)
+
+
+@router.post(
+    "/{wo_id}/estimate",
+    response_model=EstimateOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_workorder_estimate(
+    wo_id: str,
+    payload: EstimateCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Create a new wo_estimate for this work order. 409 if one already active."""
+    # Fetch work order
+    res = await db.execute(select(WorkOrder).where(WorkOrder.id == wo_id))
+    wo = res.scalars().first()
+    if not wo:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    # Reject if active estimate already exists
+    existing = await _get_active_estimate(db, wo_id)
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="An active estimate already exists for this work order",
+        )
+
+    items = _normalize_line_items(payload.line_items)
+    tax_rate = float(payload.tax_rate or 0)
+    subtotal, tax, total = _compute_estimate_totals(items, tax_rate)
+
+    # Generate quote number
+    date_part = datetime.now().strftime("%Y%m%d")
+    rand_part = uuid.uuid4().hex[:4].upper()
+    quote_number = f"EST-{date_part}-{rand_part}"
+
+    quote = _EstimateQuote(
+        id=uuid.uuid4(),
+        quote_number=quote_number,
+        customer_id=wo.customer_id,
+        work_order_id=wo.id,
+        kind="wo_estimate",
+        status="draft",
+        line_items=items,
+        subtotal=subtotal,
+        tax_rate=tax_rate,
+        tax=tax,
+        total=total,
+        notes=payload.notes,
+    )
+    db.add(quote)
+    await db.commit()
+    await db.refresh(quote)
+    return _serialize_estimate(quote)
+
+
+@router.patch("/{wo_id}/estimate", response_model=EstimateOut)
+async def update_workorder_estimate(
+    wo_id: str,
+    payload: EstimateUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update the active wo_estimate. Status may only be set to draft or sent here."""
+    est = await _get_active_estimate(db, wo_id)
+    if not est:
+        raise HTTPException(status_code=404, detail="No active estimate for this work order")
+
+    if payload.line_items is not None:
+        est.line_items = _normalize_line_items(payload.line_items)
+    if payload.tax_rate is not None:
+        est.tax_rate = float(payload.tax_rate or 0)
+    if payload.notes is not None:
+        est.notes = payload.notes
+    if payload.status is not None:
+        if payload.status not in ("draft", "sent"):
+            raise HTTPException(
+                status_code=400,
+                detail="Status may only be set to 'draft' or 'sent' here; use convert-to-invoice to mark converted",
+            )
+        est.status = payload.status
+
+    # Always recompute totals server-side
+    items = _normalize_line_items(est.line_items or [])
+    est.line_items = items
+    subtotal, tax, total = _compute_estimate_totals(items, float(est.tax_rate or 0))
+    est.subtotal = subtotal
+    est.tax = tax
+    est.total = total
+
+    await db.commit()
+    await db.refresh(est)
+    return _serialize_estimate(est)
+
+
+@router.post("/{wo_id}/estimate/convert-to-invoice", response_model=ConvertResult)
+async def convert_workorder_estimate_to_invoice(
+    wo_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Convert the active wo_estimate to an Invoice and push to QuickBooks."""
+    from app.models.invoice import Invoice
+    from datetime import timedelta
+    from app.services.qbo_service import get_qbo_service
+
+    est = await _get_active_estimate(db, wo_id)
+    if not est:
+        raise HTTPException(status_code=404, detail="No active estimate for this work order")
+
+    items = _normalize_line_items(est.line_items or [])
+    valid_items = [i for i in items if i["qty"] > 0 and i["unit_price"] > 0]
+    if not valid_items:
+        raise HTTPException(
+            status_code=400,
+            detail="Estimate must have at least one line item with qty>0 and price>0",
+        )
+
+    # Recompute totals once more so the invoice numbers are authoritative
+    subtotal, tax, total = _compute_estimate_totals(items, float(est.tax_rate or 0))
+
+    # Generate invoice number
+    date_part = datetime.now().strftime("%Y%m%d")
+    rand_part = uuid.uuid4().hex[:4].upper()
+    invoice_number = f"INV-{date_part}-{rand_part}"
+
+    today = datetime.now().date()
+    invoice = Invoice(
+        id=uuid.uuid4(),
+        customer_id=est.customer_id,
+        work_order_id=est.work_order_id,
+        invoice_number=invoice_number,
+        issue_date=today,
+        due_date=today + timedelta(days=30),
+        amount=total,
+        paid_amount=0,
+        status="draft",
+        line_items=items,
+        notes=est.notes,
+    )
+    db.add(invoice)
+    await db.flush()  # need invoice.id available before QBO push
+
+    # Push to QBO — never fail the endpoint on QBO error
+    qbo_pushed = False
+    qbo_invoice_id: Optional[str] = None
+    try:
+        qbo = get_qbo_service()
+        qbo_result = await qbo.sync_invoice(db, str(invoice.id))
+        if qbo_result:
+            qbo_pushed = True
+            # QBO returns {"Invoice": {"Id": "...", ...}} or similar; be defensive
+            if isinstance(qbo_result, dict):
+                inv_obj = qbo_result.get("Invoice") or qbo_result
+                if isinstance(inv_obj, dict):
+                    qbo_invoice_id = (
+                        inv_obj.get("Id")
+                        or inv_obj.get("id")
+                        or inv_obj.get("DocNumber")
+                    )
+            if qbo_invoice_id:
+                invoice.quickbooks_invoice_id = str(qbo_invoice_id)
+    except Exception:
+        logger.exception("QBO sync failed for invoice %s", invoice.id)
+        qbo_pushed = False
+
+    # Mark estimate converted
+    est.status = "converted"
+    est.converted_to_invoice_id = invoice.id
+    est.converted_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(invoice)
+
+    return ConvertResult(
+        invoice_id=invoice.id,
+        qbo_invoice_id=qbo_invoice_id,
+        qbo_pushed=qbo_pushed,
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Audit Log Endpoint
 # ──────────────────────────────────────────────────────────────────────────────
 

@@ -50,6 +50,22 @@ class Quote(Base):
     converted_to_work_order_id = Column(UUID(as_uuid=True), ForeignKey("work_orders.id"), nullable=True)
     converted_at = Column(DateTime(timezone=True))
 
+    # WO-estimate support: a quote can either be a standalone sales_quote
+    # or a wo_estimate attached to a work order. When converted, the
+    # resulting invoice id is captured here.
+    kind = Column(String(20), nullable=False, default="sales_quote", index=True)
+    work_order_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("work_orders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    converted_to_invoice_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("invoices.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Notes
     notes = Column(Text)
     terms = Column(Text)
@@ -60,6 +76,7 @@ class Quote(Base):
     sent_at = Column(DateTime(timezone=True))
 
     customer = relationship("Customer", foreign_keys=[customer_id], lazy="selectin")
+    work_order = relationship("WorkOrder", foreign_keys=[work_order_id], lazy="selectin")
 
     def __repr__(self):
         return f"<Quote {self.quote_number}>"
