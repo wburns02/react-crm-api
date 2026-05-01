@@ -2883,14 +2883,30 @@ async def _get_active_estimate(db, wo_id: str) -> Optional[_EstimateQuote]:
     return res.scalars().first()
 
 
+async def _get_latest_estimate_any_status(db, wo_id: str) -> Optional[_EstimateQuote]:
+    res = await db.execute(
+        select(_EstimateQuote)
+        .where(
+            _EstimateQuote.work_order_id == wo_id,
+            _EstimateQuote.kind == "wo_estimate",
+        )
+        .order_by(
+            _EstimateQuote.updated_at.desc().nullslast(),
+            _EstimateQuote.created_at.desc(),
+        )
+        .limit(1)
+    )
+    return res.scalar_one_or_none()
+
+
 @router.get("/{wo_id}/estimate")
 async def get_workorder_estimate(
     wo_id: str,
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Return the active wo_estimate quote for this work order, or null."""
-    est = await _get_active_estimate(db, wo_id)
+    """Return the most recent wo_estimate quote (any status) for this work order, or null."""
+    est = await _get_latest_estimate_any_status(db, wo_id)
     if not est:
         return None
     return _serialize_estimate(est)
