@@ -44,22 +44,8 @@ def upgrade() -> None:
     )
     op.create_index("ix_quotes_kind", "quotes", ["kind"])
 
-    op.add_column(
-        "quotes",
-        sa.Column(
-            "work_order_id",
-            postgresql.UUID(as_uuid=True),
-            nullable=True,
-        ),
-    )
-    op.create_foreign_key(
-        "fk_quotes_work_order_id_work_orders",
-        "quotes",
-        "work_orders",
-        ["work_order_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
+    # quotes.work_order_id and its FK to work_orders already exist
+    # (added in migration 046). We add only the indexes here.
     op.create_index(
         "ix_quotes_work_order_id",
         "quotes",
@@ -99,12 +85,7 @@ def downgrade() -> None:
 
     op.drop_index("ix_quotes_work_order_id_status", table_name="quotes")
     op.drop_index("ix_quotes_work_order_id", table_name="quotes")
-    op.drop_constraint(
-        "fk_quotes_work_order_id_work_orders",
-        "quotes",
-        type_="foreignkey",
-    )
-    op.drop_column("quotes", "work_order_id")
+    # work_order_id column + FK predate migration 119; do not drop here.
 
     op.drop_index("ix_quotes_kind", table_name="quotes")
     op.drop_constraint("ck_quotes_kind", "quotes", type_="check")
