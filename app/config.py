@@ -165,6 +165,8 @@ class Settings(BaseSettings):
     OUTBOUND_AGENT_TRANSFER_NUMBER: str = "+16153452544"  # MAC Septic office
     # Voice agent engine selection: "legacy" (hand-rolled) or "pipecat" (new Pipecat-based)
     VOICE_AGENT_ENGINE: str = "legacy"
+    # Persona: "septic" (Phil, MAC Septic) or "demo" (Will Burns alter-ego)
+    VOICE_AGENT_PERSONA: str = "septic"
     # Twilio AsyncAmd webhook URL — set per-environment in Railway
     OUTBOUND_AGENT_AMD_CALLBACK: str | None = None
 
