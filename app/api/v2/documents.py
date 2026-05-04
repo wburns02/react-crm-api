@@ -74,7 +74,7 @@ def document_to_response(document: Document, customer: Optional[Customer] = None
     """Convert Document model to response format."""
     customer_name = None
     if customer:
-        customer_name = customer.name or f"{customer.first_name or ''} {customer.last_name or ''}".strip()
+        customer_name = f"{customer.first_name or ''} {customer.last_name or ''}".strip() or None
 
     return DocumentResponse(
         id=str(document.id),
