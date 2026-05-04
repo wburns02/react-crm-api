@@ -49,6 +49,17 @@ class CustomerBase(BaseModel):
     postal_code: Optional[str] = Field(None, max_length=20)
     county: Optional[str] = Field(None, max_length=100)
 
+    # Separate billing address (commercial accounts)
+    billing_address_line1: Optional[str] = Field(None, max_length=255)
+    billing_address_line2: Optional[str] = Field(None, max_length=255)
+    billing_city: Optional[str] = Field(None, max_length=100)
+    billing_state: Optional[str] = Field(None, max_length=50)
+    billing_postal_code: Optional[str] = Field(None, max_length=20)
+    use_separate_billing_address: Optional[bool] = False
+
+    # Parent/child commercial account hierarchy
+    parent_customer_id: Optional[UUIDStr] = None
+
     # Status
     is_active: Optional[bool] = True
     is_archived: Optional[bool] = False

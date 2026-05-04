@@ -28,6 +28,17 @@ class Customer(Base):
     postal_code = Column(String(20))
     county = Column(String(100))
 
+    # Separate billing address (commercial accounts)
+    billing_address_line1 = Column(String(255), nullable=True)
+    billing_address_line2 = Column(String(255), nullable=True)
+    billing_city = Column(String(100), nullable=True)
+    billing_state = Column(String(50), nullable=True)
+    billing_postal_code = Column(String(20), nullable=True)
+    use_separate_billing_address = Column(Boolean, nullable=False, default=False, server_default="false")
+
+    # Parent/child commercial account hierarchy
+    parent_customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
+
     # Status
     is_active = Column(Boolean, default=True)
     is_archived = Column(Boolean, default=False, server_default="false", index=True)
@@ -92,6 +103,20 @@ class Customer(Base):
     messages = relationship("Message", back_populates="customer", cascade="all, delete-orphan", passive_deletes=True)
     bookings = relationship("Booking", back_populates="customer", foreign_keys="Booking.customer_id", cascade="all, delete-orphan", passive_deletes=True)
     permits = relationship("SepticPermit", back_populates="customer", foreign_keys="SepticPermit.customer_id")
+
+    # Self-referential parent/child for commercial account hierarchy
+    parent = relationship(
+        "Customer",
+        remote_side="Customer.id",
+        foreign_keys=[parent_customer_id],
+        lazy="selectin",
+    )
+    children = relationship(
+        "Customer",
+        foreign_keys=[parent_customer_id],
+        lazy="selectin",
+        overlaps="parent",
+    )
 
     def __repr__(self):
         return f"<Customer {self.first_name} {self.last_name}>"

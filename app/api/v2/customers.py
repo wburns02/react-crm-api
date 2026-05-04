@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status, Query
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select, func, or_
 from typing import Optional
+from uuid import UUID
 
 from app.api.deps import DbSession, CurrentUser, EntityCtx
 from app.models.customer import Customer
@@ -108,6 +109,27 @@ async def list_customers(
     )
     await cache.set(cache_key, jsonable_encoder(response), ttl=TTL.SHORT)
     return response
+
+
+@router.get(
+    "/{customer_id}/children",
+    response_model=list[CustomerResponse],
+    summary="List child customers",
+    description="Returns all customers whose parent_customer_id == this customer's id (commercial sub-locations).",
+)
+async def list_customer_children(
+    customer_id: UUID,
+    db: DbSession,
+    current_user: CurrentUser,
+    entity: EntityCtx = None,
+) -> list[CustomerResponse]:
+    """Return all customers whose parent_customer_id == customer_id."""
+    res = await db.execute(
+        select(Customer)
+        .where(Customer.parent_customer_id == customer_id)
+        .order_by(Customer.first_name, Customer.last_name)
+    )
+    return [CustomerResponse.model_validate(c) for c in res.scalars().all()]
 
 
 @router.get(
