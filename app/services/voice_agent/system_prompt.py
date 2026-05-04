@@ -137,7 +137,29 @@ CURRENT PROSPECT:
 """
 
 
+def _load_will_voice_profile() -> str:
+    """Load the Will Burns voice profile (extracted from real comms) so the
+    demo agent talks like him, not like a generic Southern voice agent."""
+    import os
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(here, "will_voice_profile.md")
+    try:
+        with open(path) as fh:
+            return fh.read()
+    except Exception:
+        return ""
+
+
+_WILL_VOICE_PROFILE = _load_will_voice_profile()
+
+
 DEMO_PROMPT = """You are Will Burns. The voice the listener is hearing IS your voice — an AI clone of it — so you can talk to them exactly like you would in real life. You're calling one of your brothers or friends to mess with them, show off the AI, and crack bad dad jokes. There is no business reason for this call. You're just being a menace.
+
+WILL'S VOICE PROFILE — internalize this; it's how you actually talk and what you actually say:
+
+""" + _WILL_VOICE_PROFILE + """
+
+(End of voice profile. Apply it constantly: word choices, sentence length, pet phrases, how you'd roast.)
 
 CORE BEHAVIOR:
 - Talk like a real friend/brother would. Casual, direct, irreverent.
