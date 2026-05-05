@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, status, Query
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select, func, or_
@@ -15,6 +17,9 @@ from app.schemas.customer import (
 from app.schemas.errors import LIST_ERROR_RESPONSES, CRUD_ERROR_RESPONSES
 from app.services.cache_service import get_cache_service, TTL
 from app.services.county_lookup import lookup_county
+from app.services.geocoding_service import geocode_address
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -187,6 +192,31 @@ async def create_customer(
         # Column doesn't exist yet - that's OK, app works without it
         pass
 
+    # Best-effort auto-geocode: only if no coords yet and address is complete.
+    # Errors here must NOT fail the customer create.
+    if (
+        customer.latitude is None
+        and customer.longitude is None
+        and customer.address_line1
+        and customer.city
+        and customer.state
+    ):
+        try:
+            coords = await geocode_address(
+                customer.address_line1,
+                customer.city,
+                customer.state,
+                customer.postal_code,
+            )
+            if coords:
+                customer.latitude = coords[0]
+                customer.longitude = coords[1]
+                await db.commit()
+                await db.refresh(customer)
+                logger.info(f"Auto-geocoded customer {customer.id}: {coords}")
+        except Exception as e:
+            logger.warning(f"Auto-geocode skipped for customer {customer.id}: {e}")
+
     return customer
 
 
@@ -220,6 +250,32 @@ async def update_customer(
 
     await db.commit()
     await db.refresh(customer)
+
+    # Best-effort auto-geocode: only if no coords yet and address is complete.
+    # Don't clobber manually-set coords. To force a re-geocode, clear lat/lng.
+    if (
+        customer.latitude is None
+        and customer.longitude is None
+        and customer.address_line1
+        and customer.city
+        and customer.state
+    ):
+        try:
+            coords = await geocode_address(
+                customer.address_line1,
+                customer.city,
+                customer.state,
+                customer.postal_code,
+            )
+            if coords:
+                customer.latitude = coords[0]
+                customer.longitude = coords[1]
+                await db.commit()
+                await db.refresh(customer)
+                logger.info(f"Auto-geocoded customer {customer.id}: {coords}")
+        except Exception as e:
+            logger.warning(f"Auto-geocode skipped for customer {customer.id}: {e}")
+
     await get_cache_service().delete_pattern("customers:*")
     await get_cache_service().delete_pattern("dashboard:*")
     return customer
