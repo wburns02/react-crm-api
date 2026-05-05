@@ -1040,6 +1040,7 @@ def work_order_with_customer_name(wo: WorkOrder, customer: Optional[Customer], b
         "clock_in_gps_lon": wo.clock_in_gps_lon,
         "clock_out_gps_lat": wo.clock_out_gps_lat,
         "clock_out_gps_lon": wo.clock_out_gps_lon,
+        "entity_id": str(wo.entity_id) if wo.entity_id else None,
     }
 
 
