@@ -240,6 +240,242 @@ These are the small noises that make a clone feel real.
 
 ---
 
+## Section 17 — Longer prosody passages *(read at a normal storytelling pace)*
+
+These give the clone natural rhythm/breath patterns. Read each one as one continuous thought, not robot-like sentence by sentence. Pause naturally where you'd pause when telling someone the same thing in person.
+
+1. "Most folks don't think about their septic system until something goes wrong, and by then it's usually a thousand-dollar problem instead of a three-hundred-dollar one. Pumping every three to five years, that's the whole game. Skip it long enough, and the sludge gets thick enough to push solids out into your drain field, and once that field's compromised, you're not pumping your way out of it — you're replacing the field."
+
+2. "We had a job last week, real estate inspection up in Brentwood, owner swore up and down the system was fine, said it'd been pumped two years ago. We pull the lid, the tank's at ninety percent solids. Inlet baffle was gone. Whoever pumped it last didn't say anything, just took the money and left. That's why we always check the baffles."
+
+3. "Honestly the biggest thing I'd tell any homeowner is — don't put chemicals down your toilet. Half those products on the shelf at Home Depot, they'll kill the bacteria your tank needs to break stuff down. Bacteria die, sludge builds up faster, system fails sooner. Just leave it alone. The system works because of biology, not chemistry."
+
+4. "Aerobic systems are a different animal — those have an air pump running twenty-four seven, oxygenating the water so it breaks down faster. Better effluent quality. But the pump's gonna die every five to seven years, and when it does, your alarm starts going off at three in the morning until somebody comes out and silences it. Maintenance contract is worth it for those, no question."
+
+5. "Real estate transactions are where it gets interesting. Buyer's agent calls, says the house is closing in two weeks, can we inspect the septic. We get out there, dig down to the lid 'cause nobody knew where it was, pump the tank, find out the field's saturated. Now the seller's gotta either fix it, drop the price, or risk the deal falling apart. Happens all the time."
+
+---
+
+## Section 18 — Reaction registers *(emotional range — match each cue, don't read flat)*
+
+Each line is a different emotional register. Match the cue or the clone won't have that emotional range.
+
+**Genuine surprise / impressed:**
+1. "Oh wow, no kidding?"
+2. "Damn, that's actually impressive."
+3. "Wait, really? That's wild."
+
+**Mild frustration / done-with-it:**
+4. "Yeah, that's not gonna work for me."
+5. "Look, this is the third time we've talked about this."
+6. "I told you Tuesday. Now it's Friday."
+
+**Genuine sympathy:**
+7. "Oh man, I'm sorry. That's a rough one."
+8. "Yeah, that's awful. I hate that for you."
+9. "No, I get it. That's a lot to deal with."
+
+**Deadpan / unimpressed:**
+10. "Mhm. Sure."
+11. "Riveting. Tell me more."
+12. "Oh, fascinating."
+
+**Genuine excitement:**
+13. "Hell yeah, let's do it!"
+14. "Alright, that's what I'm talking about."
+15. "Now we're cooking."
+
+**Quiet/contemplative:**
+16. "Hmm. Yeah, I see what you mean."
+17. "That's a fair point."
+18. "Yeah, I'd have to think on that."
+
+---
+
+## Section 19 — Brother/friend ragging *(deadpan, low energy, friend-banter delivery)*
+
+This is for the demo persona — calling brothers/friends. Read each like you're actually saying it to your brother on the phone. Don't perform it, don't oversell. Land it short.
+
+1. "Brother, you sound like you just woke up. It's two in the afternoon."
+2. "Buddy, your reception is awful. You callin' from a closet?"
+3. "Took you four seconds to figure out it was me. I see how it is."
+4. "You laughed at that one too easy. I'm worried about you."
+5. "Hey, you still letting your wife pick out your clothes?"
+6. "Friend, I'm just saying — could be worse."
+7. "What's the deal, you screening calls now?"
+8. "I can hear the TV. What are you watching, the same thing for the fourth time?"
+9. "You done? Alright, my turn."
+10. "That's the worst take I've heard all week."
+
+---
+
+## Section 20 — Dad jokes — deadpan delivery *(no setup, no acknowledgment, no laugh)*
+
+The whole point of a dad joke is that you deliver it like you mean it. No "hehe", no "get it", no laugh after. Read each one like you're stating a fact.
+
+1. "I told my wife she should embrace her mistakes. She gave me a hug."
+2. "I'm reading a book on anti-gravity. It's impossible to put down."
+3. "I'm on a seafood diet. I see food, I eat it."
+4. "What's brown and sticky? A stick."
+5. "Why don't skeletons fight each other? They don't have the guts."
+6. "I tried to write a chemistry joke but all the good ones argon."
+7. "Did you hear about the guy who invented Lifesavers? They say he made a mint."
+8. "Time flies like an arrow. Fruit flies like a banana."
+9. "I used to hate facial hair. Then it grew on me."
+10. "I'd tell you a UDP joke but you might not get it."
+11. "I gave away all my dead batteries. Free of charge."
+12. "Why did the scarecrow get a promotion? He was outstanding in his field."
+13. "I asked the librarian if they had books on paranoia. She whispered, 'they're right behind you.'"
+14. "Why don't scientists trust atoms? They make up everything."
+15. "What do you call a fish wearing a bowtie? Sofishticated."
+
+---
+
+## Section 21 — Storytelling *(longer, casual, with natural pauses and tangents)*
+
+Read these like you're actually telling someone the story. Slow down at the punchlines. Speed up through the setup. Real talking pace.
+
+1. "So, last weekend I'm at the grocery store, right, and there's this guy in front of me at the checkout, and he's got — I'm not exaggerating — twenty-six avocados. Just avocados. And the cashier, she looks at him, she goes, 'You makin' guacamole?' And he goes, dead serious, 'No, I just like 'em.' Twenty-six. I think about that guy a lot."
+
+2. "We had a customer last year, old guy out in Spring Hill, he calls and says his septic is backing up. We get out there, dig the lid, the tank's full, fine, pump it, no problem. Get back in the truck, he comes running out — turns out his system actually had two tanks, separated by like sixty feet, and we'd only done the first one. Took us another two hours. He gave us a tip and a dozen eggs from his chickens."
+
+3. "My brother got me into lifting back in high school, and the first time I bench pressed two-twenty-five, I was so excited I called him from the gym. He goes, 'That's nice. Let me know when you hit three.' Took me another four years to hit three-fifteen. Took ten more to get past three-eighty. He still doesn't think it's that impressive."
+
+---
+
+## Section 22 — Tech / business vocabulary *(read naturally, even the awkward terms)*
+
+The agent might encounter these. Read them like you'd actually say them in conversation, not like you're spelling them out.
+
+1. "Yeah, we use Postgres on Railway with a Twilio integration."
+2. "The AI agent's running on Pipecat, it does the speech-to-text through Deepgram."
+3. "We're rolling out a new version of the CRM next week."
+4. "Send me a Slack, or just text me if it's urgent."
+5. "Tell 'em to call the office at six one five, three four five, two five four four."
+6. "I'll have somebody pull up the work order on their laptop."
+7. "Yeah, the GitHub repo's private. I'll add you."
+8. "I'll spin up a quick test environment and let you know."
+9. "It's running on a Dell R-seven-thirty in the rack — old hardware but solid."
+10. "Pretty sure that's a database issue. Lemme check the logs."
+
+---
+
+## Section 23 — Numbers — extended workout *(every kind of number you might say on a phone)*
+
+Critical for the agent — TTS gets numbers wrong constantly without practice.
+
+**Phone numbers (grouped, not digit-by-digit):**
+1. "Six one five, three four five, two five four four."
+2. "Eight oh three, five five five, twelve thirty-four."
+3. "Two one zero, nine five four, oh five seventy."
+4. "Five one two, seven nine one, eleven sixty-five."
+
+**Prices:**
+5. "Six twenty-five for the standard package."
+6. "Eight twenty-five for the full inspection."
+7. "Twelve hundred even."
+8. "Forty-three fifty for the repair."
+9. "Eight grand for the install."
+10. "Fifty-seven fifty for the tank replacement."
+11. "Three thousand four hundred dollars."
+
+**Dates and time:**
+12. "Thursday the thirtieth, around nine in the morning."
+13. "Monday the fourth, between eight and noon."
+14. "Tuesday at one thirty in the afternoon."
+15. "Friday morning, eight thirty sharp."
+16. "Next week sometime, probably Wednesday."
+
+**Quantities and measurements:**
+17. "Fifteen hundred gallon tank."
+18. "Forty feet of line."
+19. "Three to five years between pumpings."
+20. "About six inches deep."
+21. "Two and a half hours, give or take."
+
+**Addresses:**
+22. "Six fifty-four Elm Road."
+23. "Twenty-three eighteen Maple Drive, apartment four B."
+24. "Seventy-eight forty Old Hickory Boulevard."
+25. "Three nineteen Magnolia Lane."
+
+**Work orders / quote numbers (spell letters, group digits):**
+26. "Work order W-O dash zero zero two zero eighty-eight."
+27. "Quote number test dash twenty-oh-oh-four."
+
+---
+
+## Section 24 — Spelling and repeating *(slower, careful — for when someone needs clarification)*
+
+1. "B as in Boy, U-R-N-S. Burns."
+2. "M-A-C, just like the computer. Septic."
+3. "Brentwood. B as in Boy, R-E-N-T, wood."
+4. "S-C-H-M-I-D-T. Schmidt."
+5. "Sure, lemme repeat that — six fifty-four Elm Road. Six. Five. Four. Elm. Road."
+6. "That's S like Sam, T like Tom, A. Sta — yeah, Star."
+7. "Number's six one five — pause — three four five — pause — two five four four."
+
+---
+
+## Section 25 — Time-of-day & seasonal greetings *(adjust energy for time of day)*
+
+Morning (slightly more energy):
+1. "Mornin'. How are you?"
+2. "Hey, good morning."
+3. "Mornin', sorry to call so early."
+
+Afternoon (steady):
+4. "Afternoon!"
+5. "Hey, you got a sec this afternoon?"
+6. "Hope your day's going alright."
+
+Evening / late (lower energy):
+7. "Hey — sorry to call so late."
+8. "Evenin'. Got a minute?"
+9. "Hope I'm not catching you at dinner."
+
+Seasonal / weather:
+10. "Hot one out there today."
+11. "Y'all stayin' dry?"
+12. "Brutal week of weather we've had."
+13. "Hope you're keepin' warm."
+
+---
+
+## Section 26 — Personality phrases — actual Will-isms *(things you'd actually say, drawn from real conversations)*
+
+Read these in your normal cadence. These exist to teach the clone YOUR sentence rhythm, not generic phrases.
+
+1. "Yeah."
+2. "Yep."
+3. "Fixed."
+4. "Go for it."
+5. "Big delay."
+6. "Still broken."
+7. "Ahh ok good deal."
+8. "What tool can we use to..."
+9. "Can we just..."
+10. "Let's..."
+11. "Needs to be..."
+12. "Sounds like shit, honestly."
+13. "Alright let me think on it."
+14. "That works."
+15. "Nope, that's not it."
+16. "Go again."
+17. "Bring it back."
+18. "Skip that one."
+19. "Same thing, different day."
+20. "I'll figure it out."
+
+---
+
 ## After recording
 
-Drop the file(s) in `/mnt/win11/Fedora/voice-clone/` (per the storage policy — keep this off the home drive, audio files are large) and tell me. I'll upload to Cartesia PVC, kick off the training run, and update `CARTESIA_VOICE_ID` once it's ready.
+Drop the file(s) in `/mnt/win11/Fedora/voice-clone/` (per the storage policy — keep this off the home drive, audio files are large) and tell me. I'll concatenate sessions if there are multiple, run loudness/noise checks, upload to Cartesia PVC, kick off the training run, and update `CARTESIA_VOICE_ID` once it's ready.
+
+**Total estimated time across all 26 sections: ~25–30 minutes of usable audio.**
+
+If you do it in multiple sessions:
+- Use the SAME mic position and the SAME room for all sessions
+- Don't apply any processing between sessions
+- Drop each WAV separately and I'll concatenate
