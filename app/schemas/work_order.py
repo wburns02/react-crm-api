@@ -26,6 +26,7 @@ class WorkOrderBase(BaseModel):
     customer_id: UUIDStr
     billing_customer_id: Optional[UUIDStr] = None
     technician_id: Optional[UUIDStr] = None
+    entity_id: Optional[UUIDStr] = None
     job_type: str
     status: Optional[str] = "draft"
     priority: Optional[str] = "normal"
@@ -95,6 +96,7 @@ class WorkOrderUpdate(BaseModel):
     customer_id: Optional[str] = None
     billing_customer_id: Optional[str] = None
     technician_id: Optional[str] = None
+    entity_id: Optional[UUIDStr] = None
     job_type: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[str] = None
