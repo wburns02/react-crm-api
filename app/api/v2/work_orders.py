@@ -1795,6 +1795,48 @@ async def create_work_order(
     await db.commit()
     await db.refresh(work_order)
 
+    # Auto-fill service location from customer if missing.
+    # Best-effort: errors here must NOT fail the request.
+    if work_order.customer_id:
+        needs_fill = (
+            not work_order.service_address_line1
+            or not work_order.service_city
+            or not work_order.service_state
+        )
+        if needs_fill:
+            try:
+                cust_res = await db.execute(
+                    select(Customer).where(Customer.id == work_order.customer_id)
+                )
+                cust = cust_res.scalar_one_or_none()
+                if cust:
+                    if not work_order.service_address_line1 and cust.address_line1:
+                        work_order.service_address_line1 = cust.address_line1
+                    if not work_order.service_address_line2 and cust.address_line2:
+                        work_order.service_address_line2 = cust.address_line2
+                    if not work_order.service_city and cust.city:
+                        work_order.service_city = cust.city
+                    if not work_order.service_state and cust.state:
+                        # Normalize full state name to abbreviation
+                        state_map = {
+                            "tennessee": "TN", "south carolina": "SC",
+                            "north carolina": "NC", "texas": "TX",
+                            "georgia": "GA", "florida": "FL",
+                            "california": "CA", "new york": "NY",
+                        }
+                        state_norm = state_map.get(cust.state.lower(), cust.state)
+                        work_order.service_state = state_norm
+                    if not work_order.service_postal_code and cust.postal_code:
+                        work_order.service_postal_code = cust.postal_code
+                    if not work_order.service_latitude and cust.latitude:
+                        work_order.service_latitude = float(cust.latitude)
+                    if not work_order.service_longitude and cust.longitude:
+                        work_order.service_longitude = float(cust.longitude)
+                    await db.commit()
+                    logger.info(f"Auto-filled service location for WO {work_order.id} from customer {work_order.customer_id}")
+            except Exception as e:
+                logger.warning(f"Service location auto-fill skipped for WO {work_order.id}: {e}")
+
     # Create audit log entry
     try:
         client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else None)
@@ -1963,6 +2005,48 @@ async def update_work_order(
                 await db.commit()
             except Exception as audit_err:
                 logger.warning(f"Failed to create audit log for WO {work_order_id}: {audit_err}")
+
+        # Auto-fill service location from customer if missing.
+        # Best-effort: errors here must NOT fail the request.
+        if work_order.customer_id:
+            needs_fill = (
+                not work_order.service_address_line1
+                or not work_order.service_city
+                or not work_order.service_state
+            )
+            if needs_fill:
+                try:
+                    cust_res = await db.execute(
+                        select(Customer).where(Customer.id == work_order.customer_id)
+                    )
+                    cust = cust_res.scalar_one_or_none()
+                    if cust:
+                        if not work_order.service_address_line1 and cust.address_line1:
+                            work_order.service_address_line1 = cust.address_line1
+                        if not work_order.service_address_line2 and cust.address_line2:
+                            work_order.service_address_line2 = cust.address_line2
+                        if not work_order.service_city and cust.city:
+                            work_order.service_city = cust.city
+                        if not work_order.service_state and cust.state:
+                            # Normalize full state name to abbreviation
+                            state_map = {
+                                "tennessee": "TN", "south carolina": "SC",
+                                "north carolina": "NC", "texas": "TX",
+                                "georgia": "GA", "florida": "FL",
+                                "california": "CA", "new york": "NY",
+                            }
+                            state_norm = state_map.get(cust.state.lower(), cust.state)
+                            work_order.service_state = state_norm
+                        if not work_order.service_postal_code and cust.postal_code:
+                            work_order.service_postal_code = cust.postal_code
+                        if not work_order.service_latitude and cust.latitude:
+                            work_order.service_latitude = float(cust.latitude)
+                        if not work_order.service_longitude and cust.longitude:
+                            work_order.service_longitude = float(cust.longitude)
+                        await db.commit()
+                        logger.info(f"Auto-filled service location for WO {work_order.id} from customer {work_order.customer_id}")
+                except Exception as e:
+                    logger.warning(f"Service location auto-fill skipped for WO {work_order.id}: {e}")
 
     except Exception as e:
         await db.rollback()
