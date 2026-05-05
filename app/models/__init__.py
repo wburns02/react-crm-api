@@ -183,6 +183,9 @@ from app.models.customer_interaction import (
 )
 from app.models.interaction_insight import InteractionInsight
 
+# Realtor Pipeline (cloud-backed)
+from app.models.realtor import RealtorAgent, RealtorReferral
+
 # HR Module (feature-flagged; models registered so SQLite test DB creates them)
 from app.hr.shared.models import HrAuditLog, HrRoleAssignment  # noqa: F401
 from app.hr.workflow.models import (  # noqa: F401
@@ -390,4 +393,6 @@ __all__ = [
     "InteractionActionItem",
     "InteractionAnalysisRun",
     "InteractionInsight",
+    "RealtorAgent",
+    "RealtorReferral",
 ]
